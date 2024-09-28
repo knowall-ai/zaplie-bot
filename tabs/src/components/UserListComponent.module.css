@@ -1,0 +1,255 @@
+.users {
+    align-self: stretch;
+    position: relative;
+    text-transform: capitalize;
+}
+.stringTabTitle {
+    position: relative;
+    line-height: 20px;
+}
+.stringBadgeIconStack {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+.borderBottom {
+    flex: 1;
+    position: relative;
+    border-radius: 2px 2px 0px 0px;
+    background-color: #5b5fc7;
+    height: 2px;
+    overflow: hidden;
+}
+.borderPaddingStack {
+    align-self: stretch;
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+.base {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 3px 0px 0px;
+    gap: 17px;
+}
+.tab {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+.base1 {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 3px 0px 0px;
+}
+.tabs {
+    align-self: stretch;
+    border-bottom: 1px solid #1f1f1f;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 16px;
+    font-size: 14px;
+    color: #d8d8d8;
+}
+.string {
+    width: 364px;
+    position: relative;
+    line-height: 16px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.string1 {
+    width: 198px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.string2 {
+    width: 182px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.string3 {
+    position: relative;
+    line-height: 16px;
+}
+.stringParent {
+    width: 844px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+}
+.headerContents {
+    flex: 1;
+    height: 32px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0px 10px;
+    box-sizing: border-box;
+}
+.headercell {
+    align-self: stretch;
+    background-color: #1f1f1f;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+    color: #d8d8d8;
+}
+.avatarIcon {
+    width: 24px;
+    position: relative;
+    height: 24px;
+    object-fit: cover;
+}
+.userName {
+    flex: 1;
+    position: relative;
+}
+.personDetails {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+}
+.totalBalance {
+    width: 123px;
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.totalBalance1 {
+    width: 123px;
+    position: relative;
+    line-height: 10px;
+    display: inline-block;
+    color: #5b5fc7;
+    text-align: right;
+    flex-shrink: 0;
+}
+.totalBalance2 {
+    width: 103px;
+    position: relative;
+    line-height: 10px;
+    display: inline-block;
+    color: #5b5fc7;
+    text-align: right;
+    flex-shrink: 0;
+}
+.mainContentStack {
+    width: 844px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 60px;
+}
+.actions {
+    align-self: stretch;
+    width: 40px;
+}
+.bodyContents {
+    flex: 1;
+    background-color: #1f1f1f;
+    height: 44px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    box-sizing: border-box;
+}
+.bodycell {
+    align-self: stretch;
+    height: 44px;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+.bodyContents3 {
+    flex: 1;
+    background-color: #1f1f1f;
+    height: 44px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+.list {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 1px;
+    font-size: 12px;
+}
+.poweredBy1 {
+    position: relative;
+}
+.logo1Icon {
+    width: 80.4px;
+    position: relative;
+    height: 24px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.poweredBy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 4px;
+}
+.poweredby {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    font-size: 10px;
+    color: #797979;
+}
+.userslist {
+    width: 100%;
+    position: relative;
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+    background-color: #2d2b2c;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 20px;
+    box-sizing: border-box;
+    gap: 20px;
+    text-align: left;
+    font-size: 18px;
+    color: #fff;
+    font-family: Inter;
+}
+

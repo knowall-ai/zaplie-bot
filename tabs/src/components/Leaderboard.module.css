@@ -1,0 +1,259 @@
+.string {
+    width: 48px;
+    position: relative;
+    line-height: 16px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding-left: 6px;
+}
+
+.string2 {
+    width: auto;
+    flex: 1;
+    position: relative;
+    line-height: 16px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0px;
+}
+
+.string3 {
+    position: relative;
+    line-height: 16px;
+    display: flex;
+    align-items: center;
+}
+
+.sortIcon {
+    margin-left: 0px;
+    width: 17px;
+    height: 17px;
+    margin-right: 0px;
+}
+
+.stringWrapper {
+    width: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    font-family: 'Segoe UI';
+}
+
+.headerContents {
+    width: 100%;
+    flex: 1;
+    height: 32px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+
+    box-sizing: border-box;
+    gap: 20px;
+    padding-right: 10px;
+    padding-left: 5px;
+}
+
+.headercell {
+    width: 100% - 20px;
+    align-self: stretch;
+    background-color: #1f1f1f;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    color: #d8d8d8;
+    justify-content: space-between;
+
+}
+
+.avatarIcon {
+    width: 24px;
+    position: relative;
+    height: 24px;
+    object-fit: cover;
+}
+
+.userName {
+    flex: content;
+    position: relative;
+    margin-left: 5px;
+}
+
+.userRank {
+    flex: content;
+    position: relative;
+    margin-left: 10px;
+}
+
+.personDetails {
+    width: content;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 30px;
+    padding-left: 0px;
+}
+
+.mainContentStack {
+    flex: 1;
+    height: 32px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 20px;
+}
+
+.b {
+    position: relative;
+    font-weight: bold;
+    text-align: right;
+}
+
+.icon {
+    width: 10px;
+    position: relative;
+    height: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.bodyContents {
+    width: 100%;
+    flex: 1;
+    background-color: #1f1f1f;
+    height: 32px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0px;
+    box-sizing: border-box;
+    border-bottom: 1px solid #2D2B2C;
+}
+
+.bodycell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #222;
+    border-bottom: 1px solid #333;
+    padding: 0px;
+}
+
+.feedlist {
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1px;
+    text-align: left;
+    font-size: 12px;
+    color: #fff;
+    font-family: Inter;
+    background-color: #2d2b2c;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.bodyContents {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding-left: 3px;
+    padding-right: 10px;
+}
+
+.mainContentStack {
+    display: flex;
+    align-items: center;
+}
+
+.personDetails {
+    display: flex;
+    align-items: center;
+}
+
+
+
+.avatarIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.b {
+    margin-left: auto;
+    margin-right: 10px;
+}
+
+.icon {
+    width: 16px;
+    height: 16px;
+
+}
+
+.horizontalContainer {
+    margin: 0;
+    padding: 0;
+    padding: 0px;
+}
+
+.yellowAmount {
+    color: #F2A900;
+    ;
+}
+
+.circleFirstPlace,
+.circleSecondPlace,
+.circleThirdPlace,
+.circleDefaultPlace {
+    width: 24px;
+    height: 24px;
+}
+
+.table {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.rankNumber {
+    position: absolute;
+    left: 49%;
+    top: 18%;
+    transform: translateX(-50%);
+    color: white;
+    font-weight: 700;
+
+}
+
+.blackRank {
+    color: black;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.firstPlace,
+.secondPlace,
+.thirdPlace,
+.defaultPlace {
+    display: flex;
+    align-items: center;
+}

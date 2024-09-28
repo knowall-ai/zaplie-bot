@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "target": "es2017",
+    "module": "commonjs",
+    "outDir": "./lib",
+    "rootDir": "./",
+    "sourceMap": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./lib/.tsbuildinfo",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "typeRoots": ["./src/types"],
+    "noEmit": false,
+  },
+  "include": ["src/**/*.ts"]  // Ensure this covers your `global.d.ts`
+}

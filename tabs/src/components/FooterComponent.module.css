@@ -1,0 +1,20 @@
+.footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  text-align: center;
+  padding: 10px 0;
+  background-color: #2d2b2c; /* Optional: Add a background color for better contrast */
+  color: white;
+  font-size: 12px;
+  z-index: 1;
+}
+
+.footer a {
+  color: white;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline; /* Optional: Add underline on hover for better UX */
+}
