@@ -6,6 +6,7 @@ import {
 } from '../services/lnbitsServiceLocal';
 import PurchasePopup from './PurchasePopup';
 import ProvidedBy from '../images/ProvidedBy.svg';
+import imagePlaceholder from '../images/imagePlaceholder.svg';
 
 const stallID = process.env.REACT_APP_LNBITS_STORE_ID as string;
 
@@ -119,21 +120,25 @@ const RewardsComponent: FunctionComponent<{
           rewards.map(reward => (
             <div key={reward.id} className={styles.card}>
               <img
-                src={reward.image}
+                src={reward.image && reward.image.length > 0 ? reward.image : imagePlaceholder}
                 alt={reward.name}
                 className={styles.rewardImage}
                 style={{ height: '160px' }} // Fixed height
               />
               <h3 className={styles.cardTitle}>{reward.name}</h3>
               <p className={styles.cardDescription}>
-                {reward.shortDescription}
+                {reward.shortDescription.length > 140
+                  ? `${reward.shortDescription.substring(0, 140)}...`
+                  : reward.shortDescription}
               </p>
-              <p
-                className={styles.productDetails}
-                onClick={() => handleProductDetailsClick(reward.link)}
-              >
-                Product details
-              </p>
+              {reward.link && reward.link.length > 0 && (
+                <p
+                  className={styles.productDetails}
+                  onClick={() => handleProductDetailsClick(reward.link)}
+                >
+                  Product details</p>
+              )}
+
               <div className={styles.priceContainer}>
                 <p className={styles.price}>{formatPrice(reward.price)}</p>
                 <p className={styles.sats}>Sats</p>
@@ -155,7 +160,7 @@ const RewardsComponent: FunctionComponent<{
           onClose={handleClosePopup}
           wallet={userWallet}
           hasEnoughSats={hasEnoughSats}
-          reward={selectedReward} 
+          reward={selectedReward}
         />
       )}{' '}
       {/* Render popup if showPopup is true and userWallet is available */}

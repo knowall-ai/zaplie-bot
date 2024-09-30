@@ -19,7 +19,7 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
 
   const message = hasEnoughSats
     ? `Please confirm you would like to purchase this reward.`
-    : `D'oh! You do not have enough Sats to redeem this reward.`;
+    : `D'oh! You do not have enough Sats to redeem this reward yet.`;
 
   const handleOverlayClick = () => {
     onClose();
@@ -31,7 +31,9 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
 
   const handleConfirmClick = () => {
     if (storeOwnerEmail) {
-      const subject = encodeURIComponent(`REWARD PURCHASE REQUEST: ${reward.name}`);
+      const subject = encodeURIComponent(
+        `REWARD PURCHASE REQUEST: ${reward.name}`,
+      );
       window.location.href = `mailto:${storeOwnerEmail}?subject=${subject}`;
     } else {
       console.error('Store owner email is not defined.');
@@ -48,21 +50,20 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
       <div className={styles.popup} onClick={handlePopupClick}>
-        <p className={styles.title}>Confirmation</p>
+        <p className={styles.title}>
+          {hasEnoughSats ? 'Confirmation' : 'Oops!'}
+        </p>
         <p className={styles.message}>{message}</p>{' '}
         {/* Display the message based on the boolean value */}
         <div className={styles.buttonContainer}>
           <button className={styles.closeButton} onClick={onClose}>
-            Cancel
+            {hasEnoughSats ? 'Cancel' : 'Close'}
           </button>
-          <button
-            onClick={handleConfirmClick}
-            className={
-              hasEnoughSats ? styles.buyButton : styles.buyButtonDisabled
-            }
-          >
-            Confirm
-          </button>
+          {hasEnoughSats && (
+            <button onClick={handleConfirmClick} className={styles.buyButton}>
+              Confirm
+            </button>
+          )}
         </div>
       </div>
     </div>
