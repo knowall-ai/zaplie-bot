@@ -1,18 +1,29 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import styles from './WalletTransactionHistory.module.css';
 import WalletTransactionLog from './WalletTransactionLog';
 
-const WalletTransactionHistory: React.FC = () => {
+
+interface WalletTransactionHistoryProps {
+  activeMainTab?: string;
+}
+const WalletTransactionHistory: React.FC<WalletTransactionHistoryProps> = ({ activeMainTab }) => {
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [activeWalletTabName, setActiveWalletTabName] = useState<string>('Private');
 
   const onHistoryTabClick = (tabName: string) => {
     setActiveTab(tabName);
   };
 
-  const filterZaps = (currentActiveTab: string) => {
+  const filterZaps = (currentActiveTab: string,currentMainTab: string) => {
     // Define filterZaps function here or import it from WalletTransactionLog
-    console.log(`Filtering zaps for tab: ${currentActiveTab}`);
+    setActiveWalletTabName(currentMainTab);
   };
+
+  useEffect(() => {
+    if (activeMainTab) {
+      filterZaps('all',activeMainTab);
+    }
+  }, [activeMainTab, filterZaps]);
 
   return (
     <div className={styles.feedcomponent}>
@@ -54,10 +65,23 @@ const WalletTransactionHistory: React.FC = () => {
           </div>
         </div>
       </div>
-      <WalletTransactionLog
+      
+        { activeWalletTabName === 'Private' ? (
+          <WalletTransactionLog
         filterZaps={onHistoryTabClick}
         activeTab={activeTab}
-      />
+        activeWallet={activeWalletTabName}
+      />)
+        : (
+          <WalletTransactionLog
+          filterZaps={onHistoryTabClick}
+          activeTab={activeTab}
+          activeWallet={activeWalletTabName}
+        />
+        )
+      }
+    
+         
     </div>
   );
 };

@@ -14,7 +14,7 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
   hasEnoughSats,
   reward,
 }) => {
-  const storeOwnerEmail = process.env.REACT_APP_STORE_OWNER_EMAIL;
+  const storeOwnerEmail = process.env.REACT_APP_LNBITS_STORE_OWNER_EMAIL;
   console.log('Store Owner Email:', storeOwnerEmail);
 
   const message = hasEnoughSats

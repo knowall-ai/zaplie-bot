@@ -50,7 +50,7 @@ const WalletYourWalletInfoCard: React.FC = () => {
           className="col-md-1 item"
           style={{ paddingTop: '30px', paddingLeft: '10px' }}
         >
-          <button className="refreshImageIcon">
+          <button style={{ display: 'none' }} className="refreshImageIcon">
             <img
               src={ArrowClockwise}
               alt="icon"
