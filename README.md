@@ -40,7 +40,7 @@ The designs can be previewed in [Figma](https://www.figma.com/proto/i0GdiVa7Dgu1
 
 Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and recognition through Bitcoin micro-transactions and AI-powered automation. Here’s how you can get started and use Zapp.ie effectively with your team:
 
-## Prerequisite to use this sample
+## Prerequisite to starting development
 
 - [Node.js](https://nodejs.org/), supported versions: 18
 - A Microsoft 365 tenant in which you have permission to upload Teams apps (where other developers have not been deploying the same bot with a matching ID). You may be able to get a free Microsoft 365 developer tenant by joining the [Microsoft 365 developer program](https://developer.microsoft.com/en-us/microsoft-365/dev-program). However, it seems recently Microsoft have removed this offering other than to users who have a Visual Studio Enterprise subscription, (see [Creating a Free Microsoft 365 Dev Tenant is Not Possible](https://o365reports.com/2024/03/14/creating-a-free-microsoft-365-e5-developer-tenant-is-no-longer-possible/)) and now advise creating a "single-license development tenant" (see steps in `Wiki` > `Setup` > `Microsoft development tenant`).
