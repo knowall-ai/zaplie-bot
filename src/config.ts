@@ -6,6 +6,9 @@ const config = {
   clientId: process.env.AAD_APP_CLIENT_ID,
   tenantId: process.env.AAD_APP_TENANT_ID,
   clientSecret: process.env.AAD_APP_CLIENT_SECRET,
+  timeout: process.env.TIMEOUT || 30000,
 };
+
+console.log('Configuration:', config);
 
 export default config;

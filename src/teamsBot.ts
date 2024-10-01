@@ -46,10 +46,10 @@ export class TeamsBot extends TeamsActivityHandler {
 
     // Define the state store for your bot.
     const memoryStorage = new MemoryStorage();
-
     // Create conversation and user state with in-memory storage provider.
     this.conversationState = new ConversationState(memoryStorage);
     this.userState = new UserState(memoryStorage);
+
 
     // Register commands
     SSOCommandMap.register('send zap', new SendZapCommand());

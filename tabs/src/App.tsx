@@ -12,6 +12,7 @@ import React from 'react';
 import { MsalProvider } from '@azure/msal-react';
 import { IPublicClientApplication } from '@azure/msal-browser';
 import { CustomNavigationClient } from './utils/NavigationClient';
+import RequireAuth from './components/RequireAuth'; 
 
 // Sample app imports
 import { PageLayout } from './components/PageLayout';
@@ -49,10 +50,10 @@ function Pages() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
-      <Route path="/feed" element={<Feed />} />
-      <Route path="/users" element={<Users />} />
-      <Route path="/Rewards" element={<Rewards />} />
-      <Route path="/Wallet" element={<Wallet />} />
+      <Route path="/feed" element={<RequireAuth><Feed /></RequireAuth>} />
+      <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
+      <Route path="/Rewards" element={<RequireAuth><Rewards /></RequireAuth>} />
+      <Route path="/Wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
     </Routes>
   );
 }

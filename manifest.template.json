@@ -77,8 +77,8 @@
                 "channelTab"
             ], 
             "name": "Feed", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net"
+            "contentUrl": "{{CONTENT_URL}}", 
+            "websiteUrl": "{{WEBSITE_URL}}"
         }, 
         { 
             "entityId": "usersTab", 
@@ -91,8 +91,8 @@
                 "channelTab"
             ], 
             "name": "Users", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/users", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/users"
+            "contentUrl": "{{CONTENT_URL}}/users", 
+            "websiteUrl": "{{WEBSITE_URL}}/users"
         } ,       { 
             "entityId": "rewardsTab", 
             "scopes": [       
@@ -104,8 +104,8 @@
                 "channelTab"
             ], 
             "name": "Rewards", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/rewards", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/rewards"
+            "contentUrl": "{{CONTENT_URL}}/rewards", 
+            "websiteUrl": "{{WEBSITE_URL}}/rewards"
         },
                { 
             "entityId": "walletTab", 
@@ -118,8 +118,8 @@
                 "channelTab"
             ], 
             "name": "Wallet", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/wallet", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/wallet"
+            "contentUrl": "{{CONTENT_URL}}/wallet", 
+            "websiteUrl": "{{WEBSITE_URL}}/wallet"
         }
     ],
     "permissions": [

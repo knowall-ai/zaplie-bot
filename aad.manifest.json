@@ -1,7 +1,7 @@
 {
     "id": "${{AAD_APP_OBJECT_ID}}",
     "appId": "${{AAD_APP_CLIENT_ID}}",
-    "name": "Zapp.ie",
+    "name": "Zapp.ie v2",
     "accessTokenAcceptedVersion": 2,
     "signInAudience": "AzureADMyOrg",
     "optionalClaims": {
@@ -96,6 +96,10 @@
         {
           "url": "https://${{BOT_DOMAIN}}/auth-end.html",
           "type": "Web"
+        },
+        {
+            "url": "http://localhost:3000",
+            "type": "spa"
         }
     ]
 }
