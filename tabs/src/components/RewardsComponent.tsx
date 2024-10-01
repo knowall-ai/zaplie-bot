@@ -6,7 +6,7 @@ import {
 } from '../services/lnbitsServiceLocal';
 import PurchasePopup from './PurchasePopup';
 import ProvidedBy from '../images/ProvidedBy.svg';
-import imagePlaceholder from '../images/imagePlaceholder.svg';
+import imagePlaceholder from '../images/imagePlaceholderNew.svg';
 
 const stallID = process.env.REACT_APP_LNBITS_STORE_ID as string;
 
