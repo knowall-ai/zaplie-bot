@@ -7,16 +7,10 @@ import {
   ConversationState,
   UserState,
   CardFactory,
-  Middleware,
   MessageFactory,
 } from 'botbuilder';
-import {
-  getUsers,
-  payInvoice,
-  getWalletIdByUserId,
-  createInvoice,
-} from '../services/lnbitsService';
-import { error } from 'console';
+import { getUsers, payInvoice, createInvoice } from '../services/lnbitsService';
+import { UserService } from '../services/userService';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 
@@ -43,14 +37,6 @@ export class SendZapCommand extends SSOCommand {
     }
   }
 }
-
-/*
-// Helper function to extract the amount from the message text
-function extractAmountFromMessage(text: string): number {
-  const amountMatch = text.match(/(\d+)/);
-  return amountMatch ? parseInt(amountMatch[0], 10) : 0;
-}
-  */
 
 export async function SendZap(
   sendersWallet: Wallet,
@@ -194,8 +180,20 @@ async function createZapCard() {
 async function populateWalletChoices() {
   console.log('Populating wallet choices ...');
   const users = await getUsers(adminKey, null);
-  if (users) {
-    return users.map((user: any) => ({
+
+  // Get the current user
+  const userService = UserService.getInstance();
+  const currentUser = userService.getCurrentUser();
+
+  let filteresUsers = users;
+  if (currentUser) {
+    filteresUsers = users.filter(
+      user => user?.aadObjectId !== userService.getCurrentUser().aadObjectId,
+    );
+  }
+
+  if (filteresUsers) {
+    return filteresUsers.map((user: any) => ({
       title: user.displayName,
       value: user.id,
     }));

@@ -1,4 +1,4 @@
-import { Middleware, TurnContext } from 'botbuilder';
+import { Middleware, TurnContext, TeamsInfo } from 'botbuilder';
 import { UserService } from './userService';
 
 export class FetchUserMiddleware {
@@ -11,7 +11,14 @@ export class FetchUserMiddleware {
   async onTurn(context: TurnContext, next: () => Promise<void>): Promise<void> {
     // Check if user is already stored in the turn state (for the current turn)
     if (!context.turnState.get('user')) {
-      const user = await this.userService.getUser(context);
+      console.log("User not found in turn state. Fetching user's info ...");
+      const member = await TeamsInfo.getMember(
+        context,
+        context.activity.from.id,
+      );
+
+      const userService = UserService.getInstance();
+      const user = await userService.ensureUserSetup(member);
       context.turnState.set('user', user); // Store user in turn state for this turn
     }
 

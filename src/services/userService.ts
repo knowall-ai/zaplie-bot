@@ -1,23 +1,44 @@
 // userService.ts
 
 /// <reference path="../../src/types/global.d.ts" />
-
-import { ConsoleTranscriptLogger, TurnContext } from 'botbuilder';
+import {
+  ConsoleTranscriptLogger,
+  TeamsChannelAccount,
+  TurnContext,
+  TeamsInfo,
+} from 'botbuilder';
+import { TeamsActivityHandler } from 'botbuilder';
 import {
   getUsers,
   createUser,
   createWallet,
   updateUser,
+  getUser,
   getUserWallets,
+  topUpWallet,
+  getWalletById,
+  getWalletName,
+  getWallets,
 } from './lnbitsService';
+import { syncBuiltinESMExports } from 'module';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
+
+interface CancellationToken {
+  isCancellationRequested: boolean;
+}
+
+function sanitizeString(str: string): string {
+  return str.replace(/[^a-zA-Z0-9]/g, '');
+}
 
 export class UserService {
   private static instance: UserService;
   private users: Map<string, User> = new Map(); // Simple in-memory cache
-
   private constructor() {}
+
+  // Private variable to hold the current user
+  private currentUser: User;
 
   public static getInstance(): UserService {
     if (!UserService.instance) {
@@ -26,60 +47,152 @@ export class UserService {
     return UserService.instance;
   }
 
-  public async getUser(context: TurnContext): Promise<User> {
-    const userId = context.activity.from.id;
+  // Setter function to update the current user
+  public setCurrentUser(user: User) {
+    this.currentUser = user;
+  }
 
-    // Check if the user is already in memory (in-session)
-    if (this.users.has(userId)) {
-      return this.users.get(userId)!;
+  // Getter function to access the current user
+  public getCurrentUser(): User {
+    return this.currentUser;
+  }
+
+  public async ensureUserSetup(
+    teamsChannelAccount: TeamsChannelAccount,
+  ): Promise<User> {
+    console.log('ensureUserSetup starting ...');
+
+    let user: User | null = null;
+    let lnbitsUsers = await getUsers(adminKey, {
+      aadObjectId: teamsChannelAccount.aadObjectId, // userProfile.aadObjectId,
+    });
+    if (lnbitsUsers.length > 1) {
+      throw new Error('More than one user found with the same aadObjectId');
     }
 
-    // Otherwise, create or fetch the user from the external service
-    let currentUser: User;
-
-    // Fetch user details from LNBits (assuming LNBits is an external service)
-    const users: User[] = await getUsers(adminKey, {
-      aadObjectId: context.activity.from.aadObjectId,
-    });
-
-    if (users.length < 1) {
-      console.log('User does not exist ... creating a new one');
-      const extra = {
-        aadObjectId: context.activity.from.aadObjectId,
-        profileImg:
-          'https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName=' +
-          context.activity.from.properties?.email,
-        privateWalletId: null,
-        allowanceWalletId: null,
-        userType: 'teammate',
-      };
-
-      currentUser = await createUser(
+    if (!lnbitsUsers || lnbitsUsers.length < 1) {
+      // Create LNbits user (they don't exist yet)
+      user = await createUser(
         adminKey,
-        context.activity.from.name,
+        teamsChannelAccount.name,
         'Private',
-        'someone@somewhere.com', // Placeholder for email
-        'password1',
-        extra,
+        teamsChannelAccount.email,
+        '', // The password is a legacy field and ignored anyway.
+        {
+          aadObjectId: teamsChannelAccount.aadObjectId,
+          userType: 'teammate',
+          profileImg: `https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName='${teamsChannelAccount.userPrincipalName}`, // TODO: Get the user's profile image from Teams
+          //profileImg: teamsChannelAccount.properties
+        }, // We'll check and update this when when they have both wallets anyway.
       );
 
       // Create their allowance wallet
       const allowanceWallet = await createWallet(
         adminKey,
-        currentUser.id,
+        user.id,
         'Allowance',
       );
-      currentUser = await updateUser(adminKey, currentUser.id, {
+      // TODO: Put this into a function (re-use below)
+      const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
+      if (initialAllowanceStr) {
+        const initialAllowance = parseInt(initialAllowanceStr); // Parse as a floating-point number
+        if (!isNaN(initialAllowance)) {
+          await topUpWallet(allowanceWallet.id, initialAllowance);
+        } else {
+          console.error(
+            'Invalid initial allowance value:',
+            initialAllowanceStr,
+          );
+        }
+      }
+      user = await updateUser(adminKey, user.id, {
         allowanceWalletId: allowanceWallet.id,
-        privateWalletId: currentUser.privateWallet?.id,
-      });
-    } else {
-      currentUser = users[0];
+      }); // Update the user with the allowance wallet id
     }
 
-    // Store the user in memory to avoid fetching again during the session
-    this.users.set(userId, currentUser);
+    // OK, so the user exists in LNbits
+    // Now let's ensure they have both wallets
 
-    return currentUser;
+    user = lnbitsUsers[0];
+
+    let allowanceWallet = null;
+
+    if (user.allowanceWallet) {
+      allowanceWallet = await getWalletById(user.id, user.allowanceWallet.id);
+      if (allowanceWallet.deleted) {
+        throw new Error(
+          'Mmm ... it looks like your allowance wallet has been deleted?!',
+        );
+      }
+    }
+    if (!allowanceWallet) {
+      // No matching allowance wallet found, create their allowance wallet
+      // But first, we should check if they have a wallet by that name already
+      let userWallets = await getUserWallets(adminKey, user.id);
+      let allowanceWallet = userWallets.find(w => w.name === 'Allowance');
+      if (allowanceWallet.balance_msat < 1) {
+        // If the orphaned wallet we found is empty, let's top them up so they can zap!
+        // TODO: Separate this out into a function
+        const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
+        if (initialAllowanceStr) {
+          const initialAllowance = parseInt(initialAllowanceStr); // Parse as a floating-point number
+          if (!isNaN(initialAllowance)) {
+            await topUpWallet(allowanceWallet.id, initialAllowance);
+          } else {
+            console.error(
+              'Invalid initial allowance value:',
+              initialAllowanceStr,
+            );
+          }
+        }
+      }
+      if (!allowanceWallet) {
+        allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
+        // TODO: Put this into a function (re-use below)
+        const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
+        if (initialAllowanceStr) {
+          const initialAllowance = parseInt(initialAllowanceStr); // Parse as a floating-point number
+          if (!isNaN(initialAllowance)) {
+            await topUpWallet(allowanceWallet.id, initialAllowance);
+          } else {
+            console.error(
+              'Invalid initial allowance value:',
+              initialAllowanceStr,
+            );
+          }
+        }
+      }
+      user = await updateUser(adminKey, user.id, {
+        allowanceWalletId: allowanceWallet.id,
+      }); // Update the user with the allowance wallet id
+    }
+
+    let privateWallet = null;
+
+    if (user.privateWallet) {
+      privateWallet = await getWalletById(user.id, user.privateWallet.id);
+      if (privateWallet.deleted) {
+        throw new Error(
+          'Mmm ... it looks like your private wallet has been deleted?!',
+        );
+      }
+    }
+    if (!privateWallet) {
+      // No matching private wallet found, create their private wallet
+      // But first, we should check if they have a wallet by that name already
+      let userWallets = await getUserWallets(adminKey, user.id);
+      let privateWallet = userWallets.find(w => w.name === 'Private');
+      if (!privateWallet) {
+        privateWallet = await createWallet(adminKey, user.id, 'Private');
+      }
+      user = await updateUser(adminKey, user.id, {
+        privateWalletId: privateWallet.id,
+      }); // Update the user with the private wallet id
+    }
+
+    // OK, now let's set the current user
+    this.setCurrentUser(user);
+    console.log('ensureUserSetup completed.');
+    return user;
   }
 }

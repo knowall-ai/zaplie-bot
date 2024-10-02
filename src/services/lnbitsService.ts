@@ -1,7 +1,6 @@
 // lnbitsService.ts
 
 /// <reference path="../../src/types/global.d.ts" />
-import { currentUser } from '../globalstate';
 
 import dotenvFlow from 'dotenv-flow';
 
@@ -22,54 +21,88 @@ let accessToken = null;
 // LNBits API is documented here:
 // https://demo.lnbits.com/docs/
 
-export async function getAccessToken(username: string, password: string) {
+// Store token in localStorage (persists between page reloads)
+let accessTokenPromise: Promise<string> | null = null; // To cache the pending token request
+
+export async function getAccessToken(
+  username: string,
+  password: string,
+): Promise<string> {
+  /*console.log(
+    `getAccessToken starting ... (username: ${username}, filterById: ${password}))`,
+  );*/
   if (accessToken) {
-    console.log('Using cached access token');
+    //console.log('Using cached access token: ' + accessToken);
     return accessToken;
+  } else {
+    console.log('No cached access token found');
   }
-  try {
-    const response = await fetch(`${lnbiturl}/api/v1/auth`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username, password }),
-      credentials: 'omit', // No cookies sent or accepted
-    });
 
-    if (!response.ok) {
-      throw new Error(
-        `Error creating access token (status: ${response.status}): ${response.statusText}`,
-      );
-    }
-
-    // Check if response has content
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('Response is not in JSON format');
-    }
-
-    // Parse the response as JSON
-    const data = await response.json();
-
-    // Check if the expected data is available
-    if (!data || !data.access_token) {
-      throw new Error('Access token is missing in the response');
-    }
-
-    // Store the access token in memory (string type)
-    accessToken = data.access_token;
-    console.log('Access token fetched and stored');
-
-    return accessToken;
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error('Error in getAccessToken:', error.message);
-    } else {
-      console.error('Unexpected error in getAccessToken:', error);
-    }
-    throw error; // Re-throw the error to handle it elsewhere
+  // If there's already a token request in progress, return the existing promise
+  if (accessTokenPromise) {
+    console.log('Returning ongoing access token request');
+    return accessTokenPromise;
   }
+
+  // No access token and no request in progress, create a new one
+  console.log('No cached access token found, requesting a new one');
+
+  // Store the promise of the request
+  accessTokenPromise = (async (): Promise<string> => {
+    try {
+      const response = await fetch(`${lnbiturl}/api/v1/auth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      //console.log('Request URL:', response.url);
+      //console.log('Request Status:', response.status);
+      //console.log('Request Headers:', response.headers);
+
+      if (!response.ok) {
+        throw new Error(
+          `Error creating access token (status: ${response.status}): ${response.statusText}`,
+        );
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Response is not in JSON format');
+      }
+
+      const data = await response.json();
+
+      if (!data || !data.access_token) {
+        throw new Error('Access token is missing in the response');
+      }
+
+      // Store the access token in memory and localStorage
+      accessToken = data.access_token;
+      if (accessToken) {
+        //localStorage.setItem('accessToken', accessToken);
+        console.log('Access token fetched and stored: ' + accessToken);
+      } else {
+        throw new Error('Access token is null, cannot store in localStorage.');
+      }
+
+      // Return the access token
+      return accessToken;
+    } catch (error) {
+      console.error('Error in getAccessToken:', error);
+      // Throw an error to ensure the promise doesn't resolve with undefined
+      throw new Error('Failed to retrieve access token');
+    } finally {
+      // Reset the promise to allow future requests
+      accessTokenPromise = null;
+    }
+  })();
+
+  // Return the token promise
+  return accessTokenPromise;
 }
 
 const getWallets = async (
@@ -258,12 +291,7 @@ const getUsers = async (
       }),
     );
 
-    console.log('getUsers usersData:', usersData);
-    const filteresUsers = usersData.filter(
-      user => user?.aadObjectId !== currentUser?.aadObjectId,
-    );
-
-    return filteresUsers;
+    return usersData;
   } catch (error) {
     console.error(error);
     throw error;
@@ -871,6 +899,8 @@ const createInvoice = async (
       }),
     });
 
+    console.log('createInvoice: response:', response);
+
     if (!response.ok) {
       throw new Error(`Error creating an invoice (status: ${response.status})`);
     }
@@ -959,6 +989,36 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
   }
 };
 
+async function topUpWallet(walletId: string, amount: number): Promise<void> {
+  const accessToken = await getAccessToken(`${userName}`, `${password}`);
+
+  const url = `${lnbiturl}/users/api/v1/topup`;
+  const body = {
+    amount: amount.toString(),
+    id: walletId,
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Wallet topped up successfully:', responseData);
+  } catch (error) {
+    console.error('Error topping up wallet:', error);
+  }
+}
+
 export {
   getWallets,
   createUser,
@@ -978,4 +1038,5 @@ export {
   createWallet,
   payInvoice,
   getWalletIdByUserId,
+  topUpWallet,
 };

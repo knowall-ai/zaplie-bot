@@ -1,6 +1,4 @@
 /// <reference path="./types/global.d.ts" />
-import { setCurrentUser } from './globalstate';
-
 import {
   TeamsActivityHandler,
   TurnContext,
@@ -13,6 +11,7 @@ import {
   Middleware,
   MessageFactory,
   TeamsInfo,
+  StatePropertyAccessor,
 } from 'botbuilder';
 import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
 import { Client } from '@microsoft/microsoft-graph-client';
@@ -21,25 +20,29 @@ import { SendZapCommand, SendZap } from './commands/sendZapCommand';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
-import { error } from 'console';
-import { getUser, getUsers, getWalletById } from './services/lnbitsService';
-
-let globalWalletId: string | null = null;
-let currentUser: User | null = null;
+import {
+  getUser,
+  getUsers,
+  getWalletById,
+  createUser,
+  createWallet,
+  updateUser,
+} from './services/lnbitsService';
+import { UserService } from './services/userService';
+import { access } from 'fs';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 interface CancellationToken {
   isCancellationRequested: boolean;
 }
 
-// Define global variables
-let globalZapAmount: number;
-let globalMentionedUserId: string;
-let globalMentionedUserName: string;
+let userSetupFlag = false;
 
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
   userState: UserState;
+  //userSetupFlagAccessor: StatePropertyAccessor<boolean>;
+  //userProfileAccessor: StatePropertyAccessor<User>;
 
   constructor() {
     super();
@@ -59,7 +62,6 @@ export class TeamsBot extends TeamsActivityHandler {
 
     this.onMessage(async (context, next) => {
       console.log('Running onMessage ...');
-
       const botId = context.activity.recipient.id; // Bot's ID
       const senderId = context.activity.from.id; // Sender's ID
 
@@ -71,41 +73,6 @@ export class TeamsBot extends TeamsActivityHandler {
       }
 
       try {
-        const userProfile = await this.getUserProfile(
-          context,
-          context.turnState.get('cancellationToken'),
-        );
-        console.log('User Profile:', userProfile);
-        const lnBitsUser = await getUsers(adminKey, {
-          aadObjectId: userProfile.aadObjectId,
-        })[0];
-        console.log('LNBits User:', lnBitsUser);
-        let privateWallet = null;
-        let allowanceWallet = null;
-        if (lnBitsUser) {
-          privateWallet = await getWalletById(
-            adminKey,
-            lnBitsUser.extra.privateWalletId,
-          );
-          allowanceWallet = await getWalletById(
-            adminKey,
-            lnBitsUser.extra.allowanceWalletId,
-          );
-        }
-        const currentUser = {
-          id: null, // This id is from the lnbits user table
-          displayName: userProfile.name,
-          profileImg: userProfile.profile, // Add logic to set profile image if available
-          aadObjectId: userProfile.aadObjectId,
-          email: userProfile.email,
-          privateWallet: privateWallet,
-          allowanceWallet: allowanceWallet,
-        };
-
-        setCurrentUser(currentUser);
-        let mentions = TurnContext.getMentions(context.activity);
-        //console.log('context.activity:', context.activity);
-
         if (
           context.activity.value &&
           context.activity.value.action === 'submitZaps'
@@ -116,7 +83,7 @@ export class TeamsBot extends TeamsActivityHandler {
           const receiver = await getUser(adminKey, receiverId);
 
           if (!currentUser.allowanceWallet.id) {
-            throw new error('No sending wallet found.');
+            throw new Error('No sending wallet found.');
           }
 
           if (!receiver.privateWallet) {
@@ -284,31 +251,47 @@ export class TeamsBot extends TeamsActivityHandler {
         console.error('Error in onMessage handler:', error);
       }
         */
-    });
-
-    this.onMembersAdded(async (context, next) => {
-      try {
-        const membersAdded = context.activity.membersAdded;
-        for (let cnt = 0; cnt < membersAdded.length; cnt++) {
-          if (membersAdded[cnt].id) {
-            await context.sendActivity('Welcome to the sso bot sample!');
-            break;
-          }
-        }
-      } catch (error) {
-        console.error('Error in onMembersAdded handler:', error);
-      }
       await next();
     });
-  }
 
-  // Insert the getUserProfile method here
-  private async getUserProfile(
-    context: TurnContext,
-    cancellationToken: CancellationToken,
-  ): Promise<any> {
-    const member = await TeamsInfo.getMember(context, context.activity.from.id);
-    return member;
+    //this.onMembersAdded(async (context, next) => {
+    this.onCommand(async (context, next) => {
+      // Retrieve the per-user setup flag
+      //const currentUser = await this.userProfileAccessor.get(context);
+      const userService = UserService.getInstance();
+      const currentUser = userService.getCurrentUser();
+      console.log('Current User:', currentUser);
+
+      if (!currentUser) {
+        console.log('Lets make sure the user is setup ...');
+
+        await context.sendActivity(
+          `Let me just check you're all setup. Bear with me a few seconds please ...`,
+        );
+
+        try {
+          // Let's  check they are setup correctly.
+          const member = await TeamsInfo.getMember(
+            context,
+            context.activity.from.id,
+          );
+
+          const userService = UserService.getInstance();
+          const currentUser = await userService.ensureUserSetup(member);
+
+          userService.setCurrentUser(currentUser);
+          //await this.userProfileAccessor.set(context, currentUser);
+          //await this.userState.saveChanges(context);
+
+          userSetupFlag = true; // OK, all done, we shouldn't need to do this again.
+        } catch (error) {
+          console.error('Error in onCommand handler:', error);
+          await context.sendActivity(
+            'Mmmm ... an error occurred while setting up your account!',
+          );
+        }
+      }
+    });
   }
 
   async run(context: TurnContext) {

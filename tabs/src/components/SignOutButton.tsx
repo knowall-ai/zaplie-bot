@@ -42,14 +42,22 @@ export const SignOutButton = () => {
     };
 
     return (
-        <div>
-            <IconButton
-                iconProps={accountCircleIcon}
-                title="Account"
-                ariaLabel="Account"
-                onClick={(event) => setAnchorEl(event.currentTarget as HTMLElement)}
-            />
-            {open && <ContextualMenu {...menuProps} />}
+        <div style={{ display: 'inline' }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              handleLogout('popup');
+            }}
+            style={{ textDecoration: 'none', cursor: 'pointer'}}
+            title="Sign Out"
+            aria-label="Sign Out"
+          >            
+              Sign Out
+
+          </a>
+          {open && <ContextualMenu {...menuProps} />}
         </div>
-    )
-};
+      );
+    };
+    
