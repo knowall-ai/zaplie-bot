@@ -75,7 +75,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
 
       console.log('All zaps: ', allZaps);
 
-      setZaps(prevState => [...prevState, ...allZaps]);
+      // setZaps(prevState => [...prevState, ...allZaps]); gives duplicates
+      setZaps(allZaps); // Update this line to replace the state instead of appending
+
     } catch (error: unknown) {
       if (error instanceof Error) {
         setError(`Failed to fetch users: ${error.message}`);
@@ -93,6 +95,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
       initialRender.current = false;
       // Clear the zaps
       setZaps([]);
+      fetchZaps();
+    } else {
+      console.log(`Timestamp updated: ${timestamp}`);
       fetchZaps();
     }
   }, [timestamp]);

@@ -2,7 +2,6 @@ import { FunctionComponent, useCallback, useState } from 'react';
 import styles from './FeedComponent.module.css';
 import FeedList from './FeedList';
 import Leaderboard from './Leaderboard';
-import React from 'react';
 
 const FeedComponent: FunctionComponent = () => {
   const [timestamp, setTimestamp] = useState(
@@ -22,7 +21,10 @@ const FeedComponent: FunctionComponent = () => {
   };
 
   const handlePeriodClick = (days: number) => {
-    setTimestamp(Math.floor(Date.now() / 1000 - days * 24 * 60 * 60));
+    // setTimestamp(Math.floor(Date.now() / 1000 - days * 24 * 60 * 60));
+    const newTimestamp = Math.floor(Date.now() / 1000 - days * 24 * 60 * 60);
+    console.log(`Period clicked: ${days} days, new timestamp: ${newTimestamp}`);
+    setTimestamp(newTimestamp);
     setActivePeriod(days);
   };
 
