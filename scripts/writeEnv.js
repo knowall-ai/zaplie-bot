@@ -14,6 +14,8 @@ const selectedVars = {
   LNBITS_USERNAME: envConfig.LNBITS_USERNAME,
   LNBITS_PASSWORD: envConfig.LNBITS_PASSWORD,
   LNBITS_ADMINKEY: envConfig.LNBITS_ADMINKEY,
+  WEBSITE_URL: envConfig.WEBSITE_URL,
+  CONTENT_URL: envConfig.CONTENT_URL,
 };
 
 // Function to append selected variables to the appropriate environment files
@@ -45,4 +47,6 @@ appendEnvFile(envOutputPath, {
   LNBITS_USERNAME: selectedVars.LNBITS_USERNAME,
   LNBITS_PASSWORD: selectedVars.LNBITS_PASSWORD,
   LNBITS_ADMINKEY: selectedVars.LNBITS_ADMINKEY,
+  WEBSITE_URL: selectedVars.WEBSITE_URL,
+  CONTENT_URL: selectedVars.CONTENT_URL,
 });
