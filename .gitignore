@@ -1,6 +1,7 @@
 # TeamsFx files
 env/.env.*.user
 env/.env.local
+env/.env.test
 .localConfigs
 appPackage/build
 
