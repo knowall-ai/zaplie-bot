@@ -1,0 +1,581 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup {
+    width: 688px;
+    height: 400px;
+    padding: 28px 32px 32px 32px;
+    gap: 20px;
+    opacity: 1;
+    position: relative;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 28px 32px 32px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+}
+
+.popupReceive {
+    width: 688px;
+    height: 345px;
+    padding: 28px 32px 32px 32px;
+    gap: 20px;
+    opacity: 1;
+    position: relative;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 28px 32px 32px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+}
+
+.title {
+    width: 624px;
+    height: 24px;
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 24px;
+    color: #FFFFFF;
+    flex: none;
+    order: 0;
+    flex-grow: 0;
+}
+
+.text {
+    width: 624px;
+    height: 20px;
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+    color: rgba(216, 216, 216, 1);
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    margin-bottom: 10px;
+}
+
+.inputForm {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0px;
+    gap: 10px;
+    width: 624px;
+    height: 177px;
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.inputRow {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding-bottom: 10px;
+    padding-top: 10px;
+    width: 100%;
+}
+
+.inputField {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0px 0px 0px 10px;
+    /* gap: 10px; */
+    left: 0px;
+    width: 302px;
+    height: 32px;
+    background: #1F1F1F;
+    border-radius: 4px;
+    border: #1F1F1F;
+    flex: none;
+    order: 0;
+    align-self: stretch;
+    flex-grow: 1;
+    font-size: 12px;
+}
+
+.button {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 94px;
+    height: 32px;
+    border: 1px solid #D8D8D8;
+    border-radius: 4px;
+    flex: none;
+    order: 0;
+    flex-grow: 1;
+    font-family: Inter;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 14.52px;
+    text-align: center;
+    color: rgba(242, 169, 0, 1);
+
+}
+
+.button:hover {
+    background-color: #2D2B2C;
+}
+
+.textarea {
+    width: 624px;
+    height: 86px;
+    background: #1F1F1F;
+    border-radius: 4px;
+    padding: 8px;
+    color: white;
+    border: none;
+    resize: none;
+    flex: none;
+    order: 1;
+    align-self: stretch;
+    flex-grow: 1;
+    font-size: 12px;
+}
+
+.scanButton {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 214px;
+    height: 38px;
+    border: 1px solid #D8D8D8;
+    border-radius: 4px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+    flex: none;
+    order: 0;
+    flex-grow: 0;
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 20px;
+    text-align: center;
+    color: #D8D8D8;
+}
+
+.qrIcon {
+    margin-right: 8px;
+    width: 21px;
+    height: 21px;
+}
+
+.actionRow {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.cancelButton {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 96px;
+    height: 38px;
+    border: 1px solid #F2A900;
+    border-radius: 4px;
+    flex: none;
+    order: 0;
+    flex-grow: 0;
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: normal;
+    font-size: 12px;
+    color: #F2A900;
+    background-color: #2D2B2C;
+}
+
+.cancelButton:hover {
+    background-color: #1F1F1F;
+}
+
+.sendOptions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkboxContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.checkbox {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0px;
+    width: 16px;
+    height: 19px;
+    flex: none;
+    order: 0;
+    flex-grow: 0;
+    align-items: center;
+    margin-right: 20px;
+    border: 1px solid #D8D8D8;
+    border-radius: 4px;
+}
+
+.checkboxLabel {
+    width: 120px;
+    height: 15px;
+    display: flex;
+    align-items: center;
+    font-family: 'Inter';
+    padding: 0px;
+    font-style: normal;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 15px;
+    order: 1;
+    flex-grow: 0;
+    margin-left: 10px;
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 15px;
+    color: rgba(216, 216, 216, 1);
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    padding-top: 3px;
+
+}
+
+.sendButton {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 111px;
+    height: 38px;
+    background: #1F1F1F;
+    border-radius: 4px;
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: normal;
+    font-size: 12px;
+    color: rgba(121, 121, 121, 1);
+}
+
+.sendButton:hover {
+    background-color: #1F1F1F;
+}
+
+.sendButtonEnabled {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 111px;
+    height: 38px;
+    background: #F2A900;
+    border-radius: 4px;
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    cursor: pointer;
+    color: rgb(0, 0, 0);
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.sendButtonEnabled:hover {
+    background-color: #d18a00;
+}
+
+.sendPopupSuccess {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 32px 32px;
+    gap: 20px;
+    position: relative;
+    width: 287px;
+    height: 84px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+}
+
+.sendPopupFailed {
+    display: flex;
+    flex-direction: column;
+    align-items: left;
+    padding: 28px 32px 32px;
+    gap: 20px;
+    position: relative;
+    width: 337px;
+    height: 220px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+
+}
+
+.sendPopupHeader {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+}
+
+.sendPopupText {
+    color: white;
+    font-size: 16px;
+    width: 220px;
+}
+
+.sendPopupSubText {
+    color: rgba(216, 216, 216, 1);
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+.checkmarkIcon {
+    width: 24px;
+    height: 24px;
+}
+
+.buttonContainerSmallPopup {
+    display: flex;
+    justify-content: space-between;
+    width: 100%+20px;
+    margin-top: 0px;
+}
+
+.changeAmountButton {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 117px;
+    height: 38px;
+    border: 1px solid #F2A900;
+    border-radius: 4px;
+    flex: none;
+    order: 0;
+    flex-grow: 0;
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: normal;
+    font-size: 12px;
+    color: #F2A900;
+    background-color: #2D2B2C;
+    ;
+}
+
+.changeAmountButton:hover {
+    background-color: #1F1F1F;
+}
+
+.receivePopupWithQrCode {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 32px 32px;
+    gap: 4px;
+    position: relative;
+    width: 688px;
+    height: 360px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+}
+
+.sendQrCodeContainer {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    padding: 0px;
+    left: 10px;
+    gap: 40px;
+    width: 625px;
+    height: 232px;
+    order: 1;
+    flex-grow: 0;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.qrCode {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 0px;
+    width: 234px;
+    height: 232px;
+    background: #FFFFFF;
+    border: 1px solid #F5F5F5;
+    border-radius: 24px;
+    flex: none;
+    order: 0;
+    flex-grow: 0;
+}
+
+.txtContainer {
+    display: flex;
+    flex-direction: column;
+    padding: 0px;
+    gap: 20px;
+    width: 351px;
+    flex: none;
+    order: 0;
+    align-self: stretch;
+    flex-grow: 0;
+    font-size: 16px;
+    margin-bottom: 20px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+    color: rgba(216, 216, 216, 1);
+}
+
+.receiveButtonContainer {
+    display: flex;
+    /* gap: 10px; */
+    margin-top: 10px;
+    justify-content: space-between;
+}
+
+.copyButton,
+.closeButton {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    width: 96px;
+    height: 38px;
+    border: 1px solid #D8D8D8;
+    border-radius: 4px;
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    background-color: #2D2B2C;
+}
+
+.copyIcon {
+    margin-right: 5px;
+    width: 20px;
+    height: 20px;
+}
+
+.qrReaderForm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0px;
+    padding-top: 0px;
+    gap: 10px;
+    width: 624px;
+    height: 324px;
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    background-color: #1F1F1F;
+    overflow: hidden;
+}
+
+.qrReaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0px;
+    gap: 0px;
+    width: 100%;
+    height: 100%;
+    flex: none;
+    order: 1;
+    flex-grow: 0;
+    background-color: #1F1F1F;
+    position: relative;
+}
+
+/* Hide arrows in Chrome, Safari, Edge, and Opera */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+/* Hide arrows in Firefox */
+input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+.loaderOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+  
+.loaderIcon {
+    width: 100px;
+    height: 100px;
+  }
