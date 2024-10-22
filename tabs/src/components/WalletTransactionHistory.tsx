@@ -2,26 +2,34 @@ import React, { useCallback, useEffect, useState } from 'react';
 import styles from './WalletTransactionHistory.module.css';
 import WalletTransactionLog from './WalletTransactionLog';
 
-
 interface WalletTransactionHistoryProps {
   activeMainTab?: string;
 }
-const WalletTransactionHistory: React.FC<WalletTransactionHistoryProps> = ({ activeMainTab }) => {
+const WalletTransactionHistory: React.FC<WalletTransactionHistoryProps> = ({
+  activeMainTab,
+}) => {
   const [activeTab, setActiveTab] = useState<string>('all');
-  const [activeWalletTabName, setActiveWalletTabName] = useState<string>('Private');
+  const [activeWalletTabName, setActiveWalletTabName] =
+    useState<string>('Private');
 
   const onHistoryTabClick = (tabName: string) => {
     setActiveTab(tabName);
   };
 
-  const filterZaps = (currentActiveTab: string,currentMainTab: string) => {
+  useEffect(() => {
+    if (activeMainTab) {
+      setActiveTab('all'); // Reset to 'all' when activeMainTab changes
+    }
+  }, [activeMainTab]);
+
+  const filterZaps = (currentActiveTab: string, currentMainTab: string) => {
     // Define filterZaps function here or import it from WalletTransactionLog
     setActiveWalletTabName(currentMainTab);
   };
 
   useEffect(() => {
     if (activeMainTab) {
-      filterZaps('all',activeMainTab);
+      filterZaps('all', activeMainTab);
     }
   }, [activeMainTab, filterZaps]);
 
@@ -65,23 +73,20 @@ const WalletTransactionHistory: React.FC<WalletTransactionHistoryProps> = ({ act
           </div>
         </div>
       </div>
-      
-        { activeWalletTabName === 'Private' ? (
-          <WalletTransactionLog
-        filterZaps={onHistoryTabClick}
-        activeTab={activeTab}
-        activeWallet={activeWalletTabName}
-      />)
-        : (
-          <WalletTransactionLog
+
+      {activeWalletTabName === 'Private' ? (
+        <WalletTransactionLog
           filterZaps={onHistoryTabClick}
           activeTab={activeTab}
           activeWallet={activeWalletTabName}
         />
-        )
-      }
-    
-         
+      ) : (
+        <WalletTransactionLog
+          filterZaps={onHistoryTabClick}
+          activeTab={activeTab}
+          activeWallet={activeWalletTabName}
+        />
+      )}
     </div>
   );
 };

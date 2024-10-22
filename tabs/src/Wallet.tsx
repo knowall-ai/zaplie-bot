@@ -11,7 +11,10 @@ const Wallet: React.FC = () => {
   );
   const [activePeriod, setActivePeriod] = useState(7); // Set default to 7-days
   const [showYourWalletTab, setshowYourWalletTab] = useState(true);
-  const [activeWalletTabName, setActiveWalletTabName] = useState<string>('Private');
+  const [activeWalletTabName, setActiveWalletTabName] =
+    useState<string>('Private');
+  const [activeTransactionTab, setActiveTransactionTab] =
+    useState<string>('all'); // New state variable
 
   const handleYourWalletTab = () => {
     setshowYourWalletTab(true);
@@ -63,12 +66,12 @@ const Wallet: React.FC = () => {
       {showYourWalletTab ? (
         <div>
           <WalletYourWalletInfoCard />
-          <WalletTransactionHistory activeMainTab = {activeWalletTabName}  />
+          <WalletTransactionHistory activeMainTab={activeWalletTabName} />
         </div>
       ) : (
         <div>
           <WalletAllowanceCard />
-          <WalletTransactionHistory activeMainTab = {activeWalletTabName} />
+          <WalletTransactionHistory activeMainTab={activeWalletTabName} />
         </div>
       )}
     </div>
