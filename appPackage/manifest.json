@@ -77,8 +77,8 @@
                 "channelTab"
             ], 
             "name": "Feed", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net"
+            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net", 
+            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net"
         }, 
         { 
             "entityId": "usersTab", 
@@ -91,8 +91,8 @@
                 "channelTab"
             ], 
             "name": "Users", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/users", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/users"
+            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/users", 
+            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/users"
         } ,       { 
             "entityId": "rewardsTab", 
             "scopes": [       
@@ -104,8 +104,8 @@
                 "channelTab"
             ], 
             "name": "Rewards", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/rewards", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/rewards"
+            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/rewards", 
+            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/rewards"
         },
                { 
             "entityId": "walletTab", 
@@ -118,8 +118,8 @@
                 "channelTab"
             ], 
             "name": "Wallet", 
-            "contentUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/wallet", 
-            "websiteUrl": "https://ashy-pond-00441c81e.5.azurestaticapps.net/wallet"
+            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/wallet", 
+            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/wallet"
         }
     ],
     "permissions": [

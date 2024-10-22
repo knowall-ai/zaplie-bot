@@ -118,6 +118,7 @@ export class UserService {
     let allowanceWallet = null;
 
     if (user.allowanceWallet) {
+      console.log('Setting  allowance wallet');
       allowanceWallet = await getWalletById(user.id, user.allowanceWallet.id);
       if (allowanceWallet.deleted) {
         throw new Error(

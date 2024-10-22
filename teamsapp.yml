@@ -2,7 +2,7 @@
 version: v1.2
 
 additionalMetadata:
-  sampleTag: TeamsFx-Samples:bot-sso
+  sampleTag: Zapp.ie
 
 environmentFolderPath: ./env
 
@@ -20,6 +20,9 @@ provision:
       tenantId: AAD_APP_TENANT_ID
       authority: AAD_APP_OAUTH_AUTHORITY
       authorityHost: AAD_APP_OAUTH_AUTHORITY_HOST
+  - uses: cli/runNpmCommand
+    with:
+      args: run write-env && npm run build-manifest
   # Creates a Teams app
   - uses: teamsApp/create
     with:
@@ -55,7 +58,7 @@ provision:
     with:
       manifestPath: ./aad.manifest.json # Relative path to teamsfx folder. Environment variables in manifest will be replaced before apply to AAD app
       outputFilePath: ./build/aad.manifest.${{TEAMSFX_ENV}}.json
-
+ 
   # Validate using manifest schema
   - uses: teamsApp/validateManifest
     with:
@@ -82,25 +85,16 @@ provision:
       appPackagePath: ./appPackage/build/appPackage.${{TEAMSFX_ENV}}.zip
 
 deploy:
-  # Run npm command
   - uses: cli/runNpmCommand
     with:
       args: install
   - uses: cli/runNpmCommand
     with:
-      args: run write-env 
-  - uses: cli/runNpmCommand
-    with:
       args: run build --if-present
-  # Deploy your application to Azure App Service using the zip deploy feature.
-  # For additional details, refer to https://aka.ms/zip-deploy-to-app-services.
   - uses: azureAppService/zipDeploy
     with:
-      # Deploy base folder
       artifactFolder: .
-      # Ignore file location, leave blank will ignore nothing
       ignoreFile: .webappignore
-      # The resource id of the cloud resource to be deployed to
       resourceId: ${{BOT_AZURE_APP_SERVICE_RESOURCE_ID}}
 
 publish:

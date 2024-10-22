@@ -1,6 +1,8 @@
 # TeamsFx files
 env/.env.*.user
 env/.env.local
+env/.env.test
+env/.env.prod
 .localConfigs
 appPackage/build
 
@@ -18,3 +20,4 @@ build/
 
 .fake
 /build
+

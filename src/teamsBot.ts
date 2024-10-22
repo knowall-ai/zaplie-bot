@@ -278,7 +278,7 @@ export class TeamsBot extends TeamsActivityHandler {
           );
 
           const userService = UserService.getInstance();
-          const currentUser = await userService.ensureUserSetup(member);
+        //  const currentUser = await userService.ensureUserSetup(member);
 
           userService.setCurrentUser(currentUser);
           //await this.userProfileAccessor.set(context, currentUser);

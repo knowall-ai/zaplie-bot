@@ -7,6 +7,7 @@ import dotenvFlow from 'dotenv-flow';
 dotenvFlow.config({ path: './env' });
 let globalWalletId: string | null = null;
 
+
 //import dotenv from 'dotenv';
 //dotenv.config();
 
