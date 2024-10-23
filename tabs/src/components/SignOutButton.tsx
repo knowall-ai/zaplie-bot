@@ -21,24 +21,40 @@ export const SignOutButton = () => {
     }
   };
 
-  const menuProps: IContextualMenuProps = {
-    items: [
-      {
-        key: 'logoutPopup',
-        text: 'Logout using Popup',
-        onClick: () => handleLogout('popup'),
-      },
-      {
-        key: 'logoutRedirect',
-        text: 'Logout using Redirect',
-        onClick: () => handleLogout('redirect'),
-      },
-    ],
-    onDismiss: () => setAnchorEl(null),
-    target: anchorEl,
-    directionalHint: 4, // topRightEdge
-    isBeakVisible: true,
-  };
+
+    const menuProps: IContextualMenuProps = {
+        items: [
+            {
+                key: 'logoutPopup',
+                text: 'Logout using Popup',
+                onClick: () => handleLogout("popup")
+            },
+            {
+                key: 'logoutRedirect',
+                text: 'Logout using Redirect',
+                onClick: () => handleLogout("redirect")
+            }
+        ],
+        onDismiss: () => setAnchorEl(null),
+        target: anchorEl,
+        directionalHint: 4, // topRightEdge
+        isBeakVisible: true,
+    };
+
+    return (
+        <div style={{ display: 'inline' }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              handleLogout('redirect');
+            }}
+            style={{ textDecoration: 'none', cursor: 'pointer'}}
+            title="Sign Out"
+            aria-label="Sign Out"
+          >            
+              Sign Out
+
 
   return (
     <div style={{ display: 'inline' }}>
