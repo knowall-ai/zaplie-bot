@@ -17,7 +17,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
-    "typeRoots": ["./src/types"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "types": ["react", "react-dom", "node"],
     "jsx": "react-jsx"
   },
   "include": ["src"],

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useContext, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import QRCode from 'react-qr-code';
 import styles from './SendReceivePayment.module.css';
 import copyDoc from '../images/DocumentCopy.svg';
@@ -32,13 +32,8 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   const isSendDisabled = !inputValue || !inputNotes;
   const myLNbitDetails = currentUserLNbitDetails;
   const [invoice, setInvoice] = useState('');
-  const [paymentReceived, setPaymentReceived] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const intervalId = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    setPaymentReceived(false);
-  }, [currentUserLNbitDetails]);
 
   useEffect(() => {
     console.log('walletBalance changed:', walletBalance);
@@ -61,16 +56,12 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
           console.log(invoice);
           setInvoice(invoice);
 
-          // Record the current timestamp
-          const timestamp = Math.floor(Date.now() / 1000);
-
           // Start polling for payment
           intervalId.current = setInterval(() => {
             getWalletPayments(myLNbitDetails.privateWallet?.inkey || '').then(
               payments => {
                 if (payments.length > 0) {
                   console.log('Payment received');
-                  setPaymentReceived(true);
                   if (intervalId.current !== null) {
                     window.clearInterval(intervalId.current);
                   }

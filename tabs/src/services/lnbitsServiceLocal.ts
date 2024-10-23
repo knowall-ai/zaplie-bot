@@ -329,7 +329,7 @@ const getUser = async (
     `getUser starting ... (adminKey: ${adminKey}, userId: ${userId})`,
   );*/
 
-  if (!userId || userId === '' || userId == 'undefined') {
+  if (!userId || userId === '' || userId === 'undefined') {
     return null;
   }
 
@@ -614,7 +614,7 @@ const getWalletTransactionsSince = async (
   try {
     // Get walletId using the provided apiKey
     //const walletId = await getWalletId(lnKey);
-    const encodedExtra = JSON.stringify(filterByExtra);
+    //const encodedExtra = JSON.stringify(filterByExtra);
 
     const response = await fetch(
       //`/api/v1/payments?limit=100&extra=${encodedExtra}`, // This approach doesn't work on this endpoint for some reason, we need to filter afterwards.
@@ -684,9 +684,10 @@ const createInvoice = async (
   memo: string,
   // extra: object,
 ) => {
-  console.log(
+  console
+    .log
     // `createInvoice starting ... (lnKey: ${lnKey}, recipientWalletId: ${recipientWalletId}, amount: ${amount}, memo: ${memo}, extra: ${extra})`,
-  );
+    ();
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments`, {

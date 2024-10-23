@@ -1,4 +1,4 @@
-import { FunctionComponent, useCallback, useState, lazy, Suspense } from 'react';
+import { FunctionComponent, useState, lazy, Suspense } from 'react';
 import styles from './FeedComponent.module.css';
 import FeedList from './FeedList';
 

@@ -79,16 +79,11 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   const [activities, setActivities] = useState<Activity[]>([]);
   //const [loading, setLoading] = useState<boolean>(true);
 
-  let summaryText = '';
-
-  const fromDate = new Date(timestamp * 1000).toISOString().split('T')[0];
-  const toDate = new Date().toISOString().split('T')[0];
-
   useEffect(() => {
     const fetchActivities = async () => {
       try {
         let allZaps: Transaction[] = [];
-        if (lnKey == '') {
+        if (lnKey === '') {
           const users = await getUsers(adminKey, {});
           console.log('Fetching zaps for all users:', users);
           if (users) {
@@ -119,6 +114,8 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
           }); // This currently only gets zaps for the specified wallet.
         }
         console.log('Chart transactions: ', allZaps);
+        const fromDate = new Date(timestamp * 1000).toISOString().split('T')[0];
+        const toDate = new Date().toISOString().split('T')[0];
         const activitiesData = transformZapsToActivities(
           allZaps,
           fromDate,

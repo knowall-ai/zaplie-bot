@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import styles from './Leaderboard.module.css';
 import {
   getUsers,
-  getUserWallets,
-  getUserWalletTransactions,
   getWalletTransactionsSince,
 } from '../services/lnbitsServiceLocal';
 import ZapIcon from '../images/ZapIcon.svg';
@@ -42,13 +40,13 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
   const [error, setError] = useState<string | null>(null);
   const [isAscending, setIsAscending] = useState<boolean>(true);
 
-  // Use the provided timestamp to 0
-  const paymentsSinceTimestamp =
-    timestamp === null || timestamp === undefined || timestamp === 0
-      ? 0
-      : timestamp;
-
   useEffect(() => {
+    // Use the provided timestamp to 0
+    const paymentsSinceTimestamp =
+      timestamp === null || timestamp === undefined || timestamp === 0
+        ? 0
+        : timestamp;
+
     const fetchUsersAndPrivateWalletTransactions = async () => {
       try {
         const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;

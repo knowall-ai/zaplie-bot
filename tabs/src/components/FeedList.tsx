@@ -26,71 +26,70 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   const [error, setError] = useState<string | null>(null);
   const initialRender = useRef(true);
 
-  const paymentsSinceTimestamp =
-    timestamp === null || timestamp === undefined || timestamp === 0
-      ? 0
-      : timestamp;
+  useEffect(() => {
+    const paymentsSinceTimestamp =
+      timestamp === null || timestamp === undefined || timestamp === 0
+        ? 0
+        : timestamp;
 
-  const fetchZaps = async () => {
-    setLoading(true);
-    setError(null);
+    const fetchZaps = async () => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      let allZaps: ZapTransaction[] = [];
+      try {
+        let allZaps: ZapTransaction[] = [];
 
-      const users = await getUsers(adminKey, {});
+        const users = await getUsers(adminKey, {});
 
-      if (users) {
-        for (const user of users) {
-          const wallets = await getUserWallets(adminKey, user.id);
+        if (users) {
+          for (const user of users) {
+            const wallets = await getUserWallets(adminKey, user.id);
 
-          if (wallets) {
-            const allowanceWallets = wallets.filter(
-              wallet => wallet.name === 'Allowance',
-            );
-
-            for (const wallet of allowanceWallets) {
-              const transactions = await getWalletTransactionsSince(
-                wallet.inkey,
-                paymentsSinceTimestamp,
-                { tag: 'zap' },
+            if (wallets) {
+              const allowanceWallets = wallets.filter(
+                wallet => wallet.name === 'Allowance',
               );
 
-              let zaps: ZapTransaction[] = await Promise.all(
-                transactions.map(async (transaction: any) => ({
-                  from: user,
-                  to: await getUser(adminKey, transaction.extra?.to?.user),
-                  transaction: transaction,
-                })),
-              );
+              for (const wallet of allowanceWallets) {
+                const transactions = await getWalletTransactionsSince(
+                  wallet.inkey,
+                  paymentsSinceTimestamp,
+                  { tag: 'zap' },
+                );
 
-              allZaps = allZaps.concat(zaps);
-              //console.log('Transactions: ', transactions);
+                let zaps: ZapTransaction[] = await Promise.all(
+                  transactions.map(async (transaction: any) => ({
+                    from: user,
+                    to: await getUser(adminKey, transaction.extra?.to?.user),
+                    transaction: transaction,
+                  })),
+                );
+
+                allZaps = allZaps.concat(zaps);
+                //console.log('Transactions: ', transactions);
+              }
+            } else {
+              console.log('No wallets found for user: ', user.id);
             }
-          } else {
-            console.log('No wallets found for user: ', user.id);
           }
         }
+
+        console.log('All zaps: ', allZaps);
+
+        // setZaps(prevState => [...prevState, ...allZaps]); gives duplicates
+        setZaps(allZaps); // Update this line to replace the state instead of appending
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          setError(`Failed to fetch users: ${error.message}`);
+        } else {
+          setError('An unknown error occurred while fetching users');
+        }
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      console.log('All zaps: ', allZaps);
-
-      // setZaps(prevState => [...prevState, ...allZaps]); gives duplicates
-      setZaps(allZaps); // Update this line to replace the state instead of appending
-
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setError(`Failed to fetch users: ${error.message}`);
-      } else {
-        setError('An unknown error occurred while fetching users');
-      }
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
       // Clear the zaps

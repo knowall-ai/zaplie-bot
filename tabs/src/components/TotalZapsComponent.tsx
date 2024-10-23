@@ -1,15 +1,12 @@
-import { FunctionComponent, useCallback, useState, useEffect } from 'react';
+import { FunctionComponent, useState, useEffect } from 'react';
 import styles from './TotalZapsComponent.module.css';
 //import lnbitsService from '../services/lnbitsServiceLocal';
 /// <reference path = "../global.d.ts" />
 import {
-  getWallets,
   getUserWallets,
   getUsers,
   getWalletTransactionsSince,
 } from '../services/lnbitsServiceLocal';
-import { getUserName } from '../utils/walletUtilities';
-
 export interface ZapSent {
   totalZaps: number;
   numberOfDays: number;
@@ -27,6 +24,7 @@ const TotalZapsComponent: FunctionComponent = () => {
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [totalZaps, setTotalZaps] = useState<number>(0);
+
   const [numberOfDays, setNumberOfDays] = useState<number>(0);
   const [numberOfUsers, setNumberOfUsers] = useState<number>(0);
   const [averagePerDay, setAveragePerDay] = useState<number>(0);
@@ -137,7 +135,7 @@ const TotalZapsComponent: FunctionComponent = () => {
           : 0) / 1000;
       setBiggestZap(Math.floor(maxZap)); // Already positive
     }
-  }, [zaps]); // This effect runs whenever zaps changes
+  }, [zaps, users]); // This effect runs whenever zaps changes
 
   if (error) {
     return <div className={styles.sentcomponent}>{error}</div>;

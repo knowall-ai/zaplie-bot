@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { callMsGraph, ProfileData } from './components/UserDetails';
-import { Stack, PrimaryButton, Image, Text } from '@fluentui/react';
+import { ProfileData } from './components/UserDetails';
+import { Stack, Image, Text } from '@fluentui/react';
 import {
   AuthenticatedTemplate,
   UnauthenticatedTemplate,

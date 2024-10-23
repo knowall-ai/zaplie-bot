@@ -8,11 +8,7 @@ import dismissIcon from '../images/DismissCircleRed.svg';
 import pasteInvoice from '../images/PasteInvoice.svg';
 import loaderGif from '../images/Loader.gif';
 import { decode } from 'light-bolt11-decoder';
-import {
-  payInvoice,
-  getWalletPayments,
-  getWalletBalance,
-} from '../services/lnbitsServiceLocal';
+import { payInvoice } from '../services/lnbitsServiceLocal';
 
 interface SendPopupProps {
   onClose: () => void;
@@ -24,22 +20,16 @@ const SendPayment: React.FC<SendPopupProps> = ({
   currentUserLNbitDetails,
 }) => {
   const [invoice, setInvoice] = useState('');
-  const [isSendPopupVisible, setIsSendPopupVisible] = useState(false);
   const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
-  const [isPaymentFailed, setIsPaymentFailed] = useState(false);
   const [isSuccessFailurePopupVisible, setIsSuccessFailurePopupVisible] =
     useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const myLNbitDetails = currentUserLNbitDetails;
   const [invoiceAmount, setInvoiceAmount] = useState<number | null>();
   const isSendDisabled = !invoice || !invoiceAmount;
-  const [paymentReceived, setPaymentReceived] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [failureMessage, setFailureMessage] = useState('');
-  const intervalId = useRef<NodeJS.Timeout | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const isMounted = useRef<boolean>(true);
-
   const [invoiceMemo, setInvoiceMemo] = useState<string | null>();
   const [isAmountReadOnly, setIsAmountReadOnly] = useState<boolean>(false);
   const [scannerPaused, setScannerPaused] = useState(true); // Make sure scanner starts paused
@@ -62,7 +52,6 @@ const SendPayment: React.FC<SendPopupProps> = ({
   const handlePaymentFailure = (message: string) => {
     setFailureMessage(message);
     setIsPaymentSuccess(false);
-    setIsPaymentFailed(true);
     setIsSuccessFailurePopupVisible(true);
     setIsLoading(false);
   };
@@ -70,15 +59,12 @@ const SendPayment: React.FC<SendPopupProps> = ({
   const handleCancelClick = () => {
     setIsLoading(true);
     setIsPaymentSuccess(false);
-    setIsPaymentFailed(false);
-    setIsSendPopupVisible(false);
     setIsSuccessFailurePopupVisible(false);
     onClose();
   };
 
   const handleSendClick = () => {
     setIsLoading(true);
-    const memo = 'Payment'; // Static memo (no anonymous option in this version) //TODO
 
     if (!myLNbitDetails || !myLNbitDetails.privateWallet) {
       handlePaymentFailure('Something wrong with your wallet');
@@ -87,11 +73,8 @@ const SendPayment: React.FC<SendPopupProps> = ({
         .then(invoice => {
           setInvoice(invoice);
           setIsPaymentSuccess(true);
-          setIsPaymentFailed(false);
-          setIsSendPopupVisible(true);
           setIsSuccessFailurePopupVisible(true); // Show the success popup
           setIsLoading(false);
-          startPollingPayments(); // Start polling for payments
         })
         .catch(error => {
           handlePaymentFailure(
@@ -99,30 +82,6 @@ const SendPayment: React.FC<SendPopupProps> = ({
           );
         });
     }
-  };
-
-  const startPollingPayments = () => {
-    intervalId.current = setInterval(() => {
-      getWalletPayments(myLNbitDetails.privateWallet?.inkey || '').then(
-        payments => {
-          if (payments.length > 0) {
-            setPaymentReceived(true);
-            if (intervalId.current !== null) {
-              window.clearInterval(intervalId.current);
-            }
-            updateWalletBalance();
-          }
-        },
-      );
-    }, 5000); // Poll every 5 seconds
-  };
-
-  const updateWalletBalance = () => {
-    getWalletBalance(myLNbitDetails.privateWallet?.inkey || '').then(
-      balance => {
-        setWalletBalance(balance !== null ? balance : 0);
-      },
-    );
   };
 
   const handleScanButtonClick = () => {
@@ -151,16 +110,18 @@ const SendPayment: React.FC<SendPopupProps> = ({
       ) as { name: string; value: string } | null;
 
       const amountValue = amountSection ? parseInt(amountSection.value) : null;
-      const invoiceAmountInSatoshis = amountValue
-        ? amountValue / 1000
-        : null;
+      const invoiceAmountInSatoshis = amountValue ? amountValue / 1000 : null;
 
       const memoSection = decodedInvoice.sections.find(
         (section: any) => section.name === 'description',
       ) as { name: string; value: string } | null;
       const memoValue = memoSection ? String(memoSection.value) : undefined;
 
-      setInvoiceAmount(invoiceAmountInSatoshis !== null ? parseInt(invoiceAmountInSatoshis.toString()) : null);
+      setInvoiceAmount(
+        invoiceAmountInSatoshis !== null
+          ? parseInt(invoiceAmountInSatoshis.toString())
+          : null,
+      );
       setInvoiceMemo(memoValue);
       setInvoice(processedInvoice);
       if (invoiceAmountInSatoshis) {
@@ -263,15 +224,16 @@ const SendPayment: React.FC<SendPopupProps> = ({
             </div>
             <div className={styles.container}>
               <div className={styles.inputRow}>
-              {isAmountReadOnly && (
-                <input
-                  type={'text'}
-                  value={`${invoiceAmount !== null ? invoiceAmount : ''} ${
-                    invoiceMemo ? ` Sats. Note: ${invoiceMemo}` : ''
-                  }`}
-                  readOnly={isAmountReadOnly}
-                  className={styles.inputField}
-                />)}
+                {isAmountReadOnly && (
+                  <input
+                    type={'text'}
+                    value={`${invoiceAmount !== null ? invoiceAmount : ''} ${
+                      invoiceMemo ? ` Sats. Note: ${invoiceMemo}` : ''
+                    }`}
+                    readOnly={isAmountReadOnly}
+                    className={styles.inputField}
+                  />
+                )}
                 {!isAmountReadOnly && (
                   <input
                     type="number"

@@ -13,13 +13,23 @@ export const SignInButton = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
-  const handleLogin = (loginType: string) => {
-    setAnchorEl(null);
+  const handleLogin = async (loginType: string) => {
+    console.log('Login type: ', loginType);
+    try {
+      setAnchorEl(null);
 
-    if (loginType === 'popup') {
-      instance.loginPopup(loginRequest);
-    } else if (loginType === 'redirect') {
-      instance.loginRedirect(loginRequest);
+      if (loginType === 'popup') {
+        await instance.loginPopup({ ...loginRequest, prompt: 'login' });
+      } else if (loginType === 'redirect') {
+        await instance.loginRedirect({ ...loginRequest, prompt: 'login' });
+      }
+    } catch (error: any) {
+      if (error.errorCode === 'user_cancelled') {
+        console.warn('Login was cancelled. Please try again.');
+      } else {
+        console.warn('An error occurred during login. Please try again.');
+        console.error('Login error:', error);
+      }
     }
   };
 
@@ -28,12 +38,18 @@ export const SignInButton = () => {
       {
         key: 'popup',
         text: 'Login with Popup',
-        onClick: () => handleLogin('popup'),
+        onClick: () => {
+          handleLogin('popup');
+          return undefined; // Ensure the callback is synchronous and returns void
+        },
       },
       {
         key: 'redirect',
         text: 'Login with Redirect',
-        onClick: () => handleLogin('redirect'),
+        onClick: () => {
+          handleLogin('redirect');
+          return undefined; // Ensure the callback is synchronous and returns void
+        },
       },
     ],
     directionalHintFixed: true,

@@ -6,15 +6,9 @@ import WalletAllowanceCard from './components/WalletAllowanceComponent';
 import styles from './Wallet.module.css';
 
 const Wallet: React.FC = () => {
-  const [timestamp, setTimestamp] = useState(
-    Math.floor(Date.now() / 1000 - 7 * 24 * 60 * 60),
-  );
-  const [activePeriod, setActivePeriod] = useState(7); // Set default to 7-days
   const [showYourWalletTab, setshowYourWalletTab] = useState(true);
   const [activeWalletTabName, setActiveWalletTabName] =
     useState<string>('Private');
-  const [activeTransactionTab, setActiveTransactionTab] =
-    useState<string>('all'); // New state variable
 
   const handleYourWalletTab = () => {
     setshowYourWalletTab(true);
@@ -24,11 +18,6 @@ const Wallet: React.FC = () => {
   const handleAllowanceTab = () => {
     setshowYourWalletTab(false);
     setActiveWalletTabName('Allowance');
-  };
-
-  const handlePeriodClick = (days: number) => {
-    setTimestamp(Math.floor(Date.now() / 1000 - days * 24 * 60 * 60));
-    setActivePeriod(days);
   };
 
   return (

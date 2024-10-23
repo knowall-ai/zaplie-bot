@@ -1,19 +1,10 @@
-import {
-  FunctionComponent,
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-} from 'react';
+import { FunctionComponent, useEffect, useState, useRef } from 'react';
 import styles from './UserListComponent.module.css';
 import { getUsers } from '../services/lnbitsServiceLocal';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
 const UserListComponent: FunctionComponent = () => {
-  const onBodyContentsContainerClick = useCallback(() => {
-    // Add your code here
-  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
