@@ -40,22 +40,6 @@ export const SignOutButton = () => {
         directionalHint: 4, // topRightEdge
         isBeakVisible: true,
     };
-
-    return (
-        <div style={{ display: 'inline' }}>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              handleLogout('redirect');
-            }}
-            style={{ textDecoration: 'none', cursor: 'pointer'}}
-            title="Sign Out"
-            aria-label="Sign Out"
-          >            
-              Sign Out
-
-
   return (
     <div style={{ display: 'inline' }}>
       <button
