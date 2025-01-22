@@ -13,6 +13,8 @@ jobs:
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
+    outputs:
+      deploymentUrl: ${{ steps.builddeploy.outputs.deploymentUrl }}
     permissions:
       contents: read
       pull-requests: write
@@ -52,20 +54,32 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: '/tabs' # App source code path
           api_location: '' # Api source code path - optional
-          output_location: 'build' # Built app content directory - optional
+          output_location: 'build' # Built app content directory - optional          
           ###### End of Repository/Build Configurations ######
 
       - name: Install Azure CLI
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
-      - name: Azure Login
-        run: az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
+    # Login to Azure  
+      - name: Login to Azure  
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Add Redirect URI
         if: github.event_name == 'pull_request'
         run: |
-          az ad app update --id 9b80eb43-d75a-43e3-8104-0d6d0f0b41ec --add web.redirectUris ${{ steps.builddeploy.outputs.deploymentUrl }}
+          $currentRedirectUris = az rest --method "get" --uri "https://graph.microsoft.com/v1.0/applications/6f3836b2-9449-45e7-aa62-810cbeaa6c5d" --headers '{"Content-Type": "application/json"}' -o json --query "spa.redirectUris"
+          $newRedirectUri = "${{ steps.builddeploy.outputs.static_web_app_url }}"
+          $updatedRedirectUris = $currentRedirectUris | ConvertFrom-Json
+          if ($updatedRedirectUris -notcontains $newRedirectUri) {
+            $updatedRedirectUris += $newRedirectUri
+            $updatedRedirectUrisJson = $updatedRedirectUris | ConvertTo-Json -Depth 10 -Compress
+            $jsonStringWithSingleQuotes = $updatedRedirectUrisJson -replace '"', "'"
+            az rest --method "patch" --uri "https://graph.microsoft.com/v1.0/applications/6f3836b2-9449-45e7-aa62-810cbeaa6c5d" --headers "{'Content-Type': 'application/json'}" --body "{'spa': {'redirectUris': $jsonStringWithSingleQuotes}}"
+          }
+        shell: pwsh
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
@@ -74,7 +88,14 @@ jobs:
     steps:
       - name: Remove Redirect URI
         run: |
-          az ad app update --id 9b80eb43-d75a-43e3-8104-0d6d0f0b41ec --remove web.redirectUris ${{ steps.builddeploy.outputs.deploymentUrl }}
+          $currentRedirectUris = az rest --method "get" --uri "https://graph.microsoft.com/v1.0/applications/6f3836b2-9449-45e7-aa62-810cbeaa6c5d" --headers '{"Content-Type": "application/json"}' -o json --query "spa.redirectUris"
+          $newRedirectUri = "${{ steps.builddeploy.outputs.static_web_app_url }}"
+          $updatedRedirectUris = $currentRedirectUris | ConvertFrom-Json
+          $updatedRedirectUris = $updatedRedirectUris | Where-Object { $_ -ne $newRedirectUri }
+          $updatedRedirectUrisJson = $updatedRedirectUris | ConvertTo-Json -Depth 10 -Compress
+          $jsonStringWithSingleQuotes = $updatedRedirectUrisJson -replace '"', "'"
+          az rest --method "patch" --uri "https://graph.microsoft.com/v1.0/applications/6f3836b2-9449-45e7-aa62-810cbeaa6c5d" --headers "{'Content-Type': 'application/json'}" --body "{'spa': {'redirectUris': $jsonStringWithSingleQuotes}}"
+        shell: pwsh
 
       - name: Close Pull Request
         id: closepullrequest
