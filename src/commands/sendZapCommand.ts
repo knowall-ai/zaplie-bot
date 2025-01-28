@@ -454,10 +454,10 @@ async function messageRecipient(
       error.message.includes('Bot not in conversation roster')
     ) {
       // Inform the sender that the recipient hasn't installed the bot
-      await context.sendActivity(
-        `FYI I wasn't able to message ${receiver.displayName} that they have a zap from you because they don't have me installed yet - maybe you could ping them, and let them know to install Zapp.ie!`,
+      /* await context.sendActivity(
+         `FYI I wasn't able to message ${receiver.displayName} that they have a zap from you because they don't have me installed yet - maybe you could ping them, and let them know to install Zapp.ie!`,
       );
-    } else {
+    } else {*/
       console.error('Error in messageRecipient:', error);
       throw error;
     }
