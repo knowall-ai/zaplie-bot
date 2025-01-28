@@ -147,12 +147,11 @@ async function createZapCard() {
       errorMessage: 'You should tell them why you are zapping them',
     },
     {
-      type: 'Input.Number',
+      type: 'Input.Text',
       id: 'zapAmount',
       placeholder: '100',
       label: 'Amount (Sats)',
-      min: 1,
-      max: 10000,
+      regex: '^(?:10000|[1-9][0-9]{0,3})$',
       isRequired: true,
       errorMessage: 'You must specify an amount between 1 and 10,000 Sats',
     },
@@ -186,7 +185,7 @@ async function createZapCard() {
       },
     ],
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-    version: '1.2',
+    version: '1.5',
   };
 }
 
