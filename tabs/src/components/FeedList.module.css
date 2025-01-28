@@ -152,4 +152,77 @@
     color: #fff;
     font-family: Inter;
 }
-
+.pagination {
+    display: flex;
+    justify-content: center; /* Centers buttons horizontally */
+    align-items: center;
+    gap: 1.5rem; /* Spacing between elements */
+    background-color: #1e1e1e; /* Dark background */
+    padding: 0.5rem 1.5rem;
+    border-radius: 2rem;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
+    margin: 20px auto 0;
+    position: relative; /* Keeps relative positioning */
+    z-index: 1;
+  }
+  .pagination button {
+    background-color: #444;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 3.2rem;
+    height: 3.2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.8rem; /* Increases font size for buttons */
+    font-family: 'Inter', sans-serif; /* Applies Inter font */
+    cursor: pointer;
+    line-height: 1;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+  }
+  .pagination button:hover {
+    background-color: #666;
+    transform: scale(1.1);
+  }
+  .pagination button:disabled {
+    background-color: #888;
+    cursor: not-allowed;
+    color: #555;
+    transform: none;
+  }
+  .pagination span {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #fff;
+    font-family: 'Inter', sans-serif; /* Applies Inter font */
+  }
+  .pagination button::before {
+    position: relative;
+    top: -12px; 
+    display: inline-block; 
+  transform: translateY(-2px);
+  }
+  .FlowHistoryIcon {
+    width: 20px; 
+    height: 22px;
+    margin-right: 6px; 
+    pointer-events: auto;
+    cursor: pointer; 
+  }
+  .pagination button.doubleArrow {
+    font-size: 2.3rem;
+    padding-top: 7px;
+  }
+  
+  .pagination button:hover:not(:disabled) {
+    background-color: #666; 
+    transform: scale(1.1); 
+  }
+  
+  .pagination button:disabled {
+    background-color: #888;
+    cursor: not-allowed;
+    color: #555;
+    transform: none;
+  }

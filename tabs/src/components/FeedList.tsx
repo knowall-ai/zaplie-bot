@@ -19,11 +19,13 @@ interface ZapTransaction {
 }
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
+const ITEMS_PER_PAGE = 10; // Items per page
 
 const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   const [zaps, setZaps] = useState<ZapTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const initialRender = useRef(true);
 
   useEffect(() => {
@@ -101,6 +103,18 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
     }
   }, [timestamp]);
 
+  // Calculate pagination variables
+  const totalPages = Math.ceil(zaps.length / ITEMS_PER_PAGE);
+  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
+  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
+  const currentItems = zaps.slice(indexOfFirstItem, indexOfLastItem);
+
+  const nextPage = () =>
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+  const firstPage = () => setCurrentPage(1);
+  const lastPage = () => setCurrentPage(totalPages);
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -122,7 +136,8 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
           </div>
         </div>
       </div>
-      {zaps
+      {currentItems.length > 0 ? (
+        currentItems
         ?.sort((a, b) => b.transaction.time - a.transaction.time)
         .map((zap, index) => (
           <div
@@ -173,9 +188,47 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                 </b>
                 <img className={styles.icon} alt="" src={ZapIcon} />
               </div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+      ) : (
+        <div>No data available</div>
+      )}
+      {zaps.length > ITEMS_PER_PAGE && (
+       <div className={styles.pagination}>
+       <button
+         onClick={firstPage}
+         disabled={currentPage === 1}
+         className={styles.doubleArrow}
+       >
+         &#171; {/* Double left arrow */}
+       </button>
+       <button
+         onClick={prevPage}
+         disabled={currentPage === 1}
+         className={styles.singleArrow}
+       >
+         &#11164; {/* Single left arrow */}
+       </button>
+       <span>
+         {currentPage} / {totalPages}
+       </span>
+       <button
+         onClick={nextPage}
+         disabled={currentPage === totalPages}
+         className={styles.singleArrow}
+       >
+         &#11166; {/* Single right arrow */}
+       </button>
+       <button
+         onClick={lastPage}
+         disabled={currentPage === totalPages}
+         className={styles.doubleArrow}
+       >
+         &#187; {/* Double right arrow */}
+       </button>
+     </div>     
+      )}
     </div>
   );
 };
