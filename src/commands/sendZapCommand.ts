@@ -94,7 +94,7 @@ export async function SendZap(
         body: [
           {
             type: 'TextBlock',
-            text: `Sats sent successfully!`,
+            text: `Zap sent!`,
             weight: 'Bolder',
             size: 'Large',
             color: 'Good',
