@@ -60,11 +60,11 @@ export class UserService {
   public async ensureUserSetup(
     teamsChannelAccount: TeamsChannelAccount,
   ): Promise<User> {
-    console.log('ensureUserSetup starting ...');
+    const aadObjectId = teamsChannelAccount.aadObjectId ;
 
     let user: User | null = null;
     let lnbitsUsers = await getUsers(adminKey, {
-      aadObjectId: teamsChannelAccount.aadObjectId, // userProfile.aadObjectId,
+      aadObjectId: aadObjectId, // userProfile.aadObjectId,
     });
     if (lnbitsUsers.length > 1) {
       throw new Error('More than one user found with the same aadObjectId');
@@ -79,7 +79,7 @@ export class UserService {
         teamsChannelAccount.email,
         '', // The password is a legacy field and ignored anyway.
         {
-          aadObjectId: teamsChannelAccount.aadObjectId,
+          aadObjectId: aadObjectId,
           userType: 'teammate',
           profileImg: `https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName='${teamsChannelAccount.userPrincipalName}`, // TODO: Get the user's profile image from Teams
           //profileImg: teamsChannelAccount.properties

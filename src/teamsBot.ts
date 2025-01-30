@@ -257,7 +257,7 @@ export class TeamsBot extends TeamsActivityHandler {
 
     //this.onMembersAdded(async (context, next) => {
     this.onCommand(async (context, next) => {
-      // Retrieve the per-user setup flag
+      /* Retrieve the per-user setup flag
       //const currentUser = await this.userProfileAccessor.get(context);
       const userService = UserService.getInstance();
       const currentUser = userService.getCurrentUser();
@@ -292,8 +292,8 @@ export class TeamsBot extends TeamsActivityHandler {
           );
         }
       }
-    });
-  }
+    }*/;
+  })}
 
   async run(context: TurnContext) {
     try {

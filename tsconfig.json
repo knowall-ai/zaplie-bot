@@ -15,5 +15,5 @@
     "skipLibCheck": true // Skip type checking of all declaration files (*.d.ts)
   },
   "include": ["src/**/*.ts", "src/types/**/*.d.ts"], // Ensure this covers your `global.d.ts`
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules","tabs", "functions"]
 }

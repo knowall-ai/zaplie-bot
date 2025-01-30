@@ -479,8 +479,8 @@ const updateUser = async (
       data.extra?.allowanceWalletId,
     );
 
-    console.log('privateWallet 111:', privateWallet);
-    console.log('allowanceWallet 111:', allowanceWallet);
+    console.log('privateWallet :', privateWallet);
+    console.log('allowanceWallet :', allowanceWallet);
 
     // Map the user to match the User interface
     const userData: User = {
