@@ -72,7 +72,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
                 {balance?.toLocaleString() ?? '0'}
               </div>
               <div>Sats</div>
-              <div style={{ paddingLeft: '20px' }}>
+              <div style={{ paddingLeft: '20px', display: 'none' }}>
                 <button className="refreshImageIcon">
                   <img
                     src={ArrowClockwise}

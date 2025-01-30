@@ -10,6 +10,7 @@ const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
 const WalletYourWalletInfoCard: React.FC = () => {
   const [balance, setBalance] = useState<number>();
+
   const [isReceivePopupOpen, setIsReceivePopupOpen] = useState(false);
   const [isSendPopupOpen, setIsSendPopupOpen] = useState(false);
   const { accounts } = useMsal();
@@ -18,7 +19,7 @@ const WalletYourWalletInfoCard: React.FC = () => {
 
   const fetchAmountReceived = async () => {
     console.log('Fetching your wallet ...');
-
+    
     const currentUserLNbitDetails = await getUsers(adminKey, {
       aadObjectId: account.localAccountId,
     });

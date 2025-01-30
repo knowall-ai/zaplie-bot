@@ -11,6 +11,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { ThemeProvider } from '@fluentui/react';
 import { theme } from './styles/Theme'; // Adjust the import path as necessary
 import App from './App'; // Adjust the import path as necessary
+import { CacheProvider } from './utils/CacheContext';
 
 export const msalInstance = new PublicClientApplication(msalConfig);
 
@@ -30,11 +31,14 @@ msalInstance.initialize().then(() => {
   });
 
   ReactDOM.render(
-    <Router>
-      <ThemeProvider theme={theme}>
-        <App pca={msalInstance} />
-      </ThemeProvider>
-    </Router>,
+    <CacheProvider>
+      <Router>
+        <ThemeProvider theme={theme}>
+          <App pca={msalInstance} />
+        </ThemeProvider>
+      </Router>
+    </CacheProvider>,
+
     document.getElementById('root'),
   );
 });

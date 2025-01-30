@@ -1,94 +1,79 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './FeedList.module.css';
-import {
-  getUser,
-  getUsers,
-  getUserWallets,
-  getWalletTransactionsSince,
-} from '../services/lnbitsServiceLocal';
 import ZapIcon from '../images/ZapIcon.svg';
-
+import { useCache } from '../utils/CacheContext';
 interface FeedListProps {
   timestamp?: number | null;
+  allZaps: Transaction[];
+  allUsers: User[];
+  isLoading: boolean;
 }
-
 interface ZapTransaction {
   from: User | null;
   to: User | null;
   transaction: Transaction;
 }
 
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
+
 const ITEMS_PER_PAGE = 10; // Items per page
 
-const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
+const FeedList: React.FC<FeedListProps> = ({
+  timestamp,
+  allZaps,
+  allUsers,
+  isLoading
+}) => {
   const [zaps, setZaps] = useState<ZapTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const initialRender = useRef(true);
+  const { cache, setCache } = useCache();
 
   useEffect(() => {
+    //alert('FEED PARAMETER:' + timestamp);
+
+    //setZaps(allZaps);
+    if (cache['allZaps']) {
+      console.log('FEED cache:', cache['allZaps']);
+    }
     const paymentsSinceTimestamp =
       timestamp === null || timestamp === undefined || timestamp === 0
         ? 0
         : timestamp;
-
     const fetchZaps = async () => {
-      setLoading(true);
+      setLoading(isLoading);
       setError(null);
 
       try {
-        let allZaps: ZapTransaction[] = [];
+        const paymentsSinceTimestamp =
+          timestamp === null || timestamp === undefined || timestamp === 0
+            ? 0
+            : timestamp;
 
-        const users = await getUsers(adminKey, {});
+        let loadZaps: ZapTransaction[] = [];
 
-        if (users) {
-          for (const user of users) {
-            const wallets = await getUserWallets(adminKey, user.id);
+        const allowanceTransactions = allZaps.filter(
+          f =>
+            f.time > paymentsSinceTimestamp && !f.memo.includes('Weekly Allowance cleared'),
+        );
 
-            if (wallets) {
-              const allowanceWallets = wallets.filter(
-                wallet => wallet.name === 'Allowance',
-              );
+        const allowanceZaps = allowanceTransactions.flat().map(transaction => ({
+          from: allUsers?.find(f => f.id === transaction.extra?.from?.user) as User,
+          to: allUsers?.find(f => f.id === transaction.extra?.to?.user) as User,
+          transaction: transaction,
+        }));
 
-              for (const wallet of allowanceWallets) {
-                const transactions = await getWalletTransactionsSince(
-                  wallet.inkey,
-                  paymentsSinceTimestamp,
-                  { tag: 'zap' },
-                );
+        loadZaps = loadZaps.concat(allowanceZaps);
 
-                let zaps: ZapTransaction[] = await Promise.all(
-                  transactions.map(async (transaction: any) => ({
-                    from: user,
-                    to: await getUser(adminKey, transaction.extra?.to?.user),
-                    transaction: transaction,
-                  })),
-                );
-
-                allZaps = allZaps.concat(zaps);
-                //console.log('Transactions: ', transactions);
-              }
-            } else {
-              console.log('No wallets found for user: ', user.id);
-            }
-          }
-        }
-
-        console.log('All zaps: ', allZaps);
-
-        // setZaps(prevState => [...prevState, ...allZaps]); gives duplicates
-        setZaps(allZaps); // Update this line to replace the state instead of appending
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          setError(`Failed to fetch users: ${error.message}`);
-        } else {
-          setError('An unknown error occurred while fetching users');
-        }
+        setZaps(loadZaps);
+      } catch (error) {
+        setError(
+          error instanceof Error ? error.message : 'An unknown error occurred',
+        );
         console.error(error);
       } finally {
-        setLoading(false);
+        setLoading(isLoading);
       }
     };
 
@@ -101,7 +86,8 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
       console.log(`Timestamp updated: ${timestamp}`);
       fetchZaps();
     }
-  }, [timestamp]);
+  }, [timestamp, allZaps, allUsers]);
+
 
   // Calculate pagination variables
   const totalPages = Math.ceil(zaps.length / ITEMS_PER_PAGE);
@@ -118,11 +104,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   if (loading) {
     return <div>Loading...</div>;
   }
-
   if (error) {
     return <div>{error}</div>;
   }
-
   return (
     <div className={styles.feedlist}>
       <div className={styles.headercell}>
@@ -232,5 +216,4 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
     </div>
   );
 };
-
 export default FeedList;

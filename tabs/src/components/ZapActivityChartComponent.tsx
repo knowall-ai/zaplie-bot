@@ -2,19 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import ActivityCalendar, { Activity } from 'react-activity-calendar';
-import {
-  getWalletTransactionsSince,
-  getUsers,
-  getUserWallets,
-} from '../services/lnbitsServiceLocal';
 import styles from './ZapActivityChartComponent.module.css';
 
 interface ZapContributionsChartProps {
   lnKey: string;
   timestamp: number; // Timestamp in seconds since the epoch
+  allZaps: Transaction[];
+  allUsers: User[];
+  isLoading: boolean;
 }
-
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
 function generateDateRange(fromDate: string, toDate: string): string[] {
   const dates = [];
@@ -75,6 +71,8 @@ const transformZapsToActivities = (
 const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   lnKey,
   timestamp,
+  allZaps,
+  allUsers
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   //const [loading, setLoading] = useState<boolean>(true);
@@ -82,37 +80,6 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        let allZaps: Transaction[] = [];
-        if (lnKey === '') {
-          const users = await getUsers(adminKey, {});
-          console.log('Fetching zaps for all users:', users);
-          if (users) {
-            for (const user of users) {
-              const wallets = await getUserWallets(adminKey, user.id);
-              console.log('Fetching zaps for all wallets:', wallets);
-              if (wallets) {
-                const allowanceWallets = wallets.filter(
-                  wallet => wallet.name === 'Allowance',
-                );
-
-                for (const wallet of allowanceWallets) {
-                  const transactions = await getWalletTransactionsSince(
-                    wallet.inkey,
-                    timestamp,
-                    { tag: 'zap' },
-                  );
-                  allZaps = allZaps.concat(transactions);
-                }
-              }
-            }
-          }
-        } else {
-          console.log('Fetching zaps for wallet:', lnKey);
-          console.log('Fetching zaps since:', timestamp);
-          allZaps = await getWalletTransactionsSince(lnKey, timestamp, {
-            tag: 'zap',
-          }); // This currently only gets zaps for the specified wallet.
-        }
         console.log('Chart transactions: ', allZaps);
         const fromDate = new Date(timestamp * 1000).toISOString().split('T')[0];
         const toDate = new Date().toISOString().split('T')[0];

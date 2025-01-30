@@ -599,6 +599,56 @@ const getInvoicePayment = async (lnKey: string, invoice: string) => {
   }
 };
 
+//Akash Performance Test
+const getAllWallets = async (lnKey: string) => {
+ 
+  try {
+    const response = await fetch(`${nodeUrl}/usermanager/api/v1/wallets/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-Key': lnKey,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Error getting invoice payment (status: ${response.status})`,
+      );
+    }
+
+    //const data = await response.json();
+
+    const data: Wallet[] = await response.json();
+
+    // Map the wallets to match the Wallet interface
+    let walletData: Wallet[] = data.map((wallet: any) => ({
+      id: wallet.id,
+      admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
+      name: wallet.name,
+      adminkey: wallet.adminkey,
+      user: wallet.user,
+      inkey: wallet.inkey,
+      balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
+      deleted: wallet.deleted,
+    }));
+
+    // Now remove the deleted wallets.
+    const filteredWallets = walletData.filter(
+      wallet => wallet.deleted !== true,
+    );
+
+    return filteredWallets;
+
+    //return data;
+
+
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};
+
 const getWalletTransactionsSince = async (
   inKey: string,
   timestamp: number,
@@ -636,10 +686,14 @@ const getWalletTransactionsSince = async (
 
     const data = await response.json();
 
+    console.log("DATA",data);
+
     // Filter the payments to only include those since the provided timestamp
     const paymentsSince = data.filter(
       (payment: { time: number }) => payment.time > timestamp,
     );
+
+    console.log("DATA2",paymentsSince);
 
     // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra
@@ -651,6 +705,8 @@ const getWalletTransactionsSince = async (
           );
         })
       : paymentsSince;
+
+      console.log("DATA2",filteredPayments);
 
     // Map the payments to match the Zap interface
     const transactionData: Transaction[] = filteredPayments.map(
@@ -920,6 +976,17 @@ const getAllowance = async (
   );
   try {
     // TODO: Implement the actual API call to fetch the allowance
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 (Sunday) to 6 (Saturday)
+    const daysUntilNextMonday = (8 - dayOfWeek) % 7 || 7; // Calculate days until next Monday
+    const nextPaymentDate = new Date(
+      today.setDate(today.getDate() + daysUntilNextMonday),
+    );
+    const daysSinceLastMonday = (dayOfWeek + 6) % 7; // Calculate days since last Monday
+    const lastPaymentDate = new Date(
+      today.setDate(today.getDate() - daysSinceLastMonday),
+    );
+
     const allowance: Allowance = {
       id: '123',
       name: 'Allowance',
@@ -929,8 +996,8 @@ const getAllowance = async (
       startDate: new Date(),
       endDate: null,
       frequency: 'Monthly',
-      nextPaymentDate: new Date(new Date().setDate(new Date().getDate() + 7)),
-      lastPaymentDate: new Date(new Date().setDate(new Date().getDate() - 7)),
+      nextPaymentDate: nextPaymentDate,
+      lastPaymentDate: lastPaymentDate,
       memo: "Don't spend it all at once",
       active: true,
     };
@@ -961,4 +1028,5 @@ export {
   getNostrRewards,
   getUserWalletTransactions,
   getAllowance,
+  getAllWallets,
 };

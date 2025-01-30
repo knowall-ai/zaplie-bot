@@ -85,7 +85,9 @@ const RewardsComponent: FunctionComponent<{
   const handleBuyClick = async (price: number, reward: Reward) => {
     try {
       const wallets = await getUserWallets(adminKey, userId);
+      console.log('wallets:-', wallets);
       const privateWallet = wallets?.find(wallet => wallet.name === 'Private');
+      console.log('privateWallet:-', privateWallet);
       if (privateWallet) {
         setUserWallet(privateWallet);
         setHasEnoughSats(privateWallet.balance_msat / 1000 >= price);
