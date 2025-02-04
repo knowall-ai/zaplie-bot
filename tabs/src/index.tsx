@@ -1,22 +1,18 @@
 import React from 'react';
-import ReactDOM from 'react-dom';
-import {
-  PublicClientApplication,
-  EventType,
-  EventMessage,
-  AuthenticationResult,
-} from '@azure/msal-browser';
-import { msalConfig } from './services/authConfig';
+import ReactDOM from 'react-dom/client';
+import { PublicClientApplication, EventType, EventMessage, AuthenticationResult } from '@azure/msal-browser';
+import { MsalProvider } from '@azure/msal-react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ThemeProvider } from '@fluentui/react';
 import { theme } from './styles/Theme'; // Adjust the import path as necessary
 import App from './App'; // Adjust the import path as necessary
+import { msalConfig } from './services/authConfig';
 import { CacheProvider } from './utils/CacheContext';
+
 
 export const msalInstance = new PublicClientApplication(msalConfig);
 
 msalInstance.initialize().then(() => {
-  // Account selection logic is app dependent. Adjust as needed for different use cases.
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
@@ -30,15 +26,16 @@ msalInstance.initialize().then(() => {
     }
   });
 
-  ReactDOM.render(
-    <CacheProvider>
+  const container = document.getElementById('root');
+  const root = ReactDOM.createRoot(container!);
+  root.render(
+    <MsalProvider instance={msalInstance}>
       <Router>
         <ThemeProvider theme={theme}>
           <App pca={msalInstance} />
         </ThemeProvider>
       </Router>
-    </CacheProvider>,
+    </MsalProvider>
 
-    document.getElementById('root'),
   );
 });
