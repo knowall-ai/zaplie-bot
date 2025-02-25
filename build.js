@@ -10,7 +10,7 @@ const websiteUrl = envConfig.WEBSITE_URL;
 
 // Check for missing environment variables
 if (!contentUrl || !websiteUrl) {
-  console.error('Error: CONTENT_URL and WEBSITE_URL environment variables must be set.');
+  console.error('Error: CONTENT_URL and WEBSITE_URL environment variables added to your envirfonment file.');
   process.exit(1);
 }
 
@@ -28,8 +28,11 @@ try {
   // Split the version into its components
   const versionParts = currentVersion.split('.').map(Number);
 
-  // Increment the patch version (the last number)
-  versionParts[2] += 1;
+  // Increment the patch version (the last number) only for Test and Prod environments
+  const environment = envConfig.ENVIRONMENT;
+  if (environment === 'Test' || environment === 'Prod') {
+    versionParts[2] += 1;
+  }
 
   // Join the version parts back into a string
   const newVersion = versionParts.join('.');
