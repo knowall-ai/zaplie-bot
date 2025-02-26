@@ -434,20 +434,23 @@ async function messageRecipient(
     };
 
     // Create the conversation ... or Adapter.CreateConversationAsync????
+    /*
     const response = await connectorClient.conversations.createConversation(
       conversationParameters,
     );
-
+    */
     // Create the message
     const message = MessageFactory.text(
       `You have received ${zapAmount} Sats from ${sender.displayName} with a message: "${zapMessage}"`,
     );
 
     // Send the message to the new conversation
+    /* 
     await connectorClient.conversations.sendToConversation(
       response.id,
       message,
     );
+    */
   } catch (error) {
     if (
       error.statusCode === 403 ||
