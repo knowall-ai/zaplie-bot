@@ -33,7 +33,9 @@ msalInstance.initialize().then(() => {
       <CacheProvider>
       <Router>
         <ThemeProvider theme={theme}>
+          <CacheProvider>
           <App pca={msalInstance} />
+          </CacheProvider>
         </ThemeProvider>
       </Router>
     </CacheProvider>,

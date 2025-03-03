@@ -3,11 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import ActivityCalendar, { Activity } from 'react-activity-calendar';
 import styles from './ZapActivityChartComponent.module.css';
-import {
-  getWalletTransactionsSince,
-  getUsers,
-  getUserWallets,
-} from '../services/lnbitsServiceLocal';
+import { count } from 'console';
+// Removed unused imports
 
 interface ZapContributionsChartProps {
   lnKey: string;
@@ -64,7 +61,6 @@ const transformZapsToActivities = (
     } else if (totalAmount >= 3000) {
       level = 4;
     }
-
     return { date, count: totalAmount, level };
   });
 
@@ -81,7 +77,7 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   //const [loading, setLoading] = useState<boolean>(true);
-
+  // Removed unused prop
   useEffect(() => {
     const fetchActivities = async () => {
       try {
@@ -94,6 +90,7 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
           toDate,
         );
         setActivities(activitiesData);
+        console.log('Activities data: ', activitiesData);
       } catch (error) {
         console.error('Error fetching zaps:', error);
       } finally {
@@ -130,4 +127,4 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   );
 };
 
-export default ZapContributionsChart;
+export default ZapContributionsChart
