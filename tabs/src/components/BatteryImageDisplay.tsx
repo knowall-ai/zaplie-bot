@@ -13,18 +13,17 @@ interface BatteryImageDisplayProps {
 const BatteryImageDisplay: React.FC<BatteryImageDisplayProps> = ({ value }) => {
   let imageSrc = '';
 
-
 if (value < 1) {
 
     imageSrc = Image0;
 }
-    else if (value >= 1 && value < 20) {
+    else if (value >= 1 && value <= 20) {
         imageSrc = Image1;
-  } else if (value >= 20 && value < 40) {
+  } else if (value > 20 && value <= 40) {
     imageSrc = Image2;
-  } else if (value >= 40 && value < 60) {
+  } else if (value > 40 && value <= 60) {
     imageSrc = Image3;
-  } else if (value >= 60 && value < 80) {
+  } else if (value > 60 && value <= 80) {
     imageSrc = Image4;
   } else {
     imageSrc = Image5;
