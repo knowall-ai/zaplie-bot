@@ -49,6 +49,7 @@ export async function SendZap(
   zapMessage: string,
   zapAmount: number,
   context: TurnContext,
+  updateCard: boolean = true
 ): Promise<void> {
   try {
     console.log('Sending zap ...');
@@ -87,7 +88,7 @@ export async function SendZap(
 
     console.log('Payment Result:', result);
 
-    if (result && result.payment_hash) {
+    if (result && result.payment_hash && updateCard) {
       // Updated adaptive card (read-only)
       const updatedCard = {
         type: 'AdaptiveCard',
@@ -246,10 +247,11 @@ async function createZapCard() {
       type: 'Input.ChoiceSet',
       label: 'Receiver',
       id: 'zapReceiverId',
-      placeholder: 'Select a recipient wallet',
+      placeholder: 'Select one or more recipient wallets',
       choices: walletChoices,
       isRequired: true,
-      errorMessage: 'You must select someone to zap',
+      isMultiSelect: true,
+      errorMessage: 'You must select at least one person to zap',
     },
     {
       type: 'Input.Text',
@@ -285,7 +287,7 @@ async function createZapCard() {
       }
     });
   }*/
-
+  
   return {
     type: 'AdaptiveCard',
     body: cardBody,
@@ -358,7 +360,7 @@ async function messageRecipient(
       botAppId,
       process.env.SECRET_AAD_APP_CLIENT_SECRET, // Is this password encrypted?
     );*/
-
+    
     console.log('Bot App ID:', botAppId);
     console.log('Bot Name:', botName);
 

@@ -95,27 +95,81 @@ export class TeamsBot extends TeamsActivityHandler {
         ) {
           const currentUser = context.turnState.get('user');
     
-          const receiverId = context.activity.value.zapReceiverId;
-          const receiver = await getUser(adminKey, receiverId);
+          let receiverIds = context.activity.value.zapReceiverId;
+          if (typeof receiverIds === 'string' && receiverIds.indexOf(',') > -1) {
+            receiverIds = receiverIds.split(',').map((id: string) => id.trim());
+          } else if (typeof receiverIds === 'string') {
+            receiverIds = [receiverIds];
+          }
+    
+          const zapMessage = context.activity.value.zapMessage;
+          const zapAmount = context.activity.value.zapAmount;
     
           if (!currentUser.allowanceWallet.id) {
             throw new Error('No sending wallet found.');
           }
     
-          if (!receiver.privateWallet) {
-            throw new Error('Receiver wallet not found.');
-          }
+          let successfulRecipients: string[] = [];
     
-          await SendZap(
-            currentUser,
-            receiver,
-            context.activity.value.zapMessage,
-            context.activity.value.zapAmount,
-            context,
-          );
+          for (const recId of receiverIds) {
+            const receiver = await getUser(adminKey, recId);
+    
+            if (!receiver.privateWallet) {
+              throw new Error('Receiver wallet not found.');
+            }
+    
+            await SendZap(
+              currentUser,
+              receiver,
+              zapMessage,
+              zapAmount,
+              context,
+              false
+            );
+    
+            successfulRecipients.push(receiver.displayName);
+          }
+          const bulletReceivers = successfulRecipients
+            .map((name) => `- ${name}`)
+            .join('\n');
+
+          // Update adaptive card to read-only with list of recipients
+          const updatedCard = {
+            type: 'AdaptiveCard',
+            body: [
+              {
+                type: 'TextBlock',
+                text: `Zap sent!`,
+                weight: 'Bolder',
+                size: 'Large',
+                color: 'Good',
+              },
+              {
+                type: 'TextBlock',
+                text: `**Receivers:**\n${bulletReceivers}`,
+                wrap: true
+              },
+              {
+                type: 'TextBlock',
+                text: `**Message:** ${zapMessage}`,
+                wrap: true
+              },
+              {
+                type: 'TextBlock',
+                text: `**Amount (Sats):** ${zapAmount}`,
+                wrap: true
+              },
+            ],
+            $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+            version: '1.2',
+          };
+    
+          const updatedMessage = MessageFactory.attachment(CardFactory.adaptiveCard(updatedCard));
+          updatedMessage.id = context.activity.replyToId;
+          await context.updateActivity(updatedMessage);
     
           await context.sendActivity(
-            `Awesome! You sent ${context.activity.value.zapAmount} Sats to your colleague with a zap!`,
+            `Awesome! You sent ${zapAmount} Sats with a zap to your colleagues with a zap!`,
           );
         }
     
@@ -125,19 +179,19 @@ export class TeamsBot extends TeamsActivityHandler {
         if (command) {
           await command.execute(context);
         } else {
+            await context.sendActivity(
+              "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!",
+            );
+          }}
+        } catch (error) {
+          console.error('Error in onMessage handler:', error.message);
           await context.sendActivity(
-            "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!",
+            `Oops! Unable to send zap (${error.message})`,
           );
-        }}
-      } catch (error) {
-        console.error('Error in onMessage handler:', error.message);
-        await context.sendActivity(
-          `Oops! Unable to send zap (${error.message})`,
-        );
-      }  
-    
-      await next();
-    });
+        }  
+
+        await next();
+        });
 
     //this.onMembersAdded(async (context, next) => {
     this.onCommand(async (context, next) => {
@@ -201,7 +255,7 @@ export class TeamsBot extends TeamsActivityHandler {
       } else {
         await context.sendActivity('Failed to ensure wallet.');
       }
-        */
+      */
     } catch (error) {
       console.error('Error in onSignInInvoke:', error);
       await context.sendActivity('An error occurred during sign-in.');
