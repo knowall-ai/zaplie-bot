@@ -30,6 +30,12 @@ const FeedList: React.FC<FeedListProps> = ({
   const initialRender = useRef(true);
   const { cache, setCache } = useCache();
 
+  // NEW: State for sorting (excluding the Memo field)
+  const [sortField, setSortField] = useState<'time' | 'from' | 'to' | 'amount'>(
+    'time',
+  );
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   useEffect(() => {
     //alert('FEED PARAMETER:' + timestamp);
 
@@ -55,11 +61,14 @@ const FeedList: React.FC<FeedListProps> = ({
 
         const allowanceTransactions = allZaps.filter(
           f =>
-            f.time > paymentsSinceTimestamp && !f.memo.includes('Weekly Allowance cleared'),
+            f.time > paymentsSinceTimestamp &&
+            !f.memo.includes('Weekly Allowance cleared'),
         );
 
         const allowanceZaps = allowanceTransactions.flat().map(transaction => ({
-          from: allUsers?.find(f => f.id === transaction.extra?.from?.user) as User,
+          from: allUsers?.find(
+            f => f.id === transaction.extra?.from?.user,
+          ) as User,
           to: allUsers?.find(f => f.id === transaction.extra?.to?.user) as User,
           transaction: transaction,
         }));
@@ -87,16 +96,55 @@ const FeedList: React.FC<FeedListProps> = ({
       fetchZaps();
     }
   }, [timestamp, allZaps, allUsers]);
+  // NEW: Function to handle header clicks for sorting
+  const handleSort = (field: 'time' | 'from' | 'to' | 'amount') => {
+    if (sortField === field) {
+      // Toggle sort order if the same field is clicked
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Change sort field and set default order to ascending
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+  // NEW: Sort the zaps array based on the selected sort field and order
+  const sortedZaps = [...zaps].sort((a, b) => {
+    let valA, valB;
 
+    switch (sortField) {
+      case 'time':
+        valA = a.transaction.time;
+        valB = b.transaction.time;
+        break;
+      case 'from':
+        valA = a.from?.displayName || '';
+        valB = b.from?.displayName || '';
+        break;
+      case 'to':
+        valA = a.to?.displayName || '';
+        valB = b.to?.displayName || '';
+        break;
+      case 'amount':
+        valA = a.transaction.amount;
+        valB = b.transaction.amount;
+        break;
+      default:
+        valA = 0;
+        valB = 0;
+    }
+
+    if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+    if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   // Calculate pagination variables
-  const totalPages = Math.ceil(zaps.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(sortedZaps.length / ITEMS_PER_PAGE);
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = zaps.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = sortedZaps.slice(indexOfFirstItem, indexOfLastItem);
 
-  const nextPage = () =>
-    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
   const firstPage = () => setCurrentPage(1);
   const lastPage = () => setCurrentPage(totalPages);
@@ -111,19 +159,39 @@ const FeedList: React.FC<FeedListProps> = ({
     <div className={styles.feedlist}>
       <div className={styles.headercell}>
         <div className={styles.headerContents}>
-          <b className={styles.string}>Time</b>
-          <b className={styles.string}>From</b>
-          <b className={styles.string}>To</b>
+          {/* Interactive sortable headers with hover effect */}
+          <b
+            className={`${styles.string} ${styles.hoverable}`}
+            onClick={() => handleSort('time')}
+          >
+            Time {sortField === 'time' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+          </b>
+          <b
+            className={`${styles.string} ${styles.hoverable}`}
+            onClick={() => handleSort('from')}
+          >
+            From {sortField === 'from' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+          </b>
+          <b
+            className={`${styles.string} ${styles.hoverable}`}
+            onClick={() => handleSort('to')}
+          >
+            To {sortField === 'to' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+          </b>
+          {/* Memo header without sorting/hover effect */}
           <b className={styles.string2}>Memo</b>
-          <div className={styles.stringWrapper}>
-            <b className={styles.string3}>Amount</b>
+          <div
+            className={`${styles.stringWrapper} ${styles.hoverable}`}
+            onClick={() => handleSort('amount')}
+          >
+            <b className={styles.string3}>
+              Amount {sortField === 'amount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+            </b>
           </div>
         </div>
       </div>
       {currentItems.length > 0 ? (
-        currentItems
-        ?.sort((a, b) => b.transaction.time - a.transaction.time)
-        .map((zap, index) => (
+        currentItems.map((zap, index) => (
           <div
             key={zap.transaction.checking_id || index}
             className={styles.bodycell}
@@ -178,7 +246,7 @@ const FeedList: React.FC<FeedListProps> = ({
       ) : (
         <div>No data available</div>
       )}
-      {zaps.length > ITEMS_PER_PAGE && (
+      {sortedZaps.length > ITEMS_PER_PAGE && (
        <div className={styles.pagination}>
        <button
          onClick={firstPage}

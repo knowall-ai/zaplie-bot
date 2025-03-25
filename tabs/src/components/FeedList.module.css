@@ -226,3 +226,12 @@
     color: #555;
     transform: none;
   }
+
+  .hoverable {
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  
+  .hoverable:hover {
+    color: #5b5fc7;
+  }
