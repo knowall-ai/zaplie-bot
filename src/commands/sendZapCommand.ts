@@ -1,20 +1,14 @@
-import { SSOCommand, SSOCommandMap } from './SSOCommandMap';
+import { SSOCommand } from './SSOCommandMap';
 import {
   TurnContext,
   ActivityTypes,
   Activity,
-  TeamsInfo,
   CardFactory,
   MessageFactory,
-  CloudAdapter,
-  ConversationReference,
   ConversationParameters,
-  ChannelAccount,
-  TeamsActivityHandler,
 } from 'botbuilder';
 import { ConnectorClient } from 'botframework-connector';
-import { getUsers, payInvoice, createInvoice } from '../services/lnbitsService';
-import { error } from 'console';
+import { getUsers, payInvoice, createInvoice, getWalletBalance } from '../services/lnbitsService';
 import { UserService } from '../services/userService';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
@@ -90,6 +84,10 @@ export async function SendZap(
 
     if (result && result.payment_hash && updateCard) {
       // Updated adaptive card (read-only)
+      //fetch remainingBalance
+      const remainingBalance = await getWalletBalance(sender.allowanceWallet.inkey);
+      console.log('Remaining Balance:', remainingBalance);
+      
       const updatedCard = {
         type: 'AdaptiveCard',
         body: [
@@ -176,6 +174,32 @@ export async function SendZap(
                   },
                 ],
               },
+              {
+                type: 'ColumnSet',
+                columns: [
+                  {
+                    type: 'Column',
+                    width: 'auto',
+                    items: [
+                      {
+                        type: 'TextBlock',
+                        text: `Remaining Amount (Sats):`,
+                        weight: 'Bolder',
+                      },
+                    ],
+                  },
+                  {
+                    type: 'Column',
+                    width: 'stretch',
+                    items: [
+                      {
+                        type: 'TextBlock',
+                        text: `${remainingBalance}`,
+                      },
+                    ],
+                  },
+                ],
+              }
             ],
           },
         ],

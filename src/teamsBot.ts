@@ -6,31 +6,18 @@ import {
   MemoryStorage,
   ConversationState,
   UserState,
-  TeamInfo,
   CardFactory,
-  Middleware,
-  MessageFactory,
-  TeamsInfo,
-  StatePropertyAccessor,
-  Mention
+  MessageFactory
 } from 'botbuilder';
-import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
-import { Client } from '@microsoft/microsoft-graph-client';
-import { OnBehalfOfUserCredential } from '@microsoft/teamsfx';
+import {  SSOCommandMap } from './commands/SSOCommandMap';
 import { SendZapCommand, SendZap } from './commands/sendZapCommand';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
 import {
   getUser,
-  getUsers,
-  getWalletById,
-  createUser,
-  createWallet,
-  updateUser,
+  getWalletBalance,
 } from './services/lnbitsService';
-import { UserService } from './services/userService';
-import { access } from 'fs';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 interface CancellationToken {
@@ -133,6 +120,10 @@ export class TeamsBot extends TeamsActivityHandler {
             .map((name) => `- ${name}`)
             .join('\n');
 
+          //fetch remainingBalance
+          const remainingBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
+          console.log('Remaining Balance:', remainingBalance);
+          
           // Update adaptive card to read-only with list of recipients
           const updatedCard = {
             type: 'AdaptiveCard',
@@ -158,6 +149,12 @@ export class TeamsBot extends TeamsActivityHandler {
                 type: 'TextBlock',
                 text: `**Amount (Sats):** ${zapAmount}`,
                 wrap: true
+              },
+              {
+                type: 'TextBlock',
+                text: `**Remaining Amount (Sats):** ${remainingBalance}`,
+                wrap: true,
+                color: 'Good',
               },
             ],
             $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
