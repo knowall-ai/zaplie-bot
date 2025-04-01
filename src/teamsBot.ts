@@ -164,10 +164,6 @@ export class TeamsBot extends TeamsActivityHandler {
           const updatedMessage = MessageFactory.attachment(CardFactory.adaptiveCard(updatedCard));
           updatedMessage.id = context.activity.replyToId;
           await context.updateActivity(updatedMessage);
-    
-          await context.sendActivity(
-            `Awesome! You sent ${zapAmount} Sats with a zap to your colleagues with a zap!`,
-          );
         }
     
         // Trigger command by IM text
@@ -183,7 +179,7 @@ export class TeamsBot extends TeamsActivityHandler {
         } catch (error) {
           console.error('Error in onMessage handler:', error.message);
           await context.sendActivity(
-            `Oops! Unable to send zap (${error.message})`,
+            `${error.message}`,
           );
         }  
 
