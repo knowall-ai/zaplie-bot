@@ -11,6 +11,8 @@ import RequireAuth from './components/RequireAuth';
 
 // Sample app imports
 import { PageLayout } from './components/PageLayout';
+import { RewardNameProvider } from './components/RewardNameContext';
+
 
 // Import the pages
 import Login from './Login';
@@ -21,6 +23,7 @@ import Rewards from './Rewards';
 import Wallet from './Wallet';
 import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
+import Settings from './Settings';
 
 
 type AppProps = {
@@ -40,6 +43,8 @@ function TitleUpdater() {
       "/login": "Login - Zapp.ie",
       "/auth-start": "Authenticating...",
       "/auth-end": "Authentication Complete",
+      "/settings": "Settings - Zapp.ie",
+
     };
 
     document.title = titles[location.pathname] || "Zapp.ie"; 
@@ -53,6 +58,8 @@ function TitleUpdater() {
 function App({ pca }: AppProps) {
   return (
     <MsalProvider instance={pca}> 
+
+    <RewardNameProvider>
     <TitleUpdater />
      <PageLayout> 
      <Stack horizontalAlign="center">    
@@ -61,6 +68,7 @@ function App({ pca }: AppProps) {
           <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
           <Route path="/rewards" element={<RequireAuth><Rewards /></RequireAuth>} />
           <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
+          <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/auth-start" element={<AuthStart />} />
           <Route path="/auth-end" element={<AuthEnd />} />
@@ -68,6 +76,7 @@ function App({ pca }: AppProps) {
         </Routes>
       </Stack>
       </PageLayout>
+      </RewardNameProvider>
      </MsalProvider>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import styles from './WalletTransactionLog.module.css';
 import {
   getUsers,
@@ -8,6 +8,7 @@ import ArrowIncoming from '../images/ArrowIncoming.svg';
 import ArrowOutgoing from '../images/ArrowOutcoming.svg';
 import moment from 'moment';
 import { useMsal } from '@azure/msal-react';
+import { RewardNameContext } from './RewardNameContext';
 
 interface WalletTransactionLogProps {
   activeTab?: string;
@@ -120,6 +121,12 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     getAllUsers();
     fetchTransactions();
   }, [activeTab, activeWallet]);
+  
+  const rewardNameContext = useContext(RewardNameContext);
+  if (!rewardNameContext) {
+    return null; // or handle the case where the context is not available
+  }
+const rewardsName = rewardNameContext.rewardName;
 
   if (loading) {
     return <div>Loading...</div>;
@@ -136,6 +143,8 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   if (error) {
     return <div>{error}</div>;
   }
+
+
 
   return (
     <div className={styles.feedlist}>
@@ -218,7 +227,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
                       ? transaction.amount / 1000
                       : '+' + transaction.amount / 1000}
                   </b>{' '}
-                  Sats{' '}
+                  {rewardsName}{' '}
                 </div>
                 <div
                   style={{ display: 'none' }}

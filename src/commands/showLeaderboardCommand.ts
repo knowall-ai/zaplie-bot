@@ -11,8 +11,10 @@ import {
   MessageFactory,
 } from 'botbuilder';
 import { getWallets, getUser } from '../services/lnbitsService';
+import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
+
 
 // New command for showing leaderboard
 export class ShowLeaderboardCommand extends SSOCommand {
@@ -20,6 +22,10 @@ export class ShowLeaderboardCommand extends SSOCommand {
     try {
       //await context.sendActivity('Showing leaderboard...');
       console.log('Showing leaderboard...');
+
+        // Fetch the latest reward name
+      const globalRewardName = await getRewardName();
+      console.log('Fetched Reward Name:', globalRewardName);
 
       // Call the getWallets function
       const wallets = await getWallets(adminKey, 'Private');
@@ -45,7 +51,7 @@ export class ShowLeaderboardCommand extends SSOCommand {
                 type: 'TextBlock',
                 text: `${user.displayName}\n: ${
                   wallet.balance_msat / 1000
-                } Sats`,
+                } ${globalRewardName}`,
                 weight: 'Bolder',
                 size: 'Medium',
               };

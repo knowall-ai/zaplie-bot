@@ -10,17 +10,24 @@ import {
 import { ConnectorClient } from 'botframework-connector';
 import { getUsers, payInvoice, createInvoice, getWalletBalance } from '../services/lnbitsService';
 import { UserService } from '../services/userService';
+import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
+const lnbitsLabel = process.env.REACT_APP_LNBITS_POINTS_LABEL as string;
 
 export class SendZapCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
     try {
+
       console.log("Running SendZapCommand's execute method.");
+
+     // Fetch the latest reward name
+      const globalRewardName = await getRewardName();
+      console.log('Fetched Reward Name:', globalRewardName);
 
       // Await the createZapCard function and log the result
       const currentUser = context.turnState.get('user');
-      const card = await createZapCard(currentUser);
+      const card = await createZapCard(currentUser, globalRewardName);
       console.log('createZapCard:', card); // Log the card content
 
       // Create the message with the adaptive card
@@ -44,7 +51,8 @@ export async function SendZap(
   zapMessage: string,
   zapAmount: number,
   context: TurnContext,
-  updateCard: boolean = true
+  updateCard: boolean = true,
+  globalRewardName: string
 ): Promise<void> {
   try {
     console.log('Sending zap ...');
@@ -55,7 +63,7 @@ export async function SendZap(
       //await context.sendActivity(
       //  `D'oh! You cannot send more than your available balance. Your current balance is ${currentBalance} Sats.`,
       //);
-      throw new Error(`D'oh! You cannot send more than your available balance. Your current balance is ${currentBalance} Sats.`);
+      throw new Error(`D'oh! You cannot send more than your available balance. Your current balance is ${currentBalance} ${globalRewardName}.`);
       //return; // Stop further processing
     }
 
@@ -170,7 +178,7 @@ export async function SendZap(
                 items: [
                   {
                     type: 'TextBlock',
-                    text: `Amount (Sats):`,
+                    text: `Amount (${globalRewardName}):`,
                     weight: 'Bolder',
                   },
                 ],
@@ -194,7 +202,7 @@ export async function SendZap(
                     items: [
                       {
                         type: 'TextBlock',
-                        text: `Remaining Amount (Sats):`,
+                        text: `Remaining Amount (${globalRewardName}):`,
                         weight: 'Bolder',
                       },
                     ],
@@ -271,7 +279,7 @@ export async function SendZap(
 }
 
 // Function to create an adaptive card
-async function createZapCard(sender: User,) {
+async function createZapCard(sender: User, globalRewardName: string) {
   console.log('Creating Zap Card ...');
   const walletChoices = await populateWalletChoices();
 
@@ -302,14 +310,14 @@ async function createZapCard(sender: User,) {
       type: 'Input.Text',
       id: 'zapAmount',
       placeholder: '100',
-      label: 'Amount (Sats)',
+      label: `Amount (${globalRewardName})`,
       regex: '^(?:10000|[1-9][0-9]{0,3})$',
       isRequired: true,
-      errorMessage: 'You must specify an amount between 1 and 10,000 Sats',
+      errorMessage: `You must specify an amount between 1 and 10,000 ${lnbitsLabel}`,
     },
     {
       type: 'TextBlock',
-      text: `**Current Available Balance (Sats):** ${currentBalance}`,
+      text: `**Current Available Balance (${globalRewardName}):** ${currentBalance}`,
       wrap: true,
       color: 'Good',
     },
@@ -415,7 +423,7 @@ async function messageRecipient(
       TurnContext.applyConversationReference(
         {
           type: ActivityTypes.Message,
-          text: `You have received ${zapAmount} Sats from ${sender.displayName} with a message: "${zapMessage}"`,
+          text: `You have received ${zapAmount} ${lnbitsLabel} from ${sender.displayName} with a message: "${zapMessage}"`,
         },
         reference,
         true,
@@ -485,7 +493,7 @@ async function messageRecipient(
     */
     // Create the message
     const message = MessageFactory.text(
-      `You have received ${zapAmount} Sats from ${sender.displayName} with a message: "${zapMessage}"`,
+      `You have received ${zapAmount} ${lnbitsLabel} from ${sender.displayName} with a message: "${zapMessage}"`,
     );
 
     // Send the message to the new conversation

@@ -16,6 +16,7 @@ import {
   createInvoice,
   getUserWallets,
 } from '../services/lnbitsService';
+import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 
@@ -24,6 +25,10 @@ export class ShowMyBalanceCommand extends SSOCommand {
     try {
       //await context.sendActivity('Showing your balance...');
       console.log('Showing your balance...');
+
+      // Fetch the latest reward name
+      const globalRewardName = await getRewardName();
+      console.log('Fetched Reward Name:', globalRewardName);
 
       // Retrieve the user object from the turn state
       const user = context.turnState.get('user') as User;
@@ -57,7 +62,7 @@ export class ShowMyBalanceCommand extends SSOCommand {
 
         const balanceSat = balanceMsat / 1000; // Convert from msat to sat
         await context.sendActivity(
-          `Your ${wallet.name} wallet has a balance of ${balanceSat} satoshis.`,
+          `Your ${wallet.name} wallet has a balance of ${balanceSat} ${globalRewardName}.`,
         );
       }
     } catch (error) {

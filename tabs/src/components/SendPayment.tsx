@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import styles from './SendReceivePayment.module.css';
@@ -9,6 +9,8 @@ import pasteInvoice from '../images/PasteInvoice.svg';
 import loaderGif from '../images/Loader.gif';
 import { decode } from 'light-bolt11-decoder';
 import { payInvoice } from '../services/lnbitsServiceLocal';
+import { RewardNameContext } from './RewardNameContext';
+
 
 interface SendPopupProps {
   onClose: () => void;
@@ -78,7 +80,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
         })
         .catch(error => {
           handlePaymentFailure(
-            'Error paying invoice. The link might be expired or you do not have enough Sats on your wallet',
+            `Error paying invoice. The link might be expired or you do not have enough ${rewardsName} on your wallet`,
           );
         });
     }
@@ -178,6 +180,12 @@ const SendPayment: React.FC<SendPopupProps> = ({
     }
   });
 
+    const rewardNameContext = useContext(RewardNameContext);
+    if (!rewardNameContext) {
+      return null; // or handle the case where the context is not available
+    }
+  const rewardsName = rewardNameContext.rewardName;
+
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
       <div
@@ -228,7 +236,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
                   <input
                     type={'text'}
                     value={`${invoiceAmount !== null ? invoiceAmount : ''} ${
-                      invoiceMemo ? ` Sats. Note: ${invoiceMemo}` : ''
+                      invoiceMemo ? ` ${rewardsName}. Note: ${invoiceMemo}` : ''
                     }`}
                     readOnly={isAmountReadOnly}
                     className={styles.inputField}

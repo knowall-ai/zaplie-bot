@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import './WalletAllowanceComponent.css'; // Assuming you'll use CSS for styling
 import BatteryImageDisplay from './BatteryImageDisplay';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
@@ -6,6 +6,7 @@ import Calendar from '../images/Calendar.svg';
 import { getAllowance, getUsers, getWalletTransactionsSince } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import WalletTransactionLog from './WalletTransactionLog';
+import { RewardNameContext } from './RewardNameContext';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 let spentSats =0
@@ -58,7 +59,11 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
 
     fetchAmountReceived();
   }, [accounts]);
-
+  const rewardNameContext = useContext(RewardNameContext);
+  if (!rewardNameContext) {
+    return null; // or handle the case where the context is not available
+  }
+const rewardsName = rewardNameContext.rewardName;
   return (
     <div className="wallet-container">
       <div className="wallet-header">
@@ -75,7 +80,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
               <div className="amountDisplay">
                 {balance?.toLocaleString() ?? '0'}
               </div>
-              <div>Sats</div>
+              <div>{rewardsName}</div>
               <div style={{ paddingLeft: '20px', display: 'none' }}>
                 <button className="refreshImageIcon">
                   <img
@@ -102,7 +107,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
               <div className="remaining smallTextFont">Next allowance</div>
               <div className="remaining smallTextFont">
                 {allowance ? allowance.amount.toLocaleString() : '0'}{' '}
-                <span>Sats</span>
+                <span>{rewardsName}</span>
               </div>
               <div className="remaining smallTextFont">
                 <div>
@@ -131,10 +136,10 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
           </div>
           <div className="col-md-3">
             <div className="spent smallTextFont">
-              <b>{balance?.toLocaleString() ?? '0'}</b> Sats
+              <b>{balance?.toLocaleString() ?? '0'}</b> {rewardsName}
             </div>
             <div className="spent smallTextFont">
-              <b>{spentSats?.toLocaleString()}</b> Sats
+              <b>{spentSats?.toLocaleString()}</b> {rewardsName}
             </div>
           </div>
         </div>

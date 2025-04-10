@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "outDir": "./dist", // Set the output directory to 'dist'
     "rootDir": "./src", // Set the root directory to 'src'
     "sourceMap": true,
@@ -21,6 +23,6 @@
     "types": ["react", "react-dom", "node"],
     "jsx": "react-jsx"
   },
-  "include": ["src"],
+  "include": ["src","backend"],
   "exclude": ["node_modules", "dist"]
 }

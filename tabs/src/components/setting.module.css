@@ -1,0 +1,102 @@
+/* filepath: /c:/projects/ZapVibes/tabs/src/components/setting.module.css */
+.mainContainer {
+  width: 90%; /* Use percentage for fluid width */
+  max-width: 1052px; /* Set a maximum width */
+  height: auto; /* Allow height to adjust based on content */
+  position: relative;
+  margin: 0 auto; /* Center the container */
+  border: 20px solid rgba(31, 31, 31, 1);
+  border-top: 0px;
+  box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  background-color: #2d2b2c;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 20px;
+  box-sizing: border-box;
+  gap: 20px;
+  text-align: left;
+  font-size: 12px;
+  color: #d6d6d6;
+  font-family: Inter;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.title {
+  width: 100%; /* Make title width responsive */
+  height: auto; /* Allow height to adjust based on content */
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 17px;
+  color: #ffffff;
+  flex: none;
+  order: 0;
+  align-self: stretch;
+  flex-grow: 0;
+  z-index: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.providedByImage {
+  position: absolute;
+  right: 20px;
+  top: 5px;
+  height: 40px;
+}
+
+.currencySetting {
+  width: 100%; /* Make currency setting take full width */
+  display: flex;
+  flex-direction: column; /* Stack elements vertically */
+  align-items: flex-start;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.inputGroup {
+  width: 100%; /* Make input group take full width */
+  display: flex;
+  align-items: center; /* Align items horizontally */
+  gap: 10px; /* Add space between elements */
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 300;
+  color: #d6d6d6;
+  margin-bottom: 5px; /* Add space between label and input group */
+}
+
+.textBox {
+  flex: 1; /* Allow text box to take available space */
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: white; /* Default text color */
+}
+
+.textBox.editing {
+  color: black; /* Text color when editing */
+}
+
+.editButton,
+.saveButton {
+  width: 100px; /* Set button width to 100px */
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #F2A900;
+  color: white;
+  cursor: pointer;
+}
+
+.editButton:hover,
+.saveButton:hover {
+  background-color: #005a9e;
+}

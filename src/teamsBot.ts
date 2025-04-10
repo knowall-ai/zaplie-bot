@@ -19,7 +19,20 @@ import {
   getWalletBalance,
 } from './services/lnbitsService';
 
+//Reward Name Constants
+
+import { getRewardName } from './services/fetchRewardsName';
+
+let globalRewardName: string;
+
+(async () => {
+  globalRewardName = await getRewardName();
+  console.log(`Reward Name is `, JSON.stringify(globalRewardName));
+})();
+
+
 const adminKey = process.env.LNBITS_ADMINKEY as string;
+
 interface CancellationToken {
   isCancellationRequested: boolean;
 }
@@ -112,7 +125,8 @@ export class TeamsBot extends TeamsActivityHandler {
               zapMessage,
               zapAmount,
               context,
-              false
+              false,
+              globalRewardName
             );
     
             successfulRecipients.push(receiver.displayName);
@@ -163,7 +177,7 @@ export class TeamsBot extends TeamsActivityHandler {
               },
               {
                 type: 'TextBlock',
-                text: `**Amount (Sats):** ${zapAmount}`,
+                text: `**Amount (${globalRewardName}):** ${zapAmount}`,
                 wrap: true
               },
               
@@ -175,7 +189,7 @@ export class TeamsBot extends TeamsActivityHandler {
               },
               {
                 type: 'TextBlock',
-                text: `**Remaining Amount (Sats):** ${remainingBalance}`,
+                text: `**Remaining Amount (${globalRewardName}):** ${remainingBalance}`,
                 wrap: true,
                 color: 'Good',
               },
@@ -186,7 +200,11 @@ export class TeamsBot extends TeamsActivityHandler {
     
           const updatedMessage = MessageFactory.attachment(CardFactory.adaptiveCard(updatedCard));
           updatedMessage.id = context.activity.replyToId;
-          await context.updateActivity(updatedMessage);
+          await context.updateActivity(updatedMessage); 
+          await context.sendActivity(
+            `Awesome! You sent ${context.activity.value.zapAmount} ${globalRewardName} to your colleague with a zap!`,
+          );
+
         }
     
         // Trigger command by IM text

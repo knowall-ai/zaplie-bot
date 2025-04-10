@@ -77,8 +77,8 @@
                 "channelTab"
             ], 
             "name": "Feed", 
-            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net", 
-            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net"
+            "contentUrl": "https://zappie-dev-development.azurewebsites.net", 
+            "websiteUrl": "https://zappie-dev-development.azurewebsites.net"
         }, 
         { 
             "entityId": "usersTab", 
@@ -91,8 +91,8 @@
                 "channelTab"
             ], 
             "name": "Users", 
-            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/users", 
-            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/users"
+            "contentUrl": "https://zappie-dev-development.azurewebsites.net/users", 
+            "websiteUrl": "https://zappie-dev-development.azurewebsites.net/users"
         } ,       { 
             "entityId": "rewardsTab", 
             "scopes": [       
@@ -104,8 +104,8 @@
                 "channelTab"
             ], 
             "name": "Rewards", 
-            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/rewards", 
-            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/rewards"
+            "contentUrl": "https://zappie-dev-development.azurewebsites.net/rewards", 
+            "websiteUrl": "https://zappie-dev-development.azurewebsites.net/rewards"
         },
                { 
             "entityId": "walletTab", 
@@ -118,8 +118,22 @@
                 "channelTab"
             ], 
             "name": "Wallet", 
-            "contentUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/wallet", 
-            "websiteUrl": "https://happy-grass-0cba10710.5.azurestaticapps.net/wallet"
+            "contentUrl": "https://zappie-dev-development.azurewebsites.net/wallet", 
+            "websiteUrl": "https://zappie-dev-development.azurewebsites.net/wallet"
+        },
+        { 
+            "entityId": "settingsTab", 
+            "scopes": [       
+                "team",
+                "personal"
+            ], 
+            "context": [ 
+                "personalTab",
+                "channelTab"
+            ], 
+            "name": "Settings", 
+            "contentUrl": "https://zappie-dev-development.azurewebsites.net/settings", 
+            "websiteUrl": "https://zappie-dev-development.azurewebsites.net/settings"
         }
     ],
     "permissions": [

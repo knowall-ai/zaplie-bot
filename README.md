@@ -71,19 +71,19 @@ Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and re
       BOT_ENDPOINT=https://sample-id-3978.devtunnels.ms
       ```
   1.  Run command: `teamsapp provision --env local` .
-  1.  Run command: `teamsapp deploy --env local` .
-  1.  Run command: `teamsapp preview --env local` .
+  2.  Run command: `teamsapp deploy --env local` .
+  3.  Run command: `teamsapp preview --env local` .
 
 ### Deploy the app to Azure
 
 - From VS Code:
   1. Sign into Azure by clicking the `Sign in to Azure` under the `ACCOUNTS` section from sidebar.
-  1. Click `Provision` from `LIFECYCLE` section or open the command palette and select: `Teams: Provision`.
-  1. Click `Deploy` or open the command palette and select: `Teams: Deploy`.
+  2. Click `Provision` from `LIFECYCLE` section or open the command palette and select: `Teams: Provision`.
+  3. Click `Deploy` or open the command palette and select: `Teams: Deploy`.
 - Or, from TeamsFx CLI:
   1. Run command: `teamsapp auth login azure`.
-  1. Run command: `teamsapp provision --env dev`.
-  1. Run command: `teamsapp deploy --env dev`.
+  2. Run command: `teamsapp provision --env dev`.
+  3. Run command: `teamsapp deploy --env dev`.
 
 ### Preview the app in Teams
 
@@ -95,8 +95,8 @@ Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and re
 ## Running Zapp.ie Web App (The Tabs in the bot)
 
 1. Navigate to tabs folder using `cd tabs`
-1. Install the packages using `npm install`
-1. Run the application using `npm start`
+2. Install the packages using `npm install`
+3. Run the application using `npm start`
 
 # Get in touch
 

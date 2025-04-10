@@ -8,6 +8,7 @@ const envConfig = dotenv.parse(fs.readFileSync(envFilePath));
 const contentUrl = envConfig.CONTENT_URL;
 const websiteUrl = envConfig.WEBSITE_URL;
 
+
 // Check for missing environment variables
 if (!contentUrl || !websiteUrl) {
   console.error('Error: CONTENT_URL and WEBSITE_URL environment variables added to your envirfonment file.');
@@ -44,6 +45,7 @@ try {
   const updatedManifest = JSON.stringify(manifest, null, 2)
     .replace(/{{CONTENT_URL}}/g, contentUrl)
     .replace(/{{WEBSITE_URL}}/g, websiteUrl);
+
 
   // Write the final manifest.json file
   const outputPath = path.join(__dirname, 'appPackage', 'manifest.json');

@@ -1,5 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useContext } from 'react';
 import styles from './PurchasePopup.module.css';
+
+import { RewardNameContext } from './RewardNameContext';
+
+
+const lnbitsLabel = process.env.REACT_APP_LNBITS_POINTS_LABEL as string;
 
 interface PurchasePopupProps {
   onClose: () => void;
@@ -16,10 +21,6 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
 }) => {
   const storeOwnerEmail = process.env.REACT_APP_LNBITS_STORE_OWNER_EMAIL;
   console.log('Store Owner Email:', storeOwnerEmail);
-
-  const message = hasEnoughSats
-    ? `Please confirm you would like to purchase this reward.`
-    : `D'oh! You do not have enough Sats to redeem this reward yet.`;
 
   const handleOverlayClick = () => {
     onClose();
@@ -44,8 +45,18 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
   // Log wallet ID and balance to the console
   useEffect(() => {
     console.log('Wallet ID:', wallet.id);
-    console.log('Balance:', wallet.balance_msat / 1000, 'Sats');
+    console.log('Balance:', wallet.balance_msat / 1000, rewardsName);
   }, [wallet]);
+
+  const rewardNameContext = useContext(RewardNameContext);
+  if (!rewardNameContext) {
+    return null; // or handle the case where the context is not available
+  }
+const rewardsName = rewardNameContext.rewardName;
+
+const message = hasEnoughSats
+? `Please confirm you would like to purchase this reward.`
+: `D'oh! You do not have enough ${rewardsName} to redeem this reward yet.`;
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>

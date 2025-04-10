@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import './WalletInfoCard.css';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
 import { getUsers } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import SendPayment from './SendPayment';
 import ReceivePayment from './ReceivePayment';
+import { RewardNameContext } from './RewardNameContext';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
+
 const WalletYourWalletInfoCard: React.FC = () => {
+
   const [balance, setBalance] = useState<number>();
 
   const [isReceivePopupOpen, setIsReceivePopupOpen] = useState(false);
@@ -34,6 +37,8 @@ const WalletYourWalletInfoCard: React.FC = () => {
     }
   };
 
+
+
   useEffect(() => {
     fetchAmountReceived();
   });
@@ -53,6 +58,12 @@ const WalletYourWalletInfoCard: React.FC = () => {
     setIsSendPopupOpen(false);
   };
 
+  const rewardNameContext = useContext(RewardNameContext);
+  if (!rewardNameContext) {
+    return null; // or handle the case where the context is not available
+  }
+const rewardsName = rewardNameContext.rewardName;
+
   // Buttons should be disabled if balance is undefined (still loading)
   const isLoading = false; // balance === undefined;
 
@@ -65,7 +76,7 @@ const WalletYourWalletInfoCard: React.FC = () => {
           {' '}
           <h1>{balance?.toLocaleString() ?? '0'}</h1>
         </div>
-        <div className="item">Sats</div>
+        <div className="item">{rewardsName}</div>
         <div
           className="col-md-1 item"
           style={{ paddingTop: '30px', paddingLeft: '10px' }}

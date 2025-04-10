@@ -18,6 +18,7 @@ const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
       <Link to="/users">Users</Link>&nbsp;|&nbsp; 
       <Link to="/rewards">Rewards</Link>&nbsp;|&nbsp;
       <Link to="/wallet">Wallet</Link>&nbsp;|&nbsp;      
+      <Link to="/settings">Settings</Link>&nbsp;|&nbsp;      
       <SignInSignOutButton />
     </footer>
     

@@ -120,6 +120,20 @@
             "name": "Wallet", 
             "contentUrl": "{{CONTENT_URL}}/wallet", 
             "websiteUrl": "{{WEBSITE_URL}}/wallet"
+        },
+        { 
+            "entityId": "settingsTab", 
+            "scopes": [       
+                "team",
+                "personal"
+            ], 
+            "context": [ 
+                "personalTab",
+                "channelTab"
+            ], 
+            "name": "Settings", 
+            "contentUrl": "{{CONTENT_URL}}/settings", 
+            "websiteUrl": "{{WEBSITE_URL}}/settings"
         }
     ],
     "permissions": [

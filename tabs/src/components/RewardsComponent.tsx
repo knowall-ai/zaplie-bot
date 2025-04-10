@@ -1,4 +1,4 @@
-import React, { FunctionComponent, useState, useEffect, useRef } from 'react';
+import React, { FunctionComponent, useState, useEffect, useRef, useContext } from 'react';
 import styles from './RewardsComponent.module.css';
 import {
   getNostrRewards,
@@ -7,13 +7,12 @@ import {
 import PurchasePopup from './PurchasePopup';
 import ProvidedBy from '../images/ProvidedBy.svg';
 import imagePlaceholder from '../images/imagePlaceholderNew.svg';
+import { RewardNameContext } from './RewardNameContext';
 
 const stallID = process.env.REACT_APP_LNBITS_STORE_ID as string;
 
-const RewardsComponent: FunctionComponent<{
-  adminKey: string;
-  userId: string;
-}> = ({ adminKey, userId }) => {
+const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> = ({ adminKey, userId }) => {
+
   const [rewards, setRewards] = useState<Reward[]>([]); // Initialize as an empty array
   const [isDragging, setIsDragging] = useState(false);
   const [startPosition, setStartPosition] = useState(0);
@@ -105,6 +104,11 @@ const RewardsComponent: FunctionComponent<{
     setShowPopup(false);
   };
 
+  const rewardNameContext = useContext(RewardNameContext);
+  const  rewardName  = rewardNameContext.rewardName;
+
+
+
   // Only render rewards if they exist
   return (
     <div className={styles.mainContainer}>
@@ -143,7 +147,7 @@ const RewardsComponent: FunctionComponent<{
 
               <div className={styles.priceContainer}>
                 <p className={styles.price}>{formatPrice(reward.price)}</p>
-                <p className={styles.sats}>Sats</p>
+                <p className={styles.sats}>{rewardName}</p>
               </div>
               <button
                 className={styles.buyButton}

@@ -1,7 +1,8 @@
-import { FunctionComponent, useEffect, useState, useRef } from 'react';
+import { FunctionComponent, useEffect, useState, useRef, useContext } from 'react';
 import styles from './UserListComponent.module.css';
 import { getUsers } from '../services/lnbitsServiceLocal';
 import { useCache } from '../utils/CacheContext';
+import { RewardNameContext } from './RewardNameContext';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
@@ -22,22 +23,29 @@ const UserListComponent: FunctionComponent = () => {
     console.log('load all users in USER comp', allUsers);
     setUsers(allUsers);
     setLoading(false);
+    
   };
 
   useEffect(() => {
+    
     if (!fetchCalled.current) {
       fetchCalled.current = true;
       fetchUsers();
     }
   }, []);
-
+  const rewardNameContext = useContext(RewardNameContext);
+  if (!rewardNameContext) {
+    return null; // or handle the case where the context is not available
+  }
+const rewardsName = rewardNameContext.rewardName;
   if (loading) {
     return <div>Loading...</div>;
   }
 
   if (error) {
     return <div>{error}</div>;
-  }
+  }  
+
 
   return (
     <div className={styles.userslist}>
@@ -100,14 +108,14 @@ const UserListComponent: FunctionComponent = () => {
                     {user.privateWallet
                       ? `${Math.floor(
                           user.privateWallet.balance_msat / 1000,
-                        )} Sats`
+                        )} ${rewardsName}`
                       : 'N/A'}
                   </b>
                   <b className={styles.totalBalance2}>
                     {user.allowanceWallet
                       ? `${Math.floor(
                           user.allowanceWallet.balance_msat / 1000,
-                        )} Sats`
+                        )} ${rewardsName}`
                       : 'N/A'}
                   </b>
                 </div>
