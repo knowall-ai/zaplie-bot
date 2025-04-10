@@ -40,7 +40,10 @@ provision:
         - name: msteams
   - uses: cli/runNpmCommand
     with:
-      args: run write-env && npm run build-manifest
+      args: run write-env
+  - uses: cli/runNpmCommand
+    with:
+      args: run build-manifest
 
   - uses: aadApp/update
     with:

@@ -64,6 +64,8 @@ export class TeamsBot extends TeamsActivityHandler {
         // Check if the bot is mentioned
         const botMentioned = mentions.some(mention => mention.mentioned.id === botId);
     
+        let failedRecipients: string[] = [];
+
         if (botMentioned) {
           // Remove the mention from the text
           mentions.forEach(mention => {
@@ -99,7 +101,9 @@ export class TeamsBot extends TeamsActivityHandler {
             const receiver = await getUser(adminKey, recId);
     
             if (!receiver.privateWallet) {
-              throw new Error('Receiver wallet not found.');
+              //throw new Error('Receiver wallet not found.');
+              failedRecipients.push(receiver.displayName || `User ID: ${recId}`);
+              continue;
             }
     
             await SendZap(
@@ -116,6 +120,8 @@ export class TeamsBot extends TeamsActivityHandler {
           const bulletReceivers = successfulRecipients
             .map((name) => `- ${name}`)
             .join('\n');
+
+            const bulletFailed = failedRecipients.length ? failedRecipients.map((name) => `- ${name}`).join('\n') : 'None';
 
           //fetch remainingBalance
           const remainingBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
@@ -137,9 +143,19 @@ export class TeamsBot extends TeamsActivityHandler {
               },
               {
                 type: 'TextBlock',
-                text: `**Receivers:**\n${bulletReceivers}`,
+                text: `**Successful Receivers:**\n${bulletReceivers}`,
                 wrap: true
               },
+              ...(failedRecipients.length > 0
+                ? [
+                    {
+                      type: 'TextBlock',
+                      text: `**Failed Receivers:**\n${bulletFailed}`,
+                      wrap: true,
+                      color: 'Attention',
+                    },
+                  ]
+                : []),
               {
                 type: 'TextBlock',
                 text: `**Message:** ${zapMessage}`,

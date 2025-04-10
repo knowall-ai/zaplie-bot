@@ -22,7 +22,10 @@ provision:
       authorityHost: AAD_APP_OAUTH_AUTHORITY_HOST
   - uses: cli/runNpmCommand
     with:
-      args: run write-env && npm run build-manifest
+      args: run write-env
+  - uses: cli/runNpmCommand
+    with:
+      args: run build-manifest
   # Creates a Teams app
   - uses: teamsApp/create
     with:
