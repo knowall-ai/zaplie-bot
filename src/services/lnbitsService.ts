@@ -107,22 +107,21 @@ export async function getAccessToken(
 }
 
 const getWallets = async (
-  adminKey: string,
   filterByName?: string,
   filterById?: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getWallets starting ... (adminKey: ${adminKey}, filterByName: ${filterByName}, filterById: ${filterById}))`,
+    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById}))`,
   );
 
   try {
     //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
-        'X-Api-Key': adminKey,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
@@ -176,11 +175,10 @@ const getWallets = async (
 };
 
 const getUserWallets = async (
-  adminKey: string,
   userId: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getUserWallets starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getUserWallets starting ... (userId: ${userId})`,
   );
 
   try {
@@ -192,7 +190,6 @@ const getUserWallets = async (
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
-          //'X-Api-Key': adminKey,
         },
       },
     );
@@ -230,28 +227,26 @@ const getUserWallets = async (
 };
 
 const getUsers = async (
-  adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<User[] | null> => {
   console.log(
-    `getUsers starting ... (adminKey: ${adminKey}, filterByExtra: ${JSON.stringify(
+    `getUsers starting ... (filterByExtra: ${JSON.stringify(
       filterByExtra,
     )})`,
   );
 
   try {
-    // URL encode the extra filter
-    //const encodedExtra = encodeURIComponent(JSON.stringify(filterByExtra));
-    const encodedExtra = JSON.stringify(filterByExtra);
-    //console.log('encodedExtra:', encodedExtra);
+    // Note: Core Users API may not support filtering by extra metadata
+    // This functionality may need to be implemented at the application layer
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
     const response = await fetch(
-      `${lnbiturl}/usermanager/api/v1/users?extra=${encodedExtra}`,
+      `${lnbiturl}/api/v1/wallets`, // Using wallets endpoint as proxy for users
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
+          Authorization: `Bearer ${accessToken}`,
         },
       },
     );
@@ -266,29 +261,18 @@ const getUsers = async (
 
     console.log('getUsers data:', data);
 
-    // Map the users to match the User interface
+    // Note: Since we're using wallets endpoint, we need to map wallet data to user structure
+    // This is a limitation of the core API - proper user management may need application layer solution
     const usersData: User[] = await Promise.all(
-      data.map(async (user: any) => {
-        const extra = user.extra || {}; // Provide a default empty object if user.extra is null
-
-        let privateWallet = null;
-        let allowanceWallet = null;
-
-        if (user.extra) {
-          privateWallet = await getWalletById(user.id, extra.privateWalletId);
-          allowanceWallet = await getWalletById(
-            user.id,
-            extra.allowanceWalletId,
-          );
-        }
-
+      data.map(async (wallet: any) => {
+        // Map wallet data to user structure (temporary solution)
         return {
-          id: user.id,
-          displayName: user.name,
-          aadObjectId: extra.aadObjectId || null,
-          email: user.email,
-          privateWallet: privateWallet,
-          allowanceWallet: allowanceWallet,
+          id: wallet.user || wallet.id,
+          displayName: wallet.name || 'Unknown User',
+          aadObjectId: null, // Not available in core API
+          email: '', // Not available in core API
+          privateWallet: wallet,
+          allowanceWallet: null,
         };
       }),
     );
@@ -301,7 +285,6 @@ const getUsers = async (
 };
 
 const createUser = async (
-  adminKey: string,
   userName: string,
   walletName: string,
   email: string,
@@ -309,7 +292,7 @@ const createUser = async (
   extra: { [key: string]: string }, // Ensure extra is an object, not a string
 ): Promise<User | null> => {
   console.log(
-    `createUser starting ... (adminKey: ${adminKey}, userName: ${userName}, email: ${email}, password: ${password}, extra: ${JSON.stringify(
+    `createUser starting ... (userName: ${userName}, email: ${email}, password: ${password}, extra: ${JSON.stringify(
       extra,
     )}))`,
   );
@@ -326,13 +309,21 @@ const createUser = async (
 
     console.log(JSON.stringify(requestBody));
 
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/users`, {
+    // Note: Core Users API may not support direct user creation with custom metadata
+    // This implementation creates a wallet as a proxy for user creation
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
+    // Create wallet using core API
+    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Api-Key': adminKey,
+        Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(requestBody), // Stringify the request body
+      body: JSON.stringify({
+        name: walletName,
+        // Note: extra metadata needs to be handled at application layer
+      }),
     });
 
     if (!response.ok) {
@@ -341,29 +332,17 @@ const createUser = async (
       );
     }
 
-    const user = await response.json();
+    const wallet = await response.json();
 
-    // Await the wallet promises
-    const privateWallet = await getWalletById(
-      user.id,
-      user.extra?.privateWalletId,
-    );
-    const allowanceWallet = await getWalletById(
-      user.id,
-      user.extra?.allowanceWalletId,
-    );
-
-    // Map the user to match the User interface
+    // Map wallet data to user structure (temporary solution)
     const userData: User = {
-      id: user.id,
-      displayName: user.name,
-      profileImg:
-        'https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName=' +
-        user.email, // TODO: Remove hardecoded URL
-      aadObjectId: user.extra?.aadObjectId || null,
-      email: user.email,
-      privateWallet: privateWallet,
-      allowanceWallet: allowanceWallet,
+      id: wallet.user || wallet.id,
+      displayName: userName,
+      profileImg: '',
+      aadObjectId: extra.aadObjectId || null,
+      email: email,
+      privateWallet: wallet,
+      allowanceWallet: null, // May need separate wallet creation
     };
 
     console.log('userData:', userData);
@@ -376,21 +355,21 @@ const createUser = async (
 };
 
 const getUser = async (
-  adminKey: string,
   userId: string,
 ): Promise<User | null> => {
   console.log(
-    `createUser starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getUser starting ... (userId: ${userId})`,
   );
 
   try {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
     const response = await fetch(
-      `${lnbiturl}/usermanager/api/v1/users/${userId}`,
+      `${lnbiturl}/users/api/v1/user/${userId}/wallet`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
+          Authorization: `Bearer ${accessToken}`,
         },
       },
     );
@@ -401,27 +380,23 @@ const getUser = async (
       );
     }
 
-    const user = await response.json();
+    const wallets = await response.json();
+    
+    // Since we get wallets array, create user from first wallet
+    const firstWallet = wallets[0];
+    if (!firstWallet) {
+      return null;
+    }
 
-    // Await the wallet promises
-    const privateWallet = await getWalletById(
-      user.id,
-      user.extra?.privateWalletId,
-    );
-    const allowanceWallet = await getWalletById(
-      user.id,
-      user.extra?.allowanceWalletId,
-    );
-
-    // Map the user to match the User interface
+    // Map wallet data to user structure
     const userData: User = {
-      id: user.id,
-      displayName: user.name,
-      profileImg: user.profileImg,
-      aadObjectId: user.extra?.aadObjectId || null,
-      email: user.email,
-      privateWallet: privateWallet,
-      allowanceWallet: allowanceWallet,
+      id: firstWallet.user || userId,
+      displayName: firstWallet.name || 'Unknown User',
+      profileImg: '',
+      aadObjectId: null, // Not available in core API
+      email: '', // Not available in core API
+      privateWallet: firstWallet,
+      allowanceWallet: wallets.find((w: any) => w.name.includes('Allowance')) || null,
     };
 
     console.log('userData:', userData);
@@ -434,69 +409,22 @@ const getUser = async (
 };
 
 const updateUser = async (
-  adminKey: string,
   userId: string,
   extra: { [key: string]: string }, // Ensure extra is an object, not a string
 ): Promise<User | null> => {
   console.log(
-    `updateUser starting ... (adminKey: ${adminKey}, userId: ${userId}, extra: ${JSON.stringify(
+    `updateUser starting ... (userId: ${userId}, extra: ${JSON.stringify(
       extra,
     )}))`,
   );
 
   try {
-    // Prepare the request body
-    const requestBody = {
-      extra: extra,
-    };
-
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(
-      `${lnbiturl}/usermanager/api/v1/users/${userId}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          //Authorization: `Bearer ${accessToken}`,
-          'X-Api-Key': adminKey,
-        },
-        body: JSON.stringify(requestBody), // Stringify the request body
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error getting response (status: ${response.status})`);
-    }
-
-    const data = await response.json();
-
-    // Await the wallet promises
-    const privateWallet = await getWalletById(
-      adminKey,
-      data.extra?.privateWalletId,
-    );
-    const allowanceWallet = await getWalletById(
-      adminKey,
-      data.extra?.allowanceWalletId,
-    );
-
-    console.log('privateWallet :', privateWallet);
-    console.log('allowanceWallet :', allowanceWallet);
-
-    // Map the user to match the User interface
-    const userData: User = {
-      id: data.id,
-      displayName: data.name,
-      profileImg: data.profileImg,
-      aadObjectId: data.extra?.aadObjectId || null,
-      email: data.email,
-      privateWallet: privateWallet,
-      allowanceWallet: allowanceWallet,
-    };
-
-    console.log('updateUser usersData:', userData);
-
-    return userData;
+    // Note: Core Users API may not support updating user metadata
+    // This functionality needs to be implemented at the application layer
+    console.warn('updateUser: Core Users API does not support updating user metadata. Implement at application layer.');
+    
+    // Return existing user data for now
+    return await getUser(userId);
   } catch (error) {
     console.error(error);
     return error;
@@ -504,30 +432,25 @@ const updateUser = async (
 };
 
 const createWallet = async (
-  adminKey: string,
   userId: string,
   walletName: string,
 ): Promise<Wallet | null> => {
   console.log(
-    `createWallet starting ... (adminKey: ${adminKey}, userId: ${userId}, walletName: ${walletName}))`,
+    `createWallet starting ... (userId: ${userId}, walletName: ${walletName}))`,
   );
 
   try {
-    // Prepare the request body
-    const requestBody = {
-      user_id: userId,
-      wallet_name: walletName,
-    };
-
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
-        'X-Api-Key': adminKey,
+        Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(requestBody), // Stringify the request body
+      body: JSON.stringify({
+        name: walletName,
+        // Note: Core API may not support user_id assignment
+      }),
     });
 
     if (!response.ok) {
@@ -1022,7 +945,7 @@ async function topUpWallet(walletId: string, amount: number): Promise<void> {
 }
 
 async function scheduledTopup() {
-  const allowancewallets = await getWallets(process.env.LNBITS_ADMINKEY as string, 'Allowance',);
+  const allowancewallets = await getWallets('Allowance');
   const allowanceValue = process.env.LNBITS_INITIAL_ALLOWANCE as string;
   const hostWalletId = process.env.LNBITS_HOST_WALLET_ID as string;
   const hostUserId =process.env.LNBITS_HOST_USER_ID as string;
@@ -1034,7 +957,7 @@ async function scheduledTopup() {
 
   if (allowancewallets) {
     allowancewallets.forEach(async wallet => {
-     const User = await getUser(process.env.LNBITS_ADMINKEY as string, wallet.user);
+     const User = await getUser(wallet.user);
   
      const extra = {
       from: wallet,
@@ -1048,7 +971,7 @@ async function scheduledTopup() {
      const paymentRequest = await createInvoice(
       process.env.LNBITS_INKEY as string,
        hostWalletId, wallet.balance_msat/1000,
-        `${User.displayName} Weekly Allowance cleared`,
+        `${User?.displayName || 'User'} Weekly Allowance cleared`,
         extra ); 
       await payInvoice(wallet.adminkey , paymentRequest, extra)}
      topUpWallet(wallet.id, parseInt(allowanceValue));

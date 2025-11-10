@@ -85,22 +85,22 @@ export async function getAccessToken(
 
 const getWallets = async (
   req: HttpRequest,
-  adminKey: string,
   filterByName?: string,
   filterById?: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getWallets starting ... (adminKey: ${adminKey}, filterByName: ${filterByName}, filterById: ${filterById}))`,
+    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById}))`,
   );
 
   try {
     //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
+    const { username: reqUsername, password: reqPassword } = getCredentials(req);
+    const accessToken = await getAccessToken(req, reqUsername, reqPassword);
+    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
-        'X-Api-Key': adminKey,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
@@ -134,10 +134,10 @@ const getWallets = async (
         inkey: filteredData.inkey,
         // See: https://github.com/lnbits/lnbits/issues/2690
         deleted: (
-          await getWalletById(filteredData.user, filteredData.id)
+          await getWalletById(req, filteredData.user, filteredData.id)
         )?.deleted ?? false,
         balance_msat: (
-          await getWalletById( filteredData.user, filteredData.id)
+          await getWalletById(req, filteredData.user, filteredData.id)
         )?.balance_msat ?? 0,
       })),
     );
@@ -629,13 +629,14 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
 };
 
 const getWalletById = async (
+  req: HttpRequest,
   userId: string,
   id: string,
 ): Promise<Wallet | null> => {
   console.log(`getWalletById starting ... (userId: ${userId}, id: ${id})`);
-const req= {} as HttpRequest;
   try {
-    const accessToken = await getAccessToken(req,`${username}`, `${password}`);
+    const { username: reqUsername, password: reqPassword } = getCredentials(req);
+    const accessToken = await getAccessToken(req, reqUsername, reqPassword);
     const response = await fetch(
       `${lnbiturl}/users/api/v1/user/${userId}/wallet`,
       {
