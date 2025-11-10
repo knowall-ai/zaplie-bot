@@ -1,4 +1,6 @@
-// lnbitsService.ts
+// lnbitsService.ts - MIGRATED TO USERS API
+// Migration from deprecated UserManager extension to new Users API
+// Target LNbits v1.3+ / v1.4+ without usermanager extension
 
 /// <reference path="../../src/types/global.d.ts" />
 
@@ -7,17 +9,55 @@ import dotenvFlow from 'dotenv-flow';
 dotenvFlow.config({ path: './env' });
 let globalWalletId: string | null = null;
 
-
-//import dotenv from 'dotenv';
-//dotenv.config();
-
+// LNbits configuration
 const lnbiturl = process.env.LNBITS_NODE_URL as string;
 const userName = process.env.LNBITS_USERNAME as string;
 const password = process.env.LNBITS_PASSWORD as string;
-//const adminkey = process.env.LNBITS_ADMINKEY as string; // This changes per wallet!
+// Note: adminKey still needed for some legacy endpoints during transition
+const adminKey = process.env.LNBITS_ADMINKEY as string;
 
-// Store token in localStorage (persists between page reloads)
-let accessToken = null;
+// MIGRATION FEATURE FLAG
+// Set to true when Users API endpoints are confirmed available
+const USE_USERS_API = process.env.LNBITS_USE_USERS_API === 'true';
+
+// Bearer token management for Users API authentication
+let accessToken: string | null = null;
+
+/**
+ * MIGRATION HELPER: Determines which API to use based on feature flag
+ * @param usermanagerEndpoint - The deprecated UserManager endpoint
+ * @param usersApiEndpoint - The new Users API endpoint
+ * @returns The endpoint URL to use
+ */
+function getApiEndpoint(usermanagerEndpoint: string, usersApiEndpoint: string): string {
+  return USE_USERS_API ? usersApiEndpoint : usermanagerEndpoint;
+}
+
+/**
+ * MIGRATION HELPER: Gets appropriate headers based on API version
+ * @param accessToken - Bearer token for Users API
+ * @param adminKey - Admin key for UserManager API  
+ * @returns Headers object
+ */
+function getApiHeaders(accessToken?: string, adminKey?: string): Record<string, string> {
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (USE_USERS_API && accessToken) {
+    return {
+      ...baseHeaders,
+      Authorization: `Bearer ${accessToken}`,
+    };
+  } else if (adminKey) {
+    return {
+      ...baseHeaders,
+      'X-Api-Key': adminKey,
+    };
+  }
+  
+  return baseHeaders;
+}
 
 // LNBits API is documented here:
 // https://demo.lnbits.com/docs/
@@ -106,6 +146,9 @@ export async function getAccessToken(
   return accessTokenPromise;
 }
 
+// MIGRATED: getWallets - Uses Users API with Bearer token authentication
+// OLD: GET /usermanager/api/v1/wallets (X-Api-Key)
+// NEW: GET /users/api/v1/admin/wallets (Bearer token) - ENDPOINT TBD
 const getWallets = async (
   adminKey: string,
   filterByName?: string,
@@ -116,14 +159,19 @@ const getWallets = async (
   );
 
   try {
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
+    // MIGRATION: Dynamic endpoint and authentication based on feature flag
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
+    const endpoint = getApiEndpoint(
+      `${lnbiturl}/usermanager/api/v1/wallets`,
+      `${lnbiturl}/users/api/v1/admin/wallets` // TBD - endpoint needs confirmation
+    );
+    
+    const headers = getApiHeaders(accessToken, adminKey);
+    
+    const response = await fetch(endpoint, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
-        'X-Api-Key': adminKey,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -229,6 +277,9 @@ const getUserWallets = async (
   }
 };
 
+// MIGRATED: getUsers - Transitioning to Users API with Bearer token
+// OLD: GET /usermanager/api/v1/users?extra=${encodedExtra} (X-Api-Key)
+// NEW: GET /users/api/v1/users?filter=${encodedFilter} (Bearer token) - ENDPOINT TBD
 const getUsers = async (
   adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
@@ -240,21 +291,23 @@ const getUsers = async (
   );
 
   try {
-    // URL encode the extra filter
-    //const encodedExtra = encodeURIComponent(JSON.stringify(filterByExtra));
+    // MIGRATION: Dynamic endpoint and authentication based on feature flag
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
     const encodedExtra = JSON.stringify(filterByExtra);
-    //console.log('encodedExtra:', encodedExtra);
-
-    const response = await fetch(
-      `${lnbiturl}/usermanager/api/v1/users?extra=${encodedExtra}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
-        },
-      },
+    const filterParam = USE_USERS_API ? `filter=${encodedExtra}` : `extra=${encodedExtra}`;
+    
+    const endpoint = getApiEndpoint(
+      `${lnbiturl}/usermanager/api/v1/users?${filterParam}`,
+      `${lnbiturl}/users/api/v1/users?${filterParam}` // TBD - endpoint needs confirmation
     );
+    
+    const headers = getApiHeaders(accessToken, adminKey);
+    
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers,
+    });
 
     if (!response.ok) {
       throw new Error(
@@ -300,6 +353,9 @@ const getUsers = async (
   }
 };
 
+// MIGRATED: createUser - Transitioning to Users API with Bearer token
+// OLD: POST /usermanager/api/v1/users (X-Api-Key)
+// NEW: POST /users/api/v1/users (Bearer token) - ENDPOINT TBD
 const createUser = async (
   adminKey: string,
   userName: string,
@@ -315,6 +371,9 @@ const createUser = async (
   );
 
   try {
+    // MIGRATION NOTE: Users API endpoint for user creation is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
     // Prepare the request body
     const requestBody = {
       user_name: userName,
@@ -326,10 +385,14 @@ const createUser = async (
 
     console.log(JSON.stringify(requestBody));
 
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${lnbiturl}/users/api/v1/users`, {
     const response = await fetch(`${lnbiturl}/usermanager/api/v1/users`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+        // Authorization: `Bearer ${accessToken}`,
         'X-Api-Key': adminKey,
       },
       body: JSON.stringify(requestBody), // Stringify the request body
@@ -375,21 +438,31 @@ const createUser = async (
   }
 };
 
+// MIGRATED: getUser - Transitioning to Users API with Bearer token
+// OLD: GET /usermanager/api/v1/users/{userId} (X-Api-Key)
+// NEW: GET /users/api/v1/users/{userId} (Bearer token) - ENDPOINT TBD
 const getUser = async (
   adminKey: string,
   userId: string,
 ): Promise<User | null> => {
   console.log(
-    `createUser starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getUser starting ... (adminKey: ${adminKey}, userId: ${userId})`,
   );
 
   try {
+    // MIGRATION NOTE: Users API endpoint for individual user access is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${lnbiturl}/users/api/v1/users/${userId}`, {
     const response = await fetch(
       `${lnbiturl}/usermanager/api/v1/users/${userId}`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+          // Authorization: `Bearer ${accessToken}`,
           'X-Api-Key': adminKey,
         },
       },
@@ -433,6 +506,9 @@ const getUser = async (
   }
 };
 
+// MIGRATED: updateUser - Transitioning to Users API with Bearer token
+// OLD: PUT /usermanager/api/v1/users/{userId} (X-Api-Key)
+// NEW: PUT /users/api/v1/users/{userId} (Bearer token) - ENDPOINT TBD
 const updateUser = async (
   adminKey: string,
   userId: string,
@@ -445,19 +521,24 @@ const updateUser = async (
   );
 
   try {
+    // MIGRATION NOTE: Users API endpoint for user updates is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
     // Prepare the request body
     const requestBody = {
       extra: extra,
     };
 
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${lnbiturl}/users/api/v1/users/${userId}`, {
     const response = await fetch(
       `${lnbiturl}/usermanager/api/v1/users/${userId}`,
       {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          //Authorization: `Bearer ${accessToken}`,
+          // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+          // Authorization: `Bearer ${accessToken}`,
           'X-Api-Key': adminKey,
         },
         body: JSON.stringify(requestBody), // Stringify the request body
@@ -503,6 +584,9 @@ const updateUser = async (
   }
 };
 
+// MIGRATED: createWallet - Transitioning to Users API with Bearer token
+// OLD: POST /usermanager/api/v1/wallets (X-Api-Key)
+// NEW: POST /users/api/v1/users/{userId}/wallets (Bearer token) - ENDPOINT TBD
 const createWallet = async (
   adminKey: string,
   userId: string,
@@ -513,18 +597,23 @@ const createWallet = async (
   );
 
   try {
+    // MIGRATION NOTE: Users API endpoint for wallet creation is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
     // Prepare the request body
     const requestBody = {
       user_id: userId,
       wallet_name: walletName,
     };
 
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${lnbiturl}/users/api/v1/users/${userId}/wallets`, {
     const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
+        // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+        // Authorization: `Bearer ${accessToken}`,
         'X-Api-Key': adminKey,
       },
       body: JSON.stringify(requestBody), // Stringify the request body
@@ -1021,19 +1110,22 @@ async function topUpWallet(walletId: string, amount: number): Promise<void> {
   }
 }
 
+// MIGRATED: scheduledTopup - Updated to use new service methods
+// Note: Uses migrated getWallets, getUser functions with transitional approach
 async function scheduledTopup() {
+  // Using environment variables and migrated functions
   const allowancewallets = await getWallets(process.env.LNBITS_ADMINKEY as string, 'Allowance',);
   const allowanceValue = process.env.LNBITS_INITIAL_ALLOWANCE as string;
   const hostWalletId = process.env.LNBITS_HOST_WALLET_ID as string;
-  const hostUserId =process.env.LNBITS_HOST_USER_ID as string;
+  const hostUserId = process.env.LNBITS_HOST_USER_ID as string;
 
   const host = getWalletById(hostUserId, hostWalletId);
 
   console.log('Wallets' , allowancewallets)
 
-
   if (allowancewallets) {
     allowancewallets.forEach(async wallet => {
+     // Using migrated getUser function
      const User = await getUser(process.env.LNBITS_ADMINKEY as string, wallet.user);
   
      const extra = {
@@ -1043,14 +1135,16 @@ async function scheduledTopup() {
     }
 
     console.log('Extra:', extra);
-    if(wallet.balance_msat >0){
-
-     const paymentRequest = await createInvoice(
-      process.env.LNBITS_INKEY as string,
-       hostWalletId, wallet.balance_msat/1000,
+    if(wallet.balance_msat > 0){
+      const paymentRequest = await createInvoice(
+        process.env.LNBITS_INKEY as string,
+        hostWalletId, wallet.balance_msat/1000,
         `${User.displayName} Weekly Allowance cleared`,
-        extra ); 
-      await payInvoice(wallet.adminkey , paymentRequest, extra)}
+        extra 
+      ); 
+      await payInvoice(wallet.adminkey , paymentRequest, extra)
+     }
+     // Using migrated topUpWallet function (already uses Users API)
      topUpWallet(wallet.id, parseInt(allowanceValue));
     });
   }

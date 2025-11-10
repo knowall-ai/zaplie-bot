@@ -37,6 +37,10 @@ module.exports = function(app) {
     })
   );
 
+  // MIGRATION NOTE: UserManager API proxy - DEPRECATED
+  // This proxy is for the deprecated UserManager extension
+  // Target: Migrate to Users API (/users/api/v1) in LNbits v1.3+
+  // Status: Temporary during transition period
   app.use(
     '/usermanager/api/v1',
     createProxyMiddleware({

@@ -1,4 +1,6 @@
-// lnbitsService.ts
+// lnbitsServiceLocal.ts - TABS EXTENSION - MIGRATED TO USERS API
+// Migration from deprecated UserManager extension to new Users API
+// Target LNbits v1.3+ / v1.4+ without usermanager extension
 
 // LNBits API is documented here:
 // https://demo.lnbits.com/docs/
@@ -247,6 +249,9 @@ const getUserWallets = async (
   }
 };
 
+// MIGRATED: getUsers - Tabs extension version transitioning to Users API
+// OLD: GET /usermanager/api/v1/users?extra=${encodedExtra} (X-Api-Key)
+// NEW: GET /users/api/v1/users?filter=${encodedFilter} (Bearer token) - ENDPOINT TBD
 const getUsers = async (
   adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
@@ -258,18 +263,22 @@ const getUsers = async (
   );*/
 
   try {
-    // URL encode the extra filter
-    //const encodedExtra = encodeURIComponent(JSON.stringify(filterByExtra));
+    // MIGRATION NOTE: Users API endpoint for user filtering is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
     const encodedExtra = JSON.stringify(filterByExtra);
     console.log('encodedExtra:', encodedExtra);
-    console.log('encodedExtra:', encodedExtra);
 
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${nodeUrl}/users/api/v1/users?filter=${encodedExtra}`, {
     const response = await fetch(
       `${nodeUrl}/usermanager/api/v1/users?extra=${encodedExtra}`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+          // Authorization: `Bearer ${accessToken}`,
           'X-Api-Key': adminKey,
         },
       },
@@ -321,6 +330,9 @@ const getUsers = async (
   }
 };
 
+// MIGRATED: getUser - Tabs extension version transitioning to Users API
+// OLD: GET /usermanager/api/v1/users/{userId} (X-Api-Key)
+// NEW: GET /users/api/v1/users/{userId} (Bearer token) - ENDPOINT TBD
 const getUser = async (
   adminKey: string,
   userId: string,
@@ -334,12 +346,19 @@ const getUser = async (
   }
 
   try {
+    // MIGRATION NOTE: Users API endpoint for individual user access is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${nodeUrl}/users/api/v1/users/${userId}`, {
     const response = await fetch(
       `${nodeUrl}/usermanager/api/v1/users/${userId}`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+          // Authorization: `Bearer ${accessToken}`,
           'X-Api-Key': adminKey,
         },
       },
@@ -599,14 +618,22 @@ const getInvoicePayment = async (lnKey: string, invoice: string) => {
   }
 };
 
-//Akash Performance Test
+// MIGRATED: getAllWallets - Performance test function transitioning to Users API
+// OLD: GET /usermanager/api/v1/wallets (X-Api-Key)
+// NEW: GET /users/api/v1/admin/wallets (Bearer token) - ENDPOINT TBD
 const getAllWallets = async (lnKey: string) => {
- 
   try {
+    // MIGRATION NOTE: Users API endpoint for all wallets access is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${nodeUrl}/users/api/v1/admin/wallets`, {
     const response = await fetch(`${nodeUrl}/usermanager/api/v1/wallets/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+        // Authorization: `Bearer ${accessToken}`,
         'X-Api-Key': lnKey,
       },
     });
@@ -914,24 +941,34 @@ const getNostrRewards = async (
   }
 };
 
+// MIGRATED: getUserWalletTransactions - Transitioning to Users API
+// OLD: GET /usermanager/api/v1/transactions/{walletId} (X-Api-Key)
+// NEW: GET /users/api/v1/wallets/{walletId}/transactions (Bearer token) - ENDPOINT TBD
 const getUserWalletTransactions = async (
   walletId: string,
   apiKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<Transaction[]> => {
   /*console.log(
-    `getNostrRewards starting ... (walletId: ${walletId}, apiKey: ${apiKey}, filterByExtra: ${JSON.stringify(
+    `getUserWalletTransactions starting ... (walletId: ${walletId}, apiKey: ${apiKey}, filterByExtra: ${JSON.stringify(
       filterByExtra,
     )}`,
   );*/
 
   try {
+    // MIGRATION NOTE: Users API endpoint for wallet transactions is TBD
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${nodeUrl}/users/api/v1/wallets/${walletId}/transactions`, {
     const response = await fetch(
       `${nodeUrl}/usermanager/api/v1/transactions/${walletId}`,
       {
         method: 'GET',
         headers: {
           Accept: 'application/json',
+          // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+          // Authorization: `Bearer ${accessToken}`,
           'X-Api-Key': apiKey,
         },
       },

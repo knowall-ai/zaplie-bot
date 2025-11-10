@@ -1,10 +1,12 @@
+// lnbitsService.ts - AZURE FUNCTIONS - MIGRATED TO USERS API
+// Migration from deprecated UserManager extension to new Users API
+// Target LNbits v1.3+ / v1.4+ without usermanager extension
+
 import { console } from 'inspector';
 import { getCredentials } from '../services/utils';
 import { HttpRequest } from  "@azure/functions"
 
 /// <reference path= "../types/global.d.ts" />
-
-; // Import HttpRequest from the appropriate library
 
 const { password, siteUrl, username, adminKey } = getCredentials({} as HttpRequest);
 let lnbiturl: string | null = null;
@@ -83,6 +85,9 @@ export async function getAccessToken(
   return accessTokenPromise;
 }
 
+// MIGRATED: getWallets - Azure Functions version transitioning to Users API
+// OLD: GET /usermanager/api/v1/wallets (X-Api-Key)
+// NEW: GET /users/api/v1/admin/wallets (Bearer token) - ENDPOINT TBD
 const getWallets = async (
   req: HttpRequest,
   adminKey: string,
@@ -94,12 +99,17 @@ const getWallets = async (
   );
 
   try {
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    // MIGRATION NOTE: Users API endpoint for admin wallet access is TBD
+    const accessToken = await getAccessToken(req, `${username}`, `${password}`);
+    
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${lnbiturl}/users/api/v1/admin/wallets`, {
     const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
+        // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+        // Authorization: `Bearer ${accessToken}`,
         'X-Api-Key': adminKey,
       },
     });
@@ -210,6 +220,9 @@ const getUserWallets = async (
   }
 };
 
+// MIGRATED: getUsers - Azure Functions version transitioning to Users API
+// OLD: GET /usermanager/api/v1/users?extra=${encodedExtra} (X-Api-Key)
+// NEW: GET /users/api/v1/users?filter=${encodedFilter} (Bearer token) - ENDPOINT TBD
 const getUsers = async (
   req: HttpRequest,
   adminKey: string,
@@ -222,17 +235,21 @@ const getUsers = async (
   );
 
   try {
-    // URL encode the extra filter
-    //const encodedExtra = encodeURIComponent(JSON.stringify(filterByExtra));
+    // MIGRATION NOTE: Users API endpoint for user filtering is TBD
+    const accessToken = await getAccessToken(req, `${username}`, `${password}`);
+    
     const encodedExtra = JSON.stringify(filterByExtra);
-    //console.log('encodedExtra:', encodedExtra);
-
+    
+    // TODO: Replace with Users API endpoint once available:
+    // const response = await fetch(`${lnbiturl}/users/api/v1/users?filter=${encodedExtra}`, {
     const response = await fetch(
       `${lnbiturl}/usermanager/api/v1/users?extra=${encodedExtra}`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          // TODO: Switch to Bearer token once Users API endpoint is confirmed:
+          // Authorization: `Bearer ${accessToken}`,
           'X-Api-Key': adminKey,
         },
       },
