@@ -18,6 +18,12 @@
   margin-bottom: 8px;
 }
 
+.navigation a:not(:last-child)::after {
+  content: '|';
+  margin: 0 8px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .footer a {
   color: white;
   text-decoration: none;

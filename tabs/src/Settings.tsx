@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import CurrencySetting from './components/RewardsNameSetting'
 import styles from './components/setting.module.css';
 
