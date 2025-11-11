@@ -1,8 +1,7 @@
-import React from 'react';
 import CurrencySetting from './components/RewardsNameSetting'
 import styles from './components/setting.module.css';
 
-const Settings: React.FC = () => {
+const Settings = () => {
 
 
   return ( 
