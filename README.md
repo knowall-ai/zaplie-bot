@@ -103,3 +103,11 @@ Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and re
 Have fun, and tag us on Twitter / Nostr!
 
 ![FooterImage](https://github.com/user-attachments/assets/3c798d0d-9466-493d-9a66-ee5fe2c374f5)
+
+---
+
+## Built by KnowAll AI
+
+**Contact**: hello@knowall.ai | **Website**: [www.knowall.ai](https://www.knowall.ai)
+
+Zapp.ie is developed and maintained by KnowAll AI, a company dedicated to creating innovative AI-powered solutions that enhance collaboration and productivity.

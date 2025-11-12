@@ -40,9 +40,9 @@ export function Login() {
       <div className="overlay"></div>
       <div className="content">
         <Image
-          src="eirevo.png"
+          src="knowall.png"
           styles={{ root: centeredImageStyle }}
-          alt="Eirevo"
+          alt="KnowAll AI"
           width="5%"
         />
         <AuthenticatedTemplate>

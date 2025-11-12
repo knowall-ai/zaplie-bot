@@ -1,6 +1,9 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Zapp.ie",
+  "name": "Zapp.ie - Bitcoin Rewards & AI for Teams",
+  "author": "KnowAll AI",
+  "author_url": "https://www.knowall.ai",
+  "support_email": "hello@knowall.ai",
   "icons": [
     {
       "src": "favicon.ico",
