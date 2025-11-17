@@ -2,15 +2,15 @@
 
 # Overview
 
-Zapp.ie is an innovative solution that seamlessly integrates into Microsoft Teams and leverages Microsoft Copilot to create a dynamic, value-driven ecosystem of collaboration. Through a combination of AI automation and Bitcoin micro-transactions, Zapp.ie enables users, copilots (AI agents), and even customers to engage in meaningful interactions that drive success.
+Zaplie is an innovative solution that seamlessly integrates into Microsoft Teams and leverages Microsoft Copilot to create a dynamic, value-driven ecosystem of collaboration. Through a combination of AI automation and Bitcoin micro-transactions, Zaplie enables users, copilots (AI agents), and even customers to engage in meaningful interactions that drive success.
 
-With Zapp.ie, users, copilots, and customers can:
+With Zaplie, users, copilots, and customers can:
 
 - Send and receive Bitcoin-based rewards (Sats) as a token of appreciation for helping reach goals—whether from teammate to teammate, teammate to copilot, teammate to customer, or even copilot to copilot.
 - Reinforce positive behaviors and effective workflows through microtransactions based on real value, enhancing both AI copilots’ learning and motivating teammates and customers to adopt the right ways of working.
 - Enable both teammates and copilots to fund their own development by earning and utilizing rewards to further their personal and professional growth.
 
-Zapp.ie transforms traditional incentives into a powerful, value-for-value system where AI copilots, human teammates, and customers work together, driving continuous improvement and engagement in a transparent, rewarding manner.
+Zaplie transforms traditional incentives into a powerful, value-for-value system where AI copilots, human teammates, and customers work together, driving continuous improvement and engagement in a transparent, rewarding manner.
 
 # Design
 
@@ -34,11 +34,11 @@ The vision of the solution (many elements still in draft) can be seen here:
   </tr>
 </table>
 
-The designs can be previewed in [Figma](https://www.figma.com/proto/i0GdiVa7Dgu1FVSNwhBpjZ/Zapp.ie?node-id=607-67310&node-type=frame&t=FVljvFCjf72XgbJR-1&scaling=min-zoom&content-scaling=fixed&page-id=0%3A1&starting-point-node-id=607%3A67310)
+The designs can be previewed in [Figma](https://www.figma.com/proto/i0GdiVa7Dgu1FVSNwhBpjZ/Zaplie?node-id=607-67310&node-type=frame&t=FVljvFCjf72XgbJR-1&scaling=min-zoom&content-scaling=fixed&page-id=0%3A1&starting-point-node-id=607%3A67310)
 
-# Getting Started with Zapp.ie
+# Getting Started with Zaplie
 
-Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and recognition through Bitcoin micro-transactions and AI-powered automation. Here’s how you can get started and use Zapp.ie effectively with your team:
+Zaplie integrates directly with Microsoft Teams to enhance collaboration and recognition through Bitcoin micro-transactions and AI-powered automation. Here's how you can get started and use Zaplie effectively with your team:
 
 ## Prerequisite to starting development
 
@@ -55,7 +55,7 @@ Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and re
 }
 ```
 
-## Running Zapp.ie bot
+## Running Zaplie bot
 
 ### Run the app locally
 
@@ -92,7 +92,7 @@ Zapp.ie integrates directly with Microsoft Teams to enhance collaboration and re
 - Or, from TeamsFx CLI:
   1. Run command: `teamsapp preview --env dev`.
 
-## Running Zapp.ie Web App (The Tabs in the bot)
+## Running Zaplie Web App (The Tabs in the bot)
 
 1. Navigate to tabs folder using `cd tabs`
 2. Install the packages using `npm install`

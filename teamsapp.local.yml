@@ -1,12 +1,12 @@
 version: v1.2
 
 additionalMetadata:
-  sampleTag: Bot:Zapp.ie
+  sampleTag: Bot:Zaplie
 
 provision:
   - uses: aadApp/create
     with:
-      name: Zapp.ie-aad
+      name: Zaplie-aad
       generateClientSecret: true
       signInAudience: 'AzureADMyOrg'
     writeToEnvironmentFile:
@@ -19,13 +19,13 @@ provision:
 
   - uses: teamsApp/create
     with:
-      name: Zapp.ie (${{APP_NAME_SUFFIX}})
+      name: Zaplie (${{APP_NAME_SUFFIX}})
     writeToEnvironmentFile:
       teamsAppId: TEAMS_APP_ID
 
   - uses: botAadApp/create
     with:
-      name: Zapp.ie (${{APP_NAME_SUFFIX}})
+      name: Zaplie (${{APP_NAME_SUFFIX}})
     writeToEnvironmentFile:
       botId: BOT_ID
       botPassword: SECRET_BOT_PASSWORD
@@ -33,7 +33,7 @@ provision:
   - uses: botFramework/create
     with:
       botId: ${{BOT_ID}}
-      name: Zapp.ie
+      name: Zaplie
       messagingEndpoint: ${{BOT_ENDPOINT}}/api/messages
       description: ''
       channels:

@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Deploy to Azure App Service Test
+name: Deploy to Azure App Service Production
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    environment: Test
+    environment: Prod
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     environment:
-      name: Test
+      name: Prod
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
       id-token: write #This is required for requesting the JWT
@@ -65,10 +65,10 @@ jobs:
           if [[ -n "${{ github.event.pull_request.number }}" ]]; then
                 SLOT_NAME="pr-${{ github.event.pull_request.number }}"
               else
-                SLOT_NAME="testing"
+                SLOT_NAME="production"
               fi
-          RESOURCE_GROUP="rg-Zappie-dev"
-          APP_NAME="zappie-dev"
+          RESOURCE_GROUP="rg-zaplie-dev"
+          APP_NAME="zaplie-dev"
           echo "Using slot: $SLOT_NAME"
     
           # Check if the slot exists
@@ -87,8 +87,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'zappie-dev'
-          slot-name: ${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || 'testing' }}
+          app-name: 'zaplie-dev'
+          slot-name: ${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || 'production' }}
           package: .
 
           
