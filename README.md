@@ -103,3 +103,12 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 Have fun, and tag us on Twitter / Nostr!
 
 ![FooterImage](https://github.com/user-attachments/assets/3c798d0d-9466-493d-9a66-ee5fe2c374f5)
+
+## Built by KnowAll AI
+
+This project is developed and maintained by KnowAll AI.
+
+**Contact Information:**
+- Website: https://www.knowall.ai
+
+For support, partnerships, or licensing inquiries, please reach out to us using the contact details above.

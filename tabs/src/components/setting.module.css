@@ -43,11 +43,13 @@
   -webkit-user-select: none;
 }
 
-.providedByImage {
+.providedBy {
   position: absolute;
   right: 20px;
   top: 5px;
-  height: 40px;
+  font-size: 10px;
+  color: #F2A900;
+  font-weight: 400;
 }
 
 .currencySetting {
