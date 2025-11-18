@@ -6,9 +6,9 @@
     "packageName": "com.microsoft.teams.extension",
     "developer": {
         "name": "KnowAll AI",
-        "websiteUrl": "https://www.example.com",
-        "privacyUrl": "https://www.example.com/privacy",
-        "termsOfUseUrl": "https://www.example.com/termofuse",
+        "websiteUrl": "https://www.knowall.ai",
+        "privacyUrl": "https://github.com/knowall-ai/GetZapl.ie/wiki/Privacy",
+        "termsOfUseUrl": "https://github.com/knowall-ai/GetZapl.ie/wiki/Terms",
         "mpnId": "506002"
     },
     "icons": {
