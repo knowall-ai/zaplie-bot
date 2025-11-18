@@ -2,7 +2,7 @@ import CurrencySetting from './components/RewardsNameSetting'
 import styles from './components/setting.module.css';
 import { KNOWALL_CONSTANTS } from './constants/branding';
 
-const Settings = () => {
+const Settings: React.FC = () => {
   return (
 <div className={styles.mainContainer}>
   <div className={styles.title}>

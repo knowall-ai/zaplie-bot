@@ -76,7 +76,3 @@
   box-shadow: 0 4px 12px rgba(242, 169, 0, 0.5);
   transform: scale(1.05);
 }
-
-.contactLink:hover {
-  color: #F2A900;
-}
