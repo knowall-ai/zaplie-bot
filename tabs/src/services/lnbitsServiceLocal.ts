@@ -247,6 +247,9 @@ const getUserWallets = async (
   }
 };
 
+// Note: LNbits v1+ core API doesn't provide user listing/filtering with custom metadata.
+// User management with custom metadata must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const getUsers = async (
   adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
@@ -257,70 +260,16 @@ const getUsers = async (
     )})`,
   );*/
 
-  try {
-    // URL encode the extra filter
-    //const encodedExtra = encodeURIComponent(JSON.stringify(filterByExtra));
-    const encodedExtra = JSON.stringify(filterByExtra);
-    console.log('encodedExtra:', encodedExtra);
-    console.log('encodedExtra:', encodedExtra);
-
-    const response = await fetch(
-      `${nodeUrl}/usermanager/api/v1/users?extra=${encodedExtra}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting users response (status: ${response.status})`,
-      );
-    }
-
-    const data = await response.json();
-
-    //console.log('getUsers data:', data);
-
-    // Map the users to match the User interface
-    const usersData: User[] = await Promise.all(
-      data.map(async (user: any) => {
-        const extra = user.extra || {}; // Provide a default empty object if user.extra is null
-
-        let privateWallet = null;
-        let allowanceWallet = null;
-
-        if (user.extra) {
-          privateWallet = await getWalletById(user.id, extra.privateWalletId);
-          allowanceWallet = await getWalletById(
-            user.id,
-            extra.allowanceWalletId,
-          );
-        }
-
-        return {
-          id: user.id,
-          displayName: user.name,
-          aadObjectId: extra.aadObjectId || null,
-          email: user.email,
-          privateWallet: privateWallet,
-          allowanceWallet: allowanceWallet,
-        };
-      }),
-    );
-
-    //console.log('getUsers usersData:', usersData);
-
-    return usersData;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
+  // LNbits v1+ core API doesn't support user listing with custom metadata
+  // This functionality must be implemented at the application layer
+  throw new Error(
+    'getUsers is not supported by LNbits v1+ core API. Implement user management at application layer.',
+  );
 };
 
+// Note: LNbits v1+ core API doesn't provide user details with custom metadata.
+// User details must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const getUser = async (
   adminKey: string,
   userId: string,
@@ -333,59 +282,11 @@ const getUser = async (
     return null;
   }
 
-  try {
-    const response = await fetch(
-      `${nodeUrl}/usermanager/api/v1/users/${userId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
-        },
-      },
-    );
-
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting user response (status: ${response.status})`,
-      );
-    }
-
-    const user = await response.json();
-
-    // Await the wallet promises
-    const privateWallet = await getWalletById(
-      user.id,
-      user.extra?.privateWalletId,
-    );
-    const allowanceWallet = await getWalletById(
-      user.id,
-      user.extra?.allowanceWalletId,
-    );
-
-    // Map the user to match the User interface
-    const userData: User = {
-      id: user.id,
-      displayName: user.name,
-      profileImg: user.profileImg,
-      aadObjectId: user.extra?.aadObjectId || null,
-      email: user.email,
-      type: user.extra?.type || 'Teammate',
-      privateWallet: privateWallet || null,
-      allowanceWallet: allowanceWallet || null,
-    };
-
-    //console.log('userData:', userData);
-
-    return userData;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
+  // LNbits v1+ core API doesn't support user details with custom metadata
+  // This functionality must be implemented at the application layer
+  throw new Error(
+    'getUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
+  );
 };
 
 const getWalletName = async (inKey: string) => {
@@ -599,25 +500,24 @@ const getInvoicePayment = async (lnKey: string, invoice: string) => {
   }
 };
 
-//Akash Performance Test
+//Akash Performance Test - Migrated to use core API
 const getAllWallets = async (lnKey: string) => {
- 
+
   try {
-    const response = await fetch(`${nodeUrl}/usermanager/api/v1/wallets/`, {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-Api-Key': lnKey,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
     if (!response.ok) {
       throw new Error(
-        `Error getting invoice payment (status: ${response.status})`,
+        `Error getting wallets (status: ${response.status})`,
       );
     }
-
-    //const data = await response.json();
 
     const data: Wallet[] = await response.json();
 
@@ -639,10 +539,6 @@ const getAllWallets = async (lnKey: string) => {
     );
 
     return filteredWallets;
-
-    //return data;
-
-
   } catch (error) {
     console.error(error);
     throw error;
@@ -914,6 +810,7 @@ const getNostrRewards = async (
   }
 };
 
+// Migrated from UserManager to core API - Uses /api/v1/payments instead of /usermanager/api/v1/transactions
 const getUserWalletTransactions = async (
   walletId: string,
   apiKey: string,
@@ -926,8 +823,9 @@ const getUserWalletTransactions = async (
   );*/
 
   try {
+    // Use core API /api/v1/payments with wallet filter instead of deprecated /usermanager/api/v1/transactions
     const response = await fetch(
-      `${nodeUrl}/usermanager/api/v1/transactions/${walletId}`,
+      `${nodeUrl}/api/v1/payments?wallet=${walletId}&limit=100`,
       {
         method: 'GET',
         headers: {
