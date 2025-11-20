@@ -15,9 +15,11 @@ export async function getAccessToken(
   username: string,
   password: string,
 ): Promise<string> {
-  /*console.log(
-    `getAccessToken starting ... (username: ${username}, filterById: ${password}))`,
-  );*/
+  console.log('=== getAccessToken DEBUG ===');
+  console.log('Username:', username);
+  console.log('Password:', password);
+  console.log('===========================');
+
   if (accessToken) {
     //console.log('Using cached access token: ' + accessToken);
     return accessToken;
@@ -247,29 +249,85 @@ const getUserWallets = async (
   }
 };
 
-// Note: LNbits v1+ core API doesn't provide user listing/filtering with custom metadata.
-// User management with custom metadata must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
+// Migrated to use LNbits v1+ core API
+// Gets all users from /users/api/v1/user endpoint
 const getUsers = async (
   adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<User[] | null> => {
-  /*console.log(
-    `getUsers starting ... (adminKey: ${adminKey}, filterByExtra: ${JSON.stringify(
-      filterByExtra,
-    )})`,
-  );*/
+  console.log('=== getUsers ===');
+  console.log('Fetching users from /users/api/v1/user');
 
-  // LNbits v1+ core API doesn't support user listing with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'getUsers is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  try {
+    // Get all users directly from the Users API
+    const rawUsers = await getAllUsersFromAPI();
+
+    if (!rawUsers || rawUsers.length === 0) {
+      console.log('No users found');
+      return [];
+    }
+
+    console.log(`Found ${rawUsers.length} users`);
+
+    // Debug: Log first user to see available fields
+    if (rawUsers.length > 0) {
+      console.log('=== SAMPLE RAW USER FROM API ===');
+      console.log('Sample user data:', rawUsers[0]);
+      console.log('Available fields:', Object.keys(rawUsers[0]));
+    }
+
+    // Map the raw user data to User objects
+    // Note: Wallets are NOT fetched here - use separate functions to get wallets when needed
+    const users: User[] = rawUsers.map((user: any) => {
+      // Try to get a friendly display name from various fields
+      let displayName = user.username || user.id;
+
+      // If username is an email, extract the name part
+      if (displayName.includes('@')) {
+        displayName = displayName.split('@')[0].replace('.', ' ');
+        // Capitalize first letter of each word
+        displayName = displayName.split(' ').map((word: string) =>
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+      }
+
+      return {
+        id: user.id,
+        displayName: displayName,
+        profileImg: user.extra?.profileImg || '', // Get from extra metadata if available
+        aadObjectId: user.extra?.aadObjectId || '', // Get from extra metadata if available
+        email: user.email || user.extra?.email || user.username || '', // Get from user object or extra metadata
+        type: (user.extra?.type as UserType) || 'Teammate' as UserType, // Default type
+        privateWallet: null, // Wallets should be fetched separately when needed
+        allowanceWallet: null, // Wallets should be fetched separately when needed
+      };
+    });
+
+    // Apply filterByExtra if provided
+    if (filterByExtra && Object.keys(filterByExtra).length > 0) {
+      // Filter users based on extra metadata
+      const filteredUsers = users.filter(user => {
+        const userRaw = rawUsers.find((u: any) => u.id === user.id);
+        if (!userRaw || !userRaw.extra) return false;
+
+        return Object.keys(filterByExtra).every(
+          key => userRaw.extra[key] === filterByExtra[key]
+        );
+      });
+      console.log(`Filtered to ${filteredUsers.length} users based on extra metadata`);
+      return filteredUsers;
+    }
+
+    console.log('Returning all users');
+    return users;
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    throw error;
+  }
 };
 
-// Note: LNbits v1+ core API doesn't provide user details with custom metadata.
-// User details must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
+// Migrated to use LNbits v1+ core API
+// Gets a single user by fetching their wallets and constructing a User object
 const getUser = async (
   adminKey: string,
   userId: string,
@@ -282,11 +340,53 @@ const getUser = async (
     return null;
   }
 
-  // LNbits v1+ core API doesn't support user details with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'getUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  try {
+    // Get user's wallets using core API
+    const userWallets = await getUserWallets(adminKey, userId);
+
+    if (!userWallets || userWallets.length === 0) {
+      return null;
+    }
+
+    // Find private and allowance wallets
+    const privateWallet = userWallets.find(w =>
+      w.name.toLowerCase().includes('private')
+    ) || null;
+
+    const allowanceWallet = userWallets.find(w =>
+      w.name.toLowerCase().includes('allowance')
+    ) || null;
+
+    // Extract display name from wallet name
+    let displayName = userId;
+    if (privateWallet) {
+      // Try to extract name from private wallet (format: "UserName - Private")
+      const nameParts = privateWallet.name.split('-');
+      if (nameParts.length > 1) {
+        displayName = nameParts[0].trim();
+      }
+    } else if (userWallets.length > 0) {
+      // Use first wallet name
+      const nameParts = userWallets[0].name.split('-');
+      if (nameParts.length > 1) {
+        displayName = nameParts[0].trim();
+      }
+    }
+
+    return {
+      id: userId,
+      displayName: displayName,
+      profileImg: '', // Will be populated from application layer if needed
+      aadObjectId: '', // Will be populated from application layer if needed
+      email: '', // Will be populated from application layer if needed
+      type: 'Teammate' as UserType, // Default type
+      privateWallet: privateWallet,
+      allowanceWallet: allowanceWallet,
+    };
+  } catch (error) {
+    console.error(`Error fetching user ${userId}:`, error);
+    throw error;
+  }
 };
 
 const getWalletName = async (inKey: string) => {
@@ -505,6 +605,12 @@ const getAllWallets = async (lnKey: string) => {
 
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
+
+    console.log('=== getAllWallets DEBUG ===');
+    console.log('Fetching from:', `${nodeUrl}/api/v1/wallets`);
+    console.log('Access Token:', accessToken);
+    console.log('===========================');
+
     const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
       method: 'GET',
       headers: {
@@ -514,12 +620,17 @@ const getAllWallets = async (lnKey: string) => {
     });
 
     if (!response.ok) {
+      console.error('Response status:', response.status);
+      console.error('Response statusText:', response.statusText);
       throw new Error(
         `Error getting wallets (status: ${response.status})`,
       );
     }
 
     const data: Wallet[] = await response.json();
+
+    console.log('All Wallets returned:', data.length);
+    console.log('All Wallets: ', data);
 
     // Map the wallets to match the Wallet interface
     let walletData: Wallet[] = data.map((wallet: any) => ({
@@ -538,9 +649,10 @@ const getAllWallets = async (lnKey: string) => {
       wallet => wallet.deleted !== true,
     );
 
+    console.log('Filtered wallets count:', filteredWallets.length);
     return filteredWallets;
   } catch (error) {
-    console.error(error);
+    console.error('Error in getAllWallets:', error);
     throw error;
   }
 };
@@ -584,12 +696,10 @@ const getWalletTransactionsSince = async (
 
     console.log("DATA",data);
 
-    // Filter the payments to only include those since the provided timestamp
-    const paymentsSince = data.filter(
-      (payment: { time: number }) => payment.time > timestamp,
-    );
+    // Show all payments (timestamp filter removed)
+    const paymentsSince = data;
 
-    console.log("DATA2",paymentsSince);
+    console.log("DATA2 (all payments, no timestamp filter)",paymentsSince);
 
     // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra
@@ -906,6 +1016,194 @@ const getAllowance = async (
   }
 };
 
+// NEW: Get all payments from all users across the entire system
+const getAllPayments = async (
+  limit: number = 1000,
+  offset: number = 0,
+  sortby: string = 'time',
+  direction: string = 'desc'
+): Promise<Transaction[]> => {
+  console.log('=== getAllPayments DEBUG ===');
+  console.log('Fetching from:', `${nodeUrl}/api/v1/payments/all/paginated`);
+  console.log('Parameters:', { limit, offset, sortby, direction });
+
+  try {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+
+    const url = new URL(`${nodeUrl}/api/v1/payments/all/paginated`);
+    url.searchParams.append('limit', limit.toString());
+    url.searchParams.append('offset', offset.toString());
+    url.searchParams.append('sortby', sortby);
+    url.searchParams.append('direction', direction);
+
+    console.log('Full URL:', url.toString());
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Response status:', response.status);
+      console.error('Response statusText:', response.statusText);
+      throw new Error(
+        `Error getting all payments (status: ${response.status})`,
+      );
+    }
+
+    const data = await response.json();
+    console.log('Raw response data:', data);
+    console.log('Data type:', typeof data);
+    console.log('Is array:', Array.isArray(data));
+
+    // The API might return an object with a 'data' or 'payments' property
+    let payments = data;
+
+    // Check if data is wrapped in an object
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      if (data.data && Array.isArray(data.data)) {
+        payments = data.data;
+      } else if (data.payments && Array.isArray(data.payments)) {
+        payments = data.payments;
+      } else if (data.items && Array.isArray(data.items)) {
+        payments = data.items;
+      }
+    }
+
+    console.log('Total payments retrieved:', payments?.length || 0);
+    console.log('Sample payment:', payments?.[0]);
+    console.log('===========================');
+
+    return Array.isArray(payments) ? payments : [];
+  } catch (error) {
+    console.error('Error in getAllPayments:', error);
+    throw error;
+  }
+};
+
+// NEW: Get all users from /users/api/v1/user endpoint
+const getAllUsersFromAPI = async (): Promise<any[]> => {
+  console.log('=== getAllUsersFromAPI ===');
+  console.log('Fetching from:', `${nodeUrl}/users/api/v1/user`);
+
+  try {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+
+    const response = await fetch(`${nodeUrl}/users/api/v1/user`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Response status:', response.status);
+      console.error('Response statusText:', response.statusText);
+      throw new Error(
+        `Error getting all users (status: ${response.status})`,
+      );
+    }
+
+    const responseData = await response.json();
+    console.log('Total users retrieved:', responseData?.data?.length || 0);
+    console.log('All Users:', responseData);
+    console.log('===========================');
+
+    // Extract the users array from the response
+    const users = responseData?.data || [];
+    return Array.isArray(users) ? users : [];
+  } catch (error) {
+    console.error('Error in getAllUsersFromAPI:', error);
+    throw error;
+  }
+};
+
+// NEW: Get wallets paginated for a specific user
+const getWalletsPaginated = async (
+  userId: string,
+  limit: number = 100,
+  offset: number = 0
+): Promise<Wallet[]> => {
+  console.log('=== getWalletsPaginated ===');
+  console.log('>>> Requested User ID:', userId);
+  console.log('Fetching from:', `${nodeUrl}/api/v1/wallet/paginated`);
+  console.log('Parameters:', { limit, offset, user_id: userId });
+
+  try {
+    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+
+    const url = new URL(`${nodeUrl}/api/v1/wallet/paginated`);
+    url.searchParams.append('limit', limit.toString());
+    url.searchParams.append('offset', offset.toString());
+    url.searchParams.append('user_id', userId);
+
+    console.log('>>> Full URL with params:', url.toString());
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Response status:', response.status);
+      console.error('Response statusText:', response);
+      throw new Error(
+        `Error getting wallets for user ${userId} (status: ${response.status})`,
+      );
+    }
+
+    const responseData = await response.json();
+    console.log(`>>> Raw response for user ${userId}:`, responseData);
+
+    // Extract the wallets array from the response (API returns {data: [...], total: X})
+    const wallets = responseData?.data || [];
+    console.log(`>>> Extracted ${wallets.length} wallets from response`);
+
+    // DEBUG: Show the wallet.user field for each wallet to verify they match the requested userId
+    console.log(`>>> WALLET USER IDs FOR REQUESTED USER ${userId}:`);
+    wallets.forEach((wallet: any, index: number) => {
+      console.log(`  Wallet ${index + 1}: ID=${wallet.id}, Name="${wallet.name}", User ID=${wallet.user}, Matches=${wallet.user === userId ? '✓' : '✗'}`);
+    });
+
+    // Map ALL fields from the API response to match the Wallet interface
+    const walletData: Wallet[] = wallets.map((wallet: any) => ({
+      id: wallet.id,
+      admin: wallet.admin || '',
+      name: wallet.name,
+      user: wallet.user,
+      adminkey: wallet.adminkey,
+      inkey: wallet.inkey,
+      balance_msat: wallet.balance_msat,
+      deleted: wallet.deleted || false,
+      // Additional fields that might come from the API
+      currency: wallet.currency,
+      created_at: wallet.created_at,
+      updated_at: wallet.updated_at,
+    }));
+
+    // Filter out deleted wallets
+    const filteredWallets = walletData.filter(
+      wallet => wallet.deleted !== true,
+    );
+
+    console.log(`>>> Filtered wallets count for user ${userId}:`, filteredWallets.length);
+    console.log(`>>> Wallet IDs: [${filteredWallets.map(w => w.id).join(', ')}]`);
+    console.log('===========================');
+
+    return filteredWallets;
+  } catch (error) {
+    console.error(`Error in getWalletsPaginated for user ${userId}:`, error);
+    throw error;
+  }
+};
+
 export {
   getUser,
   getUsers,
@@ -927,4 +1225,7 @@ export {
   getUserWalletTransactions,
   getAllowance,
   getAllWallets,
+  getAllPayments,
+  getAllUsersFromAPI,
+  getWalletsPaginated,
 };

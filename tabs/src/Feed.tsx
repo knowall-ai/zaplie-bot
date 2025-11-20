@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import FeedComponent from './components/FeedComponent';
 import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
-import { getUsers } from './services/lnbitsServiceLocal';
+import { getUsers, getAllPayments } from './services/lnbitsServiceLocal';
 import { useCache } from '../src/utils/CacheContext';
 import { fetchAllowanceWalletTransactions } from './utils/walletUtilities';
 
@@ -28,24 +28,14 @@ const Home: React.FC = () => {
       try {
         if (!cache['allUsers']) {
           const allUsers = await getUsers(adminKey, {});
+          console.log('allUsers', allUsers);
           if (allUsers) {
             setCache('allUsers', allUsers);
             setUsers(allUsers);
           }
         } else {
-          console.log('Loading Users....');
+          console.log('Loading Users from cache....');
           setUsers(cache['allUsers']);
-
-          if (users.length === 0) {
-            {
-              const allUsers = await getUsers(adminKey, {});
-              if (allUsers) {
-                setCache('allUsers', allUsers);
-                setUsers(allUsers);
-              }
-              console.log('Users:', cache['allUsers']);
-            }
-          }
         }
       } catch (error) {
         if (error instanceof Error) {
@@ -63,15 +53,8 @@ const Home: React.FC = () => {
           setCache('allZaps', allZaps);
           setZaps(allZaps);
         } else {
-          console.log('cache:', cache['allZaps']);
+          console.log('Loading Zaps from cache:', cache['allZaps']);
           setZaps(cache['allZaps']);
-          if (zaps.length === 0) {
-            const allZaps = await fetchAllowanceWalletTransactions(adminKey);
-            console.log('allZaps', allZaps);
-            setCache('allZaps', allZaps);
-            setZaps(allZaps);
-          }
-          setLoading(false);
         }
       } catch (err) {
         setError(
@@ -83,7 +66,7 @@ const Home: React.FC = () => {
     };
 
     fetchZaps();
-  }, [adminKey, cache, setCache]); // Add dependencies to ensure the effect runs when cache or setCache changes
+  }, [adminKey]); // Only run when adminKey changes, not cache
 
   return (
     <div style={{ background: '#1F1F1F', paddingBottom: 40 }}>
