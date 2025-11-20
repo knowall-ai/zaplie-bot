@@ -257,6 +257,7 @@ const getUsers = async (
 ): Promise<User[] | null> => {
   console.log('=== getUsers ===');
   console.log('Fetching users from /users/api/v1/user');
+  console.log('Filter criteria:', filterByExtra);
 
   try {
     // Get all users directly from the Users API
@@ -274,6 +275,7 @@ const getUsers = async (
       console.log('=== SAMPLE RAW USER FROM API ===');
       console.log('Sample user data:', rawUsers[0]);
       console.log('Available fields:', Object.keys(rawUsers[0]));
+      console.log('Sample user.external_id:', rawUsers[0].external_id);
     }
 
     // Map the raw user data to User objects
@@ -295,7 +297,7 @@ const getUsers = async (
         id: user.id,
         displayName: displayName,
         profileImg: user.extra?.profileImg || '', // Get from extra metadata if available
-        aadObjectId: user.extra?.aadObjectId || '', // Get from extra metadata if available
+        aadObjectId: user.external_id || user.extra?.aadObjectId || '', // Get from external_id or extra metadata
         email: user.email || user.extra?.email || user.username || '', // Get from user object or extra metadata
         type: (user.extra?.type as UserType) || 'Teammate' as UserType, // Default type
         privateWallet: null, // Wallets should be fetched separately when needed
@@ -303,18 +305,53 @@ const getUsers = async (
       };
     });
 
-    // Apply filterByExtra if provided
+    // Apply filter if provided
     if (filterByExtra && Object.keys(filterByExtra).length > 0) {
-      // Filter users based on extra metadata
+      console.log('=== FILTERING USERS ===');
+
+      // Check if filtering by aadObjectId (which is stored in external_id field)
+      if (filterByExtra.aadObjectId) {
+        console.log('Filtering by aadObjectId (external_id):', filterByExtra.aadObjectId);
+
+        const filteredUsers = users.filter(user => {
+          const userRaw = rawUsers.find((u: any) => u.id === user.id);
+          if (!userRaw) return false;
+
+          const matches = userRaw.external_id === filterByExtra.aadObjectId;
+          console.log(`User ${user.displayName}: external_id=${userRaw.external_id}, matches=${matches}`);
+          return matches;
+        });
+
+        console.log(`Filtered to ${filteredUsers.length} users by external_id`);
+        console.log('====================');
+        return filteredUsers;
+      }
+
+      // Otherwise, filter by extra metadata fields
+      console.log('Filtering by extra metadata:', filterByExtra);
       const filteredUsers = users.filter(user => {
         const userRaw = rawUsers.find((u: any) => u.id === user.id);
-        if (!userRaw || !userRaw.extra) return false;
+        if (!userRaw || !userRaw.extra) {
+          return false;
+        }
+
+        // If extra is a string, try to parse it
+        let extraData = userRaw.extra;
+        if (typeof extraData === 'string') {
+          try {
+            extraData = JSON.parse(extraData);
+          } catch (e) {
+            return false;
+          }
+        }
 
         return Object.keys(filterByExtra).every(
-          key => userRaw.extra[key] === filterByExtra[key]
+          key => extraData[key] === filterByExtra[key]
         );
       });
-      console.log(`Filtered to ${filteredUsers.length} users based on extra metadata`);
+
+      console.log(`Filtered to ${filteredUsers.length} users by extra metadata`);
+      console.log('====================');
       return filteredUsers;
     }
 
