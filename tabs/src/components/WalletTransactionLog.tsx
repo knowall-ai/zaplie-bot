@@ -149,7 +149,12 @@ const rewardsName = rewardNameContext.rewardName;
   return (
     <div className={styles.feedlist}>
       {transactions
-        ?.sort((a, b) => b.time - a.time)
+        ?.sort((a, b) => {
+          // Convert both times to numbers for sorting
+          const timeA = typeof a.time === 'number' ? a.time : new Date(a.time).getTime() / 1000;
+          const timeB = typeof b.time === 'number' ? b.time : new Date(b.time).getTime() / 1000;
+          return timeB - timeA;
+        })
         .map((transaction, index) => (
           <div
             key={transaction.checking_id || index}
@@ -187,7 +192,11 @@ const rewardsName = rewardNameContext.rewardName;
                   <div className={styles.lightHelightInItems}>
                     {(() => {
                       const now = moment();
-                      const transactionTime = moment(transaction.time * 1000);
+                      // Convert time to milliseconds for moment
+                      const timeInMs = typeof transaction.time === 'number'
+                        ? transaction.time * 1000
+                        : new Date(transaction.time).getTime();
+                      const transactionTime = moment(timeInMs);
                       const diffInSeconds = now.diff(transactionTime, 'seconds');
 
                       if (diffInSeconds < 60) {

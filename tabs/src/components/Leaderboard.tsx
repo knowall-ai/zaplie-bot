@@ -82,12 +82,17 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
                 );
 
                 transactions.forEach(transaction => {
+                  // Convert time to number (Unix timestamp in seconds)
+                  const timeAsNumber = typeof transaction.time === 'number'
+                    ? transaction.time
+                    : new Date(transaction.time).getTime() / 1000;
+
                   privateWalletTransactionsData.push({
                     userId: user.id,
                     displayName: user.displayName,
                     walletId: privateWallet.id,
                     transaction,
-                    time: transaction.time,
+                    time: timeAsNumber,
                   });
                 });
               }

@@ -25,8 +25,6 @@ interface TotalZapsComponentProps {
 }
 
 const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZaps, allUsers, isLoading }) => {
-  const [zaps, setZaps] = useState<Transaction[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [totalZaps, setTotalZaps] = useState<number>(0);
   const { cache, setCache } = useCache();
   
@@ -69,54 +67,51 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZap
   
   useEffect(() => {
     setLoading(isLoading);
+
+    // Use allZaps from props directly instead of setting local state
     if (allZaps.length > 0) {
       console.log('Zaps AKASH: ', allZaps);
-      setZaps(allZaps);
-    }
-    
-    //Load users from Cache or paraneter
-    console.log('load all users in Total comp', cache['allUsers'] );
-    setUsers(allUsers);
-
-    console.log('length:', zaps.length);
-
-    if (zaps.length > 0) {
-      console.log('Zaps inside: ', zaps);
 
       // Calculate the total amount considering only negative values
       const total =
-        zaps
+        allZaps
           .filter(zap => zap.amount < 0)
           .reduce((sum, zap) => sum + zap.amount, 0) / 1000;
       setTotalZaps(Math.floor(Math.abs(total))); // Convert to positive
 
       // Calculate the number of users
-      const numUsers = users.length;
+      const numUsers = allUsers.length;
       setNumberOfUsers(numUsers);
 
       // Calculate the number of days since the first zap
       const currentTime = Date.now() / 1000;
-      const firstZapTime = Math.min(...zaps.map(zap => zap.time));
+      const zapTimes = allZaps.map(zap => {
+        // Convert time to number (Unix timestamp in seconds)
+        return typeof zap.time === 'number'
+          ? zap.time
+          : new Date(zap.time).getTime() / 1000;
+      });
+      const firstZapTime = Math.min(...zapTimes);
       const numDays = (currentTime - firstZapTime) / (24 * 60 * 60);
       setNumberOfDays(Math.floor(numDays));
 
       // Calculate the average per user
-      const avPerUser = totalZaps / numUsers;
-      setAveragePerUser(Math.floor(Math.abs(avPerUser)));
+      const avPerUser = Math.abs(total) / numUsers;
+      setAveragePerUser(Math.floor(avPerUser));
 
       // Calculate the average per day
       const avPerDay = Math.abs(total) / Math.floor(numDays);
-      setAveragePerDay(Math.floor(Math.abs(avPerDay)));
+      setAveragePerDay(Math.floor(avPerDay));
 
       // Calculate the biggest zap considering only negative values
-      const negativeZaps = zaps.filter(zap => zap.amount < 0);
+      const negativeZaps = allZaps.filter(zap => zap.amount < 0);
       const maxZap =
         (negativeZaps.length > 0
           ? Math.max(...negativeZaps.map(zap => Math.abs(zap.amount)))
           : 0) / 1000;
       setBiggestZap(Math.floor(maxZap)); // Already positive
     }
-  }, [zaps, users]); // This effect runs whenever zaps changes
+  }, [allZaps, allUsers, isLoading]); // React to prop changes
   
 
   if (error) {

@@ -13,9 +13,9 @@ export const fetchAllowanceWalletTransactions = async (adminKey: string): Promis
 
     console.log('Total Payments Retrieved: ', allPayments.length);
 
-    // Filter to only include "zap" transactions (exclude system transactions like "Weekly Allowance cleared")
+    // Filter to only exclude system transactions like "Weekly Allowance cleared"
+    // Don't filter by extra.tag since that field doesn't exist in the payment data
     const zapTransactions = allPayments.filter(payment =>
-      payment.extra?.tag === 'zap' &&
       !payment.memo?.includes('Weekly Allowance cleared')
     );
 

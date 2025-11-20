@@ -3,10 +3,11 @@ import styles from './FeedList.module.css';
 import ZapIcon from '../images/ZapIcon.svg';
 import { useCache } from '../utils/CacheContext';
 import {
-  getAllUsersFromAPI,
+  getUsers,
   getUserWallets,
   getWalletTransactionsSince
 } from '../services/lnbitsServiceLocal';
+import { decode as decodeBolt11 } from 'light-bolt11-decoder';
 
 interface FeedListProps {
   timestamp?: number | null;
@@ -65,7 +66,12 @@ const FeedList: React.FC<FeedListProps> = ({
 
         console.log('=== STEP 1: Fetching all users ===');
         // Step 1: Get all users from /users/api/v1/user
-        const fetchedUsers = await getAllUsersFromAPI();
+        const fetchedUsers = await getUsers(adminKey, {});
+        if (!fetchedUsers) {
+          setError('Failed to fetch users');
+          setLoading(false);
+          return;
+        }
         setUsers(fetchedUsers);
         console.log(`Fetched ${fetchedUsers.length} users`);
 
@@ -148,6 +154,12 @@ const FeedList: React.FC<FeedListProps> = ({
 
         console.log(`=== AFTER FILTERING ALLOWANCE CLEARED: ${allowanceTransactions.length} ===`);
 
+        // Debug: Show all payment checking_ids to find internal payment pairs
+        console.log('=== ALL PAYMENT CHECKING IDs ===');
+        allPayments.slice(0, 10).forEach((p, i) => {
+          console.log(`${i}: checking_id="${p.checking_id}", amount=${p.amount}, wallet_id=${p.wallet_id}, memo="${p.memo}"`);
+        });
+
         // Create wallet ID to user mapping
         const walletToUserMap = new Map<string, User>();
         allWalletsData.forEach(userData => {
@@ -159,6 +171,17 @@ const FeedList: React.FC<FeedListProps> = ({
         console.log('=== WALLET TO USER MAPPING ===');
         console.log(`Total wallet-user mappings: ${walletToUserMap.size}`);
 
+        // Create a map of all payments by checking_id for internal transfer matching
+        const paymentsByCheckingId = new Map<string, Transaction[]>();
+        allPayments.forEach(payment => {
+          const cleanId = payment.checking_id?.replace('internal_', '') || '';
+          if (cleanId) {
+            const existing = paymentsByCheckingId.get(cleanId) || [];
+            existing.push(payment);
+            paymentsByCheckingId.set(cleanId, existing);
+          }
+        });
+
         const allowanceZaps = allowanceTransactions.map((transaction, index) => {
           const walletOwner = walletToUserMap.get(transaction.wallet_id) || null;
 
@@ -168,27 +191,37 @@ const FeedList: React.FC<FeedListProps> = ({
           let fromUser: User | null = null;
           let toUser: User | null = null;
 
+          // Try to find matching internal payment (the other side of the transfer)
+          const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
+          const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
+          const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
+
           if (isIncoming) {
-            // For incoming payments: TO = wallet owner, FROM = try to find from extra or show Unknown
+            // For incoming payments: TO = wallet owner
             toUser = walletOwner;
-            const fromUserId = transaction.extra?.from?.user;
-            fromUser = fromUserId ? fetchedUsers.find(f => f.id === fromUserId) || null : null;
+
+            // FROM = the owner of the matching outgoing payment (if found)
+            if (matchingPayment) {
+              fromUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+            } else {
+              // Fallback to extra field
+              const fromUserId = transaction.extra?.from?.user;
+              fromUser = fromUserId ? fetchedUsers.find(f => f.id === fromUserId) || null : null;
+            }
           } else {
-            // For outgoing payments: FROM = wallet owner, TO = try to find from extra or show Unknown
+            // For outgoing payments: FROM = wallet owner
             fromUser = walletOwner;
-            const toUserId = transaction.extra?.to?.user;
-            toUser = toUserId ? fetchedUsers.find(f => f.id === toUserId) || null : null;
+
+            // TO = the owner of the matching incoming payment (if found)
+            if (matchingPayment) {
+              toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+            } else {
+              // Fallback to extra field
+              const toUserId = transaction.extra?.to?.user;
+              toUser = toUserId ? fetchedUsers.find(f => f.id === toUserId) || null : null;
+            }
           }
 
-          // Debug first transaction
-          if (index === 0) {
-            console.log('=== MAPPING DEBUG FOR FIRST TRANSACTION ===');
-            console.log('transaction.amount:', transaction.amount);
-            console.log('isIncoming:', isIncoming);
-            console.log('Wallet owner:', walletOwner);
-            console.log('Mapped fromUser:', fromUser);
-            console.log('Mapped toUser:', toUser);
-          }
 
           return {
             from: fromUser,
@@ -332,7 +365,7 @@ const FeedList: React.FC<FeedListProps> = ({
                       const timestamp = zap.transaction.time;
                       // Try to parse as ISO string first, then Unix timestamp
                       let date = new Date(timestamp);
-                      if (isNaN(date.getTime())) {
+                      if (isNaN(date.getTime()) && typeof timestamp === 'number') {
                         // Try as Unix timestamp (seconds)
                         date = new Date(timestamp * 1000);
                       }

@@ -717,7 +717,7 @@ const getWalletTransactionsSince = async (
     // Map the payments to match the Zap interface
     const transactionData: Transaction[] = filteredPayments.map(
       (transaction: any) => ({
-        checking_id: transaction.id,
+        checking_id: transaction.checking_id || transaction.payment_hash || transaction.id,
         bolt11: transaction.bolt11,
         //from: transaction.extra?.from?.id || null, // This should be in "extra" field
         //to: transaction.extra?.to?.id || null, // This should be in "extra" field
