@@ -33,7 +33,7 @@
   transition: all 0.3s ease;
 }
 .navigation a:hover {
-  color: #F2A900;
+  color: #84cc16;
 }
 
 .attribution {
@@ -60,7 +60,7 @@
 }
 
 .knowallBadge {
-  background: linear-gradient(135deg, #F2A900 0%, #FF8C00 100%);
+  background: linear-gradient(135deg, #84cc16 0%, #FF8C00 100%);
   color: #1a1a1a;
   padding: 3px 10px;
   border-radius: 12px;
