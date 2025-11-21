@@ -66,7 +66,7 @@ export function Login() {
           <Text
             styles={{
               root: {
-                color: '#F2A900',
+                color: '#84cc16',
                 fontSize: '4vw',
                 fontWeight: 'bold',
                 lineHeight: '64px',

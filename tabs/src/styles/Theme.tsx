@@ -3,11 +3,11 @@ import { createTheme } from '@fluentui/react';
 // Create a theme instance.
 export const theme = createTheme({
   palette: {
-    themePrimary: '#686868',
-    themeSecondary: '#19857b',
-    themeDarkAlt: '#505050',
-    themeDark: '#3b3b3b',
-    themeDarker: '#2c2c2c',
+    themePrimary: '#84cc16',
+    themeSecondary: '#84cc16',
+    themeDarkAlt: '#6ba513',
+    themeDark: '#4d7a0c',
+    themeDarker: '#3a5e09',
     neutralPrimary: '#fff',
     neutralLighter: '#1f1f1f',
     neutralLight: '#2b2b2b',
@@ -39,15 +39,15 @@ export const theme = createTheme({
     DefaultButton: {
       styles: {
         root: {
-         
-          backgroundColor: '#F2A900',
-          color: 'f4f4f4',
+
+          backgroundColor: '#84cc16',
+          color: '#1f1f1f',
           border: 'none',
           width:'150px',
           height:'50px',
           selectors: {
             ':hover': {
-              backgroundColor: '#505050',
+              backgroundColor: '#6ba513',
               color: '#fff',
             },
           },
@@ -57,13 +57,13 @@ export const theme = createTheme({
     PrimaryButton: {
       styles: {
         root: {
-         
-          backgroundColor: '#19857b',
-          color: '#fff',
+
+          backgroundColor: '#84cc16',
+          color: '#1f1f1f',
           border: 'none',
           selectors: {
             ':hover': {
-              backgroundColor: '#146a63',
+              backgroundColor: '#6ba513',
               color: '#fff',
             },
           },

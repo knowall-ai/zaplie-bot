@@ -99,7 +99,7 @@
   justify-content: center;
   align-items: center;
   height: 38px;
-  border: 1px solid #F2A900;
+  border: 1px solid #84cc16;
   border-radius: 4px;
   flex: none;
   order: 0;
@@ -126,7 +126,7 @@ button{
 .amountDisplay
 {
   text-align: center;
-  color: #F2A900;
+  color: #84cc16;
   font-size: 48px;
   font-family: Inter;
   font-weight: 500px;
@@ -147,7 +147,7 @@ button{
   width: 30px;
   height: 30px; 
   border-radius: 4px;
-  border: 1px #F2A900 solid;
+  border: 1px #84cc16 solid;
   flex-direction: column;
   justify-content: center;
   align-items: center;
