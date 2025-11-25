@@ -19,7 +19,7 @@
     "light-bolt11-decoder": "^3.2.0",
     "moment": "^2.30.1",
     "react": "^18.3.1",
-    "react-activity-calendar": "2.5.1",
+    "react-activity-calendar": "^3.0.1",
     "react-dom": "^18.3.1",
     "react-qr-code": "^2.0.15",
     "react-router-dom": "^6.26.1",
@@ -27,7 +27,6 @@
     "react-toastify": "^11.0.5",
     "web-vitals": "^2.1.4",
     "webrtc-adapter": "^9.0.1"
-
   },
   "resolutions": {
     "chroma-js": "2.4.2"
