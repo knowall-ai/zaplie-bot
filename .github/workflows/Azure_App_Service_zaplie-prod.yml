@@ -28,6 +28,15 @@ jobs:
       - name: npm install, build, and test
         env:
           CI: false
+          REACT_APP_LNBITS_NODE_URL: ${{ secrets.REACT_APP_LNBITS_NODE_URL }}
+          REACT_APP_LNBITS_USERNAME: ${{ secrets.REACT_APP_LNBITS_USERNAME }}
+          REACT_APP_LNBITS_PASSWORD: ${{ secrets.REACT_APP_LNBITS_PASSWORD }}
+          REACT_APP_LNBITS_ADMINKEY: ${{ secrets.REACT_APP_LNBITS_ADMINKEY }}
+          REACT_APP_LNBITS_STORE_ID: ${{ secrets.REACT_APP_LNBITS_STORE_ID }}
+          REACT_APP_LNBITS_STORE_OWNER_EMAIL: ${{ secrets.REACT_APP_LNBITS_STORE_OWNER_EMAIL }}
+          REACT_APP_TENANT_ID: ${{ secrets.REACT_APP_TENANT_ID }}
+          REACT_APP_AAD_CLIENT_ID: ${{ secrets.REACT_APP_AAD_CLIENT_ID }}
+          REACT_APP_LNBITS_POINTS_LABEL: ${{ secrets.REACT_APP_LNBITS_POINTS_LABEL }}
         run: |
           cd tabs
           npm install
