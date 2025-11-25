@@ -2,11 +2,17 @@ import { useMsal } from '@azure/msal-react';
 import { DefaultButton } from '@fluentui/react';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { loginRequest } from '../services/authConfig';
+import { InteractionStatus } from '@azure/msal-browser';
 
 export const SignInButton = () => {
-  const { instance } = useMsal();
+  const { instance, inProgress } = useMsal();
 
   const handleLogin = async () => {
+    // Prevent login if an interaction is already in progress
+    if (inProgress !== InteractionStatus.None) {
+      console.log('Authentication already in progress, please wait...');
+      return;
+    }
     const redirectUrl = window.location.href;
 
     // Check if running in Teams by looking at the URL or user agent

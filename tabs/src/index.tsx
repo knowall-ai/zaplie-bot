@@ -13,6 +13,15 @@ import { CacheProvider } from './utils/CacheContext';
 export const msalInstance = new PublicClientApplication(msalConfig);
 
 msalInstance.initialize().then(() => {
+  // Handle redirect promise to avoid interaction_in_progress errors
+  msalInstance.handleRedirectPromise().then((response) => {
+    if (response) {
+      msalInstance.setActiveAccount(response.account);
+    }
+  }).catch((error) => {
+    console.error('Error handling redirect:', error);
+  });
+
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
