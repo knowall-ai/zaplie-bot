@@ -13,7 +13,6 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    environment: Prod
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -51,9 +50,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment:
-      name: Prod
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
 
     steps:
       - name: Download artifact from build job
