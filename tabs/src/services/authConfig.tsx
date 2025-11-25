@@ -8,11 +8,12 @@ export const msalConfig: Configuration = {
   auth: {
     clientId: AADclientid,
     authority: `https://login.microsoftonline.com/${TenantId}`,
-    redirectUri: window.location.origin + '/auth-end',
+    redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
   },
   system: {
     allowNativeBroker: false, // Disables WAM Broker
+    allowRedirectInIframe: false, // Prevent redirect in iframe
   },
   cache: {
     cacheLocation: 'localStorage', // This can be 'localStorage' or 'sessionStorage'
