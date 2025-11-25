@@ -1,6 +1,6 @@
 import { FunctionComponent, useEffect, useState, useRef, useContext } from 'react';
 import styles from './UserListComponent.module.css';
-import { getUsers } from '../services/lnbitsServiceLocal';
+import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
 import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
 
@@ -14,16 +14,59 @@ const UserListComponent: FunctionComponent = () => {
   const { cache, setCache } = useCache();
 
   const fetchUsers = async () => {
-    //Load users from Cache or paraneter
-    console.log('load all ALL users in USERS');
+    //Load users from Cache or parameter
+    console.log('[UserList] Loading all users');
     setLoading(true);
     setError(null);
 
-    const allUsers = cache['allUsers'] as User[];
-    console.log('load all users in USER comp', allUsers);
-    setUsers(allUsers);
-    setLoading(false);
-    
+    try {
+      const allUsers = cache['allUsers'] as User[];
+      console.log('[UserList] Cached users:', allUsers?.length);
+
+      if (!allUsers || allUsers.length === 0) {
+        console.log('[UserList] No cached users found');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch wallets for each user
+      console.log('[UserList] Fetching wallets for all users...');
+      const usersWithWallets = await Promise.all(
+        allUsers.map(async (user) => {
+          try {
+            const wallets = await getUserWallets(adminKey, user.id);
+
+            if (wallets && wallets.length > 0) {
+              const privateWallet = wallets.find(w =>
+                w.name.toLowerCase().includes('private')
+              );
+              const allowanceWallet = wallets.find(w =>
+                w.name.toLowerCase().includes('allowance')
+              );
+
+              return {
+                ...user,
+                privateWallet: privateWallet || null,
+                allowanceWallet: allowanceWallet || null,
+              };
+            }
+
+            return user;
+          } catch (err) {
+            console.error(`[UserList] Error fetching wallets for user ${user.displayName}:`, err);
+            return user;
+          }
+        })
+      );
+
+      console.log('[UserList] Fetched wallets for all users');
+      setUsers(usersWithWallets);
+    } catch (err) {
+      console.error('[UserList] Error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -99,7 +142,12 @@ const rewardsName = rewardNameContext.rewardName;
                       alt=""
                       src={user.profileImg ? user.profileImg : 'profile.png'}
                     />
-                    <div className={styles.userName}>{user.displayName}</div>
+                    <div className={styles.userName}>
+                      {/* Show displayName if it's not a UUID-like ID, otherwise show email or 'Unknown' */}
+                      {user.displayName && !user.displayName.match(/^[a-f0-9]{32}$/)
+                        ? user.displayName
+                        : user.email || 'Unknown'}
+                    </div>
                   </div>
                   <div className={styles.totalBalance}>
                     {user.type ? user.type : 'Teammate'}
