@@ -10,9 +10,25 @@ export const SignInButton = () => {
   const handleLogin = async () => {
     // Prevent login if an interaction is already in progress
     if (inProgress !== InteractionStatus.None) {
-      console.log('Authentication already in progress, please wait...');
+      console.log(`Authentication already in progress: ${inProgress}, please wait...`);
       return;
     }
+
+    // Check if there's a stale interaction flag in storage and clear it
+    const interactionKey = 'msal.interaction.status';
+    try {
+      const storedStatus = sessionStorage.getItem(interactionKey) || localStorage.getItem(interactionKey);
+      if (storedStatus && storedStatus !== 'none') {
+        console.log('Clearing stale interaction status:', storedStatus);
+        sessionStorage.removeItem(interactionKey);
+        localStorage.removeItem(interactionKey);
+        // Wait a moment for MSAL to sync
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (e) {
+      console.error('Error checking interaction status:', e);
+    }
+
     const redirectUrl = window.location.href;
 
     // Check if running in Teams by looking at the URL or user agent
@@ -86,8 +102,9 @@ export const SignInButton = () => {
   return (
     <div>
       <DefaultButton
-        text="Sign In"
+        text={inProgress !== InteractionStatus.None ? "Signing In..." : "Sign In"}
         onClick={handleLogin}
+        disabled={inProgress !== InteractionStatus.None}
         styles={{
           root: {
             color: 'black',
