@@ -9,12 +9,19 @@ export const SignInButton = () => {
   const handleLogin = async () => {
     const redirectUrl = window.location.href;
 
-    try {
-      // Initialize Teams SDK and check context
-      await microsoftTeams.app.initialize();
-      const context = await microsoftTeams.app.getContext();
+    // Check if running in Teams by looking at the URL or user agent
+    const isInTeams = window.name === 'embedded-page-container' ||
+                      window.navigator.userAgent.includes('Teams/') ||
+                      new URLSearchParams(window.location.search).has('inTeams');
 
-      if (context.app.host.clientType === 'desktop') {
+    if (isInTeams) {
+      console.log('Detected Teams environment');
+
+      try {
+        // Initialize Teams SDK and check context
+        await microsoftTeams.app.initialize();
+        const context = await microsoftTeams.app.getContext();
+
         console.log('Running inside Teams');
 
         // Use the new `authentication.authenticate` method
@@ -39,7 +46,6 @@ export const SignInButton = () => {
           });
 
           console.log('MSAL Token Response:', msalResponse);
-          // Handle successful authentication
         } catch (error) {
           console.error('Error during Teams authentication:', error);
 
@@ -51,25 +57,13 @@ export const SignInButton = () => {
             console.error('Error during interactive login:', interactiveError);
           }
         }
-      } else {
-        console.log('Running in a web browser');
-
-        // Handle web browser authentication
-        try {
-          const msalResponse = await instance.loginPopup({
-            scopes: ['User.Read'],
-            prompt: 'select_account',
-          });
-          
-          // Handle successful authentication
-        } catch (error) {
-          console.error('Error during loginPopup:', error);
-        }
+      } catch (error) {
+        console.error('Teams SDK initialization error:', error);
       }
-    } catch (error) {
-      console.error('Login error:', error);
+    } else {
+      // Running in a web browser
       console.log('Running in a web browser');
-      // Handle web browser authentication
+
       try {
         const msalResponse = await instance.loginPopup({
           scopes: ['User.Read'],
@@ -77,7 +71,6 @@ export const SignInButton = () => {
         });
 
         console.log('MSAL Token Response:', msalResponse);
-        // Handle successful authentication
       } catch (error) {
         console.error('Error during loginPopup:', error);
       }
