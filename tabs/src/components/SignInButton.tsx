@@ -83,18 +83,16 @@ export const SignInButton = () => {
         console.error('Teams SDK initialization error:', error);
       }
     } else {
-      // Running in a web browser
-      console.log('Running in a web browser');
+      // Running in a web browser - use redirect instead of popup
+      console.log('Running in a web browser - using redirect flow');
 
       try {
-        const msalResponse = await instance.loginPopup({
+        await instance.loginRedirect({
           scopes: ['User.Read'],
           prompt: 'select_account',
         });
-
-        console.log('MSAL Token Response:', msalResponse);
       } catch (error) {
-        console.error('Error during loginPopup:', error);
+        console.error('Error during loginRedirect:', error);
       }
     }
   };
