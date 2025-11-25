@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - claude/issue-108-20251119-0734
   workflow_dispatch:
 
 jobs:
