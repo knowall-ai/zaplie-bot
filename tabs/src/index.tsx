@@ -12,19 +12,22 @@ import { CacheProvider } from './utils/CacheContext';
 
 export const msalInstance = new PublicClientApplication(msalConfig);
 
-msalInstance.initialize().then(() => {
-  // Handle redirect promise to avoid interaction_in_progress errors
-  msalInstance.handleRedirectPromise().then((response) => {
+msalInstance.initialize().then(async () => {
+  // Handle redirect promise BEFORE rendering the app
+  try {
+    const response = await msalInstance.handleRedirectPromise();
     if (response) {
+      console.log('Login successful, setting active account');
       msalInstance.setActiveAccount(response.account);
+    } else {
+      // No redirect response, check for existing accounts
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        msalInstance.setActiveAccount(accounts[0]);
+      }
     }
-  }).catch((error) => {
+  } catch (error) {
     console.error('Error handling redirect:', error);
-  });
-
-  const accounts = msalInstance.getAllAccounts();
-  if (accounts.length > 0) {
-    msalInstance.setActiveAccount(accounts[0]);
   }
 
   msalInstance.addEventCallback((event: EventMessage) => {
@@ -35,6 +38,7 @@ msalInstance.initialize().then(() => {
     }
   });
 
+  // Render app AFTER handling redirect
   const container = document.getElementById('root');
   const root = ReactDOM.createRoot(container!);
   root.render(
