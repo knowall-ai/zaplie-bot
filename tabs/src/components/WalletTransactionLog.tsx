@@ -3,6 +3,7 @@ import styles from './WalletTransactionLog.module.css';
 import {
   getUsers,
   getWalletTransactionsSince,
+  getUserWallets,
 } from '../services/lnbitsServiceLocal';
 import ArrowIncoming from '../images/ArrowIncoming.svg';
 import ArrowOutgoing from '../images/ArrowOutcoming.svg';
@@ -22,34 +23,24 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   activeTab,
   activeWallet,
 }) => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); // Cache all transactions
+  const [displayedTransactions, setDisplayedTransactions] = useState<Transaction[]>([]); // Filtered transactions to display
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentWallet, setCurrentWallet] = useState<string | undefined>(undefined); // Track which wallet data is cached for
 
   const { accounts } = useMsal();
 
+  // Effect to fetch data when wallet changes
   useEffect(() => {
     // Calculate the timestamp for 30 days ago
     const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
 
     // Use the provided timestamp or default to 7 days ago
     const paymentsSinceTimestamp = sevenDaysAgo;
-    const activeTabForData =
-      activeTab === null || activeTab === undefined || activeTab === ''
-        ? 'all'
-        : activeTab;
-    console.log('activeTabForData: ', activeTabForData);
 
     console.log('activeWallet: ', activeWallet);
-
-    const getAllUsers = async () => {
-      const users = await getUsers(adminKey, {});
-      if (users) {
-        setUsers(users);
-      }
-      console.log('Users: ', users);
-    };
 
     const account = accounts[0];
 
@@ -58,9 +49,16 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       setLoading(true);
       setError(null);
 
-      let allTransactions: Transaction[] = [];
+      let fetchedTransactions: Transaction[] = [];
 
       try {
+        // First, fetch all users
+        const allUsers = await getUsers(adminKey, {});
+        if (allUsers) {
+          setUsers(allUsers);
+          console.log('All users loaded:', allUsers);
+        }
+
         const currentUserLNbitDetails = await getUsers(adminKey, {
           aadObjectId: account.localAccountId,
         });
@@ -68,43 +66,168 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
         console.log('Current user: ', currentUserLNbitDetails);
 
         if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
+          const user = currentUserLNbitDetails[0];
+
+          // Fetch user's wallets
+          const userWallets = await getUserWallets(adminKey, user.id);
+          console.log('Fetched user wallets:', userWallets);
+
+          // Create a wallet ID to user mapping for ALL users
+          console.log('=== CREATING WALLET TO USER MAP ===');
+          const walletToUserMap = new Map<string, User>();
+
+          // For each user, fetch their wallets and create mapping
+          if (allUsers) {
+            for (const u of allUsers) {
+              try {
+                const wallets = await getUserWallets(adminKey, u.id);
+                if (wallets) {
+                  wallets.forEach(wallet => {
+                    walletToUserMap.set(wallet.id, u);
+                    console.log(`Mapped wallet ${wallet.id} (${wallet.name}) to user ${u.displayName || u.email}`);
+                  });
+                }
+              } catch (err) {
+                console.error(`Error fetching wallets for user ${u.id}:`, err);
+              }
+            }
+          }
+          console.log(`Total wallet mappings: ${walletToUserMap.size}`);
+
+          // Fetch ALL payments from ALL wallets to enable matching
+          console.log('=== FETCHING ALL PAYMENTS FOR MATCHING ===');
+          const allPayments: Transaction[] = [];
+
+          if (allUsers) {
+            for (const u of allUsers) {
+              try {
+                const wallets = await getUserWallets(adminKey, u.id);
+                if (wallets) {
+                  for (const wallet of wallets) {
+                    try {
+                      const payments = await getWalletTransactionsSince(
+                        wallet.inkey,
+                        paymentsSinceTimestamp,
+                        null,
+                      );
+                      allPayments.push(...payments);
+                    } catch (err) {
+                      console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error(`Error fetching wallets for user ${u.id}:`, err);
+              }
+            }
+          }
+          console.log(`Total payments fetched: ${allPayments.length}`);
+
+          // Create a map of all payments by checking_id for internal transfer matching
+          const paymentsByCheckingId = new Map<string, Transaction[]>();
+          allPayments.forEach(payment => {
+            const cleanId = payment.checking_id?.replace('internal_', '') || '';
+            if (cleanId) {
+              const existing = paymentsByCheckingId.get(cleanId) || [];
+              existing.push(payment);
+              paymentsByCheckingId.set(cleanId, existing);
+            }
+          });
+          console.log(`Payment groups by checking_id: ${paymentsByCheckingId.size}`);
+
           let inkey: any = null;
 
-          if (activeWallet === 'Private') {
-            inkey = currentUserLNbitDetails[0].privateWallet?.inkey;
+          if (userWallets && userWallets.length > 0) {
+            if (activeWallet === 'Private') {
+              const privateWallet = userWallets.find(w => w.name.toLowerCase().includes('private'));
+              inkey = privateWallet?.inkey;
+              console.log('Using Private wallet inkey:', inkey);
+            } else {
+              const allowanceWallet = userWallets.find(w => w.name.toLowerCase().includes('allowance'));
+              inkey = allowanceWallet?.inkey;
+              console.log('Using Allowance wallet inkey:', inkey);
+            }
           } else {
-            inkey = currentUserLNbitDetails[0].allowanceWallet?.inkey;
+            console.error('No wallets found for user');
           }
 
-          if (inkey) {
-            const transactions = await getWalletTransactionsSince(
-              inkey,
-              paymentsSinceTimestamp,
-              null,
-            );
+          const transactions = await getWalletTransactionsSince(
+            inkey,
+            paymentsSinceTimestamp,
+            null,
+          );
 
-            let filteredTransactions: any = null;
+          // Don't filter by tab here - we'll cache ALL transactions and filter later
+          console.log('=== MAPPING TRANSACTIONS TO USERS ===');
 
-            if (activeTab === 'sent')
-              filteredTransactions = transactions.filter(f => f.amount < 0);
-            else if (activeTab === 'received')
-              filteredTransactions = transactions.filter(f => f.amount > 0);
-            else filteredTransactions = transactions;
+          for (const transaction of transactions) {
+            const walletOwner = walletToUserMap.get(transaction.wallet_id);
+            const isIncoming = transaction.amount > 0;
 
-            for (const transaction of filteredTransactions) {
-              transaction.extra.from = users.filter(
-                u => u.id === transaction.extra?.from?.user,
-              )[0];
-              transaction.extra.to = users.filter(
-                u => u.id === transaction.extra?.to?.user,
-              )[0];
+            // Initialize extra.from and extra.to
+            if (!transaction.extra) {
+              transaction.extra = {};
             }
 
-            allTransactions = allTransactions.concat(filteredTransactions);
-            console.log('Transactions: ', allTransactions);
+            // Try to find matching internal payment (the other side of the transfer)
+            const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
+            const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
+            const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
+
+            let otherUser: User | null = null;
+
+            // First try to find the other party via matching payment
+            if (matchingPayment) {
+              otherUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+              console.log(`Found matching payment: ${matchingPayment.checking_id}, wallet: ${matchingPayment.wallet_id}, user: ${otherUser?.displayName}`);
+            }
+
+            // If no matching payment found, try to extract from memo
+            if (!otherUser && transaction.memo) {
+              console.log(`Trying to extract user from memo: "${transaction.memo}"`);
+
+              // Try to find user by matching displayName or email in memo
+              const memo = transaction.memo.toLowerCase();
+              const foundUser = allUsers?.find(u => {
+                const displayName = u.displayName?.toLowerCase();
+                const email = u.email?.toLowerCase();
+                const username = u.email?.split('@')[0]?.toLowerCase();
+
+                return (
+                  (displayName && memo.includes(displayName)) ||
+                  (email && memo.includes(email)) ||
+                  (username && memo.includes(username))
+                );
+              });
+
+              if (foundUser) {
+                otherUser = foundUser;
+                console.log(`Extracted user from memo: ${otherUser.displayName}`);
+              }
+            }
+
+            if (isIncoming) {
+              // For incoming: TO = current wallet owner, FROM = other party
+              transaction.extra.to = walletOwner || null;
+              transaction.extra.from = otherUser;
+            } else {
+              // For outgoing: FROM = current wallet owner, TO = other party
+              transaction.extra.from = walletOwner || null;
+              transaction.extra.to = otherUser;
+            }
+
+            console.log(`Transaction ${transaction.checking_id}: amount=${transaction.amount}, from=${transaction.extra.from?.displayName || 'Unknown'}, to=${transaction.extra.to?.displayName || 'Unknown'}, memo="${transaction.memo}"`);
           }
+
+          fetchedTransactions = fetchedTransactions.concat(transactions);
+          console.log('=== AFTER MAPPING ===');
+          console.log('Total transactions:', fetchedTransactions.length);
         }
-        setTransactions(prevState => [...prevState, ...allTransactions]);
+
+        // Cache all transactions
+        setAllTransactions(fetchedTransactions);
+        setCurrentWallet(activeWallet);
+        console.log('Cached transactions for wallet:', activeWallet);
       } catch (error) {
         if (error instanceof Error) {
           setError(`Failed to fetch transactions: ${error.message}`);
@@ -117,10 +240,36 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       }
     };
 
-    setTransactions([]);
-    getAllUsers();
-    fetchTransactions();
-  }, [activeTab, activeWallet]);
+    // Only fetch if wallet changed or no data cached
+    if (currentWallet !== activeWallet) {
+      console.log('Wallet changed, fetching new data...');
+      setAllTransactions([]);
+      setDisplayedTransactions([]);
+      fetchTransactions();
+    }
+  }, [activeWallet, accounts, currentWallet]);
+
+  // Separate effect to filter cached transactions when activeTab changes
+  useEffect(() => {
+    console.log('Filtering transactions for tab:', activeTab);
+
+    if (allTransactions.length === 0) {
+      setDisplayedTransactions([]);
+      return;
+    }
+
+    let filtered: Transaction[];
+    if (activeTab === 'sent') {
+      filtered = allTransactions.filter(f => f.amount < 0);
+    } else if (activeTab === 'received') {
+      filtered = allTransactions.filter(f => f.amount > 0);
+    } else {
+      filtered = allTransactions;
+    }
+
+    console.log(`Filtered ${filtered.length} transactions for ${activeTab} tab`);
+    setDisplayedTransactions(filtered);
+  }, [activeTab, allTransactions]);
   
   const rewardNameContext = useContext(RewardNameContext);
   if (!rewardNameContext) {
@@ -148,7 +297,7 @@ const rewardsName = rewardNameContext.rewardName;
 
   return (
     <div className={styles.feedlist}>
-      {transactions
+      {displayedTransactions
         ?.sort((a, b) => {
           // Convert both times to numbers for sorting
           const timeA = typeof a.time === 'number' ? a.time : new Date(a.time).getTime() / 1000;
@@ -213,9 +362,8 @@ const rewardsName = rewardNameContext.rewardName;
                       }
                     })()}
                     {(transaction.amount as number) < 0 ? 'to' : 'from'}{' '} <b>{(transaction.amount as number) < 0
-                        ? transaction.extra?.to?.displayName ?? 'Unknown'
-                        : transaction.extra?.from?.displayName ??
-                          'Unknown'}{' '}</b>
+                        ? transaction.extra?.to?.displayName || transaction.extra?.to?.email || 'Unknown'
+                        : transaction.extra?.from?.displayName || transaction.extra?.from?.email || 'Unknown'}{' '}</b>
                   </div>
                   <p className={styles.lightHelightInItems}>
                     {transaction.memo}
@@ -249,7 +397,7 @@ const rewardsName = rewardNameContext.rewardName;
             </div>
           </div>
         ))}
-      {transactions.length === 0 && <div>No transactions to show.</div>}
+      {displayedTransactions.length === 0 && <div>No transactions to show.</div>}
     </div>
   );
 };

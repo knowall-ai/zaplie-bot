@@ -1,5 +1,5 @@
 import React, { useEffect, useState,useContext } from 'react';
-import ActivityCalendar, { Activity } from 'react-activity-calendar';
+import { ActivityCalendar, Activity } from 'react-activity-calendar';
 import styles from './ZapActivityChartComponent.module.css';
 import { RewardNameContext } from './RewardNameContext';
 
