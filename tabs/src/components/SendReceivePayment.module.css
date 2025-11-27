@@ -137,7 +137,7 @@
     font-weight: 700;
     line-height: 14.52px;
     text-align: center;
-    color: rgba(242, 169, 0, 1);
+    color: #84cc16;
 
 }
 
@@ -329,7 +329,7 @@
 }
 
 .sendButtonEnabled:hover {
-    background-color: #d18a00;
+    background-color: #6ba513;
 }
 
 .sendPopupSuccess {

@@ -267,7 +267,7 @@
     bottom: 0%;
     left: 0%;
     border-radius: 50%;
-    background: linear-gradient(-41.31deg, #d09c35, #f7d249);
+    background: linear-gradient(-41.31deg, #6ba513, #84cc16);
 }
 .b {
     position: absolute;
@@ -330,7 +330,7 @@
     padding: 0px 28px 0px 0px;
     gap: 10px;
     text-align: right;
-    color: #f2a900;
+    color: #84cc16;
 }
 .bodyContents {
     flex: 1;
@@ -373,7 +373,7 @@
     bottom: 0%;
     left: 0%;
     border-radius: 50%;
-    background: linear-gradient(-41.31deg, #d06421, #f7a649);
+    background: linear-gradient(-41.31deg, #5a9311, #6ba513);
 }
 .rank3 {
     width: 24.7px;

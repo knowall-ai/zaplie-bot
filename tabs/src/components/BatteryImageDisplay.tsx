@@ -31,7 +31,13 @@ if (value < 1) {
 
   return (
     <div>
-      <img src={imageSrc} alt="Battery Level" />
+      <img
+        src={imageSrc}
+        alt="Battery Level"
+        style={{
+          filter: 'hue-rotate(45deg) saturate(1.2) brightness(1.1)'
+        }}
+      />
     </div>
   );
 };
