@@ -128,9 +128,9 @@ const rewardsName = rewardNameContext.rewardName;
           blockMargin={5}
           fontSize={14}
           theme={{
+            light: ['#1F1F1F', '#3a5e09', '#4d7a0c', '#6ba513', '#84cc16'],
             dark: ['#1F1F1F', '#3a5e09', '#4d7a0c', '#6ba513', '#84cc16'],
           }}
-          colorScheme="dark"
           labels={{
             totalCount: `{{count}} ${rewardsName} zapped (up until yesterday)`,
           }}

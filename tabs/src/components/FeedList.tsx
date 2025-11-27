@@ -154,6 +154,32 @@ const FeedList: React.FC<FeedListProps> = ({
 
         console.log(`=== AFTER FILTERING ALLOWANCE CLEARED: ${allowanceTransactions.length} ===`);
 
+        // Deduplicate internal transfers - only show the incoming side (positive amount)
+        // For internal transfers, we have 2 records with the same checking_id (one negative, one positive)
+        // We only want to show one transaction per transfer
+        const seenCheckingIds = new Set<string>();
+        const deduplicatedTransactions = allowanceTransactions.filter(payment => {
+          const cleanId = payment.checking_id?.replace('internal_', '') || '';
+
+          // If this is an internal transfer (has matching checking_id)
+          if (cleanId && payment.checking_id?.startsWith('internal_')) {
+            // Only show the incoming side (positive amount)
+            if (payment.amount < 0) {
+              return false; // Skip outgoing side
+            }
+
+            // Check if we've already seen this checking_id
+            if (seenCheckingIds.has(cleanId)) {
+              return false; // Skip duplicate
+            }
+            seenCheckingIds.add(cleanId);
+          }
+
+          return true;
+        });
+
+        console.log(`=== AFTER DEDUPLICATION: ${deduplicatedTransactions.length} (removed ${allowanceTransactions.length - deduplicatedTransactions.length} duplicates) ===`);
+
         // Debug: Show all payment checking_ids to find internal payment pairs
         console.log('=== ALL PAYMENT CHECKING IDs ===');
         allPayments.slice(0, 10).forEach((p, i) => {
@@ -182,7 +208,7 @@ const FeedList: React.FC<FeedListProps> = ({
           }
         });
 
-        const allowanceZaps = allowanceTransactions.map((transaction, index) => {
+        const allowanceZaps = deduplicatedTransactions.map((transaction, index) => {
           const walletOwner = walletToUserMap.get(transaction.wallet_id) || null;
 
           // Determine if this is incoming (positive amount) or outgoing (negative amount)

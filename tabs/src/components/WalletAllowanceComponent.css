@@ -32,13 +32,13 @@
 .battery-icon {
   width: 50px;
   height: 30px;
-  border: 2px solid #f0a500;
+  border: 2px solid #84cc16;
   position: relative;
 }
 
 .battery-fill {
   height: 100%;
-  background-color: #f0a500;
+  background-color: #84cc16;
 }
 
 .sats-amount h1 {
@@ -68,7 +68,7 @@
 }
 
 .remaining-color {
-  background-color: #f0a500;
+  background-color: #84cc16;
   align-items: left;
   align-self: left;
   align-content: left;
@@ -89,7 +89,7 @@
 .receive-btn, .send-btn {
   padding: 10px 20px;
   border: none;
-  color: rgba(242, 169, 0, 1);
+  color: #84cc16;
   cursor: pointer;
   border-radius: 5px;
   width: 122px;
@@ -108,7 +108,7 @@
 }
 
 .receive-btn:hover, .send-btn:hover {
-  background-color: #d18900;
+  background-color: #6ba513;
   color: white;
 }
 

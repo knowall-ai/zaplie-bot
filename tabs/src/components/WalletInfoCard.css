@@ -17,7 +17,7 @@
 
   .wallet-total h1 {
     margin: 0;
-    color: #f0a500;
+    color: #84cc16;
   }
   
   .wallet-actions {
@@ -26,18 +26,29 @@
     margin-top: 20px;
   }
   
-  .receive-btn, .send-btn {
+  .receive-btn {
     padding: 10px 20px;
     border: none;
-    /* background-color: #f0a500; */
-    color: #fff;
+    background-color: #84cc16;
+    color: #000;
     cursor: pointer;
     border-radius: 5px;
+    font-weight: 600;
+  }
+
+  .send-btn {
+    padding: 10px 20px;
+    border: 1px solid #84cc16;
+    background-color: transparent;
+    color: #84cc16;
+    cursor: pointer;
+    border-radius: 5px;
+    font-weight: 600;
   }
   
   .horizontal-container {
-    display: flex; /* Enables flexbox */ 
-    color: #f0a500;
+    display: flex; /* Enables flexbox */
+    color: #84cc16;
   }
   .horizontal-container h1 {
     color: rgba(255, 255, 255, 1);
