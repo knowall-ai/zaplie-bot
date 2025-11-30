@@ -40,12 +40,9 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     // Use the provided timestamp or default to 7 days ago
     const paymentsSinceTimestamp = sevenDaysAgo;
 
-    console.log('activeWallet: ', activeWallet);
-
     const account = accounts[0];
 
     const fetchTransactions = async () => {
-      console.log('Fetching payments since: ', paymentsSinceTimestamp);
       setLoading(true);
       setError(null);
 
@@ -56,24 +53,19 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
         const allUsers = await getUsers(adminKey, {});
         if (allUsers) {
           setUsers(allUsers);
-          console.log('All users loaded:', allUsers);
         }
 
         const currentUserLNbitDetails = await getUsers(adminKey, {
           aadObjectId: account.localAccountId,
         });
 
-        console.log('Current user: ', currentUserLNbitDetails);
-
         if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
           const user = currentUserLNbitDetails[0];
 
           // Fetch user's wallets
           const userWallets = await getUserWallets(adminKey, user.id);
-          console.log('Fetched user wallets:', userWallets);
 
           // Create a wallet ID to user mapping for ALL users
-          console.log('=== CREATING WALLET TO USER MAP ===');
           const walletToUserMap = new Map<string, User>();
 
           // For each user, fetch their wallets and create mapping
@@ -84,7 +76,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
                 if (wallets) {
                   wallets.forEach(wallet => {
                     walletToUserMap.set(wallet.id, u);
-                    console.log(`Mapped wallet ${wallet.id} (${wallet.name}) to user ${u.displayName || u.email}`);
                   });
                 }
               } catch (err) {
@@ -92,10 +83,8 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
               }
             }
           }
-          console.log(`Total wallet mappings: ${walletToUserMap.size}`);
 
           // Fetch ALL payments from ALL wallets to enable matching
-          console.log('=== FETCHING ALL PAYMENTS FOR MATCHING ===');
           const allPayments: Transaction[] = [];
 
           if (allUsers) {
@@ -121,7 +110,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
               }
             }
           }
-          console.log(`Total payments fetched: ${allPayments.length}`);
 
           // Create a map of all payments by checking_id for internal transfer matching
           const paymentsByCheckingId = new Map<string, Transaction[]>();
@@ -133,7 +121,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
               paymentsByCheckingId.set(cleanId, existing);
             }
           });
-          console.log(`Payment groups by checking_id: ${paymentsByCheckingId.size}`);
 
           let inkey: any = null;
 
@@ -141,11 +128,9 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             if (activeWallet === 'Private') {
               const privateWallet = userWallets.find(w => w.name.toLowerCase().includes('private'));
               inkey = privateWallet?.inkey;
-              console.log('Using Private wallet inkey:', inkey);
             } else {
               const allowanceWallet = userWallets.find(w => w.name.toLowerCase().includes('allowance'));
               inkey = allowanceWallet?.inkey;
-              console.log('Using Allowance wallet inkey:', inkey);
             }
           } else {
             console.error('No wallets found for user');
@@ -158,8 +143,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
           );
 
           // Don't filter by tab here - we'll cache ALL transactions and filter later
-          console.log('=== MAPPING TRANSACTIONS TO USERS ===');
-
           for (const transaction of transactions) {
             const walletOwner = walletToUserMap.get(transaction.wallet_id);
             const isIncoming = transaction.amount > 0;
@@ -179,13 +162,10 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             // First try to find the other party via matching payment
             if (matchingPayment) {
               otherUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
-              console.log(`Found matching payment: ${matchingPayment.checking_id}, wallet: ${matchingPayment.wallet_id}, user: ${otherUser?.displayName}`);
             }
 
             // If no matching payment found, try to extract from memo
             if (!otherUser && transaction.memo) {
-              console.log(`Trying to extract user from memo: "${transaction.memo}"`);
-
               // Try to find user by matching displayName or email in memo
               const memo = transaction.memo.toLowerCase();
               const foundUser = allUsers?.find(u => {
@@ -202,7 +182,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
               if (foundUser) {
                 otherUser = foundUser;
-                console.log(`Extracted user from memo: ${otherUser.displayName}`);
               }
             }
 
@@ -215,19 +194,14 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
               transaction.extra.from = walletOwner || null;
               transaction.extra.to = otherUser;
             }
-
-            console.log(`Transaction ${transaction.checking_id}: amount=${transaction.amount}, from=${transaction.extra.from?.displayName || 'Unknown'}, to=${transaction.extra.to?.displayName || 'Unknown'}, memo="${transaction.memo}"`);
           }
 
           fetchedTransactions = fetchedTransactions.concat(transactions);
-          console.log('=== AFTER MAPPING ===');
-          console.log('Total transactions:', fetchedTransactions.length);
         }
 
         // Cache all transactions
         setAllTransactions(fetchedTransactions);
         setCurrentWallet(activeWallet);
-        console.log('Cached transactions for wallet:', activeWallet);
       } catch (error) {
         if (error instanceof Error) {
           setError(`Failed to fetch transactions: ${error.message}`);
@@ -242,17 +216,14 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
     // Only fetch if wallet changed or no data cached
     if (currentWallet !== activeWallet) {
-      console.log('Wallet changed, fetching new data...');
       setAllTransactions([]);
       setDisplayedTransactions([]);
       fetchTransactions();
     }
-  }, [activeWallet, accounts, currentWallet]);
+  }, [activeWallet, accounts, currentWallet, users]);
 
   // Separate effect to filter cached transactions when activeTab changes
   useEffect(() => {
-    console.log('Filtering transactions for tab:', activeTab);
-
     if (allTransactions.length === 0) {
       setDisplayedTransactions([]);
       return;
@@ -267,7 +238,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       filtered = allTransactions;
     }
 
-    console.log(`Filtered ${filtered.length} transactions for ${activeTab} tab`);
     setDisplayedTransactions(filtered);
   }, [activeTab, allTransactions]);
   

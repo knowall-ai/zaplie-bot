@@ -1,5 +1,4 @@
 import { getAllPayments } from '../services/lnbitsServiceLocal';
-import { useCache } from './CacheContext';
 
 //import { Wallet, ZapTransaction } from 'path-to-types';
 

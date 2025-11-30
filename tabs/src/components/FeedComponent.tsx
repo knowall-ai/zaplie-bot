@@ -3,13 +3,13 @@ import styles from './FeedComponent.module.css';
 import FeedList from './FeedList';
 
 const Leaderboard = lazy(() => import('./Leaderboard'));
-interface FeedComponent {
+interface FeedComponentProps {
   allZaps: Transaction[];
   allUsers: User[];
   isLoading: boolean;
 }
 
-const FeedComponent: FunctionComponent<FeedComponent> = ({ isLoading, allZaps, allUsers  }) => {
+const FeedComponent: FunctionComponent<FeedComponentProps> = ({ isLoading, allZaps, allUsers  }) => {
   const [timestamp, setTimestamp] = useState(
     Math.floor(Date.now() / 1000 - 7 * 24 * 60 * 60),
   );
@@ -29,7 +29,6 @@ const FeedComponent: FunctionComponent<FeedComponent> = ({ isLoading, allZaps, a
   const handlePeriodClick = (days: number) => {
     // setTimestamp(Math.floor(Date.now() / 1000 - days * 24 * 60 * 60));
     const newTimestamp = Math.floor(Date.now() / 1000 - days * 24 * 60 * 60);
-    console.log(`Period clicked: ${days} days, new timestamp: ${newTimestamp}`);
     setTimestamp(newTimestamp);
     setActivePeriod(days);
   };

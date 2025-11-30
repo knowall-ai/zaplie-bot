@@ -1,6 +1,6 @@
-import { FunctionComponent, useEffect, useState, useRef, useContext } from 'react';
+import { FunctionComponent, useEffect, useState, useRef, useContext, useCallback } from 'react';
 import styles from './UserListComponent.module.css';
-import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
+import { getUserWallets } from '../services/lnbitsServiceLocal';
 import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
 
@@ -11,26 +11,22 @@ const UserListComponent: FunctionComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const fetchCalled = useRef(false); // Ref to track if fetchUsers has been called
-  const { cache, setCache } = useCache();
+  const { cache } = useCache();
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     //Load users from Cache or parameter
-    console.log('[UserList] Loading all users');
     setLoading(true);
     setError(null);
 
     try {
       const allUsers = cache['allUsers'] as User[];
-      console.log('[UserList] Cached users:', allUsers?.length);
 
       if (!allUsers || allUsers.length === 0) {
-        console.log('[UserList] No cached users found');
         setLoading(false);
         return;
       }
 
       // Fetch wallets for each user
-      console.log('[UserList] Fetching wallets for all users...');
       const usersWithWallets = await Promise.all(
         allUsers.map(async (user) => {
           try {
@@ -59,7 +55,6 @@ const UserListComponent: FunctionComponent = () => {
         })
       );
 
-      console.log('[UserList] Fetched wallets for all users');
       setUsers(usersWithWallets);
     } catch (err) {
       console.error('[UserList] Error:', err);
@@ -67,15 +62,14 @@ const UserListComponent: FunctionComponent = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [cache]);
 
   useEffect(() => {
-    
     if (!fetchCalled.current) {
       fetchCalled.current = true;
       fetchUsers();
     }
-  }, []);
+  }, [fetchUsers]);
   const rewardNameContext = useContext(RewardNameContext);
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available

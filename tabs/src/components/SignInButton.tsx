@@ -42,7 +42,7 @@ export const SignInButton = () => {
       try {
         // Initialize Teams SDK and check context
         await microsoftTeams.app.initialize();
-        const context = await microsoftTeams.app.getContext();
+        await microsoftTeams.app.getContext();
 
         console.log('Running inside Teams');
 

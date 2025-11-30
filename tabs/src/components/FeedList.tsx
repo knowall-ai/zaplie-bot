@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './FeedList.module.css';
 import ZapIcon from '../images/ZapIcon.svg';
-import { useCache } from '../utils/CacheContext';
 import {
   getUsers,
   getUserWallets,
   getWalletTransactionsSince
 } from '../services/lnbitsServiceLocal';
-import { decode as decodeBolt11 } from 'light-bolt11-decoder';
 
 interface FeedListProps {
   timestamp?: number | null;
@@ -32,12 +30,11 @@ const FeedList: React.FC<FeedListProps> = ({
   isLoading = false
 }) => {
   const [zaps, setZaps] = useState<ZapTransaction[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const initialRender = useRef(true);
-  const { cache, setCache } = useCache();
-  const [users, setUsers] = useState<any[]>([]);
 
   // NEW: State for sorting (excluding the Memo field)
   const [sortField, setSortField] = useState<'time' | 'from' | 'to' | 'amount'>(
@@ -59,12 +56,6 @@ const FeedList: React.FC<FeedListProps> = ({
             ? 0
             : timestamp;
 
-        console.log('>>> Payments Since Timestamp:', paymentsSinceTimestamp);
-        console.log('>>> As Date:', new Date(paymentsSinceTimestamp * 1000).toLocaleString());
-        console.log('>>> Current Time:', Math.floor(Date.now() / 1000));
-        console.log('>>> Current Date:', new Date().toLocaleString());
-
-        console.log('=== STEP 1: Fetching all users ===');
         // Step 1: Get all users from /users/api/v1/user
         const fetchedUsers = await getUsers(adminKey, {});
         if (!fetchedUsers) {
@@ -73,15 +64,12 @@ const FeedList: React.FC<FeedListProps> = ({
           return;
         }
         setUsers(fetchedUsers);
-        console.log(`Fetched ${fetchedUsers.length} users`);
 
-        console.log('=== STEP 2: Fetching wallets for each user ===');
         // Step 2: For each user, get wallets using /users/api/v1/user/{userId}/wallet
         const allWalletsData: { userId: string; wallets: Wallet[] }[] = [];
         const allWalletsArray: Wallet[] = [];
 
         for (const user of fetchedUsers) {
-          console.log(`Fetching wallets for user: ${user.id}`);
           const userWallets = await getUserWallets(adminKey, user.id);
           const wallets = userWallets || [];
 
@@ -90,15 +78,7 @@ const FeedList: React.FC<FeedListProps> = ({
             wallets: wallets
           });
           allWalletsArray.push(...wallets);
-          console.log(`  Found ${wallets.length} wallets for user ${user.id}`);
         }
-
-        console.log('=== ALL WALLETS (Simple Array) ===');
-        console.log(`Total wallets: ${allWalletsArray.length}`);
-        console.log('All Wallets:', allWalletsArray);
-        console.log('===================================');
-
-        console.log('=== STEP 3: Fetching payments for Private and Allowance wallets ===');
         // Step 3: For each wallet, get payments from Private and Allowance wallets only
         let allPayments: Transaction[] = [];
 
@@ -109,19 +89,14 @@ const FeedList: React.FC<FeedListProps> = ({
             return walletName.includes('private') || walletName.includes('allowance');
           });
 
-          console.log(`User ${userData.userId}: ${filteredWallets.length} Private/Allowance wallets out of ${userData.wallets.length} total`);
-
           // Get payments from filtered wallets only
           for (const wallet of filteredWallets) {
-            console.log(`Fetching payments for wallet: ${wallet.id} (${wallet.name}) (User: ${userData.userId})`);
-
             try {
               const payments = await getWalletTransactionsSince(
                 wallet.inkey,
                 paymentsSinceTimestamp,
                 null
               );
-              console.log(`  Found ${payments.length} payments for wallet ${wallet.id} (${wallet.name})`);
               allPayments = allPayments.concat(payments);
             } catch (err) {
               console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
@@ -129,30 +104,10 @@ const FeedList: React.FC<FeedListProps> = ({
           }
         }
 
-        console.log(`=== TOTAL PAYMENTS FETCHED: ${allPayments.length} ===`);
-        console.log('All payments:', allPayments);
-
-        // Show a sample payment to verify structure
-        if (allPayments.length > 0) {
-          console.log('=== PAYMENT DATA STRUCTURE DEBUG ===');
-          console.log('Sample payment:', allPayments[0]);
-          console.log('Sample payment time:', allPayments[0].time, typeof allPayments[0].time);
-          console.log('Sample payment extra:', allPayments[0].extra);
-          if (allPayments[0].extra) {
-            console.log('  extra.from:', allPayments[0].extra.from);
-            console.log('  extra.to:', allPayments[0].extra.to);
-          }
-          console.log('=== USER DATA DEBUG ===');
-          console.log('Total users fetched:', fetchedUsers.length);
-          console.log('Sample users:', fetchedUsers.slice(0, 3));
-        }
-
         // Filter out weekly allowance cleared transactions only
         const allowanceTransactions = allPayments.filter(
           f => !f.memo.includes('Weekly Allowance cleared'),
         );
-
-        console.log(`=== AFTER FILTERING ALLOWANCE CLEARED: ${allowanceTransactions.length} ===`);
 
         // Deduplicate internal transfers - only show the incoming side (positive amount)
         // For internal transfers, we have 2 records with the same checking_id (one negative, one positive)
@@ -178,14 +133,6 @@ const FeedList: React.FC<FeedListProps> = ({
           return true;
         });
 
-        console.log(`=== AFTER DEDUPLICATION: ${deduplicatedTransactions.length} (removed ${allowanceTransactions.length - deduplicatedTransactions.length} duplicates) ===`);
-
-        // Debug: Show all payment checking_ids to find internal payment pairs
-        console.log('=== ALL PAYMENT CHECKING IDs ===');
-        allPayments.slice(0, 10).forEach((p, i) => {
-          console.log(`${i}: checking_id="${p.checking_id}", amount=${p.amount}, wallet_id=${p.wallet_id}, memo="${p.memo}"`);
-        });
-
         // Create wallet ID to user mapping
         const walletToUserMap = new Map<string, User>();
         allWalletsData.forEach(userData => {
@@ -193,9 +140,6 @@ const FeedList: React.FC<FeedListProps> = ({
             walletToUserMap.set(wallet.id, fetchedUsers.find(u => u.id === userData.userId)!);
           });
         });
-
-        console.log('=== WALLET TO USER MAPPING ===');
-        console.log(`Total wallet-user mappings: ${walletToUserMap.size}`);
 
         // Create a map of all payments by checking_id for internal transfer matching
         const paymentsByCheckingId = new Map<string, Transaction[]>();
@@ -256,12 +200,8 @@ const FeedList: React.FC<FeedListProps> = ({
           };
         });
 
-        console.log(`=== FINAL ZAPS COUNT: ${allowanceZaps.length} ===`);
-        console.log('Sample zap with mapping:', allowanceZaps[0]);
-
         // Limit to MAX_RECORDS (100 records)
         const limitedZaps = allowanceZaps.slice(0, MAX_RECORDS);
-        console.log(`=== LIMITED TO ${limitedZaps.length} RECORDS ===`);
 
         setZaps(limitedZaps);
       } catch (error) {
@@ -279,10 +219,9 @@ const FeedList: React.FC<FeedListProps> = ({
       setZaps([]);
       fetchZapsStepByStep();
     } else {
-      console.log(`Timestamp updated: ${timestamp}`);
       fetchZapsStepByStep();
     }
-  }, [timestamp]);
+  }, [timestamp, adminKey]);
   // NEW: Function to handle header clicks for sorting
   const handleSort = (field: 'time' | 'from' | 'to' | 'amount') => {
     if (sortField === field) {

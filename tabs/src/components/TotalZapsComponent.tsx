@@ -2,9 +2,8 @@ import { FunctionComponent, useState, useEffect, useContext } from 'react';
 import styles from './TotalZapsComponent.module.css';
 //import lnbitsService from '../services/lnbitsServiceLocal';
 /// <reference path = "../global.d.ts" />
-import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
-import { getRewardName, updateRewardName } from '../apiService';
+import { getRewardName } from '../apiService';
 
 export interface ZapSent {
   totalZaps: number;
@@ -16,7 +15,6 @@ export interface ZapSent {
   zapsFromCopilots: number;
   zapsToCopilots: number;
 }
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
 interface TotalZapsComponentProps {
   allZaps: Transaction[];
@@ -26,15 +24,14 @@ interface TotalZapsComponentProps {
 
 const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZaps, allUsers, isLoading }) => {
   const [totalZaps, setTotalZaps] = useState<number>(0);
-  const { cache, setCache } = useCache();
-  
+
   const [numberOfDays, setNumberOfDays] = useState<number>(0);
   const [numberOfUsers, setNumberOfUsers] = useState<number>(0);
   const [averagePerDay, setAveragePerDay] = useState<number>(0);
   const [averagePerUser, setAveragePerUser] = useState<number>(0);
   const [biggestZap, setBiggestZap] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
 
   const { rewardName, setRewardName } = useContext(RewardNameContext);
 

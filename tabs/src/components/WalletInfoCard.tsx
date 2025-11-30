@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import './WalletInfoCard.css';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
 import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
@@ -20,67 +20,41 @@ const WalletYourWalletInfoCard: React.FC = () => {
   const account = accounts[0];
   const [myLNbitDetails, setMyLNbitDetails] = useState<User>();
 
-  const fetchAmountReceived = async () => {
-    console.log('=== WalletInfoCard: Fetching your wallet ===');
-    console.log('WalletInfoCard: account.localAccountId =', account.localAccountId);
+  const fetchAmountReceived = useCallback(async () => {
+    if (!account?.localAccountId) return;
 
     const currentUserLNbitDetails = await getUsers(adminKey, {
       aadObjectId: account.localAccountId,
     });
 
-    console.log('WalletInfoCard: Users returned from getUsers =', currentUserLNbitDetails);
-
     if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
       const user = currentUserLNbitDetails[0];
-      console.log('WalletInfoCard: Current user =', user);
-      console.log('WalletInfoCard: Current user.id =', user.id);
 
       // Fetch user's wallets
       const userWallets = await getUserWallets(adminKey, user.id);
-      console.log('WalletInfoCard: User wallets returned =', userWallets);
 
       if (userWallets && userWallets.length > 0) {
-        console.log('WalletInfoCard: Searching for Private wallet in', userWallets.length, 'wallets');
-        userWallets.forEach(w => {
-          console.log('WalletInfoCard: Wallet name:', w.name, '| balance_msat:', w.balance_msat);
-        });
-
         // Find the Private wallet
         const privateWallet = userWallets.find(w =>
           w.name.toLowerCase().includes('private')
         );
 
-        console.log('WalletInfoCard: Private wallet found?', !!privateWallet);
         if (privateWallet) {
-          console.log('WalletInfoCard: Private wallet details:', privateWallet);
-          console.log('WalletInfoCard: balance_msat =', privateWallet.balance_msat);
-
           // Update user object with the wallet
           user.privateWallet = privateWallet;
           setMyLNbitDetails(user);
 
           // Set balance
           const bal = (privateWallet.balance_msat ?? 0) / 1000;
-          console.log('WalletInfoCard: Calculated balance (sats) =', bal);
           setBalance(bal);
-        } else {
-          console.log('WalletInfoCard: ERROR - Private wallet not found!');
         }
-      } else {
-        console.log('WalletInfoCard: ERROR - No wallets returned for user');
       }
-    } else {
-      console.log('WalletInfoCard: ERROR - No users found for aadObjectId:', account.localAccountId);
-    }
-  };
-
-
-
-  useEffect(() => {
-    if (account?.localAccountId) {
-      fetchAmountReceived();
     }
   }, [account?.localAccountId]);
+
+  useEffect(() => {
+    fetchAmountReceived();
+  }, [fetchAmountReceived]);
   const handleOpenReceivePopup = () => {
     setIsReceivePopupOpen(true);
   };

@@ -9,7 +9,7 @@ import { RewardNameContext } from './RewardNameContext';
 const CurrencySetting: FunctionComponent = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currency, setCurrency] = useState(''); // Default value
-  const { rewardName, setRewardName } = useContext(RewardNameContext);
+  const { setRewardName } = useContext(RewardNameContext);
 
   useEffect(() => {
     const fetchRewardName = async () => {

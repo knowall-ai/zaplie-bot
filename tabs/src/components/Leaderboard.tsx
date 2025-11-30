@@ -17,14 +17,6 @@ interface LeaderboardProps {
   timestamp?: number | null;
 }
 
-interface PrivateWalletTransaction {
-  userId: string;
-  displayName: string;
-  walletId: string;
-  transaction: Transaction;
-  time: number;
-}
-
 interface UserTransactionSummary {
   userId: string;
   displayName: string;

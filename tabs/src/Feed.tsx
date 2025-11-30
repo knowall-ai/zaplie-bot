@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import FeedComponent from './components/FeedComponent';
 import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
-import { getUsers, getAllPayments } from './services/lnbitsServiceLocal';
+import { getUsers } from './services/lnbitsServiceLocal';
 import { useCache } from '../src/utils/CacheContext';
 import { fetchAllowanceWalletTransactions } from './utils/walletUtilities';
 
@@ -12,11 +12,10 @@ const Home: React.FC = () => {
   });
   const { cache, setCache } = useCache();
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [totalZaps, setTotalZaps] = useState<number>(0);
 
   const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
@@ -66,7 +65,8 @@ const Home: React.FC = () => {
     };
 
     fetchZaps();
-  }, [adminKey]); // Only run when adminKey changes, not cache
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminKey]); // cache and setCache are from context and are stable, intentionally excluded
 
   return (
     <div style={{ background: '#1F1F1F', paddingBottom: 40 }}>

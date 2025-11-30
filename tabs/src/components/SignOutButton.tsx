@@ -1,5 +1,4 @@
 import { useMsal } from '@azure/msal-react';
-import { DefaultButton } from '@fluentui/react';
 import * as microsoftTeams from '@microsoft/teams-js';
 import React, { useEffect, useState } from 'react';
 
