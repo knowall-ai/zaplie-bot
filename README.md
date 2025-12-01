@@ -1,5 +1,3 @@
-![CoverImage](https://github.com/user-attachments/assets/db930cee-8f0f-47b3-9729-9da8c3b6b2c1)
-
 # Overview
 
 Zaplie is an innovative solution that seamlessly integrates into Microsoft Teams and leverages Microsoft Copilot to create a dynamic, value-driven ecosystem of collaboration. Through a combination of AI automation and Bitcoin micro-transactions, Zaplie enables users, copilots (AI agents), and even customers to engage in meaningful interactions that drive success.
@@ -101,14 +99,3 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 # Get in touch
 
 Have fun, and tag us on Twitter / Nostr!
-
-![FooterImage](https://github.com/user-attachments/assets/3c798d0d-9466-493d-9a66-ee5fe2c374f5)
-
-## Built by KnowAll AI
-
-This project is developed and maintained by KnowAll AI.
-
-**Contact Information:**
-- Website: https://www.knowall.ai
-
-For support, partnerships, or licensing inquiries, please reach out to us using the contact details above.
