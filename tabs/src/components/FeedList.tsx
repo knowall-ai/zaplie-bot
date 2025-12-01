@@ -58,8 +58,8 @@ const FeedList: React.FC<FeedListProps> = ({
 
         // Step 1: Get all users from /users/api/v1/user
         const fetchedUsers = await getUsers(adminKey, {});
-        if (!fetchedUsers) {
-          setError('Failed to fetch users');
+        if (!fetchedUsers || fetchedUsers.length === 0) {
+          setError('Unable to load users. Please check your connection and try again.');
           setLoading(false);
           return;
         }
@@ -205,9 +205,10 @@ const FeedList: React.FC<FeedListProps> = ({
 
         setZaps(limitedZaps);
       } catch (error) {
-        setError(
-          error instanceof Error ? error.message : 'An unknown error occurred',
-        );
+        const errorMessage = error instanceof Error
+          ? `Failed to load activity feed: ${error.message}`
+          : 'Unable to load activity feed. Please refresh and try again.';
+        setError(errorMessage);
         console.error('Error in fetchZapsStepByStep:', error);
       } finally {
         setLoading(false);

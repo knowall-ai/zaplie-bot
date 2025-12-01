@@ -3,38 +3,64 @@
 // LNBits API is documented here:
 // https://demo.lnbits.com/docs/
 
+import { logger } from '../utils/logger';
+
 const userName = process.env.REACT_APP_LNBITS_USERNAME;
 const password = process.env.REACT_APP_LNBITS_PASSWORD;
 const nodeUrl = process.env.REACT_APP_LNBITS_NODE_URL;
 
-// Store token in localStorage (persists between page reloads)
-let accessToken = localStorage.getItem('accessToken');
+// Store token in sessionStorage (cleared when tab closes - more secure than localStorage)
+// Token expiration: tokens expire after 24 hours
+const TOKEN_EXPIRY_HOURS = 24;
+const TOKEN_KEY = 'accessToken';
+const TOKEN_TIMESTAMP_KEY = 'accessTokenTimestamp';
+
+// Get token from storage if valid, otherwise return null
+const getStoredToken = (): string | null => {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const timestamp = sessionStorage.getItem(TOKEN_TIMESTAMP_KEY);
+
+  if (!token || !timestamp) {
+    return null;
+  }
+
+  // Check if token has expired
+  const tokenAge = Date.now() - parseInt(timestamp, 10);
+  const tokenAgeHours = tokenAge / (1000 * 60 * 60);
+
+  if (tokenAgeHours > TOKEN_EXPIRY_HOURS) {
+    // Token expired, clear storage
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_TIMESTAMP_KEY);
+    return null;
+  }
+
+  return token;
+};
+
+let accessToken = getStoredToken();
 let accessTokenPromise: Promise<string> | null = null; // To cache the pending token request
 
 export async function getAccessToken(
   username: string,
   password: string,
 ): Promise<string> {
-  console.log('=== getAccessToken DEBUG ===');
-  console.log('Username:', username);
-  console.log('Password:', password);
-  console.log('===========================');
+  logger.debug('=== getAccessToken DEBUG ===');
 
   if (accessToken) {
-    //console.log('Using cached access token: ' + accessToken);
     return accessToken;
   } else {
-    console.log('No cached access token found');
+    logger.debug('No cached access token found');
   }
 
   // If there's already a token request in progress, return the existing promise
   if (accessTokenPromise) {
-    console.log('Returning ongoing access token request');
+    logger.debug('Returning ongoing access token request');
     return accessTokenPromise;
   }
 
   // No access token and no request in progress, create a new one
-  console.log('No cached access token found, requesting a new one');
+  logger.debug('No cached access token found, requesting a new one');
 
   // Store the promise of the request
   accessTokenPromise = (async (): Promise<string> => {
@@ -47,10 +73,6 @@ export async function getAccessToken(
         },
         body: JSON.stringify({ username, password }),
       });
-
-      //console.log('Request URL:', response.url);
-      //console.log('Request Status:', response.status);
-      //console.log('Request Headers:', response.headers);
 
       if (!response.ok) {
         throw new Error(
@@ -69,19 +91,20 @@ export async function getAccessToken(
         throw new Error('Access token is missing in the response');
       }
 
-      // Store the access token in memory and localStorage
+      // Store the access token in memory and sessionStorage with timestamp
       accessToken = data.access_token;
       if (accessToken) {
-        localStorage.setItem('accessToken', accessToken);
-        console.log('Access token fetched and stored: ' + accessToken);
+        sessionStorage.setItem(TOKEN_KEY, accessToken);
+        sessionStorage.setItem(TOKEN_TIMESTAMP_KEY, Date.now().toString());
+        logger.info('Access token fetched and stored (expires in ' + TOKEN_EXPIRY_HOURS + ' hours)');
       } else {
-        throw new Error('Access token is null, cannot store in localStorage.');
+        throw new Error('Access token is null, cannot store in sessionStorage.');
       }
 
       // Return the access token
       return accessToken;
     } catch (error) {
-      console.error('Error in getAccessToken:', error);
+      logger.error('Error in getAccessToken:', error);
       // Throw an error to ensure the promise doesn't resolve with undefined
       throw new Error('Failed to retrieve access token');
     } finally {
@@ -98,9 +121,6 @@ const getWallets = async (
   filterByName?: string,
   filterById?: string,
 ): Promise<Wallet[] | null> => {
-  /*console.log(
-    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById}))`,
-  );*/
 
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
@@ -140,9 +160,6 @@ const getWallets = async (
 };
 
 const getWalletDetails = async (inKey: string, walletId: string) => {
-  /*console.log(
-    `getWalletDetails starting ... (inKey: ${inKey}, walletId: ${walletId}))`,
-  );*/
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallets/${walletId}`, {
@@ -169,8 +186,6 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
 };
 
 const getWalletBalance = async (inKey: string) => {
-  //console.log(`getWalletBalance starting ... (inKey: ${inKey})`);
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallet`, {
       method: 'GET',
@@ -199,9 +214,6 @@ const getUserWallets = async (
   adminKey: string,
   userId: string,
 ): Promise<Wallet[] | null> => {
-  /*console.log(
-    `getUserWallets starting ... (adminKey: ${adminKey}, userId: ${userId})`,
-  );*/
 
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
@@ -255,27 +267,27 @@ const getUsers = async (
   adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<User[] | null> => {
-  console.log('=== getUsers ===');
-  console.log('Fetching users from /users/api/v1/user');
-  console.log('Filter criteria:', filterByExtra);
+  logger.debug('=== getUsers ===');
+  logger.debug('Fetching users from /users/api/v1/user');
+  logger.debug('Filter criteria:', filterByExtra);
 
   try {
     // Get all users directly from the Users API
     const rawUsers = await getAllUsersFromAPI();
 
     if (!rawUsers || rawUsers.length === 0) {
-      console.log('No users found');
+      logger.debug('No users found');
       return [];
     }
 
-    console.log(`Found ${rawUsers.length} users`);
+    logger.debug(`Found ${rawUsers.length} users`);
 
     // Debug: Log first user to see available fields
     if (rawUsers.length > 0) {
-      console.log('=== SAMPLE RAW USER FROM API ===');
-      console.log('Sample user data:', rawUsers[0]);
-      console.log('Available fields:', Object.keys(rawUsers[0]));
-      console.log('Sample user.external_id:', rawUsers[0].external_id);
+      logger.debug('=== SAMPLE RAW USER FROM API ===');
+      logger.debug('Sample user data:', rawUsers[0]);
+      logger.debug('Available fields:', Object.keys(rawUsers[0]));
+      logger.debug('Sample user.external_id:', rawUsers[0].external_id);
     }
 
     // Map the raw user data to User objects
@@ -369,9 +381,6 @@ const getUser = async (
   adminKey: string,
   userId: string,
 ): Promise<User | null> => {
-  /*console.log(
-    `getUser starting ... (adminKey: ${adminKey}, userId: ${userId})`,
-  );*/
 
   if (!userId || userId === '' || userId === 'undefined') {
     return null;
@@ -427,7 +436,6 @@ const getUser = async (
 };
 
 const getWalletName = async (inKey: string) => {
-  //console.log(`getWalletName starting ... (inKey: ${inKey})`);
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallet`, {
@@ -452,7 +460,6 @@ const getWalletName = async (inKey: string) => {
 };
 
 const getWalletPayments = async (inKey: string) => {
-  //console.log(`getWalletPayments starting ... (inKey: ${inKey})`);
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments?limit=100`, {
@@ -476,9 +483,6 @@ const getWalletPayments = async (inKey: string) => {
 };
 
 const getWalletPayLinks = async (inKey: string, walletId: string) => {
-  /*console.log(
-    `getWalletPayLinks starting ... (inKey: ${inKey}, walletId: ${walletId})`,
-  );*/
 
   try {
     const response = await fetch(
@@ -508,73 +512,8 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
   }
 };
 
-const getWalletById = async (
-  userId: string,
-  id: string,
-): Promise<Wallet | null> => {
-  //console.log(`getWalletById starting ... (userId: ${userId}, id: ${id})`);
-
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-
-    const response = await fetch(
-      `${nodeUrl}/users/api/v1/user/${userId}/wallet`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          //'X-Api-Key': adminKey,
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      console.error(
-        `Error getting wallet by ID response (status: ${response.status})`,
-      );
-
-      return null;
-    }
-
-    const data = await response.json();
-
-    // Find the wallet with a matching inkey that are not deleted.
-    const filteredWallets = data.filter(
-      (wallet: any) => wallet.deleted !== true,
-    );
-    const matchingWallet = filteredWallets.find(
-      (wallet: any) => wallet.id === id,
-    );
-    //console.log('matchingWallet: ', matchingWallet);
-
-    if (!matchingWallet) {
-      console.warn(`Wallet with ID ${id} not found.`);
-      return null;
-    }
-
-    // Map the filterWallets to match the Wallets interface
-    const walletData: Wallet = {
-      id: matchingWallet.id,
-      admin: matchingWallet.admin, // TODO: Coming back as undefined.
-      name: matchingWallet.name,
-      user: matchingWallet.user,
-      adminkey: matchingWallet.adminkey,
-      inkey: matchingWallet.inkey,
-      balance_msat: matchingWallet.balance_msat,
-      deleted: matchingWallet.deleted,
-    };
-
-    return walletData;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
 // May need fixing!
 const getWalletId = async (inKey: string) => {
-  //console.log(`getWalletId starting ... (inKey: ${inKey})`);
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
@@ -609,9 +548,6 @@ const getWalletId = async (inKey: string) => {
 };
 
 const getInvoicePayment = async (lnKey: string, invoice: string) => {
-  /*console.log(
-    `getInvoicePayment starting ... (inKey: ${lnKey}, invoice: ${invoice})`,
-  );*/
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments/${invoice}`, {
@@ -642,11 +578,6 @@ const getAllWallets = async (lnKey: string) => {
 
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
-
-    console.log('=== getAllWallets DEBUG ===');
-    console.log('Fetching from:', `${nodeUrl}/api/v1/wallets`);
-    console.log('Access Token:', accessToken);
-    console.log('===========================');
 
     const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
       method: 'GET',
@@ -699,11 +630,6 @@ const getWalletTransactionsSince = async (
   timestamp: number,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<Transaction[]> => {
-  /*console.log(
-    `getWalletTransactionsSince starting ... (lnKey: ${inKey}, timestamp: ${timestamp}, filterByExtra: ${JSON.stringify(
-      filterByExtra,
-    )}`,
-  );*/
 
   // Note that the timestamp is in seconds, not milliseconds.
   try {
@@ -735,8 +661,6 @@ const getWalletTransactionsSince = async (
 
     // Show all payments (timestamp filter removed)
     const paymentsSince = data;
-
-    console.log("DATA2 (all payments, no timestamp filter)",paymentsSince);
 
     // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra
@@ -817,9 +741,6 @@ const createInvoice = async (
 };
 
 const payInvoice = async (adminKey: string, paymentRequest: string) => {
-  /*console.log(
-    `payInvoice starting ... (adminKey: ${adminKey}, paymentRequest: ${paymentRequest})`,
-  );*/
 
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments`, {
@@ -851,9 +772,6 @@ const createWallet = async (
   objectID: string,
   displayName: string,
 ) => {
-  /*console.log(
-    `createWallet starting ... (apiKey: ${apiKey}, objectID: ${objectID}, displayName: ${displayName})`,
-  );*/
 
   try {
     const url = `${nodeUrl}/api/v1/wallet`;
@@ -884,9 +802,6 @@ const createWallet = async (
 
 // TODO: This method needs checking!
 const getWalletIdByUserId = async (adminKey: string, userId: string) => {
-  /*console.log(
-    `getWalletIdByUserId starting ... (adminKey: ${adminKey}, userId: ${userId})`,
-  );*/
 
   try {
     const response = await fetch(
@@ -919,9 +834,7 @@ const getNostrRewards = async (
   adminKey: string,
   stallId: string,
 ): Promise<Reward[]> => {
-  /*console.log(
-    `getNostrRewards starting ... (adminKey: ${adminKey}, stallId: ${stallId})`,
-  );*/
+
   try {
     const response = await fetch(
       `${nodeUrl}/nostrmarket/api/v1/stall/product/${stallId}`,
@@ -963,11 +876,6 @@ const getUserWalletTransactions = async (
   apiKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<Transaction[]> => {
-  /*console.log(
-    `getNostrRewards starting ... (walletId: ${walletId}, apiKey: ${apiKey}, filterByExtra: ${JSON.stringify(
-      filterByExtra,
-    )}`,
-  );*/
 
   try {
     // Use core API /api/v1/payments with wallet filter instead of deprecated /usermanager/api/v1/transactions
@@ -1016,9 +924,7 @@ const getAllowance = async (
   adminKey: string,
   userId: string,
 ): Promise<Allowance | null> => {
-  console.log(
-    `getNostrRewards starting ... (adminKey: ${adminKey}, stallId: ${userId})`,
-  );
+
   try {
     // TODO: Implement the actual API call to fetch the allowance
     const today = new Date();
@@ -1060,9 +966,6 @@ const getAllPayments = async (
   sortby: string = 'time',
   direction: string = 'desc'
 ): Promise<Transaction[]> => {
-  console.log('=== getAllPayments DEBUG ===');
-  console.log('Fetching from:', `${nodeUrl}/api/v1/payments/all/paginated`);
-  console.log('Parameters:', { limit, offset, sortby, direction });
 
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
@@ -1165,10 +1068,6 @@ const getWalletsPaginated = async (
   limit: number = 100,
   offset: number = 0
 ): Promise<Wallet[]> => {
-  console.log('=== getWalletsPaginated ===');
-  console.log('>>> Requested User ID:', userId);
-  console.log('Fetching from:', `${nodeUrl}/api/v1/wallet/paginated`);
-  console.log('Parameters:', { limit, offset, user_id: userId });
 
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
