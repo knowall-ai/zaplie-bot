@@ -26,8 +26,8 @@ const centeredImageStyle: IRawStyle = {
 };
 
 export function Login() {
-  const { instance, accounts } = useMsal();
-  const [graphData, setGraphData] = useState(null);
+  const { accounts } = useMsal();
+  const [graphData] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export function Login() {
           <Text
             styles={{
               root: {
-                color: '#F2A900',
+                color: '#84cc16',
                 fontSize: '4vw',
                 fontWeight: 'bold',
                 lineHeight: '64px',

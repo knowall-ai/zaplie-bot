@@ -23,7 +23,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -70,7 +70,7 @@
 							}
 						},
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -93,7 +93,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -122,7 +122,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -158,7 +158,7 @@
 							"raw": "{\r\n  \"user_name\": \"mario.desousa@eirevo.ie1\",\r\n  \"extra\": {\r\n    \"aadObjectId\": \"ff7d54cb-e3ca-4a62-9011-887bbf15f7df\",\r\n    \"profileImg\": \"https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName=mario.desousa@eirevo.ie\",\r\n    \"sendingWalletId\": \"b397a4ef19f641458f7895db9024fc14\",\r\n    \"receivingWalletId\": \"9c59e2e1effc4f4dbb0b571a5b680885\",\r\n    \"userType\": \"teammate\"\r\n  }\r\n}"
 						},
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users/2984e3ac627e4fea9fd6dde9c4df83b5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users/2984e3ac627e4fea9fd6dde9c4df83b5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -207,7 +207,7 @@
 							}
 						},
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users/56b310d0539841c29f2c190fc4a341d0",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users/56b310d0539841c29f2c190fc4a341d0",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -238,7 +238,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -267,7 +267,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -422,7 +422,7 @@
 							}
 						],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/api/v1/wallets",
+							"raw": "https://lnbits-test.knowall.ai/api/v1/wallets",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -449,7 +449,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -478,7 +478,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://finickyoil0.lnbits.com/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",

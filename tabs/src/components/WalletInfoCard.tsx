@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import './WalletInfoCard.css';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
-import { getUsers } from '../services/lnbitsServiceLocal';
+import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import SendPayment from './SendPayment';
 import ReceivePayment from './ReceivePayment';
@@ -20,28 +20,41 @@ const WalletYourWalletInfoCard: React.FC = () => {
   const account = accounts[0];
   const [myLNbitDetails, setMyLNbitDetails] = useState<User>();
 
-  const fetchAmountReceived = async () => {
-    console.log('Fetching your wallet ...');
-    
+  const fetchAmountReceived = useCallback(async () => {
+    if (!account?.localAccountId) return;
+
     const currentUserLNbitDetails = await getUsers(adminKey, {
       aadObjectId: account.localAccountId,
     });
 
     if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
-      setMyLNbitDetails(currentUserLNbitDetails[0]);
-      if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
-        const bal =
-          (currentUserLNbitDetails[0].privateWallet?.balance_msat ?? 0) / 1000;
-        setBalance(bal);
+      const user = currentUserLNbitDetails[0];
+
+      // Fetch user's wallets
+      const userWallets = await getUserWallets(adminKey, user.id);
+
+      if (userWallets && userWallets.length > 0) {
+        // Find the Private wallet
+        const privateWallet = userWallets.find(w =>
+          w.name.toLowerCase().includes('private')
+        );
+
+        if (privateWallet) {
+          // Update user object with the wallet
+          user.privateWallet = privateWallet;
+          setMyLNbitDetails(user);
+
+          // Set balance
+          const bal = (privateWallet.balance_msat ?? 0) / 1000;
+          setBalance(bal);
+        }
       }
     }
-  };
-
-
+  }, [account?.localAccountId]);
 
   useEffect(() => {
     fetchAmountReceived();
-  });
+  }, [fetchAmountReceived]);
   const handleOpenReceivePopup = () => {
     setIsReceivePopupOpen(true);
   };

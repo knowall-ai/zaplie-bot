@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import styles from './Leaderboard.module.css';
 import {
   getUsers,
-  getWalletTransactionsSince,
+  getUserWallets,
 } from '../services/lnbitsServiceLocal';
+import { fetchAllowanceWalletTransactions } from '../utils/walletUtilities';
 import ZapIcon from '../images/ZapIcon.svg';
 import circleFirstPlace from '../images/circleFirstPlace.svg';
 import CircleSecondPlace from '../images/circleSecondPlace.svg';
@@ -14,14 +15,6 @@ import DescendingIcon from '../images/descending.svg';
 
 interface LeaderboardProps {
   timestamp?: number | null;
-}
-
-interface PrivateWalletTransaction {
-  userId: string;
-  displayName: string;
-  walletId: string;
-  transaction: Transaction;
-  time: number;
 }
 
 interface UserTransactionSummary {
@@ -54,80 +47,84 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
           throw new Error('Admin key is missing');
         }
 
+        console.log('[Leaderboard] Fetching all users...');
         const usersData = await getUsers(adminKey, null); // Fetch all users
 
-        if (usersData) {
-          // Fetch wallets and transactions for each user's "Private" wallet
-          const privateWalletTransactionsData: PrivateWalletTransaction[] = [];
+        if (!usersData || usersData.length === 0) {
+          throw new Error('No users data returned from API');
+        }
 
-          await Promise.all(
-            usersData.map(async user => {
-              //const wallets = await getUserWallets(adminKey, user.id);
-              //const privateWallet = wallets?.find(wallet =>
-              //  wallet.name.toLowerCase().includes('private'),
-              //); // Find "Private" wallets only.
-              const privateWallet = user.privateWallet;
+        console.log(`[Leaderboard] Found ${usersData.length} users`);
 
-              if (privateWallet) {
-                /*
-                const transactions = await getUserWalletTransactions(
-                  privateWallet.id,
-                  adminKey,
-                  { tag: 'zap' }, // Filter to just zaps
-                );*/
-                const transactions = await getWalletTransactionsSince(
-                  privateWallet.inkey,
-                  paymentsSinceTimestamp,
-                  { tag: 'zap' },
-                );
+        // Fetch all transactions using the same method as Feed
+        console.log('[Leaderboard] Fetching all transactions...');
+        const allTransactions = await fetchAllowanceWalletTransactions(adminKey);
+        console.log(`[Leaderboard] Found ${allTransactions.length} total transactions`);
 
-                transactions.forEach(transaction => {
-                  privateWalletTransactionsData.push({
-                    userId: user.id,
-                    displayName: user.displayName,
-                    walletId: privateWallet.id,
-                    transaction,
-                    time: transaction.time,
-                  });
-                });
-              }
-            }),
-          );
+        // Create a map of wallet_id to user for quick lookup
+        const walletToUserMap: { [walletId: string]: User } = {};
 
-          // Group and sum amounts by users
-          const transactionSummary: { [key: string]: UserTransactionSummary } =
-            {};
+        await Promise.all(
+          usersData.map(async user => {
+            const wallets = await getUserWallets(adminKey, user.id);
+            if (wallets) {
+              wallets.forEach(wallet => {
+                walletToUserMap[wallet.id] = user;
+              });
+            }
+          })
+        );
 
-          privateWalletTransactionsData.forEach(entry => {
-            const { userId, displayName, walletId, transaction } = entry;
-            const amountInSats = transaction.amount / 1000; // Convert msats to sats
+        console.log(`[Leaderboard] Created wallet map with ${Object.keys(walletToUserMap).length} wallets`);
+
+        // Filter transactions based on timestamp if provided
+        const filteredTransactions = paymentsSinceTimestamp && paymentsSinceTimestamp > 0
+          ? allTransactions.filter(transaction => {
+              const transactionTime = typeof transaction.time === 'number'
+                ? transaction.time
+                : new Date(transaction.time).getTime() / 1000;
+              return transactionTime >= paymentsSinceTimestamp;
+            })
+          : allTransactions;
+
+        console.log(`[Leaderboard] After timestamp filter: ${filteredTransactions.length} transactions`);
+
+        // Group and sum amounts by users
+        const transactionSummary: { [key: string]: UserTransactionSummary } = {};
+
+        filteredTransactions.forEach(transaction => {
+          const user = walletToUserMap[transaction.wallet_id];
+
+          if (user && transaction.amount < 0) {  // Only count outgoing payments (sent zaps)
+            const userId = user.id;
+            const amountInSats = Math.abs(transaction.amount) / 1000; // Convert msats to sats
 
             if (!transactionSummary[userId]) {
               transactionSummary[userId] = {
                 userId,
-                displayName,
-                walletId,
+                displayName: user.displayName,
+                walletId: transaction.wallet_id,
                 totalAmountSats: 0,
-                rank: 0, // Initial rank, to be assigned later
+                rank: 0,
               };
             }
 
-            // Sum the amounts
             transactionSummary[userId].totalAmountSats += amountInSats;
-          });
+          }
+        });
 
-          // Convert the summary object to an array and assign ranks
-          const summaryArray = Object.values(transactionSummary);
+        console.log(`[Leaderboard] Grouped into ${Object.keys(transactionSummary).length} users`);
 
-          summaryArray.sort((a, b) => b.totalAmountSats - a.totalAmountSats); // Sort by amount in descending order
-          summaryArray.forEach((userSummary, index) => {
-            userSummary.rank = index + 1; // Assign ranks based on the sorted order
-          });
+        // Convert the summary object to an array and assign ranks
+        const summaryArray = Object.values(transactionSummary);
 
-          setUserTransactionSummary(summaryArray);
-        } else {
-          throw new Error('No users data returned from API');
-        }
+        summaryArray.sort((a, b) => b.totalAmountSats - a.totalAmountSats); // Sort by amount in descending order
+        summaryArray.forEach((userSummary, index) => {
+          userSummary.rank = index + 1; // Assign ranks based on the sorted order
+        });
+
+        console.log('[Leaderboard] Final summary:', summaryArray);
+        setUserTransactionSummary(summaryArray);
       } catch (error: unknown) {
         if (error instanceof Error) {
           setError(`Failed to fetch users: ${error.message}`);

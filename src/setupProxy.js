@@ -37,16 +37,19 @@ module.exports = function(app) {
     })
   );
 
+  // REMOVED: UserManager proxy - deprecated extension no longer used
+  // UserManager API (/usermanager/api/v1) has been replaced with core Users API (/users/api/v1)
+  // and standard wallet/payment endpoints (/api/v1/wallets, /api/v1/payments)
+
   app.use(
-    '/usermanager/api/v1',
+    '/users/api/v1',
     createProxyMiddleware({
       target: target,
       changeOrigin: true,
       logLevel: 'debug',
-      pathRewrite: { '^/usermanager/api/v1': '/usermanager/api/v1' },
+      pathRewrite: { '^/users/api/v1': '/users/api/v1' },
       onProxyReq: (proxyReq, req, res) => {
         console.log(`Proxying request to: ${target}${req.url}`);
-        //proxyReq.setHeader('X-Api-Key', apiKey);
         console.log('Request Headers:', JSON.stringify(proxyReq.getHeaders()));
       },
       onProxyRes: (proxyRes, req, res) => {

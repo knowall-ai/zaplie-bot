@@ -12,11 +12,10 @@ const Home: React.FC = () => {
   });
   const { cache, setCache } = useCache();
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [totalZaps, setTotalZaps] = useState<number>(0);
 
   const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
@@ -28,24 +27,14 @@ const Home: React.FC = () => {
       try {
         if (!cache['allUsers']) {
           const allUsers = await getUsers(adminKey, {});
+          console.log('allUsers', allUsers);
           if (allUsers) {
             setCache('allUsers', allUsers);
             setUsers(allUsers);
           }
         } else {
-          console.log('Loading Users....');
+          console.log('Loading Users from cache....');
           setUsers(cache['allUsers']);
-
-          if (users.length === 0) {
-            {
-              const allUsers = await getUsers(adminKey, {});
-              if (allUsers) {
-                setCache('allUsers', allUsers);
-                setUsers(allUsers);
-              }
-              console.log('Users:', cache['allUsers']);
-            }
-          }
         }
       } catch (error) {
         if (error instanceof Error) {
@@ -63,15 +52,8 @@ const Home: React.FC = () => {
           setCache('allZaps', allZaps);
           setZaps(allZaps);
         } else {
-          console.log('cache:', cache['allZaps']);
+          console.log('Loading Zaps from cache:', cache['allZaps']);
           setZaps(cache['allZaps']);
-          if (zaps.length === 0) {
-            const allZaps = await fetchAllowanceWalletTransactions(adminKey);
-            console.log('allZaps', allZaps);
-            setCache('allZaps', allZaps);
-            setZaps(allZaps);
-          }
-          setLoading(false);
         }
       } catch (err) {
         setError(
@@ -83,7 +65,8 @@ const Home: React.FC = () => {
     };
 
     fetchZaps();
-  }, [adminKey, cache, setCache]); // Add dependencies to ensure the effect runs when cache or setCache changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminKey]); // cache and setCache are from context and are stable, intentionally excluded
 
   return (
     <div style={{ background: '#1F1F1F', paddingBottom: 40 }}>

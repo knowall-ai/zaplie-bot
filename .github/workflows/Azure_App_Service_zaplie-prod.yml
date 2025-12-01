@@ -12,7 +12,6 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    environment: Prod
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -27,6 +26,15 @@ jobs:
       - name: npm install, build, and test
         env:
           CI: false
+          REACT_APP_LNBITS_NODE_URL: ${{ secrets.REACT_APP_LNBITS_NODE_URL }}
+          REACT_APP_LNBITS_USERNAME: ${{ secrets.REACT_APP_LNBITS_USERNAME }}
+          REACT_APP_LNBITS_PASSWORD: ${{ secrets.REACT_APP_LNBITS_PASSWORD }}
+          REACT_APP_LNBITS_ADMINKEY: ${{ secrets.REACT_APP_LNBITS_ADMINKEY }}
+          REACT_APP_LNBITS_STORE_ID: ${{ secrets.REACT_APP_LNBITS_STORE_ID }}
+          REACT_APP_LNBITS_STORE_OWNER_EMAIL: ${{ secrets.REACT_APP_LNBITS_STORE_OWNER_EMAIL }}
+          REACT_APP_TENANT_ID: ${{ secrets.REACT_APP_TENANT_ID }}
+          REACT_APP_AAD_CLIENT_ID: ${{ secrets.REACT_APP_AAD_CLIENT_ID }}
+          REACT_APP_LNBITS_POINTS_LABEL: ${{ secrets.REACT_APP_LNBITS_POINTS_LABEL }}
         run: |
           cd tabs
           npm install
@@ -41,54 +49,19 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment:
-      name: Prod
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
 
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: 'Ensure Slot Exists'
-        run: |
-          if [[ -n "${{ github.event.pull_request.number }}" ]]; then
-                SLOT_NAME="pr-${{ github.event.pull_request.number }}"
-              else
-                SLOT_NAME="production"
-              fi
-          RESOURCE_GROUP="rg-zaplie-dev"
-          APP_NAME="zaplie-dev"
-          echo "Using slot: $SLOT_NAME"
-    
-          # Check if the slot exists
-          SLOT_EXISTS=$(az webapp deployment slot list --resource-group $RESOURCE_GROUP --name $APP_NAME --query "[?name=='$SLOT_NAME']" -o tsv)
-    
-          # If the slot doesn't exist, create it
-          if [[ -z "$SLOT_EXISTS" ]]; then
-            echo "Slot $SLOT_NAME does not exist. Creating..."
-            az webapp deployment slot create --resource-group $RESOURCE_GROUP --name $APP_NAME --slot $SLOT_NAME
-          else
-            echo "Slot $SLOT_NAME already exists."
-          fi
-        shell: bash
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
-          app-name: 'zaplie-dev'
-          slot-name: ${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || 'production' }}
+          app-name: 'zaplie-prod-webapp'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
 
           

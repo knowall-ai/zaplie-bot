@@ -1,6 +1,6 @@
 {
   "navigationFallback": {
     "rewrite": "/",
-    "exclude": ["/api/*", "/usermanager/api/*", "/users/api/*", "/lnurlp/api/*"]
+    "exclude": ["/api/*", "/users/api/*", "/lnurlp/api/*"]
   }
 }

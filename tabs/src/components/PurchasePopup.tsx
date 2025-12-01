@@ -3,9 +3,6 @@ import styles from './PurchasePopup.module.css';
 
 import { RewardNameContext } from './RewardNameContext';
 
-
-const lnbitsLabel = process.env.REACT_APP_LNBITS_POINTS_LABEL as string;
-
 interface PurchasePopupProps {
   onClose: () => void;
   wallet: Wallet;
@@ -42,17 +39,18 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
     onClose();
   };
 
+  const rewardNameContext = useContext(RewardNameContext);
+  const rewardsName = rewardNameContext?.rewardName || '';
+
   // Log wallet ID and balance to the console
   useEffect(() => {
     console.log('Wallet ID:', wallet.id);
     console.log('Balance:', wallet.balance_msat / 1000, rewardsName);
-  }, [wallet]);
+  }, [wallet, rewardsName]);
 
-  const rewardNameContext = useContext(RewardNameContext);
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
   }
-const rewardsName = rewardNameContext.rewardName;
 
 const message = hasEnoughSats
 ? `Please confirm you would like to purchase this reward.`

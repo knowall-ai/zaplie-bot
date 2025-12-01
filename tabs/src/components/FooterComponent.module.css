@@ -33,7 +33,7 @@
   transition: all 0.3s ease;
 }
 .navigation a:hover {
-  color: #F2A900;
+  color: #84cc16;
 }
 
 .attribution {
@@ -60,19 +60,20 @@
 }
 
 .knowallBadge {
-  background: linear-gradient(135deg, #F2A900 0%, #FF8C00 100%);
+  background: #84cc16;
   color: #1a1a1a;
   padding: 3px 10px;
   border-radius: 12px;
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.5px;
-  box-shadow: 0 2px 6px rgba(242, 169, 0, 0.3);
+  box-shadow: 0 2px 6px rgba(132, 204, 22, 0.3);
   display: inline-block;
   transition: all 0.3s ease;
+  border: 1px solid #84cc16;
 }
 
 .knowallLink:hover .knowallBadge {
-  box-shadow: 0 4px 12px rgba(242, 169, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(132, 204, 22, 0.5);
   transform: scale(1.05);
 }

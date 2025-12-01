@@ -1,6 +1,6 @@
-import { FunctionComponent, useEffect, useState, useRef, useContext } from 'react';
+import { FunctionComponent, useEffect, useState, useRef, useContext, useCallback } from 'react';
 import styles from './UserListComponent.module.css';
-import { getUsers } from '../services/lnbitsServiceLocal';
+import { getUserWallets } from '../services/lnbitsServiceLocal';
 import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
 
@@ -11,28 +11,65 @@ const UserListComponent: FunctionComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const fetchCalled = useRef(false); // Ref to track if fetchUsers has been called
-  const { cache, setCache } = useCache();
+  const { cache } = useCache();
 
-  const fetchUsers = async () => {
-    //Load users from Cache or paraneter
-    console.log('load all ALL users in USERS');
+  const fetchUsers = useCallback(async () => {
+    //Load users from Cache or parameter
     setLoading(true);
     setError(null);
 
-    const allUsers = cache['allUsers'] as User[];
-    console.log('load all users in USER comp', allUsers);
-    setUsers(allUsers);
-    setLoading(false);
-    
-  };
+    try {
+      const allUsers = cache['allUsers'] as User[];
+
+      if (!allUsers || allUsers.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch wallets for each user
+      const usersWithWallets = await Promise.all(
+        allUsers.map(async (user) => {
+          try {
+            const wallets = await getUserWallets(adminKey, user.id);
+
+            if (wallets && wallets.length > 0) {
+              const privateWallet = wallets.find(w =>
+                w.name.toLowerCase().includes('private')
+              );
+              const allowanceWallet = wallets.find(w =>
+                w.name.toLowerCase().includes('allowance')
+              );
+
+              return {
+                ...user,
+                privateWallet: privateWallet || null,
+                allowanceWallet: allowanceWallet || null,
+              };
+            }
+
+            return user;
+          } catch (err) {
+            console.error(`[UserList] Error fetching wallets for user ${user.displayName}:`, err);
+            return user;
+          }
+        })
+      );
+
+      setUsers(usersWithWallets);
+    } catch (err) {
+      console.error('[UserList] Error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  }, [cache]);
 
   useEffect(() => {
-    
     if (!fetchCalled.current) {
       fetchCalled.current = true;
       fetchUsers();
     }
-  }, []);
+  }, [fetchUsers]);
   const rewardNameContext = useContext(RewardNameContext);
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
@@ -99,7 +136,12 @@ const rewardsName = rewardNameContext.rewardName;
                       alt=""
                       src={user.profileImg ? user.profileImg : 'profile.png'}
                     />
-                    <div className={styles.userName}>{user.displayName}</div>
+                    <div className={styles.userName}>
+                      {/* Show displayName if it's not a UUID-like ID, otherwise show email or 'Unknown' */}
+                      {user.displayName && !user.displayName.match(/^[a-f0-9]{32}$/)
+                        ? user.displayName
+                        : user.email || 'Unknown'}
+                    </div>
                   </div>
                   <div className={styles.totalBalance}>
                     {user.type ? user.type : 'Teammate'}

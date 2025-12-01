@@ -53,9 +53,10 @@ interface Transaction {
   amount: number; // in millisatoshis (msats)
   fee: number;
   memo: string;
-  time: number; // Unix timestamp
+  time: number | string; // Unix timestamp (number) or ISO date string
   extra: { [key: string]: any }; // JSON object
   wallet_id: string;
+  bolt11?: string; // Lightning invoice (optional)
 }
 
 interface Allowance {

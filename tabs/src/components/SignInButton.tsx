@@ -2,19 +2,48 @@ import { useMsal } from '@azure/msal-react';
 import { DefaultButton } from '@fluentui/react';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { loginRequest } from '../services/authConfig';
+import { InteractionStatus } from '@azure/msal-browser';
 
 export const SignInButton = () => {
-  const { instance } = useMsal();
+  const { instance, inProgress } = useMsal();
 
   const handleLogin = async () => {
+    // Prevent login if an interaction is already in progress
+    if (inProgress !== InteractionStatus.None) {
+      console.log(`Authentication already in progress: ${inProgress}, please wait...`);
+      return;
+    }
+
+    // Check if there's a stale interaction flag in storage and clear it
+    const interactionKey = 'msal.interaction.status';
+    try {
+      const storedStatus = sessionStorage.getItem(interactionKey) || localStorage.getItem(interactionKey);
+      if (storedStatus && storedStatus !== 'none') {
+        console.log('Clearing stale interaction status:', storedStatus);
+        sessionStorage.removeItem(interactionKey);
+        localStorage.removeItem(interactionKey);
+        // Wait a moment for MSAL to sync
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (e) {
+      console.error('Error checking interaction status:', e);
+    }
+
     const redirectUrl = window.location.href;
 
-    try {
-      // Initialize Teams SDK and check context
-      await microsoftTeams.app.initialize();
-      const context = await microsoftTeams.app.getContext();
+    // Check if running in Teams by looking at the URL or user agent
+    const isInTeams = window.name === 'embedded-page-container' ||
+                      window.navigator.userAgent.includes('Teams/') ||
+                      new URLSearchParams(window.location.search).has('inTeams');
 
-      if (context.app.host.clientType === 'desktop') {
+    if (isInTeams) {
+      console.log('Detected Teams environment');
+
+      try {
+        // Initialize Teams SDK and check context
+        await microsoftTeams.app.initialize();
+        await microsoftTeams.app.getContext();
+
         console.log('Running inside Teams');
 
         // Use the new `authentication.authenticate` method
@@ -39,7 +68,6 @@ export const SignInButton = () => {
           });
 
           console.log('MSAL Token Response:', msalResponse);
-          // Handle successful authentication
         } catch (error) {
           console.error('Error during Teams authentication:', error);
 
@@ -51,35 +79,20 @@ export const SignInButton = () => {
             console.error('Error during interactive login:', interactiveError);
           }
         }
-      } else {
-        console.log('Running in a web browser');
-
-        // Handle web browser authentication
-        try {
-          const msalResponse = await instance.loginPopup({
-            scopes: ['User.Read'],
-            prompt: 'select_account',
-          });
-          
-          // Handle successful authentication
-        } catch (error) {
-          console.error('Error during loginPopup:', error);
-        }
+      } catch (error) {
+        console.error('Teams SDK initialization error:', error);
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      console.log('Running in a web browser');
-      // Handle web browser authentication
+    } else {
+      // Running in a web browser - use redirect instead of popup
+      console.log('Running in a web browser - using redirect flow');
+
       try {
-        const msalResponse = await instance.loginPopup({
+        await instance.loginRedirect({
           scopes: ['User.Read'],
           prompt: 'select_account',
         });
-
-        console.log('MSAL Token Response:', msalResponse);
-        // Handle successful authentication
       } catch (error) {
-        console.error('Error during loginPopup:', error);
+        console.error('Error during loginRedirect:', error);
       }
     }
   };
@@ -87,8 +100,9 @@ export const SignInButton = () => {
   return (
     <div>
       <DefaultButton
-        text="Sign In"
+        text={inProgress !== InteractionStatus.None ? "Signing In..." : "Sign In"}
         onClick={handleLogin}
+        disabled={inProgress !== InteractionStatus.None}
         styles={{
           root: {
             color: 'black',

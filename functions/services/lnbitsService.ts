@@ -94,13 +94,12 @@ const getWallets = async (
   );
 
   try {
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
+    const accessToken = await getAccessToken(req, `${username}`, `${password}`);
+    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
-        'X-Api-Key': adminKey,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
@@ -210,6 +209,9 @@ const getUserWallets = async (
   }
 };
 
+// Note: LNbits v1+ core API doesn't provide user listing/filtering with custom metadata.
+// User management with custom metadata must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const getUsers = async (
   req: HttpRequest,
   adminKey: string,
@@ -221,64 +223,16 @@ const getUsers = async (
     )})`,
   );
 
-  try {
-    // URL encode the extra filter
-    //const encodedExtra = encodeURIComponent(JSON.stringify(filterByExtra));
-    const encodedExtra = JSON.stringify(filterByExtra);
-    //console.log('encodedExtra:', encodedExtra);
-
-    const response = await fetch(
-      `${lnbiturl}/usermanager/api/v1/users?extra=${encodedExtra}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting users response (status: ${response.status})`,
-      );
-    }
-
-    const data = await response.json() as User[];
-
-    console.log('getUsers data:', data);
-
-    // Map the users to match the User interface
-    const usersData: any = await Promise.all(
-      data.map(async (user: any) => {
-        const extra = user.extra || {}; // Provide a default empty object if user.extra is null
-
-        let privateWallet: Wallet | null = null;
-        let allowanceWallet: Wallet | null = null;
-
-        if (user.extra) {
-          privateWallet = await getWalletById( user.id, extra.privateWalletId);
-          allowanceWallet = await getWalletById(  user.id, extra.allowanceWalletId);
-        }
-
-        return {
-          id: user.id,
-          displayName: user.name,
-          aadObjectId: extra.aadObjectId || null,
-          email: user.email,
-          privateWallet: privateWallet,
-          allowanceWallet: allowanceWallet,
-        };
-      }),
-    );
-
-    return usersData;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
+  // LNbits v1+ core API doesn't support user listing with custom metadata
+  // This functionality must be implemented at the application layer
+  throw new Error(
+    'getUsers is not supported by LNbits v1+ core API. Implement user management at application layer.',
+  );
 };
 
+// Note: LNbits v1+ core API doesn't provide user creation with custom metadata.
+// User creation must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const createUser = async (
   req: HttpRequest,
   adminKey: string,
@@ -294,70 +248,19 @@ const createUser = async (
     )}))`,
   );
 
-  try {
-    // Prepare the request body
-    const requestBody = {
-      user_name: userName,
-      wallet_name: walletName,
-      email: email || '',
-      password: password || '',
-      extra: extra,
-    };
-
-    console.log(JSON.stringify(requestBody));
-
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/users`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': adminKey,
-      },
-      body: JSON.stringify(requestBody), // Stringify the request body
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting create user response (status: ${response.status})`,
-      );
-    }
-
-    const user = await response.json() as any;
-
-    // Await the wallet promises
-    const privateWallet = await getWalletById(      
-      user.id,
-      user.extra?.privateWalletId,
-    );
-    const allowanceWallet = await getWalletById(     
-      user.id,
-      user.extra?.allowanceWalletId,
-    );
-
-    // Map the user to match the User interface
-    const userData: User = {
-      id: user.id,
-      displayName: user.name,
-      profileImg:
-        'https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName=' +
-        user.email, // TODO: Remove hardecoded URL
-      aadObjectId: user.extra?.aadObjectId || null,
-      email: user.email,
-      privateWallet: privateWallet,
-      allowanceWallet: allowanceWallet,
-    };
-
-    console.log('userData:', userData);
-
-    return userData;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+  // LNbits v1+ core API doesn't support user creation with custom metadata
+  // This functionality must be implemented at the application layer
+  throw new Error(
+    'createUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
+  );
 };
 
 
 
 
+// Note: LNbits v1+ core API doesn't provide user updates with custom metadata.
+// User updates must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const updateUser = async (
   req: HttpRequest,
   adminKey: string,
@@ -370,65 +273,15 @@ const updateUser = async (
     )}))`,
   );
 
-  try {
-    // Prepare the request body
-    const requestBody = {
-      extra: extra,
-    };
-
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(
-      `${lnbiturl}/usermanager/api/v1/users/${userId}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          //Authorization: `Bearer ${accessToken}`,
-          'X-Api-Key': adminKey,
-        },
-        body: JSON.stringify(requestBody), // Stringify the request body
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`Error getting response (status: ${response.status})`);
-    }
-
-    const data = await response.json() as any;
-
-    // Await the wallet promises
-    const privateWallet = await getWalletById(
-      adminKey,
-      data.extra?.privateWalletId,
-    );
-    const allowanceWallet = await getWalletById(
-      adminKey,
-      data.extra?.allowanceWalletId,
-    );
-
-    console.log('privateWallet 111:', privateWallet);
-    console.log('allowanceWallet 111:', allowanceWallet);
-
-    // Map the user to match the User interface
-    const userData: User = {
-      id: data.id,
-      displayName: data.name,
-      profileImg: data.profileImg,
-      aadObjectId: data.extra?.aadObjectId || null,
-      email: data.email,
-      privateWallet: privateWallet,
-      allowanceWallet: allowanceWallet,
-    };
-
-    console.log('updateUser usersData:', userData);
-
-    return userData;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
+  // LNbits v1+ core API doesn't support user updates with custom metadata
+  // This functionality must be implemented at the application layer
+  throw new Error(
+    'updateUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
+  );
 };
 
+// Note: LNbits v1+ core API uses /api/v1/wallet endpoint for wallet creation
+// Wallet creation is now done through the core API, not UserManager
 const createWallet = async (
   req: HttpRequest,
   adminKey: string,
@@ -440,25 +293,25 @@ const createWallet = async (
   );
 
   try {
+    const accessToken = await getAccessToken(req, `${username}`, `${password}`);
+
     // Prepare the request body
     const requestBody = {
       user_id: userId,
       wallet_name: walletName,
     };
 
-    //const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/usermanager/api/v1/wallets`, {
+    const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        //Authorization: `Bearer ${accessToken}`,
-        'X-Api-Key': adminKey,
+        Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(requestBody), // Stringify the request body
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      throw new Error(`Error getting response (status: ${response.status})`);
+      throw new Error(`Error creating wallet (status: ${response.status})`);
     }
 
     const data = await response.json() as any;
@@ -923,33 +776,18 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
   }
 };
 
+// Note: LNbits v1+ core API doesn't provide user details with custom metadata.
+// User details must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const getUser = async(req: HttpRequest, userId: string, adminKey: string): Promise<any> =>{
-  
-  console.log(`Getting User starting ... (adminKey: ${adminKey}, userId: ${userId})`);
-  const { siteUrl } = getCredentials(req);
-  const lnbiturl = siteUrl
-   
-  try {
-     const url = `${lnbiturl}/usermanager/api/v1/users/${userId}`;
-     console.log('URL:', url);
-      const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-              'Content-Type': 'application/json',
-              'X-Api-Key': adminKey,
-          },
-      });
 
-      if (!response.ok) {
-          throw new Error(`Error getting user (status: ${response.status}): ${response.statusText}`);
-      }
+  console.log(`getUser starting ... (adminKey: ${adminKey}, userId: ${userId})`);
 
-      const data = await response.json();
-      return data;
-  } catch (error) {
-      console.error('Error in getUser:', error);
-      return null;
-  }
+  // LNbits v1+ core API doesn't support user details with custom metadata
+  // This functionality must be implemented at the application layer
+  throw new Error(
+    'getUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
+  );
 }
 
 async function topUpWallet(walletId: string, amount: number,  req: HttpRequest): Promise<void> {

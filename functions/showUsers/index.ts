@@ -41,6 +41,9 @@ const showUsers: AzureFunction = async function (context: Context, req: HttpRequ
     }
 };
 
+// Note: LNbits v1+ core API doesn't provide user listing with custom metadata.
+// User management with custom metadata must be handled at the application layer.
+// This function is deprecated and should be replaced with application-level user management.
 const getUsers = async (
     req: HttpRequest,
     adminKey: string,
@@ -49,28 +52,12 @@ const getUsers = async (
     console.log(`getUsers starting ... (adminKey: ${adminKey})`);
 
     console.log(`LNBits URL: ${lnbiturl}`);
-    try {  
-        const response = await fetch(
-            `${lnbiturl}/usermanager/api/v1/users`,
-            {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Api-Key': adminKey,
-                },
-            },
-        );
 
-        if (!response.ok) {
-            throw new Error(`Error getting users (status: ${response.status}): ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Error in getUsers:', error);
-        return null;
-    }
+    // LNbits v1+ core API doesn't support user listing with custom metadata
+    // This functionality must be implemented at the application layer
+    throw new Error(
+        'getUsers is not supported by LNbits v1+ core API. Implement user management at application layer.',
+    );
 };
 
 export default showUsers;

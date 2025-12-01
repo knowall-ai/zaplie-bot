@@ -3,13 +3,11 @@ import './WalletAllowanceComponent.css'; // Assuming you'll use CSS for styling
 import BatteryImageDisplay from './BatteryImageDisplay';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
 import Calendar from '../images/Calendar.svg';
-import { getAllowance, getUsers, getWalletTransactionsSince } from '../services/lnbitsServiceLocal';
+import { getAllowance, getUsers, getUserWallets, getWalletTransactionsSince } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
-import WalletTransactionLog from './WalletTransactionLog';
 import { RewardNameContext } from './RewardNameContext';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
-let spentSats =0
 
 interface AllowanceCardProps {
   // Define the props here if there are any, for example:
@@ -27,33 +25,55 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
   useEffect(() => {
     const account = accounts[0];
 
-    const fetchAmountReceived = async () => {
+    if (!account?.localAccountId) {
+      return;
+    }
 
+    const fetchAmountReceived = async () => {
       const user = await getUsers(adminKey, {
         aadObjectId: account.localAccountId,
       });
 
       if (user && user.length > 0) {
-        const balance = (user[0].allowanceWallet?.balance_msat ?? 0) / 1000;
-        setBalance(balance);
+        const currentUser = user[0];
 
-        const allowance = await getAllowance(adminKey, user[0].id);
-        
-        if (allowance) {
-          setAllowance(allowance);
-       
-          setBatteryPercentage ((balance /allowance?.amount ) * 100);
-          
-        } else {
-          setAllowance(null);
-         const  batteryPercentage = 0;
+        // Fetch user's wallets
+        const userWallets = await getUserWallets(adminKey, currentUser.id);
+
+        if (userWallets && userWallets.length > 0) {
+          // Find the Allowance wallet
+          const allowanceWallet = userWallets.find(w =>
+            w.name.toLowerCase().includes('allowance')
+          );
+
+          if (allowanceWallet) {
+            const balance = (allowanceWallet.balance_msat ?? 0) / 1000;
+            setBalance(balance);
+
+            const allowanceData = await getAllowance(adminKey, currentUser.id);
+
+            if (allowanceData) {
+              setAllowance(allowanceData);
+              const batteryPct = (balance / allowanceData.amount) * 100;
+              setBatteryPercentage(batteryPct);
+            } else {
+              setAllowance(null);
+            }
+
+            const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
+            const encodedExtra = {};
+            const transaction = await getWalletTransactionsSince(
+              allowanceWallet.inkey,
+              sevenDaysAgo,
+              encodedExtra
+            );
+
+            const spent = transaction
+              .filter(transaction => transaction.amount < 0)
+              .reduce((total, transaction) => total + Math.abs(transaction.amount), 0) / 1000;
+            setSpentSats(spent);
+          }
         }
-        const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
-        const encodedExtra = {}
-       const userid = user[0].allowanceWallet?.inkey as string;
-       const transaction = await getWalletTransactionsSince(userid,sevenDaysAgo,encodedExtra)
-       setSpentSats (transaction.filter(transaction => transaction.amount < 0).reduce((total,transaction)=> total + Math.abs(transaction.amount),0) /1000)
-
       }
     };
 
