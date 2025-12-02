@@ -3,14 +3,17 @@ import { Link } from 'react-router-dom';
 import styles from './FooterComponent.module.css';
 import SignInSignOutButton from './SignInSignOutButton';
 import { KNOWALL_CONSTANTS } from '../constants/branding';
+import { useTeamsContext } from '../utils/useTeamsContext';
 
 type FooterComponentProps = {
   hidden: boolean;
 };
 
 const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
+  const isInTeams = useTeamsContext();
 
-  if (hidden) {
+  // Hide navigation if explicitly hidden via prop or if running in Teams
+  if (hidden || isInTeams) {
     return null;
 }
   return (
