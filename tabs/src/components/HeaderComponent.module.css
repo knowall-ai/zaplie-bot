@@ -47,6 +47,10 @@
   gap: 16px;
 }
 
+.userInfoWrapper {
+  position: relative;
+}
+
 .userInfo {
   display: flex;
   align-items: center;
@@ -56,11 +60,63 @@
   border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .userInfo:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(132, 204, 22, 0.3);
+}
+
+.dropdownArrow {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 150px;
+  background: rgba(45, 43, 44, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 1001;
+  animation: dropdownFadeIn 0.2s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.dropdownItem:hover {
+  background: rgba(132, 204, 22, 0.15);
+  color: #84cc16;
 }
 
 .avatar {
@@ -120,8 +176,16 @@
     display: none;
   }
 
+  .dropdownArrow {
+    display: none;
+  }
+
   .userInfo {
     padding: 6px;
+  }
+
+  .dropdownMenu {
+    min-width: 120px;
   }
 }
 

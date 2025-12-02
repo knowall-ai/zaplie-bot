@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useMsal, useAccount } from '@azure/msal-react';
 import { Link } from 'react-router-dom';
+import * as microsoftTeams from '@microsoft/teams-js';
 import styles from './HeaderComponent.module.css';
-import { KNOWALL_CONSTANTS } from '../constants/branding';
 
 const HeaderComponent: React.FC = () => {
-  const { accounts } = useMsal();
+  const { instance, accounts } = useMsal();
   const account = useAccount(accounts[0] || {});
   const [userName, setUserName] = useState<string>('');
   const [userEmail, setUserEmail] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [isInTeams, setIsInTeams] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (account) {
@@ -16,6 +19,50 @@ const HeaderComponent: React.FC = () => {
       setUserEmail(account.username || '');
     }
   }, [account]);
+
+  // Initialize Teams SDK and detect if running in Teams
+  useEffect(() => {
+    microsoftTeams.app
+      .initialize()
+      .then(() => {
+        microsoftTeams.app
+          .getContext()
+          .then(() => {
+            setIsInTeams(true);
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await instance.logoutPopup({
+        postLogoutRedirectUri: window.location.origin + '/login',
+        account: accounts[0] || null,
+      });
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
+  const toggleDropdown = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+  };
 
   if (!account) {
     return null;
@@ -41,14 +88,26 @@ const HeaderComponent: React.FC = () => {
         </div>
 
         <div className={styles.rightSection}>
-          <div className={styles.userInfo}>
-            <div className={styles.avatar}>
-              {getInitials(userName)}
+          <div className={styles.userInfoWrapper} ref={dropdownRef}>
+            <div className={styles.userInfo} onClick={toggleDropdown}>
+              <div className={styles.avatar}>
+                {getInitials(userName)}
+              </div>
+              <div className={styles.userDetails}>
+                <div className={styles.userName}>{userName}</div>
+                <div className={styles.userEmail}>{userEmail}</div>
+              </div>
+              <div className={styles.dropdownArrow}>
+                {isDropdownOpen ? '▲' : '▼'}
+              </div>
             </div>
-            <div className={styles.userDetails}>
-              <div className={styles.userName}>{userName}</div>
-              <div className={styles.userEmail}>{userEmail}</div>
-            </div>
+            {isDropdownOpen && (
+              <div className={styles.dropdownMenu}>
+                <button className={styles.dropdownItem} onClick={handleLogout}>
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
