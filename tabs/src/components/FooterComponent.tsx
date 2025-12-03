@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import styles from './FooterComponent.module.css';
-import SignInSignOutButton from './SignInSignOutButton';
 import { KNOWALL_CONSTANTS } from '../constants/branding';
 
 type FooterComponentProps = {
@@ -21,7 +20,6 @@ const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
         <Link to="/rewards">Rewards</Link>
         <Link to="/wallet">Wallet</Link>
         <Link to="/settings">Settings</Link>
-        <SignInSignOutButton />
       </div>
       <div className={styles.attribution}>
         <span className={styles.poweredBy}>Powered by</span>

@@ -4,7 +4,8 @@
     flex-direction: column;
     min-height: 100vh;
   }
-  
+
   .contentWrap {
     flex: 1;
+    padding-top: 70px; /* Add padding for fixed header */
   }
