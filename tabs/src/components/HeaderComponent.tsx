@@ -16,7 +16,7 @@ const HeaderComponent: React.FC = () => {
   const dropdownButtonRef = useRef<HTMLDivElement>(null);
 
   // Use shared Teams auth hook
-  const { handleLogout, isLoggingOut, isTeamsInitializing } = useTeamsAuth();
+  const { handleLogout, isLoggingOut, isTeamsInitializing, isInTeams } = useTeamsAuth();
 
   useEffect(() => {
     if (account) {
@@ -99,6 +99,11 @@ const HeaderComponent: React.FC = () => {
   // Show loading skeleton during authentication initialization
   const isLoading = inProgress !== InteractionStatus.None || isTeamsInitializing;
 
+  // Hide header when running inside Microsoft Teams for cleaner integration
+  if (isInTeams) {
+    return null;
+  }
+
   if (isLoading) {
     return (
       <header className={styles.header}>
@@ -145,6 +150,14 @@ const HeaderComponent: React.FC = () => {
             <span className={styles.appName}>Zaplie</span>
           </Link>
         </div>
+
+        <nav className={styles.navigation}>
+          <Link to="/feed" className={styles.navLink}>Feed</Link>
+          <Link to="/users" className={styles.navLink}>Users</Link>
+          <Link to="/rewards" className={styles.navLink}>Rewards</Link>
+          <Link to="/wallet" className={styles.navLink}>Wallet</Link>
+          <Link to="/settings" className={styles.navLink}>Settings</Link>
+        </nav>
 
         <div className={styles.rightSection}>
           <div className={styles.userInfoWrapper} ref={dropdownRef}>

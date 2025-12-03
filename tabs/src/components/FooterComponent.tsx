@@ -11,19 +11,23 @@ type FooterComponentProps = {
 const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
   const isInTeams = useTeamsContext();
 
-  // Hide navigation if explicitly hidden via prop or if running in Teams
-  if (hidden || isInTeams) {
+  if (hidden) {
     return null;
-}
+  }
+
   return (
     <footer className={styles.footer}>
-      <div className={styles.navigation}>
-        <Link to="/feed">Feed</Link>
-        <Link to="/users">Users</Link>
-        <Link to="/rewards">Rewards</Link>
-        <Link to="/wallet">Wallet</Link>
-        <Link to="/settings">Settings</Link>
-      </div>
+      {/* Show navigation links ONLY in Teams context */}
+      {isInTeams && (
+        <div className={styles.navigation}>
+          <Link to="/feed">Feed</Link>
+          <Link to="/users">Users</Link>
+          <Link to="/rewards">Rewards</Link>
+          <Link to="/wallet">Wallet</Link>
+          <Link to="/settings">Settings</Link>
+        </div>
+      )}
+      {/* Always show Powered by KnowAll AI */}
       <div className={styles.attribution}>
         <span className={styles.poweredBy}>Powered by</span>
          <a
@@ -37,7 +41,6 @@ const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
         </a>
       </div>
     </footer>
-
   );
 };
 
