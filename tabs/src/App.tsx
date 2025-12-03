@@ -2,6 +2,9 @@ import { Route, Routes, Navigate, useLocation  } from 'react-router-dom';
 import { useEffect } from 'react';
 // Fluent UI imports
 import { Stack } from '@fluentui/react';
+// Toast notifications
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // MSAL imports
 import { MsalProvider } from '@azure/msal-react';
@@ -56,10 +59,22 @@ function TitleUpdater() {
 
 function App({ pca }: AppProps) {
   return (
-    <MsalProvider instance={pca}> 
+    <MsalProvider instance={pca}>
 
     <RewardNameProvider>
     <TitleUpdater />
+    <ToastContainer
+      position="top-right"
+      autoClose={5000}
+      hideProgressBar={false}
+      newestOnTop
+      closeOnClick
+      rtl={false}
+      pauseOnFocusLoss
+      draggable
+      pauseOnHover
+      theme="dark"
+    />
      <PageLayout> 
      <Stack horizontalAlign="center">    
         <Routes>
