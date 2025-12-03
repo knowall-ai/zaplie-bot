@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import styles from './SendZapsPopup.module.css';
 import { RewardNameContext } from './RewardNameContext';
 import { useCache } from '../utils/CacheContext';
-import { getUserWallets, createInvoice, payInvoice } from '../services/lnbitsServiceLocal';
+import { getUserWallets, createInvoice, payInvoice, getUsers } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
 import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';
@@ -14,11 +14,14 @@ interface SendZapsPopupProps {
   onClose: () => void;
 }
 
+const PRESET_AMOUNTS = [5000, 10000, 25000];
+
 const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [memo, setMemo] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -26,32 +29,48 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
     allowance: null,
     balance: 0,
   });
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [sendAnonymously, setSendAnonymously] = useState(false);
+  const [selectedValue, setSelectedValue] = useState<string>('');
 
-  const { cache } = useCache();
+  const { cache, setCache } = useCache();
   const { accounts } = useMsal();
   const rewardNameContext = useContext(RewardNameContext);
-
-  if (!rewardNameContext) {
-    return null;
-  }
-
-  const rewardsName = rewardNameContext.rewardName;
+  const rewardsName = rewardNameContext?.rewardName ?? 'Sats';
 
   useEffect(() => {
     const loadUsers = async () => {
+      setIsLoadingUsers(true);
       try {
-        const allUsers = cache['allUsers'] as User[];
         const account = accounts[0];
-
-        if (!allUsers || allUsers.length === 0 || !account?.localAccountId) {
+        if (!account?.localAccountId) {
+          setIsLoadingUsers(false);
           return;
         }
 
+        // Get users from cache or fetch them
+        let allUsers = cache['allUsers'] as User[];
+        if (!allUsers || allUsers.length === 0) {
+          console.log('Fetching users from API...');
+          const fetchedUsers = await getUsers(adminKey, {});
+          if (fetchedUsers && fetchedUsers.length > 0) {
+            allUsers = fetchedUsers;
+            setCache('allUsers', fetchedUsers);
+          } else {
+            console.log('No users found');
+            setIsLoadingUsers(false);
+            return;
+          }
+        }
+
+        console.log('All users:', allUsers.length);
+
         // Fetch current user's wallet
         const currentUserData = allUsers.find(u => u.aadObjectId === account.localAccountId);
+        console.log('Current user data:', currentUserData);
+
         if (currentUserData) {
           const wallets = await getUserWallets(adminKey, currentUserData.id);
+          console.log('Current user wallets:', wallets);
           const allowanceWallet = wallets?.find(w => w.name.toLowerCase().includes('allowance'));
 
           setCurrentUserWallets({
@@ -62,14 +81,24 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
 
         // Filter out current user and fetch wallets for others
         const otherUsers = allUsers.filter(u => u.aadObjectId !== account.localAccountId);
+        console.log('Other users:', otherUsers.length);
+
         const usersWithWallets = await Promise.all(
           otherUsers.map(async (user) => {
             try {
               const wallets = await getUserWallets(adminKey, user.id);
-              const privateWallet = wallets?.find(w => w.name.toLowerCase().includes('private'));
+              console.log(`User ${user.displayName} wallets:`, wallets?.map(w => w.name));
+
+              // First try to find a "private" wallet, then fall back to any wallet with an inkey
+              let targetWallet = wallets?.find(w => w.name.toLowerCase().includes('private'));
+              if (!targetWallet && wallets && wallets.length > 0) {
+                // Fall back to first available wallet
+                targetWallet = wallets[0];
+              }
+
               return {
                 ...user,
-                privateWallet: privateWallet || null,
+                privateWallet: targetWallet || null,
               };
             } catch (err) {
               console.error(`Error fetching wallets for user ${user.displayName}:`, err);
@@ -82,16 +111,27 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
       } catch (err) {
         console.error('Error loading users:', err);
         setError('Failed to load users');
+      } finally {
+        setIsLoadingUsers(false);
       }
     };
 
     loadUsers();
-  }, [cache, accounts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts]); // cache and setCache are from context and are stable, intentionally excluded
+
+  if (!rewardNameContext) {
+    return null;
+  }
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
+  };
+
+  const handlePresetAmount = (presetAmount: number) => {
+    setAmount(presetAmount.toString());
   };
 
   const handleSendZap = async () => {
@@ -129,19 +169,18 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
     setError(null);
 
     try {
-      // Create invoice in recipient's private wallet
-      const extra = {
-        from: currentUserWallets.allowance,
-        to: recipient.privateWallet,
-        tag: 'zap',
-      };
+      // Build the memo with anonymous prefix if needed
+      let paymentMemo = memo || 'Zap payment';
+      if (sendAnonymously) {
+        paymentMemo = `[Anonymous] ${paymentMemo}`;
+      }
 
+      // Create invoice in recipient's private wallet
       const paymentRequest = await createInvoice(
         recipient.privateWallet.inkey,
         recipient.privateWallet.id,
         zapAmount,
-        memo || 'Zap payment',
-        extra
+        paymentMemo
       );
 
       if (!paymentRequest) {
@@ -151,8 +190,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
       // Pay the invoice from sender's allowance wallet
       const result = await payInvoice(
         currentUserWallets.allowance.adminkey,
-        paymentRequest,
-        extra
+        paymentRequest
       );
 
       if (result && result.payment_hash) {
@@ -177,82 +215,170 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
     onClose();
   };
 
-  const filteredUsers = users.filter(user =>
-    user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  const selectedUserData = users.find(u => u.id === selectedUser);
   const isSendDisabled = !selectedUser || !amount || parseFloat(amount) <= 0;
+
+  // Get initials for avatar placeholder
+  const getInitials = (name?: string) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name[0]?.toUpperCase() || '?';
+  };
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
       {!isLoading && !success && !error && (
         <div className={styles.popup}>
-          <p className={styles.title}>Send some zaps</p>
-          <p className={styles.text}>
-            Show gratitude, thanks, and recognize awesomeness to others in your team
-          </p>
-
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Select user</label>
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={styles.searchInput}
-            />
-            <select
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className={styles.select}
-            >
-              <option value="">-- Select a user --</option>
-              {filteredUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.displayName || user.email || 'Unknown'}
-                </option>
-              ))}
-            </select>
+          {/* Header Banner with lightning pattern */}
+          <div className={styles.headerBanner}>
+            <div className={styles.avatarContainer}>
+              {selectedUserData ? (
+                <div className={styles.avatarPlaceholder}>
+                  {getInitials(selectedUserData.displayName)}
+                </div>
+              ) : (
+                <div className={styles.avatarPlaceholder}>
+                  <span>⚡</span>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Amount ({rewardsName})</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Enter amount"
-              min="1"
-              className={styles.input}
-            />
+          {/* Popup Content */}
+          <div className={styles.popupContent}>
+            <h2 className={styles.title}>Send some zaps</h2>
+            <p className={styles.text}>
+              Show gratitude, thanks and recognising awesomeness to others in your team
+            </p>
+
+            {/* Two Column Layout */}
+            <div className={styles.formRow}>
+              {/* Left Column - User Selection */}
+              <div className={styles.formColumn}>
+                <div className={styles.formGroup}>
+                  <select
+                    value={selectedUser}
+                    onChange={(e) => setSelectedUser(e.target.value)}
+                    className={styles.select}
+                    disabled={isLoadingUsers}
+                  >
+                    <option value="">
+                      {isLoadingUsers ? 'Loading users...' : 'Send zaps to'}
+                    </option>
+                    {!isLoadingUsers && users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName || user.email || 'Unknown'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* User count info */}
+                {!isLoadingUsers && users.length > 0 && (
+                  <p className={styles.balanceText}>
+                    {users.length} team member{users.length !== 1 ? 's' : ''} available
+                  </p>
+                )}
+              </div>
+
+              {/* Right Column - Amount */}
+              <div className={styles.formColumn}>
+                <div className={styles.formGroup}>
+                  <div className={styles.amountInputRow}>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="Specify amount"
+                      min="1"
+                      className={styles.amountInput}
+                    />
+                    <span className={styles.currencyLabel}>{rewardsName}</span>
+                  </div>
+                </div>
+
+                {/* Preset Amount Buttons */}
+                <div className={styles.presetAmounts}>
+                  {PRESET_AMOUNTS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handlePresetAmount(preset)}
+                      className={
+                        amount === preset.toString()
+                          ? styles.presetButtonActive
+                          : styles.presetButton
+                      }
+                    >
+                      {preset.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Value Dropdown */}
+                <div className={styles.formGroup}>
+                  <select
+                    value={selectedValue}
+                    onChange={(e) => setSelectedValue(e.target.value)}
+                    className={styles.valueSelect}
+                  >
+                    <option value="">Value</option>
+                    <option value="teamwork">Teamwork</option>
+                    <option value="innovation">Innovation</option>
+                    <option value="excellence">Excellence</option>
+                    <option value="integrity">Integrity</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className={styles.formGroup}>
+              <textarea
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="Description"
+                className={styles.textarea}
+                rows={3}
+              />
+            </div>
+
+            {/* Balance Info */}
             <p className={styles.balanceText}>
               Available balance: {currentUserWallets.balance.toLocaleString()} {rewardsName}
             </p>
-          </div>
 
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Message (optional)</label>
-            <textarea
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="Add a message..."
-              className={styles.textarea}
-              rows={3}
-            />
-          </div>
+            {/* Action Row */}
+            <div className={styles.actionRow}>
+              <div className={styles.leftActions}>
+                <button onClick={handleClose} className={styles.cancelButton}>
+                  Cancel
+                </button>
+              </div>
 
-          <div className={styles.actionRow}>
-            <button onClick={handleClose} className={styles.cancelButton}>
-              Cancel
-            </button>
-            <button
-              onClick={handleSendZap}
-              className={isSendDisabled ? styles.sendButtonDisabled : styles.sendButton}
-              disabled={isSendDisabled}
-            >
-              Send from Allowance
-            </button>
+              <div className={styles.rightActions}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={sendAnonymously}
+                    onChange={(e) => setSendAnonymously(e.target.checked)}
+                    className={styles.checkbox}
+                  />
+                  Send anonymously
+                </label>
+
+                <button
+                  onClick={handleSendZap}
+                  className={isSendDisabled ? styles.sendButtonDisabled : styles.sendButton}
+                  disabled={isSendDisabled}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

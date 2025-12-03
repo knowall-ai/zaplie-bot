@@ -116,8 +116,14 @@ const rewardsName = rewardNameContext.rewardName;
             </div>
           </div>
 
-          <div className="col-md-3">
+          <div className="col-md-6 batteryButtonContainer">
             <BatteryImageDisplay value={batteryPercentage} />
+            <button
+              className="sendZapsButton"
+              onClick={() => setShowSendZapsPopup(true)}
+            >
+              Send some zaps
+            </button>
           </div>
         </div>
         <div
@@ -164,16 +170,6 @@ const rewardsName = rewardNameContext.rewardName;
             <div className="spent smallTextFont">
               <b>{spentSats?.toLocaleString()}</b> {rewardsName}
             </div>
-          </div>
-        </div>
-        <div className="row" style={{ paddingTop: '20px', paddingBottom: '20px' }}>
-          <div className="col-md-12">
-            <button
-              className="sendZapsButton"
-              onClick={() => setShowSendZapsPopup(true)}
-            >
-              Send some zaps
-            </button>
           </div>
         </div>
       </div>

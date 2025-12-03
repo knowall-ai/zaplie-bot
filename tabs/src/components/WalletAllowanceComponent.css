@@ -180,3 +180,10 @@ button{
 .sendZapsButton:hover {
   background: #9ed929;
 }
+
+.batteryButtonContainer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+}
