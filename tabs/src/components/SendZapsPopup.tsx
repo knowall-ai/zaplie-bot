@@ -268,11 +268,26 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
                     <option value="">
                       {isLoadingUsers ? 'Loading users...' : 'Send zaps to'}
                     </option>
-                    {!isLoadingUsers && users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.displayName || user.email || 'Unknown'}
-                      </option>
-                    ))}
+                    {!isLoadingUsers && users
+                      .filter((user) => {
+                        // Check if displayName exists and is not a GUID (32 hex chars)
+                        const isGuid = /^[a-f0-9]{32}$/i.test(user.displayName || '');
+                        const hasValidName = user.displayName && !isGuid;
+                        const hasEmail = user.email && user.email.includes('@');
+                        return hasValidName || hasEmail;
+                      })
+                      .map((user) => {
+                        // Check if displayName looks like a GUID
+                        const isGuid = /^[a-f0-9]{32}$/i.test(user.displayName || '');
+                        const displayText = (!user.displayName || isGuid)
+                          ? user.email
+                          : user.displayName;
+                        return (
+                          <option key={user.id} value={user.id}>
+                            {displayText || 'Unknown'}
+                          </option>
+                        );
+                      })}
                   </select>
                 </div>
 
