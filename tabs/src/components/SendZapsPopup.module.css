@@ -1,0 +1,299 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup {
+    width: 600px;
+    max-height: 90vh;
+    padding: 28px 32px 32px 32px;
+    gap: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+    overflow-y: auto;
+}
+
+.title {
+    width: 100%;
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 24px;
+    color: #FFFFFF;
+    margin: 0 0 8px 0;
+}
+
+.text {
+    width: 100%;
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+    color: #D8D8D8;
+    margin: 0 0 20px 0;
+}
+
+.formGroup {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.label {
+    display: block;
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 20px;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 10px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+}
+
+.searchInput::placeholder {
+    color: #8A8A8A;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.select {
+    width: 100%;
+    padding: 10px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+.select:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.select option {
+    background: #1F1F1F;
+    color: #FFFFFF;
+}
+
+.input {
+    width: 100%;
+    padding: 10px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+}
+
+.input::placeholder {
+    color: #8A8A8A;
+}
+
+.input:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.textarea {
+    width: 100%;
+    padding: 10px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.textarea::placeholder {
+    color: #8A8A8A;
+}
+
+.textarea:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.balanceText {
+    font-family: 'Segoe UI';
+    font-size: 12px;
+    color: #84cc16;
+    margin: 4px 0 0 0;
+}
+
+.actionRow {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.cancelButton {
+    padding: 10px 20px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid #84cc16;
+    border-radius: 4px;
+    color: #84cc16;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cancelButton:hover {
+    background: rgba(132, 204, 22, 0.1);
+}
+
+.sendButton {
+    padding: 10px 20px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    font-weight: 600;
+    background: #84cc16;
+    border: none;
+    border-radius: 4px;
+    color: #1F1F1F;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.sendButton:hover {
+    background: #9ed929;
+}
+
+.sendButtonDisabled {
+    padding: 10px 20px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    font-weight: 600;
+    background: #424242;
+    border: none;
+    border-radius: 4px;
+    color: #8A8A8A;
+    cursor: not-allowed;
+}
+
+.loaderOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+}
+
+.loaderIcon {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 16px;
+}
+
+.loaderText {
+    font-family: 'Segoe UI';
+    font-size: 16px;
+    color: #FFFFFF;
+}
+
+.successPopup,
+.errorPopup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 26px 32px 32px;
+    gap: 20px;
+    position: relative;
+    width: 348px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 4px;
+}
+
+.popupHeader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.statusIcon {
+    width: 48px;
+    height: 48px;
+}
+
+.popupText {
+    font-family: 'Segoe UI';
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 24px;
+    text-align: center;
+    color: #FFFFFF;
+}
+
+.errorMessage {
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    line-height: 20px;
+    text-align: center;
+    color: #D8D8D8;
+}
+
+.closeButton {
+    padding: 10px 24px;
+    font-family: 'Segoe UI';
+    font-size: 14px;
+    font-weight: 600;
+    background: #84cc16;
+    border: none;
+    border-radius: 4px;
+    color: #1F1F1F;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.closeButton:hover {
+    background: #9ed929;
+}
