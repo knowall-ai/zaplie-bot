@@ -2,6 +2,7 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import { AuthenticatedTemplate } from "@azure/msal-react";
 import FooterComponent from "./FooterComponent";
+import HeaderComponent from "./HeaderComponent";
 import styles from './PageLayout.module.css';
 
 type Props = {
@@ -15,6 +16,9 @@ export const PageLayout: React.FC<Props> = ({ children }) => {
 
     return (
         <div className={styles.pageContainer}>
+            <AuthenticatedTemplate>
+                <HeaderComponent />
+            </AuthenticatedTemplate>
             <div className={styles.contentWrap}>
                 {children}
             </div>
