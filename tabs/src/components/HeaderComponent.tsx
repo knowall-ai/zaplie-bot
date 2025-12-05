@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useAccount, useIsAuthenticated, useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import styles from './HeaderComponent.module.css';
 import { useTeamsAuth } from '../hooks/useTeamsAuth';
-import { isActivePath } from '../utils/navigation';
+import NavigationLinks from './NavigationLinks';
 
 const HeaderComponent: React.FC = () => {
   const { accounts, inProgress } = useMsal();
   const account = useAccount(accounts[0] || {});
   const isAuthenticated = useIsAuthenticated();
-  const location = useLocation();
   const [userName, setUserName] = useState<string>('');
   const [userEmail, setUserEmail] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
@@ -19,9 +18,6 @@ const HeaderComponent: React.FC = () => {
 
   // Use shared Teams auth hook
   const { handleLogout, isLoggingOut, isTeamsInitializing, isInTeams } = useTeamsAuth();
-
-  // Use shared navigation utility for active path checking
-  const isActive = (path: string) => isActivePath(location.pathname, path);
 
   useEffect(() => {
     if (account) {
@@ -164,11 +160,10 @@ const HeaderComponent: React.FC = () => {
         </div>
 
         <nav className={styles.navigation} aria-label="Primary navigation">
-          <Link to="/feed" className={`${styles.navLink} ${isActive('/feed') ? styles.navLinkActive : ''}`} aria-current={isActive('/feed') ? 'page' : undefined}>Feed</Link>
-          <Link to="/users" className={`${styles.navLink} ${isActive('/users') ? styles.navLinkActive : ''}`} aria-current={isActive('/users') ? 'page' : undefined}>Users</Link>
-          <Link to="/rewards" className={`${styles.navLink} ${isActive('/rewards') ? styles.navLinkActive : ''}`} aria-current={isActive('/rewards') ? 'page' : undefined}>Rewards</Link>
-          <Link to="/wallet" className={`${styles.navLink} ${isActive('/wallet') ? styles.navLinkActive : ''}`} aria-current={isActive('/wallet') ? 'page' : undefined}>Wallet</Link>
-          <Link to="/settings" className={`${styles.navLink} ${isActive('/settings') ? styles.navLinkActive : ''}`} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</Link>
+          <NavigationLinks
+            linkClassName={styles.navLink}
+            activeLinkClassName={styles.navLinkActive}
+          />
         </nav>
 
         <div className={styles.rightSection}>

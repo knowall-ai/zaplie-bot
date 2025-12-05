@@ -26,6 +26,11 @@
  * isActivePath('/feed', '/') // false - root only matches exactly
  */
 export const isActivePath = (currentPath: string, targetPath: string): boolean => {
+  // Validate inputs to prevent runtime errors
+  if (!currentPath || !targetPath) {
+    return false;
+  }
+
   // Normalize paths by removing trailing slashes (but keep root '/' intact)
   const normalizedCurrent = currentPath.replace(/\/+$/, '') || '/';
   const normalizedTarget = targetPath.replace(/\/+$/, '') || '/';
