@@ -68,10 +68,10 @@ const SendPayment: React.FC<SendPopupProps> = ({
   const handleSendClick = () => {
     setIsLoading(true);
 
-    if (!myLNbitDetails || !myLNbitDetails.privateWallet) {
+    if (!myLNbitDetails || !myLNbitDetails.allowanceWallet) {
       handlePaymentFailure('Something wrong with your wallet');
     } else {
-      payInvoice(myLNbitDetails.privateWallet?.adminkey || '', invoice)
+      payInvoice(myLNbitDetails.allowanceWallet?.adminkey || '', invoice)
         .then(invoice => {
           setInvoice(invoice);
           setIsPaymentSuccess(true);

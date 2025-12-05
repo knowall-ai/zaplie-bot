@@ -85,15 +85,15 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
     try {
       const wallets = await getUserWallets(adminKey, userId);
       console.log('wallets:-', wallets);
-      const privateWallet = wallets?.find(wallet => wallet.name === 'Private');
-      console.log('privateWallet:-', privateWallet);
-      if (privateWallet) {
-        setUserWallet(privateWallet);
-        setHasEnoughSats(privateWallet.balance_msat / 1000 >= price);
+      const allowanceWallet = wallets?.find(wallet => wallet.name === 'Allowance');
+      console.log('allowanceWallet:-', allowanceWallet);
+      if (allowanceWallet) {
+        setUserWallet(allowanceWallet);
+        setHasEnoughSats(allowanceWallet.balance_msat / 1000 >= price);
         setSelectedReward(reward);
         setShowPopup(true);
       } else {
-        console.error('No private wallet found for the user');
+        console.error('No allowance wallet found for the user');
       }
     } catch (error) {
       console.error('Error fetching user wallet:', error);

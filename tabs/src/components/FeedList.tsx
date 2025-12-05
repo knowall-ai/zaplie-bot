@@ -79,14 +79,14 @@ const FeedList: React.FC<FeedListProps> = ({
           });
           allWalletsArray.push(...wallets);
         }
-        // Step 3: For each wallet, get payments from Private and Allowance wallets only
+        // Step 3: For each wallet, get payments from Allowance wallets only
         let allPayments: Transaction[] = [];
 
         for (const userData of allWalletsData) {
-          // Filter to only Private and Allowance wallets
+          // Filter to only Allowance wallets (not Private)
           const filteredWallets = userData.wallets.filter(wallet => {
             const walletName = wallet.name.toLowerCase();
-            return walletName.includes('private') || walletName.includes('allowance');
+            return walletName.includes('allowance');
           });
 
           // Get payments from filtered wallets only
@@ -109,18 +109,19 @@ const FeedList: React.FC<FeedListProps> = ({
           f => !f.memo.includes('Weekly Allowance cleared'),
         );
 
-        // Deduplicate internal transfers - only show the incoming side (positive amount)
+        // Only show outgoing payments (sent from Allowance wallet)
+        // Deduplicate internal transfers - only show the outgoing side (negative amount)
         // For internal transfers, we have 2 records with the same checking_id (one negative, one positive)
-        // We only want to show one transaction per transfer
+        // We only want to show one transaction per transfer (the send side, not the receive side)
         const seenCheckingIds = new Set<string>();
         const deduplicatedTransactions = allowanceTransactions.filter(payment => {
           const cleanId = payment.checking_id?.replace('internal_', '') || '';
 
           // If this is an internal transfer (has matching checking_id)
           if (cleanId && payment.checking_id?.startsWith('internal_')) {
-            // Only show the incoming side (positive amount)
-            if (payment.amount < 0) {
-              return false; // Skip outgoing side
+            // Only show the outgoing side (negative amount) - payments sent from allowance
+            if (payment.amount > 0) {
+              return false; // Skip incoming side (received to private wallet)
             }
 
             // Check if we've already seen this checking_id
