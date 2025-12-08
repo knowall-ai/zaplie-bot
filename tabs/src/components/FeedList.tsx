@@ -79,18 +79,27 @@ const FeedList: React.FC<FeedListProps> = ({
           });
           allWalletsArray.push(...wallets);
         }
-        // Step 3: For each wallet, get payments from Private and Allowance wallets only
+        // Step 3: Get payments from both Allowance and Private wallets
+        // We need both to match sender (Allowance) with receiver (Private)
         let allPayments: Transaction[] = [];
+        const allowanceWalletIds = new Set<string>();
 
         for (const userData of allWalletsData) {
-          // Filter to only Private and Allowance wallets
-          const filteredWallets = userData.wallets.filter(wallet => {
+          // Filter to Allowance and Private wallets
+          const relevantWallets = userData.wallets.filter(wallet => {
             const walletName = wallet.name.toLowerCase();
-            return walletName.includes('private') || walletName.includes('allowance');
+            return walletName.includes('allowance') || walletName.includes('private');
           });
 
-          // Get payments from filtered wallets only
-          for (const wallet of filteredWallets) {
+          // Track allowance wallet IDs
+          relevantWallets.forEach(wallet => {
+            if (wallet.name.toLowerCase().includes('allowance')) {
+              allowanceWalletIds.add(wallet.id);
+            }
+          });
+
+          // Get payments from relevant wallets
+          for (const wallet of relevantWallets) {
             try {
               const payments = await getWalletTransactionsSince(
                 wallet.inkey,
@@ -104,26 +113,24 @@ const FeedList: React.FC<FeedListProps> = ({
           }
         }
 
-        // Filter out weekly allowance cleared transactions only
-        const allowanceTransactions = allPayments.filter(
-          f => !f.memo.includes('Weekly Allowance cleared'),
-        );
+        // Filter: Only outgoing payments (negative amounts) FROM Allowance wallets
+        // These are payments FROM Allowance TO Private wallets
+        const allowanceTransactions = allPayments.filter(payment => {
+          // Must be from an Allowance wallet
+          if (!allowanceWalletIds.has(payment.wallet_id)) return false;
+          // Must be outgoing (negative amount)
+          if (payment.amount >= 0) return false;
+          // Exclude weekly allowance cleared transactions
+          if (payment.memo.includes('Weekly Allowance cleared')) return false;
+          return true;
+        });
 
-        // Deduplicate internal transfers - only show the incoming side (positive amount)
-        // For internal transfers, we have 2 records with the same checking_id (one negative, one positive)
-        // We only want to show one transaction per transfer
+        // Deduplicate internal transfers by checking_id
         const seenCheckingIds = new Set<string>();
         const deduplicatedTransactions = allowanceTransactions.filter(payment => {
           const cleanId = payment.checking_id?.replace('internal_', '') || '';
 
-          // If this is an internal transfer (has matching checking_id)
-          if (cleanId && payment.checking_id?.startsWith('internal_')) {
-            // Only show the incoming side (positive amount)
-            if (payment.amount < 0) {
-              return false; // Skip outgoing side
-            }
-
-            // Check if we've already seen this checking_id
+          if (cleanId) {
             if (seenCheckingIds.has(cleanId)) {
               return false; // Skip duplicate
             }
@@ -153,45 +160,24 @@ const FeedList: React.FC<FeedListProps> = ({
         });
 
         const allowanceZaps = deduplicatedTransactions.map((transaction, index) => {
-          const walletOwner = walletToUserMap.get(transaction.wallet_id) || null;
+          // FROM = owner of the Allowance wallet (sender)
+          const fromUser = walletToUserMap.get(transaction.wallet_id) || null;
 
-          // Determine if this is incoming (positive amount) or outgoing (negative amount)
-          const isIncoming = transaction.amount > 0;
-
-          let fromUser: User | null = null;
+          // TO = recipient (owner of the Private wallet that received the payment)
           let toUser: User | null = null;
 
-          // Try to find matching internal payment (the other side of the transfer)
+          // Try to find matching internal payment (the receiving side)
           const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
           const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
           const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
 
-          if (isIncoming) {
-            // For incoming payments: TO = wallet owner
-            toUser = walletOwner;
-
-            // FROM = the owner of the matching outgoing payment (if found)
-            if (matchingPayment) {
-              fromUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
-            } else {
-              // Fallback to extra field
-              const fromUserId = transaction.extra?.from?.user;
-              fromUser = fromUserId ? fetchedUsers.find(f => f.id === fromUserId) || null : null;
-            }
+          if (matchingPayment) {
+            toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
           } else {
-            // For outgoing payments: FROM = wallet owner
-            fromUser = walletOwner;
-
-            // TO = the owner of the matching incoming payment (if found)
-            if (matchingPayment) {
-              toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
-            } else {
-              // Fallback to extra field
-              const toUserId = transaction.extra?.to?.user;
-              toUser = toUserId ? fetchedUsers.find(f => f.id === toUserId) || null : null;
-            }
+            // Fallback to extra field
+            const toUserId = transaction.extra?.to?.user;
+            toUser = toUserId ? fetchedUsers.find(f => f.id === toUserId) || null : null;
           }
-
 
           return {
             from: fromUser,
