@@ -136,6 +136,12 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             console.error('No wallets found for user');
           }
 
+          // Check if inkey exists before fetching transactions
+          if (!inkey) {
+            const walletType = activeWallet === 'Private' ? 'Private' : 'Allowance';
+            throw new Error(`${walletType} wallet not found for user`);
+          }
+
           const transactions = await getWalletTransactionsSince(
             inkey,
             paymentsSinceTimestamp,

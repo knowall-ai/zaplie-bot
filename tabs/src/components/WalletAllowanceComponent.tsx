@@ -60,18 +60,24 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
               setAllowance(null);
             }
 
-            const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
-            const encodedExtra = {};
-            const transaction = await getWalletTransactionsSince(
-              allowanceWallet.inkey,
-              sevenDaysAgo,
-              encodedExtra
-            );
+            // Check if inkey exists before fetching transactions
+            if (allowanceWallet.inkey) {
+              const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
+              const encodedExtra = {};
+              const transaction = await getWalletTransactionsSince(
+                allowanceWallet.inkey,
+                sevenDaysAgo,
+                encodedExtra
+              );
 
-            const spent = transaction
-              .filter(transaction => transaction.amount < 0)
-              .reduce((total, transaction) => total + Math.abs(transaction.amount), 0) / 1000;
-            setSpentSats(spent);
+              const spent = transaction
+                .filter(transaction => transaction.amount < 0)
+                .reduce((total, transaction) => total + Math.abs(transaction.amount), 0) / 1000;
+              setSpentSats(spent);
+            } else {
+              console.error('Allowance wallet inkey not found');
+              setSpentSats(0);
+            }
           }
         }
       }
