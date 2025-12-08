@@ -23,17 +23,19 @@ interface ZapTransaction {
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
 
-// Wallet type identifiers - these match the naming convention used by the backend
+// Wallet type identifiers - these match the exact naming convention used by the backend
+// Backend creates wallets with names 'Allowance' and 'Private' (see functions/sendZap/index.ts)
 // NOTE: If wallet naming conventions change on the backend, these must be updated
-const WALLET_TYPE_ALLOWANCE = 'allowance';
-const WALLET_TYPE_PRIVATE = 'private';
+const WALLET_NAME_ALLOWANCE = 'Allowance';
+const WALLET_NAME_PRIVATE = 'Private';
 
 // Helper functions to identify wallet types by name
+// Using exact match (case-insensitive) to avoid false positives like "not_an_allowance_wallet"
 const isAllowanceWallet = (walletName: string): boolean =>
-  walletName.toLowerCase().includes(WALLET_TYPE_ALLOWANCE);
+  walletName.toLowerCase() === WALLET_NAME_ALLOWANCE.toLowerCase();
 
 const isPrivateWallet = (walletName: string): boolean =>
-  walletName.toLowerCase().includes(WALLET_TYPE_PRIVATE);
+  walletName.toLowerCase() === WALLET_NAME_PRIVATE.toLowerCase();
 
 const FeedList: React.FC<FeedListProps> = ({
   timestamp,
@@ -93,8 +95,9 @@ const FeedList: React.FC<FeedListProps> = ({
         }
         // Step 3: Get payments from both Allowance and Private wallets
         // We need both to match sender (Allowance) with receiver (Private)
-        let allPayments: Transaction[] = [];
         const allowanceWalletIds = new Set<string>();
+        const allRelevantWallets: Wallet[] = [];
+        let failedWalletCount = 0;
 
         for (const userData of allWalletsData) {
           // Filter to Allowance and Private wallets
@@ -109,19 +112,25 @@ const FeedList: React.FC<FeedListProps> = ({
             }
           });
 
-          // Get payments from relevant wallets
-          for (const wallet of relevantWallets) {
-            try {
-              const payments = await getWalletTransactionsSince(
-                wallet.inkey,
-                paymentsSinceTimestamp,
-                null
-              );
-              allPayments = allPayments.concat(payments);
-            } catch (err) {
+          allRelevantWallets.push(...relevantWallets);
+        }
+
+        // Fetch all wallet transactions in parallel for better performance
+        const paymentPromises = allRelevantWallets.map(wallet =>
+          getWalletTransactionsSince(wallet.inkey, paymentsSinceTimestamp, null)
+            .catch(err => {
               console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
-            }
-          }
+              failedWalletCount++;
+              return [] as Transaction[]; // Return empty array on error
+            })
+        );
+
+        const paymentResults = await Promise.all(paymentPromises);
+        const allPayments = paymentResults.flat();
+
+        // Log warning if some wallets failed to load
+        if (failedWalletCount > 0) {
+          console.warn(`${failedWalletCount} wallet(s) failed to load transactions`);
         }
 
         // Filter: Only outgoing payments (negative amounts) FROM Allowance wallets
@@ -162,7 +171,9 @@ const FeedList: React.FC<FeedListProps> = ({
           }
         });
 
-        // Create a map of all payments by checking_id for internal transfer matching
+        // Create a map of ALL payments (not filtered) by checking_id for internal transfer matching
+        // NOTE: We use allPayments here (not deduplicatedTransactions) because we need to find
+        // the receiving side of transfers which are in Private wallets, not just Allowance wallets
         const paymentsByCheckingId = new Map<string, Transaction[]>();
         allPayments.forEach(payment => {
           const cleanId = payment.checking_id?.replace('internal_', '') || '';
