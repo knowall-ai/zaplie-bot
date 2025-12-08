@@ -23,6 +23,18 @@ interface ZapTransaction {
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
 
+// Wallet type identifiers - these match the naming convention used by the backend
+// NOTE: If wallet naming conventions change on the backend, these must be updated
+const WALLET_TYPE_ALLOWANCE = 'allowance';
+const WALLET_TYPE_PRIVATE = 'private';
+
+// Helper functions to identify wallet types by name
+const isAllowanceWallet = (walletName: string): boolean =>
+  walletName.toLowerCase().includes(WALLET_TYPE_ALLOWANCE);
+
+const isPrivateWallet = (walletName: string): boolean =>
+  walletName.toLowerCase().includes(WALLET_TYPE_PRIVATE);
+
 const FeedList: React.FC<FeedListProps> = ({
   timestamp,
   allZaps = [],
@@ -86,14 +98,13 @@ const FeedList: React.FC<FeedListProps> = ({
 
         for (const userData of allWalletsData) {
           // Filter to Allowance and Private wallets
-          const relevantWallets = userData.wallets.filter(wallet => {
-            const walletName = wallet.name.toLowerCase();
-            return walletName.includes('allowance') || walletName.includes('private');
-          });
+          const relevantWallets = userData.wallets.filter(wallet =>
+            isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name)
+          );
 
           // Track allowance wallet IDs
           relevantWallets.forEach(wallet => {
-            if (wallet.name.toLowerCase().includes('allowance')) {
+            if (isAllowanceWallet(wallet.name)) {
               allowanceWalletIds.add(wallet.id);
             }
           });
@@ -143,9 +154,12 @@ const FeedList: React.FC<FeedListProps> = ({
         // Create wallet ID to user mapping
         const walletToUserMap = new Map<string, User>();
         allWalletsData.forEach(userData => {
-          userData.wallets.forEach(wallet => {
-            walletToUserMap.set(wallet.id, fetchedUsers.find(u => u.id === userData.userId)!);
-          });
+          const user = fetchedUsers.find(u => u.id === userData.userId);
+          if (user) {
+            userData.wallets.forEach(wallet => {
+              walletToUserMap.set(wallet.id, user);
+            });
+          }
         });
 
         // Create a map of all payments by checking_id for internal transfer matching
@@ -173,10 +187,28 @@ const FeedList: React.FC<FeedListProps> = ({
 
           if (matchingPayment) {
             toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
-          } else {
-            // Fallback to extra field
-            const toUserId = transaction.extra?.to?.user;
-            toUser = toUserId ? fetchedUsers.find(f => f.id === toUserId) || null : null;
+            if (!toUser) {
+              console.warn(`Receiver wallet ${matchingPayment.wallet_id} found but user mapping missing`);
+            }
+          }
+
+          // Fallback 1: Try extra.to.user field
+          if (!toUser && transaction.extra?.to?.user) {
+            const toUserId = transaction.extra.to.user;
+            toUser = fetchedUsers.find(f => f.id === toUserId) || null;
+          }
+
+          // Fallback 2: Try extra.to.name for display purposes (external payments)
+          if (!toUser && transaction.extra?.to?.name) {
+            console.debug(`Payment to external recipient: ${transaction.extra.to.name}`);
+          }
+
+          // Log if receiver still couldn't be determined
+          if (!toUser) {
+            console.warn(`Could not determine receiver for transaction ${transaction.checking_id}`, {
+              memo: transaction.memo,
+              extra: transaction.extra
+            });
           }
 
           return {
