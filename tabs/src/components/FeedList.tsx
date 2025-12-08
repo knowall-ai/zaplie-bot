@@ -9,9 +9,6 @@ import {
 
 interface FeedListProps {
   timestamp?: number | null;
-  allZaps?: Transaction[];
-  allUsers?: User[];
-  isLoading?: boolean;
 }
 interface ZapTransaction {
   from: User | null;
@@ -37,27 +34,19 @@ const isAllowanceWallet = (walletName: string): boolean =>
 const isPrivateWallet = (walletName: string): boolean =>
   walletName.toLowerCase() === WALLET_NAME_PRIVATE.toLowerCase();
 
-const FeedList: React.FC<FeedListProps> = ({
-  timestamp,
-  allZaps = [],
-  allUsers = [],
-  isLoading = false
-}) => {
+const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   const [zaps, setZaps] = useState<ZapTransaction[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const initialRender = useRef(true);
 
-  // NEW: State for sorting (excluding the Memo field)
-  const [sortField, setSortField] = useState<'time' | 'from' | 'to' | 'amount'>(
-    'time',
-  );
+  // State for sorting (excluding the Memo field)
+  const [sortField, setSortField] = useState<'time' | 'from' | 'to' | 'amount'>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Get admin key from environment
-  const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
+  const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY;
 
   useEffect(() => {
     const fetchZapsStepByStep = async () => {
@@ -65,37 +54,40 @@ const FeedList: React.FC<FeedListProps> = ({
       setError(null);
 
       try {
+        // Validate adminKey is configured
+        if (!adminKey) {
+          setError('Configuration error: Admin key not set.');
+          setLoading(false);
+          return;
+        }
+
         const paymentsSinceTimestamp =
           timestamp === null || timestamp === undefined || timestamp === 0
             ? 0
             : timestamp;
 
-        // Step 1: Get all users from /users/api/v1/user
+        // Step 1: Get all users
         const fetchedUsers = await getUsers(adminKey, {});
         if (!fetchedUsers || fetchedUsers.length === 0) {
           setError('Unable to load users. Please check your connection and try again.');
           setLoading(false);
           return;
         }
-        setUsers(fetchedUsers);
 
-        // Step 2: For each user, get wallets using /users/api/v1/user/{userId}/wallet
+        // Step 2: Get wallets for each user
         const allWalletsData: { userId: string; wallets: Wallet[] }[] = [];
-        const allWalletsArray: Wallet[] = [];
 
         for (const user of fetchedUsers) {
           const userWallets = await getUserWallets(adminKey, user.id);
-          const wallets = userWallets || [];
-
           allWalletsData.push({
             userId: user.id,
-            wallets: wallets
+            wallets: userWallets || []
           });
-          allWalletsArray.push(...wallets);
         }
         // Step 3: Get payments from both Allowance and Private wallets
         // We need both to match sender (Allowance) with receiver (Private)
         const allowanceWalletIds = new Set<string>();
+        const privateWalletIds = new Set<string>();
         const allRelevantWallets: Wallet[] = [];
         let failedWalletCount = 0;
 
@@ -105,10 +97,13 @@ const FeedList: React.FC<FeedListProps> = ({
             isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name)
           );
 
-          // Track allowance wallet IDs
+          // Track wallet IDs by type
           relevantWallets.forEach(wallet => {
             if (isAllowanceWallet(wallet.name)) {
               allowanceWalletIds.add(wallet.id);
+            }
+            if (isPrivateWallet(wallet.name)) {
+              privateWalletIds.add(wallet.id);
             }
           });
 
@@ -133,15 +128,57 @@ const FeedList: React.FC<FeedListProps> = ({
           console.warn(`${failedWalletCount} wallet(s) failed to load transactions`);
         }
 
-        // Filter: Only outgoing payments (negative amounts) FROM Allowance wallets
-        // These are payments FROM Allowance TO Private wallets
+        // Create wallet ID to user mapping
+        const walletToUserMap = new Map<string, User>();
+        allWalletsData.forEach(userData => {
+          const user = fetchedUsers.find(u => u.id === userData.userId);
+          if (user) {
+            userData.wallets.forEach(wallet => {
+              walletToUserMap.set(wallet.id, user);
+            });
+          } else {
+            console.warn(`User not found for userId: ${userData.userId} - wallet transactions may show as Unknown`);
+          }
+        });
+
+        // Map payments by checking_id (built before filtering to find receiving side)
+        const paymentsByCheckingId = new Map<string, Transaction[]>();
+        allPayments.forEach(payment => {
+          const cleanId = payment.checking_id?.replace('internal_', '') || '';
+          if (cleanId) {
+            const existing = paymentsByCheckingId.get(cleanId) || [];
+            existing.push(payment);
+            paymentsByCheckingId.set(cleanId, existing);
+          }
+        });
+
+        // Helper to find the receiving payment for a given outgoing payment
+        const findReceiverWalletId = (payment: Transaction): string | null => {
+          const cleanId = payment.checking_id?.replace('internal_', '') || '';
+          if (!cleanId) return null;
+
+          const matchingPayments = paymentsByCheckingId.get(cleanId) || [];
+          const receivingPayment = matchingPayments.find(p =>
+            p.wallet_id !== payment.wallet_id && p.amount > 0
+          );
+          return receivingPayment?.wallet_id || null;
+        };
+
+        // Filter: Only outgoing payments FROM Allowance wallets TO Private wallets
         const allowanceTransactions = allPayments.filter(payment => {
           // Must be from an Allowance wallet
           if (!allowanceWalletIds.has(payment.wallet_id)) return false;
           // Must be outgoing (negative amount)
           if (payment.amount >= 0) return false;
           // Exclude weekly allowance cleared transactions
-          if (payment.memo.includes('Weekly Allowance cleared')) return false;
+          if (payment.memo?.includes('Weekly Allowance cleared')) return false;
+
+          // Verify the receiver is a Private wallet (not external Lightning payment)
+          const receiverWalletId = findReceiverWalletId(payment);
+          if (!receiverWalletId || !privateWalletIds.has(receiverWalletId)) {
+            return false;
+          }
+
           return true;
         });
 
@@ -158,30 +195,6 @@ const FeedList: React.FC<FeedListProps> = ({
           }
 
           return true;
-        });
-
-        // Create wallet ID to user mapping
-        const walletToUserMap = new Map<string, User>();
-        allWalletsData.forEach(userData => {
-          const user = fetchedUsers.find(u => u.id === userData.userId);
-          if (user) {
-            userData.wallets.forEach(wallet => {
-              walletToUserMap.set(wallet.id, user);
-            });
-          }
-        });
-
-        // Create a map of ALL payments (not filtered) by checking_id for internal transfer matching
-        // NOTE: We use allPayments here (not deduplicatedTransactions) because we need to find
-        // the receiving side of transfers which are in Private wallets, not just Allowance wallets
-        const paymentsByCheckingId = new Map<string, Transaction[]>();
-        allPayments.forEach(payment => {
-          const cleanId = payment.checking_id?.replace('internal_', '') || '';
-          if (cleanId) {
-            const existing = paymentsByCheckingId.get(cleanId) || [];
-            existing.push(payment);
-            paymentsByCheckingId.set(cleanId, existing);
-          }
         });
 
         const allowanceZaps = deduplicatedTransactions.map((transaction, index) => {
@@ -203,23 +216,14 @@ const FeedList: React.FC<FeedListProps> = ({
             }
           }
 
-          // Fallback 1: Try extra.to.user field
+          // Fallback: Try extra.to.user field
           if (!toUser && transaction.extra?.to?.user) {
             const toUserId = transaction.extra.to.user;
             toUser = fetchedUsers.find(f => f.id === toUserId) || null;
           }
 
-          // Fallback 2: Try extra.to.name for display purposes (external payments)
-          if (!toUser && transaction.extra?.to?.name) {
-            console.debug(`Payment to external recipient: ${transaction.extra.to.name}`);
-          }
-
-          // Log if receiver still couldn't be determined
           if (!toUser) {
-            console.warn(`Could not determine receiver for transaction ${transaction.checking_id}`, {
-              memo: transaction.memo,
-              extra: transaction.extra
-            });
+            console.warn(`Could not determine receiver for transaction ${transaction.checking_id}`);
           }
 
           return {
@@ -252,18 +256,16 @@ const FeedList: React.FC<FeedListProps> = ({
       fetchZapsStepByStep();
     }
   }, [timestamp, adminKey]);
-  // NEW: Function to handle header clicks for sorting
+
   const handleSort = (field: 'time' | 'from' | 'to' | 'amount') => {
     if (sortField === field) {
-      // Toggle sort order if the same field is clicked
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
-      // Change sort field and set default order to ascending
       setSortField(field);
       setSortOrder('asc');
     }
   };
-  // NEW: Sort the zaps array based on the selected sort field and order
+
   const sortedZaps = [...zaps].sort((a, b) => {
     let valA, valB;
 
@@ -295,7 +297,7 @@ const FeedList: React.FC<FeedListProps> = ({
   });
 
   // Calculate pagination variables
-  const totalPages = Math.ceil(sortedZaps.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(sortedZaps.length / ITEMS_PER_PAGE));
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentItems = sortedZaps.slice(indexOfFirstItem, indexOfLastItem);
