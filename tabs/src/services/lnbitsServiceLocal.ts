@@ -15,6 +15,29 @@ const TOKEN_EXPIRY_HOURS = 24;
 const TOKEN_KEY = 'accessToken';
 const TOKEN_TIMESTAMP_KEY = 'accessTokenTimestamp';
 
+// Cache for API responses to prevent redundant calls
+const CACHE_DURATION_MS = 60000; // 1 minute cache
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+const apiCache: {
+  allUsers?: CacheEntry<any[]>;
+  userWallets: Map<string, CacheEntry<Wallet[]>>;
+} = {
+  userWallets: new Map(),
+};
+
+// Helper to check if cache is valid
+const isCacheValid = <T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> => {
+  if (!entry) return false;
+  return Date.now() - entry.timestamp < CACHE_DURATION_MS;
+};
+
+// Pending promises to prevent duplicate concurrent requests
+let pendingUsersRequest: Promise<any[]> | null = null;
+const pendingWalletRequests: Map<string, Promise<Wallet[] | null>> = new Map();
+
 // Get token from storage if valid, otherwise return null
 const getStoredToken = (): string | null => {
   const token = sessionStorage.getItem(TOKEN_KEY);
@@ -214,51 +237,79 @@ const getUserWallets = async (
   adminKey: string,
   userId: string,
 ): Promise<Wallet[] | null> => {
-
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(
-      `${nodeUrl}/users/api/v1/user/${userId}/wallet`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          //'X-Api-Key': adminKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting users wallets response (status: ${response.status})`,
-      );
-    }
-
-    const data: Wallet[] = await response.json();
-
-    // Map the wallets to match the Wallet interface
-    let walletData: Wallet[] = data.map((wallet: any) => ({
-      id: wallet.id,
-      admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-      name: wallet.name,
-      adminkey: wallet.adminkey,
-      user: wallet.user,
-      inkey: wallet.inkey,
-      balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-      deleted: wallet.deleted,
-    }));
-
-    // Now remove the deleted wallets.
-    const filteredWallets = walletData.filter(
-      wallet => wallet.deleted !== true,
-    );
-
-    return filteredWallets;
-  } catch (error) {
-    console.error(error);
-    throw error;
+  // Check cache first
+  const cachedEntry = apiCache.userWallets.get(userId);
+  if (isCacheValid(cachedEntry)) {
+    console.log(`[Cache HIT] getUserWallets for user ${userId}`);
+    return cachedEntry.data;
   }
+
+  // Check if there's already a pending request for this user
+  const pendingRequest = pendingWalletRequests.get(userId);
+  if (pendingRequest) {
+    console.log(`[Dedup] Reusing pending getUserWallets request for user ${userId}`);
+    return pendingRequest;
+  }
+
+  // Create new request and store it to prevent duplicates
+  const requestPromise = (async (): Promise<Wallet[] | null> => {
+    try {
+      const accessToken = await getAccessToken(`${userName}`, `${password}`);
+      const response = await fetch(
+        `${nodeUrl}/users/api/v1/user/${userId}/wallet`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            //'X-Api-Key': adminKey,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Error getting users wallets response (status: ${response.status})`,
+        );
+      }
+
+      const data: Wallet[] = await response.json();
+
+      // Map the wallets to match the Wallet interface
+      let walletData: Wallet[] = data.map((wallet: any) => ({
+        id: wallet.id,
+        admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
+        name: wallet.name,
+        adminkey: wallet.adminkey,
+        user: wallet.user,
+        inkey: wallet.inkey,
+        balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
+        deleted: wallet.deleted,
+      }));
+
+      // Now remove the deleted wallets.
+      const filteredWallets = walletData.filter(
+        wallet => wallet.deleted !== true,
+      );
+
+      // Cache the result
+      apiCache.userWallets.set(userId, {
+        data: filteredWallets,
+        timestamp: Date.now(),
+      });
+
+      return filteredWallets;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      // Remove from pending requests
+      pendingWalletRequests.delete(userId);
+    }
+  })();
+
+  pendingWalletRequests.set(userId, requestPromise);
+  return requestPromise;
 };
 
 // Migrated to use LNbits v1+ core API
@@ -1026,40 +1077,67 @@ const getAllPayments = async (
 
 // NEW: Get all users from /users/api/v1/user endpoint
 const getAllUsersFromAPI = async (): Promise<any[]> => {
+  // Check cache first
+  if (isCacheValid(apiCache.allUsers)) {
+    console.log('[Cache HIT] getAllUsersFromAPI');
+    return apiCache.allUsers.data;
+  }
+
+  // Check if there's already a pending request
+  if (pendingUsersRequest) {
+    console.log('[Dedup] Reusing pending getAllUsersFromAPI request');
+    return pendingUsersRequest;
+  }
+
   console.log('=== getAllUsersFromAPI ===');
   console.log('Fetching from:', `${nodeUrl}/users/api/v1/user`);
 
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+  // Create new request and store it to prevent duplicates
+  pendingUsersRequest = (async (): Promise<any[]> => {
+    try {
+      const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
-    const response = await fetch(`${nodeUrl}/users/api/v1/user`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+      const response = await fetch(`${nodeUrl}/users/api/v1/user`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
 
-    if (!response.ok) {
-      console.error('Response status:', response.status);
-      console.error('Response statusText:', response.statusText);
-      throw new Error(
-        `Error getting all users (status: ${response.status})`,
-      );
+      if (!response.ok) {
+        console.error('Response status:', response.status);
+        console.error('Response statusText:', response.statusText);
+        throw new Error(
+          `Error getting all users (status: ${response.status})`,
+        );
+      }
+
+      const responseData = await response.json();
+      console.log('Total users retrieved:', responseData?.data?.length || 0);
+      console.log('All Users:', responseData);
+      console.log('===========================');
+
+      // Extract the users array from the response
+      const users = responseData?.data || [];
+      const result = Array.isArray(users) ? users : [];
+
+      // Cache the result
+      apiCache.allUsers = {
+        data: result,
+        timestamp: Date.now(),
+      };
+
+      return result;
+    } catch (error) {
+      console.error('Error in getAllUsersFromAPI:', error);
+      throw error;
+    } finally {
+      pendingUsersRequest = null;
     }
+  })();
 
-    const responseData = await response.json();
-    console.log('Total users retrieved:', responseData?.data?.length || 0);
-    console.log('All Users:', responseData);
-    console.log('===========================');
-
-    // Extract the users array from the response
-    const users = responseData?.data || [];
-    return Array.isArray(users) ? users : [];
-  } catch (error) {
-    console.error('Error in getAllUsersFromAPI:', error);
-    throw error;
-  }
+  return pendingUsersRequest;
 };
 
 // NEW: Get wallets paginated for a specific user

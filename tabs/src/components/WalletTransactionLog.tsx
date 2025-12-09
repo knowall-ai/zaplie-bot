@@ -214,9 +214,14 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       }
     };
 
+    // Early return if no accounts available yet
+    if (!accounts || accounts.length === 0) {
+      setLoading(false);
+      return;
+    }
+
     // Only fetch if wallet changed or no data cached
-    // Also guard against empty accounts array
-    if (currentWallet !== activeWallet && accounts && accounts.length > 0) {
+    if (currentWallet !== activeWallet) {
       setAllTransactions([]);
       setDisplayedTransactions([]);
       fetchTransactions();

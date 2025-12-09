@@ -276,10 +276,16 @@ const FeedList: React.FC<FeedListProps> = ({
         if (typeof txTimeRaw === 'number') {
           txTimeSeconds = txTimeRaw;
         } else if (typeof txTimeRaw === 'string') {
-          // Parse ISO date string to Unix seconds
-          txTimeSeconds = Math.floor(new Date(txTimeRaw).getTime() / 1000);
+          // Parse ISO date string to Unix seconds with validation
+          const date = new Date(txTimeRaw);
+          if (isNaN(date.getTime())) {
+            console.warn(`Invalid date format for transaction: ${txTimeRaw}`);
+            return false; // Exclude transactions with invalid dates
+          }
+          txTimeSeconds = Math.floor(date.getTime() / 1000);
         } else {
-          txTimeSeconds = 0;
+          console.warn(`Unknown time format: ${typeof txTimeRaw}`);
+          return false; // Exclude transactions with unknown time format
         }
 
         return txTimeSeconds >= timestamp;

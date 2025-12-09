@@ -75,7 +75,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
                 .reduce((total, transaction) => total + Math.abs(transaction.amount), 0) / 1000;
               setSpentSats(spent);
             } else {
-              console.error('Allowance wallet inkey not found');
+              console.error('Wallet configuration not found');
               setSpentSats(0);
             }
           }
