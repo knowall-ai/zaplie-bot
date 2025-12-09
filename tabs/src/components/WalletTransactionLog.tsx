@@ -215,12 +215,13 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     };
 
     // Only fetch if wallet changed or no data cached
-    if (currentWallet !== activeWallet) {
+    // Also guard against empty accounts array
+    if (currentWallet !== activeWallet && accounts && accounts.length > 0) {
       setAllTransactions([]);
       setDisplayedTransactions([]);
       fetchTransactions();
     }
-  }, [activeWallet, accounts, currentWallet, users]);
+  }, [activeWallet, accounts, currentWallet]);
 
   // Separate effect to filter cached transactions when activeTab changes
   useEffect(() => {
