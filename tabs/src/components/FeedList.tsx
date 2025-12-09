@@ -23,6 +23,18 @@ interface ZapTransaction {
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
 
+// Wallet type identifiers - these match the exact naming convention used by the backend
+// Backend creates wallets with names 'Allowance' and 'Private' (see functions/sendZap/index.ts)
+const WALLET_NAME_ALLOWANCE = 'Allowance';
+const WALLET_NAME_PRIVATE = 'Private';
+
+// Helper functions to identify wallet types by name (exact match, case-insensitive)
+const isAllowanceWallet = (walletName: string): boolean =>
+  walletName.toLowerCase() === WALLET_NAME_ALLOWANCE.toLowerCase();
+
+const isPrivateWallet = (walletName: string): boolean =>
+  walletName.toLowerCase() === WALLET_NAME_PRIVATE.toLowerCase();
+
 const FeedList: React.FC<FeedListProps> = ({
   timestamp,
   allZaps = [],
