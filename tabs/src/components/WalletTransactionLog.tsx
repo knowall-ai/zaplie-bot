@@ -35,10 +35,8 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   // Effect to fetch data when wallet changes
   useEffect(() => {
     // Calculate the timestamp for 30 days ago
-    const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
-
-    // Use the provided timestamp or default to 7 days ago
-    const paymentsSinceTimestamp = sevenDaysAgo;
+    const thirtyDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
+    const paymentsSinceTimestamp = thirtyDaysAgo;
 
     const account = accounts[0];
 
@@ -46,175 +44,162 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       setLoading(true);
       setError(null);
 
-      let fetchedTransactions: Transaction[] = [];
-
       try {
-        // First, fetch all users
+        // Fetch all users once (cached in service layer)
         const allUsers = await getUsers(adminKey, {});
         if (allUsers) {
           setUsers(allUsers);
         }
 
+        // Get current user's LNbits details
         const currentUserLNbitDetails = await getUsers(adminKey, {
           aadObjectId: account.localAccountId,
         });
 
-        if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
-          const user = currentUserLNbitDetails[0];
+        if (!currentUserLNbitDetails || currentUserLNbitDetails.length === 0) {
+          throw new Error('User not found in LNbits');
+        }
 
-          // Fetch user's wallets
-          const userWallets = await getUserWallets(adminKey, user.id);
+        const user = currentUserLNbitDetails[0];
 
-          // Create a wallet ID to user mapping for ALL users
-          const walletToUserMap = new Map<string, User>();
+        // Fetch only the current user's wallets
+        const userWallets = await getUserWallets(adminKey, user.id);
 
-          // For each user, fetch their wallets and create mapping
-          if (allUsers) {
-            for (const u of allUsers) {
-              try {
-                const wallets = await getUserWallets(adminKey, u.id);
-                if (wallets) {
-                  wallets.forEach(wallet => {
-                    walletToUserMap.set(wallet.id, u);
-                  });
-                }
-              } catch (err) {
-                console.error(`Error fetching wallets for user ${u.id}:`, err);
-              }
-            }
-          }
+        if (!userWallets || userWallets.length === 0) {
+          throw new Error('No wallets found for user');
+        }
 
-          // Fetch ALL payments from ALL wallets to enable matching
-          const allPayments: Transaction[] = [];
+        // Find the selected wallet
+        let selectedWallet: Wallet | undefined;
+        if (activeWallet === 'Private') {
+          selectedWallet = userWallets.find(w => w.name.toLowerCase() === 'private') ||
+                           userWallets.find(w => w.name.toLowerCase().includes('private'));
+        } else {
+          selectedWallet = userWallets.find(w => w.name.toLowerCase() === 'allowance') ||
+                           userWallets.find(w => w.name.toLowerCase().includes('allowance'));
+        }
 
-          if (allUsers) {
-            for (const u of allUsers) {
-              try {
-                const wallets = await getUserWallets(adminKey, u.id);
-                if (wallets) {
-                  for (const wallet of wallets) {
+        if (!selectedWallet?.inkey) {
+          const walletType = activeWallet === 'Private' ? 'Private' : 'Allowance';
+          throw new Error(`${walletType} wallet not found for user`);
+        }
+
+        // Fetch transactions only for the current user's selected wallet
+        const transactions = await getWalletTransactionsSince(
+          selectedWallet.inkey,
+          paymentsSinceTimestamp,
+          null,
+        );
+
+        // Build wallet-to-user mapping and fetch all transactions for matching
+        const walletToUserMap = new Map<string, User>();
+        const allPayments: Transaction[] = [];
+
+        if (allUsers) {
+          // Fetch all wallets and their transactions in parallel for efficiency
+          const walletPromises = allUsers.map(async (u) => {
+            try {
+              const wallets = await getUserWallets(adminKey, u.id);
+              if (wallets) {
+                // Map wallets to user
+                wallets.forEach(wallet => {
+                  walletToUserMap.set(wallet.id, u);
+                });
+
+                // Fetch transactions from Private and Allowance wallets only
+                for (const wallet of wallets) {
+                  const walletName = wallet.name.toLowerCase();
+                  if (walletName === 'private' || walletName === 'allowance') {
                     try {
                       const payments = await getWalletTransactionsSince(
                         wallet.inkey,
                         paymentsSinceTimestamp,
-                        null,
+                        null
                       );
                       allPayments.push(...payments);
                     } catch (err) {
-                      console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
+                      // Silently continue
                     }
                   }
                 }
-              } catch (err) {
-                console.error(`Error fetching wallets for user ${u.id}:`, err);
               }
-            }
-          }
-
-          // Create a map of all payments by checking_id for internal transfer matching
-          const paymentsByCheckingId = new Map<string, Transaction[]>();
-          allPayments.forEach(payment => {
-            const cleanId = payment.checking_id?.replace('internal_', '') || '';
-            if (cleanId) {
-              const existing = paymentsByCheckingId.get(cleanId) || [];
-              existing.push(payment);
-              paymentsByCheckingId.set(cleanId, existing);
+            } catch (err) {
+              // Silently continue if wallet fetch fails for a user
             }
           });
 
-          let inkey: any = null;
-
-          if (userWallets && userWallets.length > 0) {
-            if (activeWallet === 'Private') {
-              const privateWallet = userWallets.find(w => w.name.toLowerCase().includes('private'));
-              inkey = privateWallet?.inkey;
-            } else {
-              const allowanceWallet = userWallets.find(w => w.name.toLowerCase().includes('allowance'));
-              inkey = allowanceWallet?.inkey;
-            }
-          } else {
-            console.error('No wallets found for user');
-          }
-
-          // Check if inkey exists before fetching transactions
-          if (!inkey) {
-            const walletType = activeWallet === 'Private' ? 'Private' : 'Allowance';
-            throw new Error(`${walletType} wallet not found for user`);
-          }
-
-          const transactions = await getWalletTransactionsSince(
-            inkey,
-            paymentsSinceTimestamp,
-            null,
-          );
-
-          // Don't filter by tab here - we'll cache ALL transactions and filter later
-          for (const transaction of transactions) {
-            const walletOwner = walletToUserMap.get(transaction.wallet_id);
-            const isIncoming = transaction.amount > 0;
-
-            // Initialize extra.from and extra.to
-            if (!transaction.extra) {
-              transaction.extra = {};
-            }
-
-            // Try to find matching internal payment (the other side of the transfer)
-            const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
-            const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
-            const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
-
-            let otherUser: User | null = null;
-
-            // First try to find the other party via matching payment
-            if (matchingPayment) {
-              otherUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
-            }
-
-            // If no matching payment found, try to extract from memo
-            if (!otherUser && transaction.memo) {
-              // Try to find user by matching displayName or email in memo
-              const memo = transaction.memo.toLowerCase();
-              const foundUser = allUsers?.find(u => {
-                const displayName = u.displayName?.toLowerCase();
-                const email = u.email?.toLowerCase();
-                const username = u.email?.split('@')[0]?.toLowerCase();
-
-                return (
-                  (displayName && memo.includes(displayName)) ||
-                  (email && memo.includes(email)) ||
-                  (username && memo.includes(username))
-                );
-              });
-
-              if (foundUser) {
-                otherUser = foundUser;
-              }
-            }
-
-            if (isIncoming) {
-              // For incoming: TO = current wallet owner, FROM = other party
-              transaction.extra.to = walletOwner || null;
-              transaction.extra.from = otherUser;
-            } else {
-              // For outgoing: FROM = current wallet owner, TO = other party
-              transaction.extra.from = walletOwner || null;
-              transaction.extra.to = otherUser;
-            }
-          }
-
-          fetchedTransactions = fetchedTransactions.concat(transactions);
+          await Promise.all(walletPromises);
         }
 
-        // Cache all transactions
-        setAllTransactions(fetchedTransactions);
+        // Create a map of all payments by checking_id for internal transfer matching
+        const paymentsByCheckingId = new Map<string, Transaction[]>();
+        allPayments.forEach(payment => {
+          const cleanId = payment.checking_id?.replace('internal_', '') || '';
+          if (cleanId) {
+            const existing = paymentsByCheckingId.get(cleanId) || [];
+            existing.push(payment);
+            paymentsByCheckingId.set(cleanId, existing);
+          }
+        });
+
+        // Process transactions to add from/to user info
+        for (const transaction of transactions) {
+          const isIncoming = transaction.amount > 0;
+          let otherUser: User | null = null;
+
+          // Try to find matching internal payment (the other side of the transfer)
+          const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
+          const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
+          const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
+
+          if (matchingPayment) {
+            otherUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+          }
+
+          // Fall back to memo text matching if no match found
+          if (!otherUser && transaction.memo && allUsers) {
+            const memo = transaction.memo.toLowerCase();
+            otherUser = allUsers.find(u => {
+              const displayName = u.displayName?.toLowerCase();
+              const email = u.email?.toLowerCase();
+              const username = u.email?.split('@')[0]?.toLowerCase();
+              return (
+                (displayName && memo.includes(displayName)) ||
+                (email && memo.includes(email)) ||
+                (username && memo.includes(username))
+              );
+            }) || null;
+          }
+
+          // Set the from/to fields
+          if (!transaction.extra) {
+            transaction.extra = {};
+          }
+
+          if (isIncoming) {
+            transaction.extra.to = user;
+            transaction.extra.from = otherUser;
+          } else {
+            transaction.extra.from = user;
+            transaction.extra.to = otherUser;
+          }
+        }
+
+        setAllTransactions(transactions);
         setCurrentWallet(activeWallet);
       } catch (error) {
+        console.error('WalletTransactionLog fetch error:', error);
         if (error instanceof Error) {
-          setError(`Failed to fetch transactions: ${error.message}`);
+          if (error.message === 'Failed to fetch') {
+            setError('Unable to connect to the server. Please check your network connection and try again.');
+          } else if (error.message.includes('wallet not found')) {
+            setError(`${activeWallet === 'Private' ? 'Private' : 'Allowance'} wallet is not available for your account.`);
+          } else {
+            setError(`Failed to load transactions: ${error.message}`);
+          }
         } else {
-          setError('An unknown error occurred while fetching transactions');
+          setError('An unexpected error occurred. Please refresh and try again.');
         }
-        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -226,7 +211,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       setDisplayedTransactions([]);
       fetchTransactions();
     }
-  }, [activeWallet, accounts, currentWallet, users]);
+  }, [activeWallet, accounts, currentWallet]);
 
   // Separate effect to filter cached transactions when activeTab changes
   useEffect(() => {
@@ -252,14 +237,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     return null; // or handle the case where the context is not available
   }
 const rewardsName = rewardNameContext.rewardName;
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>{error}</div>;
-  }
 
   if (loading) {
     return <div>Loading...</div>;
