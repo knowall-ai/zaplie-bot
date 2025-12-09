@@ -23,18 +23,6 @@ interface ZapTransaction {
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
 
-// Wallet type identifiers - these match the exact naming convention used by the backend
-// Backend creates wallets with names 'Allowance' and 'Private' (see functions/sendZap/index.ts)
-const WALLET_NAME_ALLOWANCE = 'Allowance';
-const WALLET_NAME_PRIVATE = 'Private';
-
-// Helper functions to identify wallet types by name (exact match, case-insensitive)
-const isAllowanceWallet = (walletName: string): boolean =>
-  walletName.toLowerCase() === WALLET_NAME_ALLOWANCE.toLowerCase();
-
-const isPrivateWallet = (walletName: string): boolean =>
-  walletName.toLowerCase() === WALLET_NAME_PRIVATE.toLowerCase();
-
 const FeedList: React.FC<FeedListProps> = ({
   timestamp,
   allZaps = [],
@@ -277,11 +265,32 @@ const FeedList: React.FC<FeedListProps> = ({
     return 0;
   });
 
+  // Apply timestamp filter (7/30/60 days) - filter transactions by time
+  // timestamp prop is in Unix seconds (e.g., 7 days ago)
+  // transaction.time can be either a number (Unix seconds) or an ISO date string
+  const filteredZaps = timestamp && timestamp > 0
+    ? sortedZaps.filter(zap => {
+        const txTimeRaw = zap.transaction.time;
+        let txTimeSeconds: number;
+
+        if (typeof txTimeRaw === 'number') {
+          txTimeSeconds = txTimeRaw;
+        } else if (typeof txTimeRaw === 'string') {
+          // Parse ISO date string to Unix seconds
+          txTimeSeconds = Math.floor(new Date(txTimeRaw).getTime() / 1000);
+        } else {
+          txTimeSeconds = 0;
+        }
+
+        return txTimeSeconds >= timestamp;
+      })
+    : sortedZaps;
+
   // Calculate pagination variables
-  const totalPages = Math.ceil(sortedZaps.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredZaps.length / ITEMS_PER_PAGE);
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = sortedZaps.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = filteredZaps.slice(indexOfFirstItem, indexOfLastItem);
 
   const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
@@ -401,7 +410,7 @@ const FeedList: React.FC<FeedListProps> = ({
       ) : (
         <div>No data available</div>
       )}
-      {sortedZaps.length > ITEMS_PER_PAGE && (
+      {filteredZaps.length > ITEMS_PER_PAGE && (
        <div className={styles.pagination}>
        <button
          onClick={firstPage}
