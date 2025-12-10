@@ -23,6 +23,22 @@ interface ZapTransaction {
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
 
+// Helper function to parse transaction timestamp (handles both Unix seconds and ISO strings)
+const parseTransactionTime = (timestamp: number | string): Date | null => {
+  if (typeof timestamp === 'number') {
+    return new Date(timestamp * 1000);
+  }
+  if (typeof timestamp === 'string') {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) {
+      console.warn(`Invalid timestamp: ${timestamp}`);
+      return null;
+    }
+    return date;
+  }
+  return null;
+};
+
 const FeedList: React.FC<FeedListProps> = ({
   timestamp,
   allZaps = [],
@@ -30,7 +46,6 @@ const FeedList: React.FC<FeedListProps> = ({
   isLoading = false
 }) => {
   const [zaps, setZaps] = useState<ZapTransaction[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,7 +78,6 @@ const FeedList: React.FC<FeedListProps> = ({
           setLoading(false);
           return;
         }
-        setUsers(fetchedUsers);
 
         // Step 2: For each user, get wallets using /users/api/v1/user/{userId}/wallet
         const allWalletsData: { userId: string; wallets: Wallet[] }[] = [];
@@ -270,24 +284,11 @@ const FeedList: React.FC<FeedListProps> = ({
   // transaction.time can be either a number (Unix seconds) or an ISO date string
   const filteredZaps = timestamp && timestamp > 0
     ? sortedZaps.filter(zap => {
-        const txTimeRaw = zap.transaction.time;
-        let txTimeSeconds: number;
-
-        if (typeof txTimeRaw === 'number') {
-          txTimeSeconds = txTimeRaw;
-        } else if (typeof txTimeRaw === 'string') {
-          // Parse ISO date string to Unix seconds with validation
-          const date = new Date(txTimeRaw);
-          if (isNaN(date.getTime())) {
-            console.warn(`Invalid date format for transaction: ${txTimeRaw}`);
-            return false; // Exclude transactions with invalid dates
-          }
-          txTimeSeconds = Math.floor(date.getTime() / 1000);
-        } else {
-          console.warn(`Unknown time format: ${typeof txTimeRaw}`);
-          return false; // Exclude transactions with unknown time format
+        const parsedDate = parseTransactionTime(zap.transaction.time);
+        if (!parsedDate) {
+          return false; // Exclude transactions with invalid/unknown time format
         }
-
+        const txTimeSeconds = Math.floor(parsedDate.getTime() / 1000);
         return txTimeSeconds >= timestamp;
       })
     : sortedZaps;
@@ -355,15 +356,9 @@ const FeedList: React.FC<FeedListProps> = ({
                 <div className={styles.personDetails}>
                   <div className={styles.userName}>
                     {(() => {
-                      const timestamp = zap.transaction.time;
-                      // Try to parse as ISO string first, then Unix timestamp
-                      let date = new Date(timestamp);
-                      if (isNaN(date.getTime()) && typeof timestamp === 'number') {
-                        // Try as Unix timestamp (seconds)
-                        date = new Date(timestamp * 1000);
-                      }
-                      if (isNaN(date.getTime())) {
-                        return `Invalid: ${timestamp}`;
+                      const date = parseTransactionTime(zap.transaction.time);
+                      if (!date) {
+                        return `Invalid: ${zap.transaction.time}`;
                       }
                       // UK format: DD/MM/YYYY HH:MM (24-hour)
                       return `${date.toLocaleDateString('en-GB')} ${date.toLocaleTimeString('en-GB', {

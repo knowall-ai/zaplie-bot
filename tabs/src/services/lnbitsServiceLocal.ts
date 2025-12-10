@@ -16,27 +16,48 @@ const TOKEN_KEY = 'accessToken';
 const TOKEN_TIMESTAMP_KEY = 'accessTokenTimestamp';
 
 // Cache for API responses to prevent redundant calls
-const CACHE_DURATION_MS = 60000; // 1 minute cache
+// Different TTLs for different data types based on update frequency
+const CACHE_DURATION_USERS_MS = 300000; // 5 minutes for user list (changes rarely)
+const CACHE_DURATION_WALLETS_MS = 30000; // 30 seconds for wallet data (changes frequently)
+const MAX_WALLET_CACHE_SIZE = 100; // Limit cache size to prevent memory growth
+
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
 }
+
+// Raw API user data type (before mapping to User)
+// Used by getAllUsersFromAPI - mapping to User type is done in getUsers()
+interface RawApiUser {
+  id: string;
+  username?: string;
+  external_id?: string;
+  extra?: Record<string, unknown> | string;
+}
 const apiCache: {
-  allUsers?: CacheEntry<any[]>;
+  allUsers?: CacheEntry<User[]>;
   userWallets: Map<string, CacheEntry<Wallet[]>>;
 } = {
   userWallets: new Map(),
 };
 
-// Helper to check if cache is valid
-const isCacheValid = <T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> => {
+// Helper to check if cache is valid with configurable duration
+const isCacheValid = <T>(entry: CacheEntry<T> | undefined, durationMs: number): entry is CacheEntry<T> => {
   if (!entry) return false;
-  return Date.now() - entry.timestamp < CACHE_DURATION_MS;
+  return Date.now() - entry.timestamp < durationMs;
 };
 
 // Pending promises to prevent duplicate concurrent requests
-let pendingUsersRequest: Promise<any[]> | null = null;
+let pendingUsersRequest: Promise<RawApiUser[]> | null = null;
 const pendingWalletRequests: Map<string, Promise<Wallet[] | null>> = new Map();
+
+// Clear cache function - call on logout or account switch
+export const clearApiCache = () => {
+  apiCache.allUsers = undefined;
+  apiCache.userWallets.clear();
+  pendingUsersRequest = null;
+  pendingWalletRequests.clear();
+};
 
 // Get token from storage if valid, otherwise return null
 const getStoredToken = (): string | null => {
@@ -237,17 +258,17 @@ const getUserWallets = async (
   adminKey: string,
   userId: string,
 ): Promise<Wallet[] | null> => {
-  // Check cache first
+  // Check cache first with wallet-specific TTL
   const cachedEntry = apiCache.userWallets.get(userId);
-  if (isCacheValid(cachedEntry)) {
-    console.log(`[Cache HIT] getUserWallets for user ${userId}`);
+  if (isCacheValid(cachedEntry, CACHE_DURATION_WALLETS_MS)) {
+    logger.debug(`[Cache HIT] getUserWallets for user ${userId}`);
     return cachedEntry.data;
   }
 
   // Check if there's already a pending request for this user
   const pendingRequest = pendingWalletRequests.get(userId);
   if (pendingRequest) {
-    console.log(`[Dedup] Reusing pending getUserWallets request for user ${userId}`);
+    logger.debug(`[Dedup] Reusing pending getUserWallets request for user ${userId}`);
     return pendingRequest;
   }
 
@@ -292,6 +313,15 @@ const getUserWallets = async (
         wallet => wallet.deleted !== true,
       );
 
+      // Limit cache size to prevent unbounded memory growth
+      if (apiCache.userWallets.size >= MAX_WALLET_CACHE_SIZE) {
+        // Remove oldest entry (first entry in Map)
+        const firstKey = apiCache.userWallets.keys().next().value;
+        if (firstKey) {
+          apiCache.userWallets.delete(firstKey);
+        }
+      }
+
       // Cache the result
       apiCache.userWallets.set(userId, {
         data: filteredWallets,
@@ -300,7 +330,7 @@ const getUserWallets = async (
 
       return filteredWallets;
     } catch (error) {
-      console.error(error);
+      logger.error('Error fetching user wallets:', error);
       throw error;
     } finally {
       // Remove from pending requests
@@ -338,7 +368,6 @@ const getUsers = async (
       logger.debug('=== SAMPLE RAW USER FROM API ===');
       logger.debug('Sample user data:', rawUsers[0]);
       logger.debug('Available fields:', Object.keys(rawUsers[0]));
-      logger.debug('Sample user.external_id:', rawUsers[0].external_id);
     }
 
     // Map the raw user data to User objects
@@ -393,19 +422,21 @@ const getUsers = async (
       // Otherwise, filter by extra metadata fields
       console.log('Filtering by extra metadata:', filterByExtra);
       const filteredUsers = users.filter(user => {
-        const userRaw = rawUsers.find((u: any) => u.id === user.id);
+        const userRaw = rawUsers.find(u => u.id === user.id);
         if (!userRaw || !userRaw.extra) {
           return false;
         }
 
         // If extra is a string, try to parse it
-        let extraData = userRaw.extra;
-        if (typeof extraData === 'string') {
+        let extraData: Record<string, unknown>;
+        if (typeof userRaw.extra === 'string') {
           try {
-            extraData = JSON.parse(extraData);
+            extraData = JSON.parse(userRaw.extra);
           } catch (e) {
             return false;
           }
+        } else {
+          extraData = userRaw.extra;
         }
 
         return Object.keys(filterByExtra).every(
@@ -1076,24 +1107,25 @@ const getAllPayments = async (
 };
 
 // NEW: Get all users from /users/api/v1/user endpoint
-const getAllUsersFromAPI = async (): Promise<any[]> => {
-  // Check cache first
-  if (isCacheValid(apiCache.allUsers)) {
-    console.log('[Cache HIT] getAllUsersFromAPI');
-    return apiCache.allUsers.data;
+// Returns raw API data - mapping to User type is done in getUsers()
+const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
+  // Check cache first with user-specific TTL (5 minutes)
+  if (isCacheValid(apiCache.allUsers, CACHE_DURATION_USERS_MS)) {
+    logger.debug('[Cache HIT] getAllUsersFromAPI');
+    return apiCache.allUsers.data as RawApiUser[];
   }
 
   // Check if there's already a pending request
   if (pendingUsersRequest) {
-    console.log('[Dedup] Reusing pending getAllUsersFromAPI request');
-    return pendingUsersRequest;
+    logger.debug('[Dedup] Reusing pending getAllUsersFromAPI request');
+    return pendingUsersRequest as Promise<RawApiUser[]>;
   }
 
-  console.log('=== getAllUsersFromAPI ===');
-  console.log('Fetching from:', `${nodeUrl}/users/api/v1/user`);
+  logger.debug('=== getAllUsersFromAPI ===');
+  logger.debug(`Fetching from: ${nodeUrl}/users/api/v1/user`);
 
   // Create new request and store it to prevent duplicates
-  pendingUsersRequest = (async (): Promise<any[]> => {
+  pendingUsersRequest = (async (): Promise<RawApiUser[]> => {
     try {
       const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
@@ -1106,38 +1138,35 @@ const getAllUsersFromAPI = async (): Promise<any[]> => {
       });
 
       if (!response.ok) {
-        console.error('Response status:', response.status);
-        console.error('Response statusText:', response.statusText);
+        logger.error(`getAllUsersFromAPI failed with status: ${response.status}`);
         throw new Error(
           `Error getting all users (status: ${response.status})`,
         );
       }
 
       const responseData = await response.json();
-      console.log('Total users retrieved:', responseData?.data?.length || 0);
-      console.log('All Users:', responseData);
-      console.log('===========================');
+      logger.debug(`Total users retrieved: ${responseData?.data?.length || 0}`);
 
       // Extract the users array from the response
       const users = responseData?.data || [];
-      const result = Array.isArray(users) ? users : [];
+      const result: RawApiUser[] = Array.isArray(users) ? users : [];
 
-      // Cache the result
+      // Cache the result (cast to User[] for cache type compatibility)
       apiCache.allUsers = {
-        data: result,
+        data: result as unknown as User[],
         timestamp: Date.now(),
       };
 
       return result;
     } catch (error) {
-      console.error('Error in getAllUsersFromAPI:', error);
+      logger.error('Error in getAllUsersFromAPI:', error);
       throw error;
     } finally {
       pendingUsersRequest = null;
     }
-  })();
+  })() as Promise<RawApiUser[]>;
 
-  return pendingUsersRequest;
+  return pendingUsersRequest as Promise<RawApiUser[]>;
 };
 
 // NEW: Get wallets paginated for a specific user

@@ -62,11 +62,12 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
 
             // Check if inkey exists before fetching transactions
             if (allowanceWallet.inkey) {
-              const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
+              const DAYS_TO_FETCH = 30;
+              const thirtyDaysAgo = Date.now() / 1000 - DAYS_TO_FETCH * 24 * 60 * 60;
               const encodedExtra = {};
               const transaction = await getWalletTransactionsSince(
                 allowanceWallet.inkey,
-                sevenDaysAgo,
+                thirtyDaysAgo,
                 encodedExtra
               );
 

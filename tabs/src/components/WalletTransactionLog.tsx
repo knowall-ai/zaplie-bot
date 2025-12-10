@@ -25,7 +25,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 }) => {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); // Cache all transactions
   const [displayedTransactions, setDisplayedTransactions] = useState<Transaction[]>([]); // Filtered transactions to display
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentWallet, setCurrentWallet] = useState<string | undefined>(undefined); // Track which wallet data is cached for
@@ -35,10 +34,10 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   // Effect to fetch data when wallet changes
   useEffect(() => {
     // Calculate the timestamp for 30 days ago
-    const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
+    const DAYS_TO_FETCH = 30;
+    const thirtyDaysAgo = Date.now() / 1000 - DAYS_TO_FETCH * 24 * 60 * 60;
 
-    // Use the provided timestamp or default to 7 days ago
-    const paymentsSinceTimestamp = sevenDaysAgo;
+    const paymentsSinceTimestamp = thirtyDaysAgo;
 
     const account = accounts[0];
 
@@ -51,9 +50,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       try {
         // First, fetch all users
         const allUsers = await getUsers(adminKey, {});
-        if (allUsers) {
-          setUsers(allUsers);
-        }
 
         const currentUserLNbitDetails = await getUsers(adminKey, {
           aadObjectId: account.localAccountId,
@@ -252,14 +248,6 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     return null; // or handle the case where the context is not available
   }
 const rewardsName = rewardNameContext.rewardName;
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>{error}</div>;
-  }
 
   if (loading) {
     return <div>Loading...</div>;
