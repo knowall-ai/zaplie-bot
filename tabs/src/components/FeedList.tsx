@@ -79,44 +79,43 @@ const FeedList: React.FC<FeedListProps> = ({
           return;
         }
 
-        // Step 2: For each user, get wallets using /users/api/v1/user/{userId}/wallet
-        const allWalletsData: { userId: string; wallets: Wallet[] }[] = [];
-        const allWalletsArray: Wallet[] = [];
+        // Step 2: Parallelize wallet fetches for all users
+        const walletPromises = fetchedUsers.map(async (user) => {
+          try {
+            const userWallets = await getUserWallets(adminKey, user.id);
+            return { userId: user.id, wallets: userWallets || [] };
+          } catch (err) {
+            // Log error but continue - don't fail entire feed for one user
+            return { userId: user.id, wallets: [] };
+          }
+        });
+        const allWalletsData = await Promise.all(walletPromises);
 
-        for (const user of fetchedUsers) {
-          const userWallets = await getUserWallets(adminKey, user.id);
-          const wallets = userWallets || [];
-
-          allWalletsData.push({
-            userId: user.id,
-            wallets: wallets
-          });
-          allWalletsArray.push(...wallets);
-        }
-        // Step 3: For each wallet, get payments from Private and Allowance wallets only
-        let allPayments: Transaction[] = [];
-
+        // Step 3: Collect all Private and Allowance wallets, then parallelize payment fetches
+        const filteredWallets: Wallet[] = [];
         for (const userData of allWalletsData) {
-          // Filter to only Private and Allowance wallets
-          const filteredWallets = userData.wallets.filter(wallet => {
+          const userFilteredWallets = userData.wallets.filter(wallet => {
             const walletName = wallet.name.toLowerCase();
             return walletName.includes('private') || walletName.includes('allowance');
           });
-
-          // Get payments from filtered wallets only
-          for (const wallet of filteredWallets) {
-            try {
-              const payments = await getWalletTransactionsSince(
-                wallet.inkey,
-                paymentsSinceTimestamp,
-                null
-              );
-              allPayments = allPayments.concat(payments);
-            } catch (err) {
-              console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
-            }
-          }
+          filteredWallets.push(...userFilteredWallets);
         }
+
+        // Parallelize payment fetches for all filtered wallets
+        const paymentPromises = filteredWallets.map(async (wallet) => {
+          try {
+            return await getWalletTransactionsSince(
+              wallet.inkey,
+              paymentsSinceTimestamp,
+              null
+            );
+          } catch (err) {
+            // Log error but continue - don't fail entire feed for one wallet
+            return [];
+          }
+        });
+        const paymentResults = await Promise.all(paymentPromises);
+        const allPayments = paymentResults.flat();
 
         // Filter out weekly allowance cleared transactions only
         const allowanceTransactions = allPayments.filter(

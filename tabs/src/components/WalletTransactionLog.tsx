@@ -19,6 +19,11 @@ interface WalletTransactionLogProps {
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
+// Time constants
+const SECONDS_PER_DAY = 86400;
+const MS_PER_SECOND = 1000;
+const TRANSACTION_HISTORY_DAYS = 30;
+
 const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   activeTab,
   activeWallet,
@@ -33,11 +38,10 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
   // Effect to fetch data when wallet changes
   useEffect(() => {
-    // Calculate the timestamp for 30 days ago
-    const DAYS_TO_FETCH = 30;
-    const thirtyDaysAgo = Date.now() / 1000 - DAYS_TO_FETCH * 24 * 60 * 60;
+    // Calculate the timestamp for transaction history period
+    const transactionHistoryStart = Date.now() / MS_PER_SECOND - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
 
-    const paymentsSinceTimestamp = thirtyDaysAgo;
+    const paymentsSinceTimestamp = transactionHistoryStart;
 
     const account = accounts[0];
 
@@ -61,50 +65,48 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
           // Fetch user's wallets
           const userWallets = await getUserWallets(adminKey, user.id);
 
-          // Create a wallet ID to user mapping for ALL users
+          // Create a wallet ID to user mapping for ALL users - parallelized
           const walletToUserMap = new Map<string, User>();
-
-          // For each user, fetch their wallets and create mapping
-          if (allUsers) {
-            for (const u of allUsers) {
-              try {
-                const wallets = await getUserWallets(adminKey, u.id);
-                if (wallets) {
-                  wallets.forEach(wallet => {
-                    walletToUserMap.set(wallet.id, u);
-                  });
-                }
-              } catch (err) {
-                console.error(`Error fetching wallets for user ${u.id}:`, err);
-              }
-            }
-          }
-
-          // Fetch ALL payments from ALL wallets to enable matching
-          const allPayments: Transaction[] = [];
+          let allPayments: Transaction[] = [];
 
           if (allUsers) {
-            for (const u of allUsers) {
-              try {
-                const wallets = await getUserWallets(adminKey, u.id);
-                if (wallets) {
-                  for (const wallet of wallets) {
-                    try {
-                      const payments = await getWalletTransactionsSince(
-                        wallet.inkey,
-                        paymentsSinceTimestamp,
-                        null,
-                      );
-                      allPayments.push(...payments);
-                    } catch (err) {
-                      console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
-                    }
-                  }
+            // Parallelize wallet fetches for all users
+            const walletResults = await Promise.all(
+              allUsers.map(async (u) => {
+                try {
+                  const wallets = await getUserWallets(adminKey, u.id);
+                  return { user: u, wallets: wallets || [] };
+                } catch (err) {
+                  // Log error but continue - don't fail for one user
+                  return { user: u, wallets: [] };
                 }
-              } catch (err) {
-                console.error(`Error fetching wallets for user ${u.id}:`, err);
-              }
-            }
+              })
+            );
+
+            // Build wallet to user mapping
+            walletResults.forEach(({ user, wallets }) => {
+              wallets.forEach(wallet => {
+                walletToUserMap.set(wallet.id, user);
+              });
+            });
+
+            // Collect all wallets and parallelize payment fetches
+            const allWallets = walletResults.flatMap(r => r.wallets);
+            const paymentResults = await Promise.all(
+              allWallets.map(async (wallet) => {
+                try {
+                  return await getWalletTransactionsSince(
+                    wallet.inkey,
+                    paymentsSinceTimestamp,
+                    null,
+                  );
+                } catch (err) {
+                  // Log error but continue - don't fail for one wallet
+                  return [];
+                }
+              })
+            );
+            allPayments = paymentResults.flat();
           }
 
           // Create a map of all payments by checking_id for internal transfer matching
