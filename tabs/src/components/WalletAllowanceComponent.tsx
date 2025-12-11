@@ -6,6 +6,7 @@ import Calendar from '../images/Calendar.svg';
 import { getAllowance, getUsers, getUserWallets, getWalletTransactionsSince } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import { RewardNameContext } from './RewardNameContext';
+import SendZapsPopup from './SendZapsPopup';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
@@ -19,6 +20,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
   const [balance, setBalance] = useState<number>(0);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [spentSats, setSpentSats] = useState(0);
+  const [showSendZapsPopup, setShowSendZapsPopup] = useState(false);
   // calculate battery
   const { accounts } = useMsal();
 
@@ -85,17 +87,18 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
   }
 const rewardsName = rewardNameContext.rewardName;
   return (
-    <div className="wallet-container">
-      <div className="wallet-header">
-        <h4>Allowance</h4>
-        <p>Amount available to send to your teammates:</p>
-      </div>
-      <div className="mainContent">
+    <>
+      <div className="wallet-container">
+        <div className="wallet-header">
+          <h4>Allowance</h4>
+          <p>Amount available to send to your teammates:</p>
+        </div>
+        <div className="mainContent">
         <div
           className="row"
           style={{ paddingTop: '20px', paddingBottom: '20px' }}
         >
-          <div className="col-md-6">
+          <div className="col-md-5">
             <div className="amountDisplayContainer">
               <div className="amountDisplay">
                 {balance?.toLocaleString() ?? '0'}
@@ -113,15 +116,22 @@ const rewardsName = rewardNameContext.rewardName;
             </div>
           </div>
 
-          <div className="col-md-3">
+          <div className="col-md-6" style={{ display: 'flex', alignItems: 'center', gap: '160px' }}>
             <BatteryImageDisplay value={batteryPercentage} />
+            <button
+              className="sendZapsButton"
+              onClick={() => setShowSendZapsPopup(true)}
+              style={{ width: 'auto' }}
+            >
+              Send some zaps
+            </button>
           </div>
         </div>
         <div
           className="row"
           style={{ paddingTop: '20px', paddingBottom: '20px' }}
         >
-          <div className="col-md-6">
+          <div className="col-md-5">
             <div className="nextAllwanceContainer">
               <img src={Calendar} alt="" />
               <div className="remaining smallTextFont">Next allowance</div>
@@ -165,6 +175,10 @@ const rewardsName = rewardNameContext.rewardName;
         </div>
       </div>
     </div>
+    {showSendZapsPopup && (
+      <SendZapsPopup onClose={() => setShowSendZapsPopup(false)} />
+    )}
+    </>
   );
 };
 
