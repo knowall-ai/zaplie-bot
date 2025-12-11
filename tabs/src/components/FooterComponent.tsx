@@ -1,29 +1,35 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import styles from './FooterComponent.module.css';
 import { KNOWALL_CONSTANTS } from '../constants/branding';
+import { useTeamsAuth } from '../hooks/useTeamsAuth';
+import NavigationLinks from './NavigationLinks';
 
 type FooterComponentProps = {
   hidden: boolean;
 };
 
 const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
+  const { isInTeams } = useTeamsAuth();
 
   if (hidden) {
     return null;
-}
+  }
+
   return (
     <footer className={styles.footer}>
-      <div className={styles.navigation}>
-        <Link to="/feed">Feed</Link>
-        <Link to="/users">Users</Link>
-        <Link to="/rewards">Rewards</Link>
-        <Link to="/wallet">Wallet</Link>
-        <Link to="/settings">Settings</Link>
-      </div>
+      {/* Show navigation links ONLY in Teams context */}
+      {isInTeams && (
+        <nav className={styles.navigation} aria-label="Primary navigation">
+          <NavigationLinks
+            linkClassName=""
+            activeLinkClassName={styles.active}
+          />
+        </nav>
+      )}
+      {/* Always show Powered by KnowAll AI */}
       <div className={styles.attribution}>
         <span className={styles.poweredBy}>Powered by</span>
-         <a
+        <a
           href={KNOWALL_CONSTANTS.website}
           target="_blank"
           rel="noopener noreferrer"
@@ -34,7 +40,6 @@ const FooterComponent: React.FC<FooterComponentProps> = ({ hidden }) => {
         </a>
       </div>
     </footer>
-
   );
 };
 

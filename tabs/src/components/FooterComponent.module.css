@@ -36,6 +36,11 @@
   color: #84cc16;
 }
 
+.navigation a.active {
+  color: #84cc16;
+  font-weight: 600;
+}
+
 .attribution {
   display: flex;
   align-items: center;
