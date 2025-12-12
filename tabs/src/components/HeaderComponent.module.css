@@ -41,6 +41,41 @@
   transform: scale(1.05);
 }
 
+/* ========================================
+   Navigation Styles
+   ======================================== */
+.navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navLink {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.navLink:hover {
+  color: #84cc16;
+  background: rgba(132, 204, 22, 0.1);
+}
+
+.navLinkActive {
+  color: #84cc16;
+  background: rgba(132, 204, 22, 0.15);
+  font-weight: 600;
+}
+
+.navLink:focus {
+  outline: 2px solid #84cc16;
+  outline-offset: 2px;
+}
+
 .rightSection {
   display: flex;
   align-items: center;
@@ -197,6 +232,10 @@
     font-size: 18px;
   }
 
+  .navigation {
+    display: none;
+  }
+
   .userDetails {
     display: none;
   }
@@ -229,6 +268,15 @@
 }
 
 /* Loading skeleton styles */
+.navLinkSkeleton {
+  width: 50px;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
 .userInfoSkeleton {
   display: flex;
   align-items: center;

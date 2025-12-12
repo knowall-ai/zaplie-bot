@@ -1,0 +1,619 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup {
+    width: 700px;
+    max-width: 95vw;
+    max-height: 90vh;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Header Banner with lightning pattern */
+.headerBanner {
+    width: 100%;
+    height: 80px;
+    background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    background-image:
+        repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(255,255,255,0.05) 10px,
+            rgba(255,255,255,0.05) 20px
+        ),
+        linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+}
+
+/* Lightning bolt pattern overlay */
+.headerBanner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.15)' stroke-width='2'%3E%3Cpath d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/%3E%3C/svg%3E");
+    background-size: 30px 30px;
+    opacity: 0.3;
+}
+
+.avatarContainer {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+}
+
+.avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 4px solid #2D2B2C;
+    background: #424242;
+    object-fit: cover;
+}
+
+.avatarPlaceholder {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 4px solid #2D2B2C;
+    background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #1F1F1F;
+    font-weight: 700;
+}
+
+.popupContent {
+    padding: 60px 32px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+}
+
+.title {
+    width: 100%;
+    font-family: 'Segoe UI', sans-serif;
+    font-style: normal;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 32px;
+    color: #FFFFFF;
+    margin: 0;
+    text-align: center;
+}
+
+.text {
+    width: 100%;
+    font-family: 'Segoe UI', sans-serif;
+    font-style: normal;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+    color: #D8D8D8;
+    margin: 0 0 10px 0;
+    text-align: center;
+}
+
+/* Two column layout for form */
+.formRow {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+}
+
+.formColumn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.formGroup {
+    width: 100%;
+}
+
+.label {
+    display: block;
+    font-family: 'Segoe UI', sans-serif;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 20px;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+}
+
+/* User select dropdown */
+.select {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #8A8A8A;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%238A8A8A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+}
+
+.select:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.select option {
+    background: #1F1F1F;
+    color: #FFFFFF;
+}
+
+/* Add people button */
+.addPeopleButton {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: #FFFFFF;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 8px 0;
+}
+
+.addPeopleButton:hover {
+    color: #84cc16;
+}
+
+.addIcon {
+    width: 20px;
+    height: 20px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+}
+
+/* Amount input section */
+.amountInputRow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.amountInput {
+    flex: 1;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+}
+
+.amountInput::placeholder {
+    color: #8A8A8A;
+}
+
+.amountInput:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.currencyLabel {
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    color: #FFFFFF;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* Preset amount buttons */
+.presetAmounts {
+    display: flex;
+    gap: 12px;
+}
+
+.presetButton {
+    flex: 1;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid #84cc16;
+    border-radius: 4px;
+    color: #84cc16;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.presetButton:hover {
+    background: rgba(132, 204, 22, 0.1);
+}
+
+.presetButtonActive {
+    flex: 1;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: #84cc16;
+    border: 1px solid #84cc16;
+    border-radius: 4px;
+    color: #1F1F1F;
+    cursor: pointer;
+}
+
+/* Value dropdown */
+.valueSelect {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #8A8A8A;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%238A8A8A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+}
+
+.valueSelect:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+/* Description textarea */
+.textarea {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.textarea::placeholder {
+    color: #8A8A8A;
+}
+
+.textarea:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+/* Balance text */
+.balanceText {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: #84cc16;
+    margin: 4px 0 0 0;
+}
+
+/* Action row at bottom */
+.actionRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-top: 10px;
+    padding-top: 20px;
+    border-top: 1px solid #424242;
+}
+
+.leftActions {
+    display: flex;
+    align-items: center;
+}
+
+.rightActions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Send anonymously checkbox */
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+.checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #424242;
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+    position: relative;
+}
+
+.checkbox:checked {
+    background: #84cc16;
+    border-color: #84cc16;
+}
+
+.checkbox:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #1F1F1F;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Buttons */
+.cancelButton {
+    padding: 12px 24px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid #84cc16;
+    border-radius: 4px;
+    color: #84cc16;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cancelButton:hover {
+    background: rgba(132, 204, 22, 0.1);
+}
+
+.sendButton {
+    padding: 12px 24px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: #84cc16;
+    border: none;
+    border-radius: 4px;
+    color: #1F1F1F;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.sendButton:hover {
+    background: #9ed929;
+}
+
+.sendButtonDisabled {
+    padding: 12px 24px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: #424242;
+    border: none;
+    border-radius: 4px;
+    color: #8A8A8A;
+    cursor: not-allowed;
+}
+
+/* Loader overlay */
+.loaderOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+}
+
+.loaderIcon {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 16px;
+}
+
+.loaderText {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 16px;
+    color: #FFFFFF;
+}
+
+/* Success and Error popups */
+.successPopup,
+.errorPopup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 26px 32px 32px;
+    gap: 20px;
+    position: relative;
+    width: 348px;
+    background: #2D2B2C;
+    box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.12), 0px 14px 250px rgba(0, 0, 0, 0.14);
+    border-radius: 8px;
+}
+
+.popupHeader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.statusIcon {
+    width: 48px;
+    height: 48px;
+}
+
+.popupText {
+    font-family: 'Segoe UI', sans-serif;
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 24px;
+    text-align: center;
+    color: #FFFFFF;
+}
+
+.errorMessage {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    text-align: center;
+    color: #D8D8D8;
+}
+
+/* Transaction ID display */
+.transactionId {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 16px;
+    background: rgba(132, 204, 22, 0.1);
+    border-radius: 4px;
+    width: 100%;
+}
+
+.transactionLabel {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: #8A8A8A;
+}
+
+.transactionHash {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    color: #84cc16;
+    word-break: break-all;
+}
+
+.closeButton {
+    padding: 12px 24px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    background: #84cc16;
+    border: none;
+    border-radius: 4px;
+    color: #1F1F1F;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.closeButton:hover {
+    background: #9ed929;
+}
+
+/* Legacy styles for backwards compatibility */
+.searchInput {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+}
+
+.searchInput::placeholder {
+    color: #8A8A8A;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.input {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #1F1F1F;
+    border: 1px solid #424242;
+    border-radius: 4px;
+    color: #FFFFFF;
+}
+
+.input::placeholder {
+    color: #8A8A8A;
+}
+
+.input:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .popup {
+        width: 95vw;
+    }
+
+    .formRow {
+        flex-direction: column;
+    }
+
+    .presetAmounts {
+        flex-wrap: wrap;
+    }
+
+    .presetButton,
+    .presetButtonActive {
+        flex: 1 1 calc(50% - 6px);
+    }
+}

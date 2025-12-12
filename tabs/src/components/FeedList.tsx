@@ -386,8 +386,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                     style={{ display: 'none' }}
                   />
                   <div className={styles.userName}>
-                    {zap.from?.displayName || zap.from?.email ||
-                     (zap.transaction.extra?.from?.user ? `User ${zap.transaction.extra.from.user.substring(0, 8)}` : 'Unknown')}
+                    {zap.transaction.memo?.startsWith('[Anonymous]') ? 'Anonymous' :
+                     (zap.from?.displayName || zap.from?.email ||
+                     (zap.transaction.extra?.from?.user ? `User ${zap.transaction.extra.from.user.substring(0, 8)}` : 'Unknown'))}
                   </div>
                 </div>
                 <div className={styles.personDetails}>
@@ -402,8 +403,8 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                      (zap.transaction.extra?.to?.user ? `User ${zap.transaction.extra.to.user.substring(0, 8)}` : 'Unknown')}
                   </div>
                 </div>
-                <div className={styles.userName} title={zap.transaction.memo}>
-                  {zap.transaction.memo}
+                <div className={styles.userName} title={zap.transaction.memo?.replace('[Anonymous] ', '')}>
+                  {zap.transaction.memo?.replace('[Anonymous] ', '')}
                 </div>
               </div>
               <div className={styles.transactionDetails}>

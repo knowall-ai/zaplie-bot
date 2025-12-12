@@ -4,6 +4,7 @@ import { InteractionStatus } from '@azure/msal-browser';
 import { Link } from 'react-router-dom';
 import styles from './HeaderComponent.module.css';
 import { useTeamsAuth } from '../hooks/useTeamsAuth';
+import NavigationLinks from './NavigationLinks';
 
 const HeaderComponent: React.FC = () => {
   const { accounts, inProgress } = useMsal();
@@ -16,7 +17,7 @@ const HeaderComponent: React.FC = () => {
   const dropdownButtonRef = useRef<HTMLDivElement>(null);
 
   // Use shared Teams auth hook
-  const { handleLogout, isLoggingOut, isTeamsInitializing } = useTeamsAuth();
+  const { handleLogout, isLoggingOut, isTeamsInitializing, isInTeams } = useTeamsAuth();
 
   useEffect(() => {
     if (account) {
@@ -99,6 +100,11 @@ const HeaderComponent: React.FC = () => {
   // Show loading skeleton during authentication initialization
   const isLoading = inProgress !== InteractionStatus.None || isTeamsInitializing;
 
+  // Hide header when running inside Microsoft Teams for cleaner integration
+  if (isInTeams) {
+    return null;
+  }
+
   if (isLoading) {
     return (
       <header className={styles.header}>
@@ -108,6 +114,13 @@ const HeaderComponent: React.FC = () => {
               <span className={styles.appName}>Zaplie</span>
             </Link>
           </div>
+          <nav className={styles.navigation} aria-hidden="true">
+            <div className={styles.navLinkSkeleton} />
+            <div className={styles.navLinkSkeleton} />
+            <div className={styles.navLinkSkeleton} />
+            <div className={styles.navLinkSkeleton} />
+            <div className={styles.navLinkSkeleton} />
+          </nav>
           <div className={styles.rightSection}>
             <div className={styles.userInfoSkeleton}>
               <div className={styles.avatarSkeleton} />
@@ -145,6 +158,13 @@ const HeaderComponent: React.FC = () => {
             <span className={styles.appName}>Zaplie</span>
           </Link>
         </div>
+
+        <nav className={styles.navigation} aria-label="Primary navigation">
+          <NavigationLinks
+            linkClassName={styles.navLink}
+            activeLinkClassName={styles.navLinkActive}
+          />
+        </nav>
 
         <div className={styles.rightSection}>
           <div className={styles.userInfoWrapper} ref={dropdownRef}>
