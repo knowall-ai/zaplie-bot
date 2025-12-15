@@ -103,7 +103,7 @@ const Home: React.FC = () => {
           paddingTop: 0,
         }}
       >
-        <FeedComponent isLoading={loading} allZaps={zaps} allUsers={users} />
+        <FeedComponent />
       </div>
     </div>
   );
