@@ -162,3 +162,38 @@ button{
   gap: 20px;
   display: inline-flex;
 }
+
+.sendZapsButton {
+  padding: 12px 24px;
+  background: #84cc16;
+  border: none;
+  border-radius: 4px;
+  color: #1F1F1F;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: auto !important;
+  flex-shrink: 0;
+}
+
+.sendZapsButton:hover {
+  background: #9ed929;
+}
+
+.batteryButtonContainer {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 24px;
+}
+
+.batteryButtonContainer > div {
+  flex-shrink: 0;
+}
+
+.batteryButtonContainer > div > img {
+  max-width: 100px;
+  height: auto;
+}

@@ -3,13 +3,8 @@ import styles from './FeedComponent.module.css';
 import FeedList from './FeedList';
 
 const Leaderboard = lazy(() => import('./Leaderboard'));
-interface FeedComponentProps {
-  allZaps: Transaction[];
-  allUsers: User[];
-  isLoading: boolean;
-}
 
-const FeedComponent: FunctionComponent<FeedComponentProps> = ({ isLoading, allZaps, allUsers  }) => {
+const FeedComponent: FunctionComponent = () => {
   const [timestamp, setTimestamp] = useState(
     Math.floor(Date.now() / 1000 - 7 * 24 * 60 * 60),
   );
@@ -95,7 +90,7 @@ const FeedComponent: FunctionComponent<FeedComponentProps> = ({ isLoading, allZa
         </div>
       </div>
       {showFeed ? (
-        <FeedList isLoading={isLoading} timestamp={timestamp} allZaps={allZaps} allUsers={allUsers} />
+        <FeedList timestamp={timestamp} />
       ) : (
         <Suspense fallback={<div>Loading...</div>}>
           <Leaderboard timestamp={timestamp} />
