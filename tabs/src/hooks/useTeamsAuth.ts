@@ -3,6 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { toast } from 'react-toastify';
+import { clearApiCache } from '../services/lnbitsServiceLocal';
 
 interface UseTeamsAuthReturn {
   isInTeams: boolean;
@@ -34,11 +35,9 @@ export const useTeamsAuth = (): UseTeamsAuthReturn => {
         const context = await microsoftTeams.app.getContext();
         if (context && mounted) {
           setIsInTeams(true);
-          console.log('Running inside Microsoft Teams');
         }
-      } catch (error) {
+      } catch {
         // Not running in Teams context - this is expected for web browser
-        console.log('Not running in Teams context:', error instanceof Error ? error.message : String(error));
         if (mounted) {
           setIsInTeams(false);
         }
@@ -59,7 +58,6 @@ export const useTeamsAuth = (): UseTeamsAuthReturn => {
   const handleLogout = useCallback(async () => {
     // Check if MSAL has an interaction in progress
     if (inProgress !== InteractionStatus.None) {
-      console.log('MSAL interaction in progress, skipping logout');
       return;
     }
 
@@ -69,24 +67,20 @@ export const useTeamsAuth = (): UseTeamsAuthReturn => {
     setIsLoggingOut(true);
 
     try {
-      if (isInTeams) {
-        console.log('Logging out from Teams');
-      } else {
-        console.log('Logging out from Web Browser');
-      }
+      // Clear API cache before logout to prevent stale data on re-login
+      clearApiCache();
+
       await instance.logoutPopup({
         postLogoutRedirectUri: window.location.origin + '/login',
         account: accounts[0] || null,
       });
-      console.log('Successfully logged out from MSAL');
     } catch (error) {
-      console.error('Error during logout:', error);
       toast.error('Failed to sign out. Please try again.');
     } finally {
       logoutInProgressRef.current = false;
       setIsLoggingOut(false);
     }
-  }, [instance, accounts, isInTeams, inProgress]);
+  }, [instance, accounts, inProgress]);
 
   return {
     isInTeams,

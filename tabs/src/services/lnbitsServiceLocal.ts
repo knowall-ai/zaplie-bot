@@ -15,6 +15,68 @@ const TOKEN_EXPIRY_HOURS = 24;
 const TOKEN_KEY = 'accessToken';
 const TOKEN_TIMESTAMP_KEY = 'accessTokenTimestamp';
 
+// =============================================================================
+// Cache Configuration
+// =============================================================================
+// TTLs optimized for data change frequency:
+// - Users: 60 seconds (new users should appear within a minute)
+// - Wallets: 15 seconds (balance updates need to be reasonably fresh)
+const CACHE_DURATION_USERS_MS = 60000;   // 1 minute for user list
+const CACHE_DURATION_WALLETS_MS = 15000; // 15 seconds for wallet data
+const MAX_WALLET_CACHE_SIZE = 100;       // Limit cache size to prevent memory growth
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+// Raw API user data type (before mapping to User)
+// Used by getAllUsersFromAPI - mapping to User type is done in getUsers()
+interface RawApiUser {
+  id: string;
+  username?: string;
+  external_id?: string;
+  extra?: Record<string, unknown> | string;
+}
+
+// Cache stores raw API data to avoid type mismatches
+const apiCache: {
+  rawUsers?: CacheEntry<RawApiUser[]>;
+  userWallets: Map<string, CacheEntry<Wallet[]>>;
+} = {
+  userWallets: new Map(),
+};
+
+// Helper to check if cache is valid with configurable duration
+const isCacheValid = <T>(entry: CacheEntry<T> | undefined, durationMs: number): entry is CacheEntry<T> => {
+  if (!entry) return false;
+  return Date.now() - entry.timestamp < durationMs;
+};
+
+// Pending promises to prevent duplicate concurrent requests
+let pendingUsersRequest: Promise<RawApiUser[]> | null = null;
+const pendingWalletRequests: Map<string, Promise<Wallet[] | null>> = new Map();
+
+// Clear cache function - call on logout or account switch
+export const clearApiCache = () => {
+  apiCache.rawUsers = undefined;
+  apiCache.userWallets.clear();
+  pendingUsersRequest = null;
+  pendingWalletRequests.clear();
+  logger.debug('API cache cleared');
+};
+
+// Invalidate wallet cache for a specific user (call after transactions)
+export const invalidateWalletCache = (userId?: string) => {
+  if (userId) {
+    apiCache.userWallets.delete(userId);
+    logger.debug(`Wallet cache invalidated for user ${userId}`);
+  } else {
+    apiCache.userWallets.clear();
+    logger.debug('All wallet caches invalidated');
+  }
+};
+
 // Get token from storage if valid, otherwise return null
 const getStoredToken = (): string | null => {
   const token = sessionStorage.getItem(TOKEN_KEY);
@@ -154,7 +216,7 @@ const getWallets = async (
 
     return filteredData;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -180,7 +242,7 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
 
     return data;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -205,7 +267,7 @@ const getWalletBalance = async (inKey: string) => {
 
     return data.balance / 1000; // return in Sats (not millisatoshis)
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -214,51 +276,88 @@ const getUserWallets = async (
   adminKey: string,
   userId: string,
 ): Promise<Wallet[] | null> => {
-
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(
-      `${nodeUrl}/users/api/v1/user/${userId}/wallet`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          //'X-Api-Key': adminKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting users wallets response (status: ${response.status})`,
-      );
-    }
-
-    const data: Wallet[] = await response.json();
-
-    // Map the wallets to match the Wallet interface
-    let walletData: Wallet[] = data.map((wallet: any) => ({
-      id: wallet.id,
-      admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-      name: wallet.name,
-      adminkey: wallet.adminkey,
-      user: wallet.user,
-      inkey: wallet.inkey,
-      balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-      deleted: wallet.deleted,
-    }));
-
-    // Now remove the deleted wallets.
-    const filteredWallets = walletData.filter(
-      wallet => wallet.deleted !== true,
-    );
-
-    return filteredWallets;
-  } catch (error) {
-    console.error(error);
-    throw error;
+  // Check cache first with wallet-specific TTL
+  const cachedEntry = apiCache.userWallets.get(userId);
+  if (isCacheValid(cachedEntry, CACHE_DURATION_WALLETS_MS)) {
+    logger.debug(`[Cache HIT] getUserWallets for user ${userId}`);
+    return cachedEntry.data;
   }
+
+  // Check if there's already a pending request for this user
+  const pendingRequest = pendingWalletRequests.get(userId);
+  if (pendingRequest) {
+    logger.debug(`[Dedup] Reusing pending getUserWallets request for user ${userId}`);
+    return pendingRequest;
+  }
+
+  // Create new request and store it to prevent duplicates
+  const requestPromise = (async (): Promise<Wallet[] | null> => {
+    try {
+      const accessToken = await getAccessToken(`${userName}`, `${password}`);
+      const response = await fetch(
+        `${nodeUrl}/users/api/v1/user/${userId}/wallet`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            //'X-Api-Key': adminKey,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Error getting users wallets response (status: ${response.status})`,
+        );
+      }
+
+      const data: Wallet[] = await response.json();
+
+      // Map the wallets to match the Wallet interface
+      let walletData: Wallet[] = data.map((wallet: any) => ({
+        id: wallet.id,
+        admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
+        name: wallet.name,
+        adminkey: wallet.adminkey,
+        user: wallet.user,
+        inkey: wallet.inkey,
+        balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
+        deleted: wallet.deleted,
+      }));
+
+      // Now remove the deleted wallets.
+      const filteredWallets = walletData.filter(
+        wallet => wallet.deleted !== true,
+      );
+
+      // Limit cache size to prevent unbounded memory growth
+      if (apiCache.userWallets.size >= MAX_WALLET_CACHE_SIZE) {
+        // Remove oldest entry (first entry in Map)
+        const firstKey = apiCache.userWallets.keys().next().value;
+        if (firstKey) {
+          apiCache.userWallets.delete(firstKey);
+        }
+      }
+
+      // Cache the result
+      apiCache.userWallets.set(userId, {
+        data: filteredWallets,
+        timestamp: Date.now(),
+      });
+
+      return filteredWallets;
+    } catch (error) {
+      logger.error('Error fetching user wallets:', error);
+      throw error;
+    } finally {
+      // Remove from pending requests
+      pendingWalletRequests.delete(userId);
+    }
+  })();
+
+  pendingWalletRequests.set(userId, requestPromise);
+  return requestPromise;
 };
 
 // Migrated to use LNbits v1+ core API
@@ -287,7 +386,6 @@ const getUsers = async (
       logger.debug('=== SAMPLE RAW USER FROM API ===');
       logger.debug('Sample user data:', rawUsers[0]);
       logger.debug('Available fields:', Object.keys(rawUsers[0]));
-      logger.debug('Sample user.external_id:', rawUsers[0].external_id);
     }
 
     // Map the raw user data to User objects
@@ -319,42 +417,44 @@ const getUsers = async (
 
     // Apply filter if provided
     if (filterByExtra && Object.keys(filterByExtra).length > 0) {
-      console.log('=== FILTERING USERS ===');
+      logger.debug('=== FILTERING USERS ===');
 
       // Check if filtering by aadObjectId (which is stored in external_id field)
       if (filterByExtra.aadObjectId) {
-        console.log('Filtering by aadObjectId (external_id):', filterByExtra.aadObjectId);
+        logger.debug('Filtering by aadObjectId (external_id):', filterByExtra.aadObjectId);
 
         const filteredUsers = users.filter(user => {
           const userRaw = rawUsers.find((u: any) => u.id === user.id);
           if (!userRaw) return false;
 
           const matches = userRaw.external_id === filterByExtra.aadObjectId;
-          console.log(`User ${user.displayName}: external_id=${userRaw.external_id}, matches=${matches}`);
+          logger.debug(`User ${user.displayName}: external_id=${userRaw.external_id}, matches=${matches}`);
           return matches;
         });
 
-        console.log(`Filtered to ${filteredUsers.length} users by external_id`);
-        console.log('====================');
+        logger.debug(`Filtered to ${filteredUsers.length} users by external_id`);
+        logger.debug('====================');
         return filteredUsers;
       }
 
       // Otherwise, filter by extra metadata fields
-      console.log('Filtering by extra metadata:', filterByExtra);
+      logger.debug('Filtering by extra metadata:', filterByExtra);
       const filteredUsers = users.filter(user => {
-        const userRaw = rawUsers.find((u: any) => u.id === user.id);
+        const userRaw = rawUsers.find(u => u.id === user.id);
         if (!userRaw || !userRaw.extra) {
           return false;
         }
 
         // If extra is a string, try to parse it
-        let extraData = userRaw.extra;
-        if (typeof extraData === 'string') {
+        let extraData: Record<string, unknown>;
+        if (typeof userRaw.extra === 'string') {
           try {
-            extraData = JSON.parse(extraData);
+            extraData = JSON.parse(userRaw.extra);
           } catch (e) {
             return false;
           }
+        } else {
+          extraData = userRaw.extra;
         }
 
         return Object.keys(filterByExtra).every(
@@ -362,15 +462,15 @@ const getUsers = async (
         );
       });
 
-      console.log(`Filtered to ${filteredUsers.length} users by extra metadata`);
-      console.log('====================');
+      logger.debug(`Filtered to ${filteredUsers.length} users by extra metadata`);
+      logger.debug('====================');
       return filteredUsers;
     }
 
-    console.log('Returning all users');
+    logger.debug('Returning all users');
     return users;
   } catch (error) {
-    console.error('Error fetching users:', error);
+    logger.error('Error fetching users:', error);
     throw error;
   }
 };
@@ -430,7 +530,7 @@ const getUser = async (
       allowanceWallet: allowanceWallet,
     };
   } catch (error) {
-    console.error(`Error fetching user ${userId}:`, error);
+    logger.error(`Error fetching user ${userId}:`, error);
     throw error;
   }
 };
@@ -454,7 +554,7 @@ const getWalletName = async (inKey: string) => {
 
     return data.name;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -477,7 +577,7 @@ const getWalletPayments = async (inKey: string) => {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Error:', error);
+    logger.error('Error:', error);
     return null;
   }
 };
@@ -497,7 +597,7 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
     );
 
     if (!response.ok) {
-      console.error(
+      logger.error(
         `Error getting paylinks for wallet (status: ${response.status})`,
       );
       return null;
@@ -507,7 +607,7 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
 
     return data;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -525,7 +625,7 @@ const getWalletId = async (inKey: string) => {
     });
 
     if (!response.ok) {
-      console.error(`Error getting wallet ID (status: ${response.status})`);
+      logger.error(`Error getting wallet ID (status: ${response.status})`);
       return null;
     }
 
@@ -535,14 +635,14 @@ const getWalletId = async (inKey: string) => {
     const wallet = data.find((wallet: any) => wallet.inkey === inKey);
 
     if (!wallet) {
-      console.error('No wallet found for this inKey.');
+      logger.error('No wallet found for this inKey.');
       return null;
     }
 
     // Return the id of the wallet
     return wallet.id;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -568,7 +668,7 @@ const getInvoicePayment = async (lnKey: string, invoice: string) => {
 
     return data;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -588,8 +688,8 @@ const getAllWallets = async (lnKey: string) => {
     });
 
     if (!response.ok) {
-      console.error('Response status:', response.status);
-      console.error('Response statusText:', response.statusText);
+      logger.error('Response status:', response.status);
+      logger.error('Response statusText:', response.statusText);
       throw new Error(
         `Error getting wallets (status: ${response.status})`,
       );
@@ -597,8 +697,8 @@ const getAllWallets = async (lnKey: string) => {
 
     const data: Wallet[] = await response.json();
 
-    console.log('All Wallets returned:', data.length);
-    console.log('All Wallets: ', data);
+    logger.debug('All Wallets returned:', data.length);
+    logger.debug('All Wallets: ', data);
 
     // Map the wallets to match the Wallet interface
     let walletData: Wallet[] = data.map((wallet: any) => ({
@@ -617,10 +717,10 @@ const getAllWallets = async (lnKey: string) => {
       wallet => wallet.deleted !== true,
     );
 
-    console.log('Filtered wallets count:', filteredWallets.length);
+    logger.debug('Filtered wallets count:', filteredWallets.length);
     return filteredWallets;
   } catch (error) {
-    console.error('Error in getAllWallets:', error);
+    logger.error('Error in getAllWallets:', error);
     throw error;
   }
 };
@@ -657,7 +757,7 @@ const getWalletTransactionsSince = async (
 
     const data = await response.json();
 
-    console.log("DATA",data);
+    logger.debug("DATA",data);
 
     // Show all payments (timestamp filter removed)
     const paymentsSince = data;
@@ -673,7 +773,7 @@ const getWalletTransactionsSince = async (
         })
       : paymentsSince;
 
-      console.log("DATA2",filteredPayments);
+      logger.debug("DATA2",filteredPayments);
 
     // Map the payments to match the Zap interface
     const transactionData: Transaction[] = filteredPayments.map(
@@ -690,11 +790,11 @@ const getWalletTransactionsSince = async (
       }),
     );
 
-    //console.log('Transactions:', transactionData);
+    //logger.debug('Transactions:', transactionData);
 
     return transactionData;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -735,7 +835,7 @@ const createInvoice = async (
 
     return data.payment_request;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -795,7 +895,7 @@ const createWallet = async (
 
     return data;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     throw error;
   }
 };
@@ -825,7 +925,7 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
 
     return data.id;
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return null;
   }
 };
@@ -853,19 +953,19 @@ const getNostrRewards = async (
 
     // Check if the response is JSON
     const contentType = response.headers.get('content-type');
-    console.log('Content-Type:', contentType);
+    logger.debug('Content-Type:', contentType);
 
     if (contentType && contentType.includes('application/json')) {
       const data: Reward[] = await response.json();
-      console.log('Products:', data);
+      logger.debug('Products:', data);
       return data;
     } else {
       const text = await response.text(); // Capture non-JSON responses
-      console.log('Non-JSON response:', text);
+      logger.debug('Non-JSON response:', text);
       throw new Error(`Expected JSON, but got: ${text}`);
     }
   } catch (error) {
-    console.error('Error fetching rewards:', error);
+    logger.error('Error fetching rewards:', error);
     throw error;
   }
 };
@@ -892,7 +992,7 @@ const getUserWalletTransactions = async (
 
     if (!response.ok) {
       const errorMessage = `Failed to fetch transactions for wallet ${walletId}: ${response.status} - ${response.statusText}`;
-      console.error(errorMessage);
+      logger.error(errorMessage);
       throw new Error(errorMessage);
     }
 
@@ -909,13 +1009,13 @@ const getUserWalletTransactions = async (
         })
       : data;
 
-    /*console.log(
+    /*logger.debug(
       `Transactions fetched for wallet: ${walletId}`,
       filteredPayments,
     );*/ // Log fetched data
     return filteredPayments; // Assuming data is an array of transactions
   } catch (error) {
-    console.error(`Error fetching transactions for wallet ${walletId}:`, error);
+    logger.error(`Error fetching transactions for wallet ${walletId}:`, error);
     throw error; // Re-throw the error to handle it in the parent function
   }
 };
@@ -954,7 +1054,7 @@ const getAllowance = async (
     };
     return allowance;
   } catch (error) {
-    console.error(`Error fetching allowances for ${userId}:`, error);
+    logger.error(`Error fetching allowances for ${userId}:`, error);
     throw error; // Re-throw the error to handle it in the parent function
   }
 };
@@ -976,7 +1076,7 @@ const getAllPayments = async (
     url.searchParams.append('sortby', sortby);
     url.searchParams.append('direction', direction);
 
-    console.log('Full URL:', url.toString());
+    logger.debug('Full URL:', url.toString());
 
     const response = await fetch(url.toString(), {
       method: 'GET',
@@ -987,17 +1087,17 @@ const getAllPayments = async (
     });
 
     if (!response.ok) {
-      console.error('Response status:', response.status);
-      console.error('Response statusText:', response.statusText);
+      logger.error('Response status:', response.status);
+      logger.error('Response statusText:', response.statusText);
       throw new Error(
         `Error getting all payments (status: ${response.status})`,
       );
     }
 
     const data = await response.json();
-    console.log('Raw response data:', data);
-    console.log('Data type:', typeof data);
-    console.log('Is array:', Array.isArray(data));
+    logger.debug('Raw response data:', data);
+    logger.debug('Data type:', typeof data);
+    logger.debug('Is array:', Array.isArray(data));
 
     // The API might return an object with a 'data' or 'payments' property
     let payments = data;
@@ -1013,53 +1113,74 @@ const getAllPayments = async (
       }
     }
 
-    console.log('Total payments retrieved:', payments?.length || 0);
-    console.log('Sample payment:', payments?.[0]);
-    console.log('===========================');
+    logger.debug('Total payments retrieved:', payments?.length || 0);
+    logger.debug('Sample payment:', payments?.[0]);
+    logger.debug('===========================');
 
     return Array.isArray(payments) ? payments : [];
   } catch (error) {
-    console.error('Error in getAllPayments:', error);
+    logger.error('Error in getAllPayments:', error);
     throw error;
   }
 };
 
 // NEW: Get all users from /users/api/v1/user endpoint
-const getAllUsersFromAPI = async (): Promise<any[]> => {
-  console.log('=== getAllUsersFromAPI ===');
-  console.log('Fetching from:', `${nodeUrl}/users/api/v1/user`);
-
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-
-    const response = await fetch(`${nodeUrl}/users/api/v1/user`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      console.error('Response status:', response.status);
-      console.error('Response statusText:', response.statusText);
-      throw new Error(
-        `Error getting all users (status: ${response.status})`,
-      );
-    }
-
-    const responseData = await response.json();
-    console.log('Total users retrieved:', responseData?.data?.length || 0);
-    console.log('All Users:', responseData);
-    console.log('===========================');
-
-    // Extract the users array from the response
-    const users = responseData?.data || [];
-    return Array.isArray(users) ? users : [];
-  } catch (error) {
-    console.error('Error in getAllUsersFromAPI:', error);
-    throw error;
+// Returns raw API data - mapping to User type is done in getUsers()
+const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
+  // Check cache first
+  if (isCacheValid(apiCache.rawUsers, CACHE_DURATION_USERS_MS)) {
+    logger.debug('[Cache HIT] getAllUsersFromAPI');
+    return apiCache.rawUsers.data;
   }
+
+  // Check if there's already a pending request
+  if (pendingUsersRequest) {
+    logger.debug('[Dedup] Reusing pending getAllUsersFromAPI request');
+    return pendingUsersRequest;
+  }
+
+  logger.debug('[Cache MISS] Fetching users from API');
+
+  // Create new request and store it to prevent duplicates
+  pendingUsersRequest = (async (): Promise<RawApiUser[]> => {
+    try {
+      const accessToken = await getAccessToken(`${userName}`, `${password}`);
+
+      const response = await fetch(`${nodeUrl}/users/api/v1/user`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        logger.error(`getAllUsersFromAPI failed with status: ${response.status}`);
+        throw new Error('Failed to fetch users');
+      }
+
+      const responseData = await response.json();
+      const users = responseData?.data || [];
+      const result: RawApiUser[] = Array.isArray(users) ? users : [];
+
+      logger.debug(`Fetched ${result.length} users from API`);
+
+      // Cache the result with proper type
+      apiCache.rawUsers = {
+        data: result,
+        timestamp: Date.now(),
+      };
+
+      return result;
+    } catch (error) {
+      logger.error('Error in getAllUsersFromAPI:', error);
+      throw error;
+    } finally {
+      pendingUsersRequest = null;
+    }
+  })();
+
+  return pendingUsersRequest;
 };
 
 // NEW: Get wallets paginated for a specific user
@@ -1077,7 +1198,7 @@ const getWalletsPaginated = async (
     url.searchParams.append('offset', offset.toString());
     url.searchParams.append('user_id', userId);
 
-    console.log('>>> Full URL with params:', url.toString());
+    logger.debug('>>> Full URL with params:', url.toString());
 
     const response = await fetch(url.toString(), {
       method: 'GET',
@@ -1088,24 +1209,24 @@ const getWalletsPaginated = async (
     });
 
     if (!response.ok) {
-      console.error('Response status:', response.status);
-      console.error('Response statusText:', response);
+      logger.error('Response status:', response.status);
+      logger.error('Response statusText:', response);
       throw new Error(
         `Error getting wallets for user ${userId} (status: ${response.status})`,
       );
     }
 
     const responseData = await response.json();
-    console.log(`>>> Raw response for user ${userId}:`, responseData);
+    logger.debug(`>>> Raw response for user ${userId}:`, responseData);
 
     // Extract the wallets array from the response (API returns {data: [...], total: X})
     const wallets = responseData?.data || [];
-    console.log(`>>> Extracted ${wallets.length} wallets from response`);
+    logger.debug(`>>> Extracted ${wallets.length} wallets from response`);
 
     // DEBUG: Show the wallet.user field for each wallet to verify they match the requested userId
-    console.log(`>>> WALLET USER IDs FOR REQUESTED USER ${userId}:`);
+    logger.debug(`>>> WALLET USER IDs FOR REQUESTED USER ${userId}:`);
     wallets.forEach((wallet: any, index: number) => {
-      console.log(`  Wallet ${index + 1}: ID=${wallet.id}, Name="${wallet.name}", User ID=${wallet.user}, Matches=${wallet.user === userId ? '✓' : '✗'}`);
+      logger.debug(`  Wallet ${index + 1}: ID=${wallet.id}, Name="${wallet.name}", User ID=${wallet.user}, Matches=${wallet.user === userId ? '✓' : '✗'}`);
     });
 
     // Map ALL fields from the API response to match the Wallet interface
@@ -1129,13 +1250,13 @@ const getWalletsPaginated = async (
       wallet => wallet.deleted !== true,
     );
 
-    console.log(`>>> Filtered wallets count for user ${userId}:`, filteredWallets.length);
-    console.log(`>>> Wallet IDs: [${filteredWallets.map(w => w.id).join(', ')}]`);
-    console.log('===========================');
+    logger.debug(`>>> Filtered wallets count for user ${userId}:`, filteredWallets.length);
+    logger.debug(`>>> Wallet IDs: [${filteredWallets.map(w => w.id).join(', ')}]`);
+    logger.debug('===========================');
 
     return filteredWallets;
   } catch (error) {
-    console.error(`Error in getWalletsPaginated for user ${userId}:`, error);
+    logger.error(`Error in getWalletsPaginated for user ${userId}:`, error);
     throw error;
   }
 };
