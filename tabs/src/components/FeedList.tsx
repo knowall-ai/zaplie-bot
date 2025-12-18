@@ -20,6 +20,22 @@ interface ZapTransaction {
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
 
+// Helper function to parse transaction timestamp (handles both Unix seconds and ISO strings)
+const parseTransactionTime = (timestamp: number | string): Date | null => {
+  if (typeof timestamp === 'number') {
+    return new Date(timestamp * 1000);
+  }
+  if (typeof timestamp === 'string') {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) {
+      console.warn(`Invalid timestamp: ${timestamp}`);
+      return null;
+    }
+    return date;
+  }
+  return null;
+};
+
 // Wallet type identifiers - these match the exact naming convention used by the backend
 // Backend creates wallets with names 'Allowance' and 'Private' (see functions/sendZap/index.ts)
 // NOTE: If wallet naming conventions change on the backend, these must be updated
@@ -74,16 +90,18 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
           return;
         }
 
-        // Step 2: Get wallets for each user
-        const allWalletsData: { userId: string; wallets: Wallet[] }[] = [];
+        // Step 2: Parallelize wallet fetches for all users
+        const walletPromises = fetchedUsers.map(async (user) => {
+          try {
+            const userWallets = await getUserWallets(adminKey, user.id);
+            return { userId: user.id, wallets: userWallets || [] };
+          } catch (err) {
+            // Log error but continue - don't fail entire feed for one user
+            return { userId: user.id, wallets: [] };
+          }
+        });
+        const allWalletsData = await Promise.all(walletPromises);
 
-        for (const user of fetchedUsers) {
-          const userWallets = await getUserWallets(adminKey, user.id);
-          allWalletsData.push({
-            userId: user.id,
-            wallets: userWallets || []
-          });
-        }
         // Step 3: Get payments from both Allowance and Private wallets
         // We need both to match sender (Allowance) with receiver (Private)
         const allowanceWalletIds = new Set<string>();
@@ -92,7 +110,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
         let failedWalletCount = 0;
 
         for (const userData of allWalletsData) {
-          // Filter to Allowance and Private wallets
+          // Filter to Allowance and Private wallets using exact match
           const relevantWallets = userData.wallets.filter(wallet =>
             isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name)
           );
@@ -296,11 +314,25 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
     return 0;
   });
 
+  // Apply timestamp filter (7/30/60 days) - filter transactions by time
+  // timestamp prop is in Unix seconds (e.g., 7 days ago)
+  // transaction.time can be either a number (Unix seconds) or an ISO date string
+  const filteredZaps = timestamp && timestamp > 0
+    ? sortedZaps.filter(zap => {
+        const parsedDate = parseTransactionTime(zap.transaction.time);
+        if (!parsedDate) {
+          return false; // Exclude transactions with invalid/unknown time format
+        }
+        const txTimeSeconds = Math.floor(parsedDate.getTime() / 1000);
+        return txTimeSeconds >= timestamp;
+      })
+    : sortedZaps;
+
   // Calculate pagination variables
-  const totalPages = Math.max(1, Math.ceil(sortedZaps.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredZaps.length / ITEMS_PER_PAGE));
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = sortedZaps.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = filteredZaps.slice(indexOfFirstItem, indexOfLastItem);
 
   const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
@@ -359,15 +391,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                 <div className={styles.personDetails}>
                   <div className={styles.userName}>
                     {(() => {
-                      const timestamp = zap.transaction.time;
-                      // Try to parse as ISO string first, then Unix timestamp
-                      let date = new Date(timestamp);
-                      if (isNaN(date.getTime()) && typeof timestamp === 'number') {
-                        // Try as Unix timestamp (seconds)
-                        date = new Date(timestamp * 1000);
-                      }
-                      if (isNaN(date.getTime())) {
-                        return `Invalid: ${timestamp}`;
+                      const date = parseTransactionTime(zap.transaction.time);
+                      if (!date) {
+                        return `Invalid: ${zap.transaction.time}`;
                       }
                       // UK format: DD/MM/YYYY HH:MM (24-hour)
                       return `${date.toLocaleDateString('en-GB')} ${date.toLocaleTimeString('en-GB', {
@@ -421,7 +447,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
       ) : (
         <div>No data available</div>
       )}
-      {sortedZaps.length > ITEMS_PER_PAGE && (
+      {filteredZaps.length > ITEMS_PER_PAGE && (
        <div className={styles.pagination}>
        <button
          onClick={firstPage}
@@ -454,7 +480,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
        >
          &#187; {/* Double right arrow */}
        </button>
-     </div>     
+     </div>
       )}
     </div>
   );

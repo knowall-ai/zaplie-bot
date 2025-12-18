@@ -10,6 +10,11 @@ import SendZapsPopup from './SendZapsPopup';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
+// Time constants
+const SECONDS_PER_DAY = 86400;
+const MS_PER_SECOND = 1000;
+const TRANSACTION_HISTORY_DAYS = 30;
+
 interface AllowanceCardProps {
   // Define the props here if there are any, for example:
   // someProp: string;
@@ -62,18 +67,22 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
               setAllowance(null);
             }
 
-            const sevenDaysAgo = Date.now() / 1000 - 30 * 24 * 60 * 60;
-            const encodedExtra = {};
-            const transaction = await getWalletTransactionsSince(
-              allowanceWallet.inkey,
-              sevenDaysAgo,
-              encodedExtra
-            );
+            // Check if inkey exists before fetching transactions
+            if (allowanceWallet.inkey) {
+              const transactionHistoryStart = Date.now() / MS_PER_SECOND - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+              const transaction = await getWalletTransactionsSince(
+                allowanceWallet.inkey,
+                transactionHistoryStart,
+                {}
+              );
 
-            const spent = transaction
-              .filter(transaction => transaction.amount < 0)
-              .reduce((total, transaction) => total + Math.abs(transaction.amount), 0) / 1000;
-            setSpentSats(spent);
+              const spent = transaction
+                .filter(t => t.amount < 0)
+                .reduce((total, t) => total + Math.abs(t.amount), 0) / MS_PER_SECOND;
+              setSpentSats(spent);
+            } else {
+              setSpentSats(0);
+            }
           }
         }
       }
