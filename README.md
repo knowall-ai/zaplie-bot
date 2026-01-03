@@ -92,11 +92,11 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 - Or, from TeamsFx CLI:
   1. Run command: `teamsapp preview --env dev`.
 
-## Running Zaplie Web App (The Tabs in the bot)
+## Zaplie Web App
 
-1. Navigate to tabs folder using `cd tabs`
-2. Install the packages using `npm install`
-3. Run the application using `npm start`
+The Zaplie Web App has been moved to a separate repository: [knowall-ai/zaplie-webapp](https://github.com/knowall-ai/zaplie-webapp)
+
+The web app is hosted in production at: https://zaplie.knowall.ai
 
 # Get in touch
 
