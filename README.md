@@ -98,6 +98,10 @@ The Zaplie Web App has been moved to a separate repository: [knowall-ai/zaplie-w
 
 The web app is hosted in production at: https://zaplie.knowall.ai
 
+## Security Note
+
+The `tabs/.env.development` file that was previously in this repository contained **fake/void wallet credentials** used only for local development and testing purposes. These were throwaway credentials pointing to a test LNbits environment with no real funds. The file has been removed from git history as a security best practice. All production credentials are managed separately via secure environment configuration.
+
 # Get in touch
 
 Have fun, and tag us on Twitter / Nostr!
