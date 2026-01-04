@@ -98,6 +98,37 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 2. Install the packages using `npm install`
 3. Run the application using `npm start`
 
+## Code Quality
+
+This project uses ESLint and Prettier to maintain code quality and consistent formatting. Quality checks run automatically on all pull requests to the `main` branch.
+
+### Available Scripts
+
+**Bot/Backend (root directory):**
+```bash
+npm run lint          # Run ESLint
+npm run lint:fix      # Auto-fix lint issues
+npm run format        # Format code with Prettier
+npm run format:check  # Check formatting without changes
+npm run typecheck     # Run TypeScript type checking
+```
+
+**Frontend/Tabs (`tabs/` directory):**
+```bash
+npm run lint          # Run ESLint
+npm run lint:fix      # Auto-fix lint issues
+npm run format        # Format code with Prettier
+npm run format:check  # Check formatting without changes
+```
+
+### CI Pipeline
+
+The CI workflow (`.github/workflows/ci-quality-checks.yml`) runs on every push and PR to `main`:
+1. **Linting** - ESLint checks for both bot and tabs
+2. **Formatting** - Prettier validation
+3. **Type Checking** - TypeScript compilation check (bot)
+4. **Build Verification** - Ensures both projects build successfully
+
 # Get in touch
 
 Have fun, and tag us on Twitter / Nostr!
