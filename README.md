@@ -119,6 +119,7 @@ npm run lint          # Run ESLint
 npm run lint:fix      # Auto-fix lint issues
 npm run format        # Format code with Prettier
 npm run format:check  # Check formatting without changes
+npm run typecheck     # Run TypeScript type checking
 ```
 
 ### CI Pipeline
@@ -126,7 +127,7 @@ npm run format:check  # Check formatting without changes
 The CI workflow (`.github/workflows/ci-quality-checks.yml`) runs on every push and PR to `main`:
 1. **Linting** - ESLint checks for both bot and tabs
 2. **Formatting** - Prettier validation
-3. **Type Checking** - TypeScript compilation check (bot)
+3. **Type Checking** - TypeScript compilation checks for both bot and tabs
 4. **Build Verification** - Ensures both projects build successfully
 
 # Get in touch

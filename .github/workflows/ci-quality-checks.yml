@@ -66,6 +66,10 @@ jobs:
         working-directory: tabs
         run: npm run format:check
 
+      - name: Run TypeScript type check
+        working-directory: tabs
+        run: npm run typecheck
+
   build-check:
     name: Build Verification
     runs-on: ubuntu-latest
