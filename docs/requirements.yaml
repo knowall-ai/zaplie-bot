@@ -1,0 +1,315 @@
+# Zapp.ie (Copilot MVP) Requirements
+
+- project: "Zapp.ie (Copilot MVP)"
+  description: "A team engagement and recognition platform using micro-Bitcoin rewards through the Bitcoin Lightning Network"
+  features:
+    - name: "Total Zaps Sent Component"
+      id: total-zaps
+      description: "Component displaying total zaps sent statistics"
+      deliverables:
+        - "React component implementation"
+        - "Filter functionality (7-days, 30-days, 60-days)"
+        - "Satoshis (Sats) calculations"
+      user_stories:
+        - "As a Stakeholder, I would like Total Zaps Sent Component to be reviewed"
+        - "As a User, I would like to see filter the zaps sent by 7-days, 30-days or 60-days"
+        - "As a Teammate, I want to see the Total Zaps sent"
+      scenarios:
+        - name: "Display Total Zaps"
+          given: "User is on Feed page"
+          when: "Total zaps sent component loads"
+          then: 
+            - "Total number of zaps is displayed in Sats"
+            - "Value is accurate and up-to-date"
+
+        - name: "Display Average per User"
+          given: "User is on Feed page"
+          when: "Component loads"
+          then: 
+            - "Average per user value is calculated"
+            - "Value is displayed in Sats"
+            - "Value represents total zaps divided by total users"
+
+        - name: "Display Average per Day"
+          given: "User is on Feed page"
+          when: "Component loads"
+          then: 
+            - "Average per day value is calculated"
+            - "Value is displayed in Sats"
+            - "Value represents total zaps divided by days since first zap"
+
+        - name: "Display Biggest Zap"
+          given: "User is on Feed page"
+          when: "Component loads"
+          then: 
+            - "Biggest zap value is displayed in Sats"
+            - "Value represents highest single zap transaction"
+
+        - name: "Display Zaps from Copilots"
+          given: "User is on Feed page"
+          when: "Component loads"
+          then: 
+            - "Total Sats sent by copilots is calculated"
+            - "Value is displayed in Sats"
+
+        - name: "Display Zaps to Copilots"
+          given: "User is on Feed page"
+          when: "Component loads"
+          then: 
+            - "Total Sats received by copilots is calculated"
+            - "Value is displayed in Sats"
+
+    - name: "Leaderboard Component"
+      id: leaderboard
+      description: "Component showing zap rankings among teammates"
+      deliverables:
+        - "React leaderboard component"
+        - "Time period filtering (7 days, 30 days, 90 days)"
+        - "User ranking calculations"
+      user_stories:
+        - "As a Stakeholder, I would like Leaderboard component to be reviewed"
+        - "As a Teammate, I want to see a leaderboard of Zaps"
+        - "As a Teammate, I would like to filter by 7 days, 30 days and 90 days"
+      scenarios:
+        - name: "Display Leaderboard"
+          given: "User accesses leaderboard"
+          when: "Component loads"
+          then: 
+            - "List of users is displayed with their zap counts"
+            - "Users are ranked by zap count"
+            - "Time period filter is available"
+
+    - name: "React App - SSO Authentication"
+      id: sso-auth
+      description: "Single Sign-On authentication system"
+      deliverables:
+        - "Authentication integration"
+        - "Login page"
+        - "Error handling"
+      user_stories:
+        - "As a Stakeholder, I would like SSO Authentication to be reviewed"
+        - "As a Teammate, I want to log in using a SSO authentication process"
+      scenarios:
+        - name: "Login Page Display"
+          given: "User navigates to login page"
+          when: "Page loads"
+          then: 
+            - "Login prompt is displayed"
+            - "Login button is visible"
+
+        - name: "Login Form Display"
+          when: "User clicks login button"
+          then: 
+            - "Redirected to authentication page"
+            - "Login form with email and password fields is displayed"
+            - "Cancel and Login buttons are present"
+            - "Forgot password link is available"
+
+        - name: "Failed Login"
+          given: "User attempts login with invalid credentials"
+          when: "Authentication fails"
+          then: 
+            - "Error message is displayed"
+            - "Message reads 'Invalid credentials, please try again.'"
+
+    - name: "React App - Rewards Carousel Component"
+      id: rewards-carousel
+      description: "Component displaying available rewards for redemption"
+      deliverables:
+        - "Rewards carousel implementation"
+        - "Reward redemption functionality"
+        - "Product details integration"
+      user_stories:
+        - "As a Stakeholder, I would like Rewards carousel component to be reviewed"
+        - "As a Teammate, I want to see the available rewards"
+        - "As a user, I want to be able to purchase a reward"
+        - "As a Teammate, I would like to redeem the reward"
+        - "As a user, I want to see the available rewards"
+      scenarios:
+        - name: "View Rewards"
+          given: "User is on rewards screen"
+          when: "Page loads"
+          then: 
+            - "List of rewards is displayed"
+            - "Each reward shows product details"
+            - "Redeem button is available"
+
+        - name: "Redeem Reward"
+          given: "User has sufficient Sats"
+          when: "User clicks Buy button"
+          then: 
+            - "QR code confirmation dialog is displayed"
+            - "Sats are deducted from user's account"
+            - "Confirmation of successful redemption"
+            - "Reward marked as redeemed"
+
+    - name: "React App - Allowance Component"
+      id: allowance
+      description: "Component managing user's zap sending allowance"
+      deliverables:
+        - "Allowance balance display"
+        - "Send/Receive functionality"
+        - "Weekly allowance tracking"
+      user_stories:
+        - "As a Stakeholder, I would like Allowance component to be reviewed"
+        - "As a user, I would like to be able to see my allowance remaining"
+        - "As a Teammate, I want to see how many Zaps I have available to give to peers, so that I can plan my allocations"
+      scenarios:
+        - name: "Display Allowance Balance"
+          given: "User views Allowance component"
+          when: "Component loads"
+          then: 
+            - "Total Sats available is displayed"
+            - "Amount is formatted with commas"
+
+        - name: "Display Weekly Allowance"
+          given: "User views Allowance component"
+          when: "Component loads"
+          then: 
+            - "Remaining weekly allowance is displayed"
+            - "Sent this week amount is displayed"
+            - "Both values are formatted clearly"
+
+        - name: "Receive Functionality"
+          given: "User clicks Receive button"
+          when: "Modal appears"
+          then: 
+            - "Wallet address/QR code generation"
+            - "Address/QR code is functional"
+
+        - name: "Send Functionality"
+          given: "User clicks Send button"
+          when: "Modal appears"
+          then: 
+            - "Recipient information input"
+            - "Transaction details input"
+            - "Send up to remaining weekly balance"
+
+    - name: "React App - Wallet - Transaction History"
+      id: transaction-history
+      description: "Component displaying user's transaction history"
+      deliverables:
+        - "Transaction history component"
+        - "Tab-based filtering (All, Sent, Received)"
+        - "Transaction details display"
+      user_stories:
+        - "As a Stakeholder, I would like Wallet - Transaction History to be reviewed"
+        - "As a Teammate, I would like to have transaction history"
+      scenarios:
+        - name: "Display All Transactions"
+          given: "User is logged in"
+          when: "User views All tab"
+          then: 
+            - "All sent and received transactions are displayed"
+
+        - name: "Display Sent Transactions"
+          given: "User is logged in"
+          when: "User views Sent tab"
+          then: 
+            - "All sent transactions are displayed"
+            - "Recipient name, amount in Sats, USD value, and reason are shown"
+
+        - name: "Display Received Transactions"
+          given: "User is logged in"
+          when: "User views Received tab"
+          then: 
+            - "All received transactions are displayed"
+            - "Sender name, amount in Sats, USD value, and reason are shown"
+
+    - name: "React App - Wallet - Send & Receive Payment"
+      id: payment
+      description: "Component handling zap sending and receiving"
+      deliverables:
+        - "Send payment functionality"
+        - "Receive payment functionality"
+        - "QR code scanning"
+      user_stories:
+        - "As a Stakeholder, I would like Wallet - Send & Receive Payment to be reviewed"
+        - "As a Teammate, I want to see the amount of Sats in the currency"
+        - "As a user, I would like to be able to create an invoice (to receive a payment)"
+        - "As a Teammate, I would like to be able to send and receive payment"
+      scenarios:
+        - name: "Receive Zaps"
+          given: "User clicks Receive Zaps button"
+          when: "Receive popup displays"
+          then: 
+            - "Amount specification form is shown"
+            - "Pre-set amount buttons available"
+            - "QR code generation for invoice"
+
+        - name: "Send Zaps"
+          given: "User clicks Send button"
+          when: "Send popup displays"
+          then: 
+            - "Amount specification form is shown"
+            - "Invoice pasting field available"
+            - "Anonymous sending option"
+
+        - name: "QR Code Scanning"
+          given: "User is on send zaps popup"
+          when: "User clicks Scan QR code"
+          then: 
+            - "QR code scanning functionality"
+            - "Device camera access"
+
+    - name: "Bot - Zap Received Notification"
+      id: zap-notification
+      description: "Bot notification system for zap receipts"
+      deliverables:
+        - "Notification bot implementation"
+        - "Zap receipt alerts"
+        - "User recognition system"
+      user_stories:
+        - "As a Stakeholder, I would like Notification - Zap received to be reviewed"
+        - "As a Teammate, I want to be notified when I receive Zaps from peers, so that I'm aware of the recognition I've received and feel motivated to continue participating"
+        - "As a user, I want to allocate Zaps to my peers for their contributions, so that I can appreciate and reward their efforts"
+      scenarios:
+        - name: "Notify Zap Receipt"
+          given: "User receives zap"
+          when: "Zap is received"
+          then: 
+            - "Notification is sent"
+            - "User is informed of zap receipt"
+            - "User is motivated to continue participation"
+            - "Peer recognition is visible"
+
+    - name: "LNBits Allowance Extension"
+      id: lnbits-allowance
+      description: "LNBits marketplace extension for allowance management"
+      deliverables:
+        - "Marketplace extension"
+        - "Schedule viewing"
+        - "Schedule updating"
+      user_stories:
+        - "As an Administrator, I would like this extension available in the marketplace"
+        - "As a Stakeholder, I would like Allowance schedule to be reviewed"
+      scenarios:
+        - name: "Marketplace Availability"
+          given: "User accesses LNBits marketplace"
+          when: "Allowance extension is published"
+          then: 
+            - "Extension is visible"
+            - "Extension is available for installation"
+
+        - name: "Schedule Management"
+          given: "User installs extension"
+          when: "Schedule is modified"
+          then: 
+            - "Changes are saved"
+            - "Information is updated"
+
+    - name: "React App - User List Component"
+      id: user-list
+      description: "Component displaying all system users"
+      deliverables:
+        - "User list component"
+        - "User information display"
+      user_stories:
+        - "As a Stakeholder, I want a list of all users"
+      scenarios:
+        - name: "Display User List"
+          given: "User accesses component"
+          when: "Component loads"
+          then: 
+            - "List of all users is displayed"
+            - "User information is visible"
