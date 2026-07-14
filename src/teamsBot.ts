@@ -23,11 +23,15 @@ import {
 
 import { getRewardName } from './services/fetchRewardsName';
 
-let globalRewardName: string;
+let globalRewardName: string = 'Sats';
 
 (async () => {
-  globalRewardName = await getRewardName();
-  console.log(`Reward Name is `, JSON.stringify(globalRewardName));
+  try {
+    globalRewardName = await getRewardName();
+    console.log(`Reward Name is `, JSON.stringify(globalRewardName));
+  } catch (error) {
+    console.error('Failed to fetch reward name, falling back to default:', error);
+  }
 })();
 
 
