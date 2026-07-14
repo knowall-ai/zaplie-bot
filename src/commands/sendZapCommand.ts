@@ -10,10 +10,9 @@ import {
 import { ConnectorClient } from 'botframework-connector';
 import { getUsers, payInvoice, createInvoice, getWalletBalance } from '../services/lnbitsService';
 import { UserService } from '../services/userService';
-import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
-const lnbitsLabel = process.env.REACT_APP_LNBITS_POINTS_LABEL as string;
+const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
 
 export class SendZapCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
@@ -21,9 +20,7 @@ export class SendZapCommand extends SSOCommand {
 
       console.log("Running SendZapCommand's execute method.");
 
-     // Fetch the latest reward name
-      const globalRewardName = await getRewardName();
-      console.log('Fetched Reward Name:', globalRewardName);
+      const globalRewardName = lnbitsLabel;
 
       // Await the createZapCard function and log the result
       const currentUser = context.turnState.get('user');
