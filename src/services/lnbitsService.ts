@@ -804,10 +804,12 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
 async function topUpWallet(walletId: string, amount: number): Promise<void> {
   const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
-  const url = `${lnbiturl}/users/api/v1/topup`;
+  // LNbits moved wallet top-ups from the old "User Manager" extension
+  // (/users/api/v1/topup, removed in LNbits >= 1.0.0) into core (/users/api/v1/balance).
+  const url = `${lnbiturl}/users/api/v1/balance`;
   const body = {
-    amount: amount.toString(),
     id: walletId,
+    amount,
   };
 
   try {
