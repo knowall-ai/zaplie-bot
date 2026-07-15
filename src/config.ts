@@ -9,6 +9,6 @@ const config = {
   timeout: process.env.TIMEOUT || 30000,
 };
 
-console.log('Configuration:', config);
+console.log('Configuration:', { ...config, botPassword: '[REDACTED]', clientSecret: '[REDACTED]' });
 
 export default config;
