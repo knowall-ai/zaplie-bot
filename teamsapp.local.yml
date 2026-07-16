@@ -69,6 +69,19 @@ provision:
       appPackagePath: ./appPackage/build/appPackage.${{TEAMSFX_ENV}}.zip
 
 deploy:
+  # The manifest embeds the tabs at https://localhost:3000, but the CRA dev
+  # server speaks plain HTTP and the Teams webview rejects both HTTP and
+  # untrusted certificates ("localhost sent an invalid response"). Install
+  # the toolkit's trusted localhost dev certificate and hand its paths to
+  # CRA via tabs/.env.development.local (gitignored, loaded automatically).
+  - uses: devTool/install
+    with:
+      devCert:
+        trust: true
+    writeToEnvironmentFile:
+      sslCertFile: SSL_CRT_FILE
+      sslKeyFile: SSL_KEY_FILE
+
   - uses: cli/runNpmCommand
     with:
       args: install --no-audit
@@ -83,3 +96,10 @@ deploy:
         AAD_APP_CLIENT_SECRET: ${{SECRET_AAD_APP_CLIENT_SECRET}}
         AAD_APP_TENANT_ID: ${{AAD_APP_TENANT_ID}}
         AAD_APP_OAUTH_AUTHORITY_HOST: ${{AAD_APP_OAUTH_AUTHORITY_HOST}}
+  - uses: file/createOrUpdateEnvironmentFile
+    with:
+      target: ./tabs/.env.development.local
+      envs:
+        HTTPS: 'true'
+        SSL_CRT_FILE: ${{SSL_CRT_FILE}}
+        SSL_KEY_FILE: ${{SSL_KEY_FILE}}
