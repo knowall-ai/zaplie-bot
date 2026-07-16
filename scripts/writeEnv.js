@@ -18,6 +18,8 @@ const selectedVars = {
   LNBITS_ADMINKEY: envConfig.LNBITS_ADMINKEY,
   WEBSITE_URL: envConfig.WEBSITE_URL,
   CONTENT_URL: envConfig.CONTENT_URL,
+  FOUNDRY_PROJECT_ENDPOINT: envConfig.FOUNDRY_PROJECT_ENDPOINT,
+  FOUNDRY_MODEL: envConfig.FOUNDRY_MODEL,
 };
 
 // Function to append selected variables to the appropriate environment files
@@ -51,4 +53,6 @@ appendEnvFile(envOutputPath, {
   LNBITS_ADMINKEY: selectedVars.LNBITS_ADMINKEY,
   WEBSITE_URL: selectedVars.WEBSITE_URL,
   CONTENT_URL: selectedVars.CONTENT_URL,
+  FOUNDRY_PROJECT_ENDPOINT: selectedVars.FOUNDRY_PROJECT_ENDPOINT,
+  FOUNDRY_MODEL: selectedVars.FOUNDRY_MODEL,
 });

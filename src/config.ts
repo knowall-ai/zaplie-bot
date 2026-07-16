@@ -7,6 +7,8 @@ const config = {
   tenantId: process.env.AAD_APP_TENANT_ID,
   clientSecret: process.env.AAD_APP_CLIENT_SECRET,
   timeout: process.env.TIMEOUT || 30000,
+  foundryProjectEndpoint: process.env.FOUNDRY_PROJECT_ENDPOINT,
+  foundryModel: process.env.FOUNDRY_MODEL,
 };
 
 console.log('Configuration:', config);

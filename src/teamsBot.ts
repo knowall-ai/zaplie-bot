@@ -6,6 +6,7 @@ import {
   MemoryStorage,
   ConversationState,
   UserState,
+  StatePropertyAccessor,
   CardFactory,
   MessageFactory
 } from 'botbuilder';
@@ -14,10 +15,15 @@ import { SendZapCommand, SendZap } from './commands/sendZapCommand';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
+import { runConversationalTurn } from './services/foundryAgentService';
+import { createReadOnlyTools } from './commands/agentTools';
 import {
   getUser,
   getWalletBalance,
 } from './services/lnbitsService';
+
+const UNRECOGNIZED_COMMAND_MESSAGE =
+  "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
 
 //Reward Name Constants
 
@@ -42,6 +48,7 @@ let userSetupFlag = false;
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
   userState: UserState;
+  foundryConversationIdAccessor: StatePropertyAccessor<string | undefined>;
 
   constructor() {
     super();
@@ -51,6 +58,9 @@ export class TeamsBot extends TeamsActivityHandler {
     // Create conversation and user state with in-memory storage provider.
     this.conversationState = new ConversationState(memoryStorage);
     this.userState = new UserState(memoryStorage);
+    this.foundryConversationIdAccessor = this.conversationState.createProperty<
+      string | undefined
+    >('foundryConversationId');
 
     // Register commands
     SSOCommandMap.register('send zap', new SendZapCommand());
@@ -208,15 +218,21 @@ export class TeamsBot extends TeamsActivityHandler {
         }
     
         // Trigger command by IM text
-         if(textMessage){
-        const command = SSOCommandMap.get(textMessage.toLowerCase());
-        if (command) {
-          await command.execute(context);
-        } else {
-            await context.sendActivity(
-              "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!",
-            );
-          }}
+        if (textMessage) {
+          const command = SSOCommandMap.get(textMessage.toLowerCase());
+          if (command) {
+            await command.execute(context);
+          } else if (context.activity.conversation.conversationType === 'personal') {
+            // Free text with no exact command match falls back to the
+            // conversational agent, but only in 1:1 chats — ConversationState
+            // (and therefore the Foundry conversation) is keyed per
+            // conversation, so a team/groupchat would otherwise share one
+            // agent thread across unrelated teammates.
+            await this.replyConversationally(context, textMessage);
+          } else {
+            await context.sendActivity(UNRECOGNIZED_COMMAND_MESSAGE);
+          }
+        }
         } catch (error) {
           console.error('Error in onMessage handler:', error.message);
           await context.sendActivity(
@@ -242,6 +258,32 @@ export class TeamsBot extends TeamsActivityHandler {
     } catch (error) {
       console.error('Error in run method:', error);
       await context.sendActivity(error);
+    }
+  }
+
+  private async replyConversationally(
+    context: TurnContext,
+    textMessage: string,
+  ): Promise<void> {
+    const existingConversationId = await this.foundryConversationIdAccessor.get(
+      context,
+      undefined,
+    );
+    try {
+      const result = await runConversationalTurn(
+        textMessage,
+        existingConversationId,
+        createReadOnlyTools(),
+        context,
+      );
+      await this.foundryConversationIdAccessor.set(context, result.foundryConversationId);
+      await context.sendActivity(result.replyText || UNRECOGNIZED_COMMAND_MESSAGE);
+    } catch (error) {
+      // A failed turn can leave a dangling/invalid Foundry conversation id; clear
+      // it so the next message starts fresh. Then rethrow — a broken agent must
+      // surface as a real error, not be disguised as "unrecognized command".
+      await this.foundryConversationIdAccessor.set(context, undefined);
+      throw error;
     }
   }
 

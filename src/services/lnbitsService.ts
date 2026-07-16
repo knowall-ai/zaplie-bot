@@ -169,8 +169,11 @@ const getWallets = async (
 
     return walletData;
   } catch (error) {
+    // Unlike most functions in this file, throw here instead of returning
+    // the error: callers (e.g. agentTools.ts's get_leaderboard) treat any
+    // truthy return as success, and an Error object is truthy.
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
