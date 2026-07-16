@@ -100,6 +100,10 @@
         {
             "url": "https://localhost:3000",
             "type": "spa"
+        },
+        {
+            "url": "https://localhost:3000/auth-end",
+            "type": "spa"
         }
     ]
 }
