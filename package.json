@@ -16,7 +16,7 @@
     "write-env": "cross-env TEAMSFX_ENV=$TEAMSFX_ENV node scripts/writeEnv.js",
     "start": "node ./lib/src/index.js",
     "watch": "nodemon --exec \"npm run start\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "repository": {
     "type": "git",

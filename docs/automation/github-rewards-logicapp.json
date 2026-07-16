@@ -1,0 +1,175 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "zaplie-github-rewards",
+      "metadata": {
+        "description": "Name of the Logic App workflow."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the Logic App."
+      }
+    },
+    "zaplieRewardsUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Full URL of the Zaplie rewards endpoint, e.g. https://<bot-domain>/api/v1/rewards"
+      }
+    },
+    "zaplieRewardsApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Value of the REWARDS_API_KEY configured on the Zaplie bot. Stored as a secure workflow parameter, not visible after deployment."
+      }
+    },
+    "rewardAmountSats": {
+      "type": "int",
+      "defaultValue": 1000,
+      "metadata": {
+        "description": "Sats paid per merged pull request. Edit here or in the workflow designer."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "zaplieRewardsUrl": {
+            "value": "[parameters('zaplieRewardsUrl')]"
+          },
+          "zaplieRewardsApiKey": {
+            "value": "[parameters('zaplieRewardsApiKey')]"
+          },
+          "rewardAmountSats": {
+            "value": "[parameters('rewardAmountSats')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "zaplieRewardsUrl": {
+              "type": "String"
+            },
+            "zaplieRewardsApiKey": {
+              "type": "SecureString"
+            },
+            "rewardAmountSats": {
+              "type": "Int"
+            }
+          },
+          "triggers": {
+            "github_webhook": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "method": "POST",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "number": {
+                      "type": "integer"
+                    },
+                    "pull_request": {
+                      "type": "object",
+                      "properties": {
+                        "merged": {
+                          "type": "boolean"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "actions": {
+            "If_pull_request_merged": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@triggerBody()?['action']",
+                      "closed"
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@triggerBody()?['pull_request']?['merged']",
+                      true
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Send_reward_to_Zaplie": {
+                  "type": "Http",
+                  "inputs": {
+                    "retryPolicy": {
+                      "type": "none"
+                    },
+                    "method": "POST",
+                    "uri": "@parameters('zaplieRewardsUrl')",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "X-Api-Key": "@parameters('zaplieRewardsApiKey')"
+                    },
+                    "body": {
+                      "recipient": "@triggerBody()?['pull_request']?['user']?['login']",
+                      "amountSats": "@parameters('rewardAmountSats')",
+                      "reason": "GitHub: PR #@{triggerBody()?['number']} merged - @{triggerBody()?['pull_request']?['title']}",
+                      "source": "github"
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs"
+                      ]
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "webhookUrl": {
+      "type": "string",
+      "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('logicAppName'), 'github_webhook'), '2019-05-01').value]"
+    }
+  }
+}
