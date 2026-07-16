@@ -99,11 +99,11 @@
         },
         {
             "url": "https://localhost:3000",
-            "type": "spa"
+            "type": "Spa"
         },
         {
             "url": "https://localhost:3000/auth-end",
-            "type": "spa"
+            "type": "Spa"
         }
     ]
 }
