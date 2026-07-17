@@ -1,11 +1,13 @@
 .zapactivitychartbox {
     display: flex;
-    width: 688px;
+    flex: 1 1 400px;
+    max-width: 688px;
+    min-width: 0;
+    box-sizing: border-box;
     padding: 20px;
     flex-direction: column;
     align-items: flex-end;
     gap: 10px;
-    flex-shrink: 0;
     align-self: stretch;
 
     border-radius: 4px;

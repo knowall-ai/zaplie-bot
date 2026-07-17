@@ -78,17 +78,18 @@ const Home: React.FC = () => {
           //background: '#1F1F1F',
           justifyContent: 'flex-start',
           alignItems: 'flex-start',
-          gap: 918,
-          display: 'inline-flex',
+          display: 'flex',
+          boxSizing: 'border-box',
         }}
       >
         <div
           style={{
-            /*height: 246.19,*/
+            width: '100%',
             justifyContent: 'flex-start',
-            alignItems: 'flex-start',
+            alignItems: 'stretch',
             gap: 6,
             display: 'flex',
+            flexWrap: 'wrap',
           }}
         >
           <TotalZapsComponent isLoading={loading} allZaps={zaps} allUsers={users} />
