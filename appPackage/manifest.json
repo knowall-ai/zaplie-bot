@@ -76,12 +76,26 @@
                 "personalTab",
                 "channelTab"
             ], 
-            "name": "Feed", 
-            "contentUrl": "https://zaplie-dev-development.azurewebsites.net", 
+            "name": "Feed",
+            "contentUrl": "https://zaplie-dev-development.azurewebsites.net",
             "websiteUrl": "https://zaplie-dev-development.azurewebsites.net"
-        }, 
-        { 
-            "entityId": "usersTab", 
+        },
+        {
+            "entityId": "weekTab",
+            "scopes": [
+                "team",
+                "personal"
+            ],
+            "context": [
+                "personalTab",
+                "channelTab"
+            ],
+            "name": "Your week",
+            "contentUrl": "https://zaplie-dev-development.azurewebsites.net/week",
+            "websiteUrl": "https://zaplie-dev-development.azurewebsites.net/week"
+        },
+        {
+            "entityId": "usersTab",
             "scopes": [       
                 "team",
                 "personal"
