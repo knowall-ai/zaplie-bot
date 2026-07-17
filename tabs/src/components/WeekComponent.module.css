@@ -1,0 +1,146 @@
+.weekcomponent {
+    width: 100%;
+    position: relative;
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+    background-color: #2d2b2c;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 20px;
+    box-sizing: border-box;
+    gap: 16px;
+    text-align: left;
+    font-size: 12px;
+    color: #d6d6d6;
+    font-family: Inter;
+}
+
+.title {
+    color: #fff;
+    font-size: 20px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.subtitle {
+    color: #a19f9d;
+    margin: 0;
+}
+
+.sectionHeading {
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 8px 0 0;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.row {
+    background-color: #1f1f1f;
+    border-bottom: 1px solid #2d2b2c;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.row:last-child {
+    border-bottom: none;
+}
+
+.rowInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rowTitle {
+    color: #fff;
+    font-weight: 600;
+}
+
+.rowMeta {
+    color: #a19f9d;
+    font-size: 11px;
+}
+
+.zappedBadge {
+    color: #84cc16;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.noAccountBadge {
+    color: #7a7877;
+    white-space: nowrap;
+}
+
+.zapButton {
+    background-color: #5b5fc7;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.zapButton:hover {
+    background-color: #4649a3;
+}
+
+.suggestionRow {
+    background-color: #1f1f1f;
+    border-left: 2px solid #5b5fc7;
+    border-radius: 4px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.suggestionText {
+    color: #fff;
+}
+
+.consentBox {
+    background-color: #1f1f1f;
+    border-radius: 4px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.consentButton {
+    background-color: #5b5fc7;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.errorText {
+    color: #ff6b6b;
+}
+
+.emptyText {
+    color: #a19f9d;
+}
