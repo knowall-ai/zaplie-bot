@@ -56,6 +56,60 @@
     gap: 12px;
 }
 
+.avatar,
+.avatarFallback,
+.meetingIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.avatar {
+    object-fit: cover;
+}
+
+.avatarFallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #5b5fc7;
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.meetingIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #2d2b2c;
+    font-size: 16px;
+}
+
+.stats {
+    display: flex;
+    gap: 28px;
+    padding: 4px 2px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.statNum {
+    color: #fff;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.statLabel {
+    color: #a19f9d;
+    font-size: 11px;
+}
+
 .row:last-child {
     border-bottom: none;
 }
@@ -65,6 +119,7 @@
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+    flex: 1;
 }
 
 .rowTitle {

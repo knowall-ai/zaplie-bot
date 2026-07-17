@@ -14,6 +14,19 @@ const DAYS_BACK = 7;
 // Graph returns UTC without a 'Z' suffix; append it so the browser renders local time.
 const asUtc = (dateTime: string): Date => new Date(`${dateTime}Z`);
 
+const initialsOf = (label: string): string => {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return label.trim().slice(0, 2).toUpperCase();
+};
+
+const renderAvatar = (name: string, matchedUser: User | null) =>
+  matchedUser?.profileImg ? (
+    <img className={styles.avatar} src={matchedUser.profileImg} alt="" />
+  ) : (
+    <div className={styles.avatarFallback}>{initialsOf(name)}</div>
+  );
+
 interface MetAttendee {
   name: string;
   email: string;
@@ -173,6 +186,7 @@ const WeekComponent: React.FC = () => {
     alreadyZapped: boolean,
   ) => (
     <div key={key} className={styles.row}>
+      {renderAvatar(name, matchedUser)}
       <div className={styles.rowInfo}>
         <span className={styles.rowTitle}>{name}</span>
         <span className={styles.rowMeta}>{meta}</span>
@@ -191,6 +205,21 @@ const WeekComponent: React.FC = () => {
     <div className={styles.weekcomponent}>
       <h2 className={styles.title}>Your week</h2>
       <p className={styles.subtitle}>Meetings from the last {DAYS_BACK} days, and teammates worth recognising.</p>
+
+      <div className={styles.stats}>
+        <div className={styles.stat}>
+          <span className={styles.statNum}>{meetings.length}</span>
+          <span className={styles.statLabel}>meetings</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statNum}>{attendeesToZap.length}</span>
+          <span className={styles.statLabel}>to recognise</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statNum}>{onZaplie.length}</span>
+          <span className={styles.statLabel}>on Zaplie</span>
+        </div>
+      </div>
 
       {topSuggestion && (
         <div className={styles.suggestionRow}>
@@ -212,6 +241,7 @@ const WeekComponent: React.FC = () => {
           const start = asUtc(event.start.dateTime);
           return (
             <div key={event.id} className={styles.row}>
+              <div className={styles.meetingIcon}>📅</div>
               <div className={styles.rowInfo}>
                 <span className={styles.rowTitle}>{event.subject}</span>
                 <span className={styles.rowMeta}>
