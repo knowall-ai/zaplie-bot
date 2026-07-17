@@ -8,9 +8,15 @@ import {
   StatePropertyAccessor,
   CardFactory,
   MessageFactory,
+  MessagingExtensionAction,
+  MessagingExtensionActionResponse,
 } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
-import { SendZapCommand, SendZap } from './commands/sendZapCommand';
+import {
+  SendZapCommand,
+  SendZap,
+  createZapCard,
+} from './commands/sendZapCommand';
 import { ZapLedger, zapKey } from './services/zapLedger';
 import {
   getPendingRecipientIds,
@@ -30,7 +36,7 @@ import {
 } from './commands/connectCalendarCommand';
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createAgentTools } from './commands/agentTools';
-import { getUser, getWalletBalance } from './services/lnbitsService';
+import { getUser, getUsers, getWalletBalance } from './services/lnbitsService';
 
 const UNRECOGNIZED_COMMAND_MESSAGE =
   "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
@@ -407,4 +413,69 @@ export class TeamsBot extends TeamsActivityHandler {
       console.error('Error in handleTeamsSigninTokenExchange:', error);
     }
   }
+
+  // "Zap a message" action command: right-click a message -> pre-fill a zap card for its author.
+  async handleTeamsMessagingExtensionSubmitAction(
+    context: TurnContext,
+    action: MessagingExtensionAction,
+  ): Promise<MessagingExtensionActionResponse> {
+    const currentUser = context.turnState.get('user');
+    if (!currentUser) {
+      await context.sendActivity(
+        "D'oh! I couldn't find your Zaplie account. Message me directly first to get set up.",
+      );
+      return {};
+    }
+
+    const authorUser = action.messagePayload?.from?.user;
+    if (!authorUser?.id) {
+      await context.sendActivity(
+        "D'oh! I couldn't tell who sent that message, so I can't zap them.",
+      );
+      return {};
+    }
+
+    const users = await getUsers(adminKey, null);
+    const author = users?.find(user => user.aadObjectId === authorUser.id);
+    if (!author) {
+      await context.sendActivity(
+        `D'oh! ${authorUser.displayName || 'That person'} doesn't have a Zaplie account yet.`,
+      );
+      return {};
+    }
+
+    if (author.aadObjectId === currentUser.aadObjectId) {
+      await context.sendActivity(
+        "D'oh! You can't zap yourself - the allowance is for recognising others.",
+      );
+      return {};
+    }
+
+    const card = await createZapCard(currentUser, globalRewardName, {
+      receiverId: author.id,
+      amountSats: getZapMessageDefaultSats(),
+      message: stripHtmlSnippet(action.messagePayload?.body?.content),
+    });
+
+    await context.sendActivity(
+      MessageFactory.attachment(CardFactory.adaptiveCard(card)),
+    );
+
+    return {};
+  }
+}
+
+// HTML -> plaintext, capped to a short preview for the zap memo field.
+function stripHtmlSnippet(html: string | undefined): string {
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, '').trim().slice(0, 80);
+}
+
+function getZapMessageDefaultSats(): number {
+  const raw = process.env.ZAP_MESSAGE_DEFAULT_SATS ?? '1000';
+  const amount = Number(raw);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error(`ZAP_MESSAGE_DEFAULT_SATS must be a positive integer, got "${raw}".`);
+  }
+  return amount;
 }

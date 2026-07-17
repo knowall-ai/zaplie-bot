@@ -63,7 +63,23 @@
             ]
         }
     ],
-    "composeExtensions": [],
+    "composeExtensions": [
+        {
+            "botId": "${{BOT_ID}}",
+            "commands": [
+                {
+                    "id": "zapMessage",
+                    "type": "action",
+                    "context": [
+                        "message"
+                    ],
+                    "title": "Zap ⚡",
+                    "description": "Send sats to the author of this message",
+                    "fetchTask": false
+                }
+            ]
+        }
+    ],
     "configurableTabs": [],
     "staticTabs": [
         { 
