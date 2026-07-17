@@ -19,6 +19,7 @@ import { UserService } from './services/userService';
 import { FetchUserMiddleware } from './services/fetchUserMiddleware';
 import {
   parseRewardRequest,
+  resolveAmountSats,
   payReward,
   RewardError,
 } from './services/rewardsService';
@@ -125,13 +126,14 @@ server.post('/api/v1/rewards', async (req, res) => {
   }
 
   try {
-    const reward = parseRewardRequest(req.body);
-    const { paymentHash } = await payReward(reward);
+    const request = parseRewardRequest(req.body);
+    const amountSats = await resolveAmountSats(request);
+    const { paymentHash } = await payReward({ ...request, amountSats });
     res.send(200, {
       status: 'paid',
       paymentHash,
-      recipient: reward.recipient,
-      amountSats: reward.amountSats,
+      recipient: request.recipient,
+      amountSats,
     });
   } catch (error) {
     if (error instanceof RewardError) {

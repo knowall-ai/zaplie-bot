@@ -1,4 +1,5 @@
 import { getUserWallets, createInvoice, payInvoice } from './lnbitsService';
+import { getRewardAmounts } from './fetchRewardAmounts';
 
 const TREASURY_DISPLAY_NAME = 'Automation';
 
@@ -13,31 +14,29 @@ export class RewardError extends Error {
 
 export interface RewardRequest {
   recipient: string; // external identity, e.g. GitHub login
+  amountSats?: number;
+  eventType?: string;
+  reason: string;
+  source: string;
+}
+
+export interface ResolvedRewardRequest {
+  recipient: string;
   amountSats: number;
   reason: string;
   source: string;
 }
 
 export function parseRewardRequest(body: unknown): RewardRequest {
-  const { recipient, amountSats, reason, source } = (body ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const { recipient, amountSats, eventType, reason, source } = (body ??
+    {}) as Record<string, unknown>;
   if (typeof recipient !== 'string' || recipient.length === 0) {
     throw new RewardError('recipient must be a non-empty string', 400);
   }
-  if (
-    typeof amountSats !== 'number' ||
-    !Number.isInteger(amountSats) ||
-    amountSats <= 0
-  ) {
-    throw new RewardError('amountSats must be a positive integer', 400);
-  }
-  if (amountSats > maxAmountSats()) {
-    throw new RewardError(
-      `amountSats exceeds the per-reward cap of ${maxAmountSats()}`,
-      400,
-    );
+  if (amountSats !== undefined) {
+    validateAmountSats(amountSats);
+  } else if (typeof eventType !== 'string' || eventType.length === 0) {
+    throw new RewardError('either amountSats or eventType is required', 400);
   }
   if (typeof reason !== 'string' || reason.length === 0) {
     throw new RewardError('reason must be a non-empty string', 400);
@@ -45,7 +44,71 @@ export function parseRewardRequest(body: unknown): RewardRequest {
   if (typeof source !== 'string' || source.length === 0) {
     throw new RewardError('source must be a non-empty string', 400);
   }
-  return { recipient, amountSats, reason, source };
+  return {
+    recipient,
+    // already validated above; cast reflects that, not new trust
+    amountSats: amountSats as number | undefined,
+    // eventType is unused when amountSats is set, so a malformed one is dropped, not a 400
+    eventType: typeof eventType === 'string' ? eventType : undefined,
+    reason,
+    source,
+  };
+}
+
+function isPositiveInteger(amountSats: unknown): amountSats is number {
+  return (
+    typeof amountSats === 'number' &&
+    Number.isInteger(amountSats) &&
+    amountSats > 0
+  );
+}
+
+// single cap-check predicate shared with resolveAmountSats so the two amount sources can't drift
+function isValidRewardAmount(amountSats: unknown): amountSats is number {
+  return isPositiveInteger(amountSats) && amountSats <= maxAmountSats();
+}
+
+function validateAmountSats(amountSats: unknown): asserts amountSats is number {
+  if (!isPositiveInteger(amountSats)) {
+    throw new RewardError('amountSats must be a positive integer', 400);
+  }
+  if (!isValidRewardAmount(amountSats)) {
+    throw new RewardError(
+      `amountSats exceeds the per-reward cap of ${maxAmountSats()}`,
+      400,
+    );
+  }
+}
+
+export async function resolveAmountSats(
+  request: RewardRequest,
+): Promise<number> {
+  if (request.amountSats !== undefined) {
+    return request.amountSats;
+  }
+
+  // parseRewardRequest guarantees eventType is set when amountSats is absent.
+  const eventType = request.eventType as string;
+  const configKey = `${eventType}Sats`;
+  const rewardAmounts = await getRewardAmounts();
+  const amountSats = Object.prototype.hasOwnProperty.call(
+    rewardAmounts,
+    configKey,
+  )
+    ? rewardAmounts[configKey]
+    : undefined;
+  if (amountSats === undefined) {
+    throw new RewardError(
+      `no configured amount for eventType '${eventType}'`,
+      400,
+    );
+  }
+  if (!isValidRewardAmount(amountSats)) {
+    throw new Error(
+      `configured amount for '${configKey}' is invalid: ${amountSats}`,
+    );
+  }
+  return amountSats;
 }
 
 // 10000 matches the interactive zap card's ceiling
@@ -81,7 +144,7 @@ function lookupLnbitsUserId(githubLogin: string): string {
 }
 
 export async function payReward(
-  reward: RewardRequest,
+  reward: ResolvedRewardRequest,
 ): Promise<{ paymentHash: string }> {
   const treasuryAdminKey = requiredEnv('REWARDS_TREASURY_ADMINKEY');
 

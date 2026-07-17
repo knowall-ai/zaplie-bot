@@ -27,13 +27,6 @@
       "metadata": {
         "description": "Value of the REWARDS_API_KEY configured on the Zaplie bot. Stored as a secure workflow parameter, not visible after deployment."
       }
-    },
-    "rewardAmountSats": {
-      "type": "int",
-      "defaultValue": 1000,
-      "metadata": {
-        "description": "Sats paid per merged pull request. Edit here or in the workflow designer."
-      }
     }
   },
   "resources": [
@@ -50,9 +43,6 @@
           },
           "zaplieRewardsApiKey": {
             "value": "[parameters('zaplieRewardsApiKey')]"
-          },
-          "rewardAmountSats": {
-            "value": "[parameters('rewardAmountSats')]"
           }
         },
         "definition": {
@@ -64,9 +54,6 @@
             },
             "zaplieRewardsApiKey": {
               "type": "SecureString"
-            },
-            "rewardAmountSats": {
-              "type": "Int"
             }
           },
           "triggers": {
@@ -142,7 +129,7 @@
                     },
                     "body": {
                       "recipient": "@triggerBody()?['pull_request']?['user']?['login']",
-                      "amountSats": "@parameters('rewardAmountSats')",
+                      "eventType": "githubPrMerged",
                       "reason": "GitHub: PR #@{triggerBody()?['number']} merged - @{triggerBody()?['pull_request']?['title']}",
                       "source": "github"
                     }

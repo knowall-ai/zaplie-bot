@@ -32,7 +32,7 @@ Set these environment variables on the bot (alongside the existing LNbits ones):
 | `REWARDS_API_KEY` | Shared secret the automation must send in `X-Api-Key`. Endpoint returns 503 when unset. |
 | `REWARDS_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). |
 | `REWARDS_GITHUB_USER_MAP` | JSON object mapping GitHub logins to LNbits user ids, e.g. `{"octocat":"3fa85f64..."}`. Unmapped logins are rejected with 404 — rewards are never paid on a guessed identity. |
-| `REWARDS_MAX_AMOUNT_SATS` | Optional per-reward cap. Defaults to 10000 (the same ceiling as the interactive zap card). Requests above it are rejected with 400. |
+| `REWARDS_MAX_AMOUNT_SATS` | Optional per-reward cap. Defaults to 10000 (the same ceiling as the interactive zap card). Requests above it are rejected with 400, whether the amount came from the caller or from the portal config. |
 
 Generate the API key with e.g. `openssl rand -hex 32`.
 
@@ -67,8 +67,7 @@ az deployment group create \
   --template-file docs/automation/github-rewards-logicapp.json \
   --parameters \
       zaplieRewardsUrl="https://<bot-domain>/api/v1/rewards" \
-      zaplieRewardsApiKey="<REWARDS_API_KEY value>" \
-      rewardAmountSats=1000
+      zaplieRewardsApiKey="<REWARDS_API_KEY value>"
 
 # The webhook URL for GitHub comes out of the deployment outputs:
 az deployment group show \
@@ -96,11 +95,16 @@ and takes the empty else-branch — that is expected.
 
 ## 4. Customising the flow
 
-Open the Logic App in the Azure portal designer to change it without touching
-code: adjust `rewardAmountSats`, edit the condition (e.g. only PRs into `main`,
-or reward issue closers instead), or add steps (Teams notification, approval).
-Any event source that can POST JSON can drive the same Zaplie endpoint — GitHub
-is just the first flow.
+The reward amount is not part of the template: it is configured in the portal
+under **Settings → Admin → Automation Reward Amounts**, keyed by `eventType`
+(the template sends `eventType: "githubPrMerged"`, which the bot resolves
+against the portal's `githubPrMergedSats` value). Open the Logic App in the
+Azure portal designer to change anything else without touching code: edit the
+condition (e.g. only PRs into `main`, or reward issue closers instead), or add
+steps (Teams notification, approval). The HTTP action body also accepts an
+explicit `amountSats` field as an override of the configured amount, for flows
+that want to decide the amount themselves. Any event source that can POST
+JSON can drive the same Zaplie endpoint — GitHub is just the first flow.
 
 ## Smoke test without Azure
 
@@ -112,7 +116,7 @@ this payload — GitHub webhooks cannot target the endpoint directly):
 curl -s -X POST https://<bot-domain>/api/v1/rewards \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $REWARDS_API_KEY" \
-  -d '{"recipient":"octocat","amountSats":21,"reason":"GitHub: PR #1 merged","source":"github"}'
+  -d '{"recipient":"octocat","eventType":"githubPrMerged","reason":"GitHub: PR #1 merged","source":"github"}'
 ```
 
-Expected: `{"status":"paid","paymentHash":"...","recipient":"octocat","amountSats":21}`.
+Expected: `{"status":"paid","paymentHash":"...","recipient":"octocat","amountSats":<configured value>}`.
