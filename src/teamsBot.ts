@@ -11,6 +11,7 @@ import {
 } from 'botbuilder';
 import {  SSOCommandMap } from './commands/SSOCommandMap';
 import { SendZapCommand, SendZap } from './commands/sendZapCommand';
+import { validateZapSubmit } from './commands/zapBudget';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
@@ -107,7 +108,18 @@ export class TeamsBot extends TeamsActivityHandler {
           if (!currentUser.allowanceWallet.id) {
             throw new Error('No sending wallet found.');
           }
-    
+
+          const liveBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
+          if (typeof liveBalance !== 'number') {
+            throw new Error('Could not read your live balance, so no zaps were sent.');
+          }
+          const amount = validateZapSubmit(
+            zapAmount,
+            receiverIds.length,
+            liveBalance,
+            globalRewardName,
+          );
+
           let successfulRecipients: string[] = [];
     
           for (const recId of receiverIds) {
@@ -123,7 +135,7 @@ export class TeamsBot extends TeamsActivityHandler {
               currentUser,
               receiver,
               zapMessage,
-              zapAmount,
+              amount,
               context,
               false,
               globalRewardName
@@ -142,7 +154,7 @@ export class TeamsBot extends TeamsActivityHandler {
           console.log('Remaining Balance:', remainingBalance);
           
           // Assuming zapAmount is the amount sent to each receiver
-          const totalAmountSent = receiverIds.length * zapAmount;
+          const totalAmountSent = successfulRecipients.length * amount;
 
           // Update adaptive card to read-only with list of recipients
           const updatedCard = {
