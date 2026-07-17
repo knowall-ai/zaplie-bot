@@ -84,7 +84,18 @@
     align-items: center;
     justify-content: center;
     background-color: #2d2b2c;
-    font-size: 16px;
+}
+
+.glyph {
+    width: 18px;
+    height: 18px;
+}
+
+.inlineIcon {
+    width: 13px;
+    height: 13px;
+    vertical-align: -1px;
+    margin-left: 3px;
 }
 
 .stats {

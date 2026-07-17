@@ -7,6 +7,8 @@ import { fetchRecentMeetings, GraphEvent } from '../services/calendarService';
 import { fetchRelevantPeople } from '../services/peopleService';
 import { fetchZapHistory } from '../services/zapHistoryService';
 import SendZapsPopup from './SendZapsPopup';
+import ZapIcon from '../images/ZapIcon.svg';
+import CalendarIcon from '../images/Calendar.svg';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 const DAYS_BACK = 7;
@@ -192,7 +194,11 @@ const WeekComponent: React.FC = () => {
         <span className={styles.rowMeta}>{meta}</span>
       </div>
       {!matchedUser && <span className={styles.noAccountBadge}>Not on Zaplie</span>}
-      {matchedUser && alreadyZapped && <span className={styles.zappedBadge}>Zapped ⚡</span>}
+      {matchedUser && alreadyZapped && (
+        <span className={styles.zappedBadge}>
+          Zapped <img src={ZapIcon} alt="" className={styles.inlineIcon} />
+        </span>
+      )}
       {matchedUser && !alreadyZapped && (
         <button className={styles.zapButton} onClick={() => setZapTarget(matchedUser)}>
           Zap
@@ -229,7 +235,7 @@ const WeekComponent: React.FC = () => {
             and haven't recognised them yet.
           </span>
           <button className={styles.zapButton} onClick={() => setZapTarget(topSuggestion.matchedUser)}>
-            Zap {topSuggestion.name.split(' ')[0]} ⚡
+            Zap {topSuggestion.name.split(' ')[0]} <img src={ZapIcon} alt="" className={styles.inlineIcon} />
           </button>
         </div>
       )}
@@ -241,7 +247,9 @@ const WeekComponent: React.FC = () => {
           const start = asUtc(event.start.dateTime);
           return (
             <div key={event.id} className={styles.row}>
-              <div className={styles.meetingIcon}>📅</div>
+              <div className={styles.meetingIcon}>
+                <img src={CalendarIcon} alt="" className={styles.glyph} />
+              </div>
               <div className={styles.rowInfo}>
                 <span className={styles.rowTitle}>{event.subject}</span>
                 <span className={styles.rowMeta}>
