@@ -40,3 +40,67 @@ export const updateRewardName = async (newRewardName: string) => {
     throw error;
   }
 };
+
+export const getBotPersona = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/bot-persona`, {
+      headers: {
+        Authorization: getAuthToken(),
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching bot persona:', error);
+    throw error;
+  }
+};
+
+export const updateBotPersona = async (botPersona: string) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/bot-persona`,
+      { botPersona },
+      {
+        headers: {
+          Authorization: getAuthToken(),
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error updating bot persona:', error);
+    throw error;
+  }
+};
+
+export const getRewardAmounts = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/reward-amounts`, {
+      headers: {
+        Authorization: getAuthToken(),
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching reward amounts:', error);
+    throw error;
+  }
+};
+
+export const updateRewardAmounts = async (rewardAmounts: Record<string, number>) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/reward-amounts`,
+      { rewardAmounts },
+      {
+        headers: {
+          Authorization: getAuthToken(),
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error updating reward amounts:', error);
+    throw error;
+  }
+};

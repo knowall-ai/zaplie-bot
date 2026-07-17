@@ -25,6 +25,8 @@ const readData = () => {
   }
 };
 
+const defaultRewardAmounts = { githubPrMergedSats: 1000 };
+
 // Function to write data to the JSON file
 const writeData = (data) => {
   try {
@@ -53,6 +55,44 @@ app.post('/api/reward-name', (req, res) => {
     res.send({ message: 'Reward name updated successfully', rewardName: data.rewardName });
   } else {
     res.status(400).send({ message: 'Invalid reward name' });
+  }
+});
+
+// Endpoint to get the bot persona
+app.get('/api/bot-persona', (req, res) => {
+  const data = readData();
+  res.send({ botPersona: data.botPersona || '' });
+});
+
+// Endpoint to update the bot persona
+app.post('/api/bot-persona', (req, res) => {
+  const { botPersona } = req.body;
+  if (typeof botPersona === 'string') {
+    const data = readData();
+    data.botPersona = botPersona;
+    writeData(data);
+    res.send({ message: 'Bot persona updated successfully', botPersona: data.botPersona });
+  } else {
+    res.status(400).send({ message: 'Invalid bot persona' });
+  }
+});
+
+// Endpoint to get automation reward amounts
+app.get('/api/reward-amounts', (req, res) => {
+  const data = readData();
+  res.send({ rewardAmounts: { ...defaultRewardAmounts, ...data.rewardAmounts } });
+});
+
+// Endpoint to update automation reward amounts
+app.post('/api/reward-amounts', (req, res) => {
+  const { rewardAmounts } = req.body;
+  if (rewardAmounts && typeof rewardAmounts === 'object' && !Array.isArray(rewardAmounts)) {
+    const data = readData();
+    data.rewardAmounts = { ...defaultRewardAmounts, ...data.rewardAmounts, ...rewardAmounts };
+    writeData(data);
+    res.send({ message: 'Reward amounts updated successfully', rewardAmounts: data.rewardAmounts });
+  } else {
+    res.status(400).send({ message: 'Invalid reward amounts' });
   }
 });
 
