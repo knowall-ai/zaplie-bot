@@ -68,11 +68,13 @@
 .rowTitle {
     color: #fff;
     font-weight: 600;
+    overflow-wrap: anywhere;
 }
 
 .rowMeta {
     color: #a19f9d;
     font-size: 11px;
+    overflow-wrap: anywhere;
 }
 
 .zappedBadge {
@@ -115,6 +117,7 @@
 
 .suggestionText {
     color: #fff;
+    min-width: 0;
 }
 
 .consentBox {
