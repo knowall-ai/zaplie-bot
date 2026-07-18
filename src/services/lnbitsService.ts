@@ -11,11 +11,15 @@ let globalWalletId: string | null = null;
 //import dotenv from 'dotenv';
 //dotenv.config();
 
-for (const name of ['LNBITS_NODE_URL', 'LNBITS_USERNAME', 'LNBITS_PASSWORD']) {
-  if (!process.env[name]) {
-    throw new Error(`${name} is not set`);
+// Validated on first use, not at import: test suites import this module with
+// mocked fetch and no LNbits env.
+const requireLnbitsEnv = () => {
+  for (const name of ['LNBITS_NODE_URL', 'LNBITS_USERNAME', 'LNBITS_PASSWORD']) {
+    if (!process.env[name]) {
+      throw new Error(`${name} is not set`);
+    }
   }
-}
+};
 const lnbiturl = process.env.LNBITS_NODE_URL as string;
 const userName = process.env.LNBITS_USERNAME as string;
 const password = process.env.LNBITS_PASSWORD as string;
@@ -34,6 +38,7 @@ export async function getAccessToken(
   username: string,
   password: string,
 ): Promise<string> {
+  requireLnbitsEnv();
   /*console.log(
     `getAccessToken starting ... (username: ${username}, filterById: ${password}))`,
   );*/
