@@ -5,12 +5,19 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('./authMiddleware'); // Import the authentication middleware
+const identityRoutes = require('./identityRoutes');
+const pendingRewardsStore = require('./pendingRewardsStore');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
+
+// Mounted before the generic authMiddleware below: its user-facing routes
+// (authorize-url, mine) authenticate with a real MSAL token, not the
+// placeholder API token, and /resolve applies authMiddleware itself.
+app.use('/api/identities', identityRoutes);
 
 const dataFilePath = path.join(__dirname, 'data.json');
 
@@ -54,6 +61,32 @@ app.post('/api/reward-name', (req, res) => {
   } else {
     res.status(400).send({ message: 'Invalid reward name' });
   }
+});
+
+// Endpoint the bot posts to when a reward's recipient can't be resolved to a
+// Zaplie person yet (identity graph and env-map fallback both miss).
+app.post('/api/pending-rewards', (req, res) => {
+  const { provider, providerId, recipientLabel, amountSats, reason, source } = req.body || {};
+  if (
+    typeof provider !== 'string' ||
+    typeof providerId !== 'string' ||
+    typeof recipientLabel !== 'string' ||
+    typeof amountSats !== 'number' ||
+    typeof reason !== 'string' ||
+    typeof source !== 'string'
+  ) {
+    res.status(400).send({ message: 'Invalid pending reward payload' });
+    return;
+  }
+  pendingRewardsStore.addPendingReward({
+    provider,
+    providerId,
+    recipientLabel,
+    amountSats,
+    reason,
+    source,
+  });
+  res.status(201).send({ message: 'Pending reward recorded' });
 });
 
 // Serve the React app

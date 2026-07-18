@@ -128,10 +128,18 @@ server.post('/api/v1/rewards', async (req, res) => {
   try {
     const request = parseRewardRequest(req.body);
     const amountSats = await resolveAmountSats(request);
-    const { paymentHash } = await payReward({ ...request, amountSats });
+    const result = await payReward({ ...request, amountSats });
+    if ('pending' in result) {
+      res.send(202, {
+        status: 'pending',
+        recipient: request.recipient,
+        amountSats,
+      });
+      return;
+    }
     res.send(200, {
       status: 'paid',
-      paymentHash,
+      paymentHash: result.paymentHash,
       recipient: request.recipient,
       amountSats,
     });

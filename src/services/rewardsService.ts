@@ -1,5 +1,7 @@
-import { getUserWallets, createInvoice, payInvoice } from './lnbitsService';
+import { getUserWallets, getUsers, createInvoice, payInvoice } from './lnbitsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
+import { resolvePersonAadByGithubId } from './identityService';
+import { createPendingReward } from './pendingRewardsService';
 
 const TREASURY_DISPLAY_NAME = 'Automation';
 
@@ -13,7 +15,8 @@ export class RewardError extends Error {
 }
 
 export interface RewardRequest {
-  recipient: string; // external identity, e.g. GitHub login
+  recipient: string; // external identity, e.g. GitHub login (label only)
+  recipientId?: string; // stable numeric provider id, e.g. GitHub user id — never the login
   amountSats?: number;
   eventType?: string;
   reason: string;
@@ -22,16 +25,27 @@ export interface RewardRequest {
 
 export interface ResolvedRewardRequest {
   recipient: string;
+  recipientId?: string;
   amountSats: number;
   reason: string;
   source: string;
 }
 
 export function parseRewardRequest(body: unknown): RewardRequest {
-  const { recipient, amountSats, eventType, reason, source } = (body ??
-    {}) as Record<string, unknown>;
+  const { recipient, recipientId, amountSats, eventType, reason, source } =
+    (body ?? {}) as Record<string, unknown>;
   if (typeof recipient !== 'string' || recipient.length === 0) {
     throw new RewardError('recipient must be a non-empty string', 400);
+  }
+  if (
+    recipientId !== undefined &&
+    ((typeof recipientId !== 'string' && typeof recipientId !== 'number') ||
+      String(recipientId).length === 0)
+  ) {
+    throw new RewardError(
+      'recipientId must be a non-empty string or number',
+      400,
+    );
   }
   if (amountSats !== undefined) {
     validateAmountSats(amountSats);
@@ -46,6 +60,8 @@ export function parseRewardRequest(body: unknown): RewardRequest {
   }
   return {
     recipient,
+    // GitHub ids are numbers over the wire; store as a string to match the identity store's key
+    recipientId: recipientId !== undefined ? String(recipientId) : undefined,
     // already validated above; cast reflects that, not new trust
     amountSats: amountSats as number | undefined,
     // eventType is unused when amountSats is set, so a malformed one is dropped, not a 400
@@ -128,27 +144,46 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-function lookupLnbitsUserId(githubLogin: string): string {
-  const map = JSON.parse(requiredEnv('REWARDS_GITHUB_USER_MAP'));
-  // hasOwnProperty so "constructor" etc. cannot resolve via Object.prototype
-  const userId = Object.prototype.hasOwnProperty.call(map, githubLogin)
-    ? map[githubLogin]
-    : undefined;
-  if (typeof userId !== 'string' || userId.length === 0) {
-    throw new RewardError(
-      `no LNbits user mapped for recipient "${githubLogin}"`,
-      404,
-    );
+// Resolve the recipient to an LNbits user through the identity graph, keyed on the
+// stable GitHub id. A recipient who hasn't linked their GitHub yet returns null so
+// the caller holds the reward pending instead of dropping the recognition.
+async function resolveRecipientUserId(
+  reward: ResolvedRewardRequest,
+): Promise<string | null> {
+  if (!reward.recipientId) {
+    throw new RewardError('recipientId is required to resolve the recipient', 400);
   }
-  return userId;
+  const personAad = await resolvePersonAadByGithubId(reward.recipientId);
+  if (!personAad) {
+    return null;
+  }
+  const users = await getUsers(process.env.LNBITS_ADMINKEY as string, {
+    aadObjectId: personAad,
+  });
+  if (users.length === 0) {
+    throw new Error(`linked person ${personAad} has no LNbits user`);
+  }
+  return users[0].id;
 }
 
 export async function payReward(
   reward: ResolvedRewardRequest,
-): Promise<{ paymentHash: string }> {
+): Promise<{ paymentHash: string } | { pending: true }> {
   const treasuryAdminKey = requiredEnv('REWARDS_TREASURY_ADMINKEY');
 
-  const userId = lookupLnbitsUserId(reward.recipient);
+  const userId = await resolveRecipientUserId(reward);
+  if (userId === null) {
+    await createPendingReward({
+      provider: 'github',
+      providerId: reward.recipientId as string,
+      recipientLabel: reward.recipient,
+      amountSats: reward.amountSats,
+      reason: reward.reason,
+      source: reward.source,
+    });
+    return { pending: true };
+  }
+
   const adminKey = process.env.LNBITS_ADMINKEY;
   if (!adminKey) {
     throw new Error('LNBITS_ADMINKEY is not set');

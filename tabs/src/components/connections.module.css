@@ -1,0 +1,43 @@
+/* filepath: tabs/src/components/connections.module.css */
+.row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.status {
+  font-size: 12px;
+  color: #d6d6d6;
+}
+
+.connected {
+  font-size: 12px;
+  color: #84cc16;
+  font-weight: 600;
+}
+
+.connectButton {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #5b5fc7;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.connectButton:hover {
+  background-color: #4850b8;
+}
+
+.connectButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

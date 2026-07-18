@@ -83,6 +83,9 @@
                         "user": {
                           "type": "object",
                           "properties": {
+                            "id": {
+                              "type": "integer"
+                            },
                             "login": {
                               "type": "string"
                             }
@@ -129,6 +132,7 @@
                     },
                     "body": {
                       "recipient": "@triggerBody()?['pull_request']?['user']?['login']",
+                      "recipientId": "@triggerBody()?['pull_request']?['user']?['id']",
                       "eventType": "githubPrMerged",
                       "reason": "GitHub: PR #@{triggerBody()?['number']} merged - @{triggerBody()?['pull_request']?['title']}",
                       "source": "github"
