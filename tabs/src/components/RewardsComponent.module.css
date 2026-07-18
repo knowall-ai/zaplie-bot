@@ -1,6 +1,6 @@
 .mainContainer {
     width: 1052px;
-    height: 565px;
+    min-height: 565px;
     position: relative;
     margin-left: auto;
     margin-right: auto;
@@ -217,4 +217,192 @@
 
 .noPointer {
     cursor: default;
+}
+.teamSection {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.teamTitle {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    margin: 8px 0 0;
+}
+
+.teamSubtitle {
+    color: #a19f9d;
+    margin: 0 0 8px;
+}
+
+.teamGrid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.teamCard {
+    background-color: #1f1f1f;
+    border-radius: 4px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.categoryChip {
+    align-self: flex-start;
+    background-color: #2d2b2c;
+    color: #9ed929;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-radius: 4px;
+    padding: 3px 8px;
+}
+
+.teamCardTitle {
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.teamCardDescription {
+    color: #a19f9d;
+    margin: 0;
+    flex: 1;
+    line-height: 1.5;
+}
+
+.teamCardFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.teamPrice {
+    color: #fff;
+    font-weight: 600;
+}
+
+.redeemButton {
+    background-color: #84cc16;
+    color: #1f1f1f;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.redeemButton:hover {
+    background-color: #6ba513;
+}
+
+.redeemButton:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.requestedBadge {
+    color: #9ed929;
+    border: 1px solid #84cc16;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.teamCardPhoto {
+    width: calc(100% + 32px);
+    margin: -14px -16px 4px;
+    height: 110px;
+    object-fit: cover;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    display: block;
+}
+
+.historyList {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.historyRow {
+    background-color: #1f1f1f;
+    border-bottom: 1px solid #2d2b2c;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.historyRow:last-child {
+    border-bottom: none;
+}
+
+.historyInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.historyReward {
+    color: #fff;
+    font-weight: 600;
+}
+
+.historyMeta {
+    color: #a19f9d;
+    font-size: 11px;
+}
+
+.pendingBadge {
+    color: #f2c94c;
+    border: 1px solid #f2c94c;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.fulfilledBadge {
+    color: #9ed929;
+    border: 1px solid #84cc16;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.fulfillButton {
+    width: auto;
+    flex: none;
+    background: none;
+    border: 1px solid #5a5856;
+    color: #d6d6d6;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.fulfillButton:hover {
+    border-color: #84cc16;
+    color: #fff;
 }

@@ -19,6 +19,12 @@ app.use(bodyParser.json());
 // placeholder API token, and /resolve applies authMiddleware itself.
 app.use('/api/identities', identityRoutes);
 
+// Same reason: these authenticate with a real MSAL token (and admin writes
+// with the Zaplie.Admin app role), not the placeholder API token.
+app.use('/api/team-rewards', require('./teamRewardsRoutes'));
+app.use('/api/bounties', require('./bountiesRoutes'));
+app.use('/api/achievements', require('./achievementsRoutes'));
+
 const dataFilePath = path.join(__dirname, 'data.json');
 
 // Function to read data from the JSON file
@@ -41,17 +47,12 @@ const writeData = (data) => {
   }
 };
 
-// Use the authentication middleware for API routes
-app.use('/api', authMiddleware);
-
-// Endpoint to get the reward name
-app.get('/api/reward-name', (req, res) => {
-  const data = readData();
-  res.send({ rewardName: data.rewardName });
-});
+// Config writes are admin-only (MSAL idToken carrying the Zaplie.Admin app
+// role), so they are registered before the placeholder authMiddleware.
+const { requireAdmin } = require('./adminAuth');
 
 // Endpoint to update the reward name
-app.post('/api/reward-name', (req, res) => {
+app.post('/api/reward-name', requireAdmin, (req, res) => {
   const { newRewardName } = req.body;
   if (newRewardName) {
     const data = readData();
@@ -61,6 +62,15 @@ app.post('/api/reward-name', (req, res) => {
   } else {
     res.status(400).send({ message: 'Invalid reward name' });
   }
+});
+
+// Use the authentication middleware for API routes
+app.use('/api', authMiddleware);
+
+// Endpoint to get the reward name
+app.get('/api/reward-name', (req, res) => {
+  const data = readData();
+  res.send({ rewardName: data.rewardName });
 });
 
 // Endpoint the bot posts to when a reward's recipient can't be resolved to a

@@ -22,6 +22,7 @@ import Feed from './Feed';
 import Users from './Users';
 import './App.css';
 import Rewards from './Rewards';
+import Bounties from './Bounties';
 import Wallet from './Wallet';
 import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
@@ -81,6 +82,7 @@ function App({ pca }: AppProps) {
           <Route path="/feed" element={<RequireAuth><Feed /></RequireAuth>} />
           <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
           <Route path="/rewards" element={<RequireAuth><Rewards /></RequireAuth>} />
+          <Route path="/bounties" element={<RequireAuth><Bounties /></RequireAuth>} />
           <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
           <Route path="/login" element={<Login />} />

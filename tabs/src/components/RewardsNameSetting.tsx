@@ -1,12 +1,15 @@
 // filepath: /c:/projects/ZapVibes/tabs/src/components/RewardsNameSetting.tsx
 import React, { FunctionComponent, useState, useEffect, useContext } from 'react';
+import { useMsal } from '@azure/msal-react';
 import styles from './setting.module.css';
 import { getRewardName, updateRewardName } from '../apiService';
+import { acquireIdToken } from '../services/adminRole';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { RewardNameContext } from './RewardNameContext';
 
 const CurrencySetting: FunctionComponent = () => {
+  const { instance, accounts } = useMsal();
   const [isEditing, setIsEditing] = useState(false);
   const [currency, setCurrency] = useState(''); // Default value
   const { setRewardName } = useContext(RewardNameContext);
@@ -31,8 +34,8 @@ const CurrencySetting: FunctionComponent = () => {
   const handleSaveClick = async () => {
     setIsEditing(false);
     try {
-      const data = await updateRewardName(currency);
-      console.log('Reward name saved:', data.rewardName);
+      const idToken = await acquireIdToken(instance, accounts[0]);
+      const data = await updateRewardName(idToken, currency);
       setRewardName(data.rewardName); // Update the context
       toast.success('Reward name has been updated successfully!');
     } catch (error) {

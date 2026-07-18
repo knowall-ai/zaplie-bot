@@ -31,6 +31,7 @@ const NAV_LINKS: NavLink[] = [
   { path: '/feed', label: 'Feed' },
   { path: '/users', label: 'Users' },
   { path: '/rewards', label: 'Rewards' },
+  { path: '/bounties', label: 'Bounties' },
   { path: '/wallet', label: 'Wallet' },
   { path: '/settings', label: 'Settings' },
 ];

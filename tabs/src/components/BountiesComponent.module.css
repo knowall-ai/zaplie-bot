@@ -1,0 +1,368 @@
+.bountiescomponent {
+    width: 100%;
+    max-width: 1052px;
+    margin: 0 auto;
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+    background-color: #2d2b2c;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 20px;
+    box-sizing: border-box;
+    gap: 16px;
+    text-align: left;
+    font-size: 12px;
+    color: #d6d6d6;
+    font-family: Inter;
+}
+
+.banner {
+    position: relative;
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 150px;
+    display: flex;
+    align-items: flex-end;
+}
+
+.bannerImage {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;
+}
+
+.bannerOverlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(31, 31, 31, 0.15) 20%, rgba(31, 31, 31, 0.92) 100%);
+}
+
+.bannerText {
+    position: relative;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.title {
+    color: #fff;
+    font-size: 20px;
+    font-weight: bold;
+    margin: 0;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.subtitle {
+    color: #d6d6d6;
+    margin: 0;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.createCard {
+    background-color: #1f1f1f;
+    border-radius: 4px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.createHeading {
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.createRow {
+    display: flex;
+    gap: 10px;
+}
+
+.input {
+    flex: 1;
+    background-color: #2d2b2c;
+    border: 1px solid #5a5856;
+    border-radius: 4px;
+    padding: 8px 12px;
+    color: #fff;
+    font-family: Inter;
+    font-size: 12px;
+    min-width: 0;
+}
+
+.amountInput {
+    flex: none;
+    width: 110px;
+}
+
+.input:focus,
+.textarea:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.textarea {
+    background-color: #2d2b2c;
+    border: 1px solid #5a5856;
+    border-radius: 4px;
+    padding: 8px 12px;
+    color: #fff;
+    font-family: Inter;
+    font-size: 12px;
+    resize: vertical;
+}
+
+.primaryButton {
+    align-self: flex-start;
+    width: auto;
+    flex: none;
+    background-color: #84cc16;
+    color: #1f1f1f;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.primaryButton:hover {
+    background-color: #6ba513;
+}
+
+.primaryButton:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.secondaryButton {
+    width: auto;
+    flex: none;
+    background: none;
+    border: 1px solid #5a5856;
+    color: #d6d6d6;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.secondaryButton:hover {
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.row {
+    background-color: #1f1f1f;
+    border-bottom: 1px solid #2d2b2c;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.row:last-child {
+    border-bottom: none;
+}
+
+.rowInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.rowTitleLine {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.rowTitle {
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.rowDescription {
+    color: #a19f9d;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.rowMeta {
+    color: #7a7877;
+    font-size: 11px;
+}
+
+.statusBadge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-radius: 4px;
+    padding: 2px 7px;
+}
+
+.status_open {
+    background-color: #2d2b2c;
+    color: #9ed929;
+}
+
+.status_claimed {
+    background-color: #2d2b2c;
+    color: #f2c94c;
+}
+
+.status_paid {
+    background-color: #84cc16;
+    color: #1f1f1f;
+}
+
+.status_cancelled {
+    background-color: #2d2b2c;
+    color: #7a7877;
+}
+
+.satsChip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #2d2b2c;
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.satsChip img {
+    width: 14px;
+    height: 14px;
+}
+
+.rowActions {
+    display: flex;
+    gap: 8px;
+}
+
+.emptyText {
+    color: #a19f9d;
+}
+
+.footerNote {
+    color: #7a7877;
+    font-size: 11px;
+}
+
+.select {
+    flex: 1;
+    background-color: #2d2b2c;
+    border: 1px solid #5a5856;
+    border-radius: 4px;
+    padding: 8px 12px;
+    color: #fff;
+    font-family: Inter;
+    font-size: 12px;
+    min-width: 0;
+}
+
+.select:focus {
+    outline: none;
+    border-color: #84cc16;
+}
+
+.linkButton {
+    align-self: flex-start;
+    width: auto;
+    flex: none;
+    background: none;
+    border: none;
+    padding: 2px 0;
+    color: #9ed929;
+    font-family: Inter;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.linkButton:hover {
+    text-decoration: underline;
+}
+
+.submissionList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    border-left: 2px solid #2d2b2c;
+    padding-left: 12px;
+}
+
+.submissionRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.submissionInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.submissionName {
+    color: #fff;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.submissionNote {
+    color: #a19f9d;
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.submitBox {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.objectiveSetButton {
+    width: auto;
+    flex: none;
+    background-color: #2d2b2c;
+    border: 1px solid #84cc16;
+    color: #9ed929;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.objectiveSetButton:hover {
+    border-color: #6ba513;
+}
