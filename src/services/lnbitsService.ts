@@ -1,4 +1,4 @@
-// lnbitsService.ts
+﻿// lnbitsService.ts
 
 /// <reference path="../../src/types/global.d.ts" />
 
@@ -11,6 +11,11 @@ let globalWalletId: string | null = null;
 //import dotenv from 'dotenv';
 //dotenv.config();
 
+for (const name of ['LNBITS_NODE_URL', 'LNBITS_USERNAME', 'LNBITS_PASSWORD']) {
+  if (!process.env[name]) {
+    throw new Error(`${name} is not set`);
+  }
+}
 const lnbiturl = process.env.LNBITS_NODE_URL as string;
 const userName = process.env.LNBITS_USERNAME as string;
 const password = process.env.LNBITS_PASSWORD as string;
@@ -85,7 +90,7 @@ export async function getAccessToken(
       accessToken = data.access_token;
       if (accessToken) {
         //localStorage.setItem('accessToken', accessToken);
-        console.log('Access token fetched and stored: ' + accessToken);
+        console.log('Access token fetched and stored.');
       } else {
         throw new Error('Access token is null, cannot store in localStorage.');
       }
@@ -112,7 +117,7 @@ const getWallets = async (
   filterById?: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getWallets starting ... (adminKey: ${adminKey}, filterByName: ${filterByName}, filterById: ${filterById}))`,
+    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById}))`,
   );
 
   try {
@@ -179,7 +184,7 @@ const getUserWallets = async (
   userId: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getUserWallets starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getUserWallets starting ... (userId: ${userId})`,
   );
 
   try {
@@ -372,7 +377,7 @@ const createWallet = async (
 
 const getWalletDetails = async (inKey: string, walletId: string) => {
   console.log(
-    `getWalletDetails starting ... (inKey: ${inKey}, walletId: ${walletId}))`,
+    `getWalletDetails starting ... (walletId: ${walletId}))`,
   );
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallets/${walletId}`, {
@@ -400,7 +405,7 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
 };
 
 const getWalletBalance = async (inKey: string) => {
-  console.log(`getWalletBalance starting ... (inKey: ${inKey})`);
+  console.log('getWalletBalance starting ...');
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
       method: 'GET',
@@ -428,7 +433,7 @@ const getWalletBalance = async (inKey: string) => {
 };
 
 const getWalletName = async (inKey: string) => {
-  console.log(`getWalletName starting ... (inKey: ${inKey})`);
+  console.log('getWalletName starting ...');
 
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
@@ -453,7 +458,7 @@ const getWalletName = async (inKey: string) => {
 };
 
 const getPayments = async (inKey: string) => {
-  console.log(`getPayments starting ... (inKey: ${inKey})`);
+  console.log('getPayments starting ...');
 
   try {
     const response = await fetch(`${lnbiturl}/api/v1/payments?limit=100`, {
@@ -478,7 +483,7 @@ const getPayments = async (inKey: string) => {
 
 const getWalletPayLinks = async (inKey: string, walletId: string) => {
   console.log(
-    `getWalletPayLinks starting ... (inKey: ${inKey}, walletId: ${walletId})`,
+    `getWalletPayLinks starting ... (walletId: ${walletId})`,
   );
 
   try {
@@ -576,7 +581,7 @@ const getWalletById = async (
 
 // May need fixing!
 const getWalletIdFromKey = async (inKey: string) => {
-  console.log(`getWalletIdFromKey starting ... (inKey: ${inKey})`);
+  console.log('getWalletIdFromKey starting ...');
 
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
@@ -733,7 +738,7 @@ const payInvoice = async (
   extra: object,
 ) => {
   console.log(
-    `payInvoice starting ... (adminKey: ${adminKey}, paymentRequest: ${paymentRequest}, extra: ${JSON.stringify(
+    `payInvoice starting ... (paymentRequest: ${paymentRequest}, extra: ${JSON.stringify(
       extra,
     )})`,
   );
@@ -770,7 +775,7 @@ const payInvoice = async (
 // TODO: This method needs checking!
 const getWalletIdByUserId = async (adminKey: string, userId: string) => {
   console.log(
-    `getWalletIdByUserId starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getWalletIdByUserId starting ... (userId: ${userId})`,
   );
 
   try {

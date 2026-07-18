@@ -42,6 +42,9 @@ let userSetupFlag = false;
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
   userState: UserState;
+  // A zap card must pay at most once: a double click or a Teams retry
+  // re-submits the same replyToId and would pay every recipient again.
+  private processedZapCards = new Set<string>();
 
   constructor() {
     super();
@@ -92,6 +95,15 @@ export class TeamsBot extends TeamsActivityHandler {
           context.activity.value &&
           context.activity.value.action === 'submitZaps'
         ) {
+          const cardId = context.activity.replyToId;
+          if (cardId && this.processedZapCards.has(cardId)) {
+            await context.sendActivity('That zap card was already submitted.');
+            return;
+          }
+          if (cardId) {
+            this.processedZapCards.add(cardId);
+          }
+
           const currentUser = context.turnState.get('user');
     
           let receiverIds = context.activity.value.zapReceiverId;

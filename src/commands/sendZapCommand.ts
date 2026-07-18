@@ -245,14 +245,6 @@ export async function SendZap(
       );
     }
 
-    try {
-      await messageRecipient(sender, receiver, zapAmount, zapMessage, context);
-    } catch (error) {
-      console.error(
-        'Failed to send a message to the recipient. (' + error.message + ')',
-      );
-    }
-
     // TODO: Errors here are not being caught for some reason. Need to fix this. Mario.
 
     /*
@@ -504,17 +496,7 @@ async function messageRecipient(
     );
     */
   } catch (error) {
-    if (
-      error.statusCode === 403 ||
-      error.message.includes('Bot not in conversation roster')
-    ) {
-      // Inform the sender that the recipient hasn't installed the bot
-      /* await context.sendActivity(
-         `FYI I wasn't able to message ${receiver.displayName} that they have a zap from you because they don't have me installed yet - maybe you could ping them, and let them know to install Zaplie!`,
-      );
-    } else {*/
-      console.error('Error in messageRecipient:', error);
-      throw error;
-    }
+    console.error('Error in messageRecipient:', error);
+    throw error;
   }
 }
