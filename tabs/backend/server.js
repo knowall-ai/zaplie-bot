@@ -19,6 +19,23 @@ app.use(bodyParser.json());
 // placeholder API token, and /resolve applies authMiddleware itself.
 app.use('/api/identities', identityRoutes);
 
+// Same reason: user-facing routes here authenticate with a real MSAL token
+// (admin writes additionally require the Zaplie.Admin app role), and
+// /connections/github/setup is GitHub's post-install browser redirect.
+app.use('/api/connections', require('./connectionsRoutes'));
+app.use('/api/webhook-keys', require('./webhookKeysRoutes'));
+app.use('/api/automations-stats', require('./automationsStatsRoutes'));
+app.use('/api/reports', require('./reportsRoutes'));
+
+const { requireAdmin } = require('./adminAuth');
+
+const defaultRewardAmounts = {
+  githubPrMergedSats: 1000,
+  githubIssueClosedSats: 500,
+  githubReviewSubmittedSats: 300,
+  timesheetWeekSats: 800,
+};
+
 const dataFilePath = path.join(__dirname, 'data.json');
 
 // Function to read data from the JSON file
@@ -41,6 +58,32 @@ const writeData = (data) => {
   }
 };
 
+// Admin config writes are registered before the placeholder authMiddleware:
+// they authenticate with the caller's MSAL idToken + Zaplie.Admin app role.
+app.post('/api/automations', requireAdmin, (req, res) => {
+  const { repos } = req.body;
+  if (Array.isArray(repos) && repos.every((repo) => typeof repo === 'string' && repo.length > 0)) {
+    const data = readData();
+    data.automations = { repos };
+    writeData(data);
+    res.send({ message: 'Automations updated successfully', repos: data.automations.repos });
+  } else {
+    res.status(400).send({ message: 'Invalid repos' });
+  }
+});
+
+app.post('/api/reward-amounts', requireAdmin, (req, res) => {
+  const { rewardAmounts } = req.body;
+  if (rewardAmounts && typeof rewardAmounts === 'object' && !Array.isArray(rewardAmounts)) {
+    const data = readData();
+    data.rewardAmounts = { ...defaultRewardAmounts, ...data.rewardAmounts, ...rewardAmounts };
+    writeData(data);
+    res.send({ message: 'Reward amounts updated successfully', rewardAmounts: data.rewardAmounts });
+  } else {
+    res.status(400).send({ message: 'Invalid reward amounts' });
+  }
+});
+
 // Use the authentication middleware for API routes
 app.use('/api', authMiddleware);
 
@@ -48,6 +91,18 @@ app.use('/api', authMiddleware);
 app.get('/api/reward-name', (req, res) => {
   const data = readData();
   res.send({ rewardName: data.rewardName });
+});
+
+// Endpoint to get the connected repository allowlist
+app.get('/api/automations', (req, res) => {
+  const data = readData();
+  res.send({ repos: data.automations?.repos || [] });
+});
+
+// Endpoint to get automation reward amounts
+app.get('/api/reward-amounts', (req, res) => {
+  const data = readData();
+  res.send({ rewardAmounts: { ...defaultRewardAmounts, ...data.rewardAmounts } });
 });
 
 // Endpoint to update the reward name

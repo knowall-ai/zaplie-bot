@@ -17,7 +17,7 @@ const getJwks = () => {
   return jwks;
 };
 
-const verifyMsalToken = async (token) => {
+const verifyMsalPayload = async (token) => {
   const tenantId = process.env.AAD_TENANT_ID;
   const clientId = process.env.AAD_CLIENT_ID;
   if (!tenantId || !clientId) {
@@ -31,7 +31,18 @@ const verifyMsalToken = async (token) => {
   if (typeof payload.oid !== 'string' || payload.oid.length === 0) {
     throw new Error('token is missing the oid claim');
   }
-  return payload.oid;
+  return payload;
+};
+
+const verifyMsalToken = async (token) => (await verifyMsalPayload(token)).oid;
+
+// App roles (Entra "roles" claim) arrive inside the same verified idToken.
+const verifyMsalClaims = async (token) => {
+  const payload = await verifyMsalPayload(token);
+  return {
+    oid: payload.oid,
+    roles: Array.isArray(payload.roles) ? payload.roles : [],
+  };
 };
 
 const extractBearerToken = (req) => {
@@ -40,4 +51,4 @@ const extractBearerToken = (req) => {
   return match ? match[1] : null;
 };
 
-module.exports = { verifyMsalToken, extractBearerToken };
+module.exports = { verifyMsalToken, verifyMsalClaims, extractBearerToken };

@@ -1,0 +1,90 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Zaplie Rewards",
+    "description": "Send a Zaplie reward when work happens. Create the API key in the Zaplie portal under Automations, Power Automate and Logic Apps.",
+    "version": "1.0"
+  },
+  "host": "REPLACE-WITH-YOUR-BOT-HOST",
+  "basePath": "/api/v1",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": {
+    "api_key": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "x-api-key"
+    }
+  },
+  "security": [{ "api_key": [] }],
+  "paths": {
+    "/rewards": {
+      "post": {
+        "operationId": "SendReward",
+        "summary": "Send a reward",
+        "description": "Pays a configured reward to a teammate. The amount comes from the reward rule for the event type, so flows never decide how much to pay.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["reason", "source"],
+              "properties": {
+                "recipient": {
+                  "type": "string",
+                  "description": "Teammate email as known to Zaplie",
+                  "x-ms-summary": "Recipient email"
+                },
+                "recipientId": {
+                  "type": "string",
+                  "description": "Provider identity id, like the GitHub numeric user id",
+                  "x-ms-summary": "Recipient provider id"
+                },
+                "eventType": {
+                  "type": "string",
+                  "description": "Reward rule to apply, like timesheetWeek or githubPrMerged",
+                  "x-ms-summary": "Event type"
+                },
+                "repo": {
+                  "type": "string",
+                  "description": "owner/repo, required for GitHub events only",
+                  "x-ms-summary": "Repository"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Shown as the payment memo",
+                  "x-ms-summary": "Reason"
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Which flow sent this, for audit",
+                  "x-ms-summary": "Source"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reward paid",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string" },
+                "paymentHash": { "type": "string" },
+                "recipient": { "type": "string" },
+                "amountSats": { "type": "integer" }
+              }
+            }
+          },
+          "202": { "description": "Recipient not on Zaplie yet, reward stored as pending" },
+          "401": { "description": "Invalid API key" },
+          "403": { "description": "Repository not connected" }
+        }
+      }
+    }
+  }
+}

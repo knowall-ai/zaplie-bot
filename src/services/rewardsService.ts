@@ -1,5 +1,6 @@
 import { getUserWallets, getUsers, createInvoice, payInvoice } from './lnbitsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
+import { getAutomations } from './fetchAutomations';
 import { resolvePersonAadByGithubId } from './identityService';
 import { createPendingReward } from './pendingRewardsService';
 
@@ -19,6 +20,7 @@ export interface RewardRequest {
   recipientId?: string; // stable numeric provider id, e.g. GitHub user id — never the login
   amountSats?: number;
   eventType?: string;
+  repo?: string; // owner/repo, checked against the connected-repos allowlist
   reason: string;
   source: string;
 }
@@ -32,7 +34,7 @@ export interface ResolvedRewardRequest {
 }
 
 export function parseRewardRequest(body: unknown): RewardRequest {
-  const { recipient, recipientId, amountSats, eventType, reason, source } =
+  const { recipient, recipientId, amountSats, eventType, repo, reason, source } =
     (body ?? {}) as Record<string, unknown>;
   if (typeof recipient !== 'string' || recipient.length === 0) {
     throw new RewardError('recipient must be a non-empty string', 400);
@@ -46,6 +48,9 @@ export function parseRewardRequest(body: unknown): RewardRequest {
       'recipientId must be a non-empty string or number',
       400,
     );
+  }
+  if (repo !== undefined && (typeof repo !== 'string' || repo.length === 0)) {
+    throw new RewardError('repo must be a non-empty string', 400);
   }
   if (amountSats !== undefined) {
     validateAmountSats(amountSats);
@@ -66,9 +71,21 @@ export function parseRewardRequest(body: unknown): RewardRequest {
     amountSats: amountSats as number | undefined,
     // eventType is unused when amountSats is set, so a malformed one is dropped, not a 400
     eventType: typeof eventType === 'string' ? eventType : undefined,
+    repo: typeof repo === 'string' ? repo : undefined,
     reason,
     source,
   };
+}
+
+// This is what makes "connect several repos" have real effect.
+export async function assertRepoConnected(repo: string | undefined): Promise<void> {
+  if (!repo) {
+    throw new RewardError('repo is required', 400);
+  }
+  const { repos } = await getAutomations();
+  if (!repos.includes(repo)) {
+    throw new RewardError(`repo '${repo}' is not connected`, 403);
+  }
 }
 
 function isPositiveInteger(amountSats: unknown): amountSats is number {
