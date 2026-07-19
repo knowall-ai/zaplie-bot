@@ -25,3 +25,5 @@ appPackage/manifest.json
 # Identity foundation: local JSON stores, never real data in git
 tabs/backend/identities.json
 tabs/backend/pending-rewards.json
+tabs/backend/github-app-credentials.json
+tabs/backend/secrets.json

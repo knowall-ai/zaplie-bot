@@ -6,7 +6,8 @@ const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
 const { signState, verifyState } = require('./githubOAuthState');
 const connectionsStore = require('./connectionsStore');
-const { listInstallationRepos } = require('./githubAppAuth');
+const { listInstallationRepos, NOT_CREATED_MESSAGE } = require('./githubAppAuth');
+const { getCredentials } = require('./githubAppCredentials');
 
 const router = express.Router();
 
@@ -34,10 +35,9 @@ router.post('/github/install-url', async (req, res) => {
   if (!oid) {
     return;
   }
-  const slug = process.env.GITHUB_APP_SLUG;
+  const slug = getCredentials()?.slug;
   if (!slug) {
-    console.error('GITHUB_APP_SLUG is not set');
-    res.status(503).json({ error: 'GitHub App is not configured' });
+    res.status(409).json({ error: NOT_CREATED_MESSAGE });
     return;
   }
   const installUrl = `https://github.com/apps/${slug}/installations/new?state=${signState(
@@ -79,6 +79,10 @@ router.get('/github/repos', async (req, res) => {
     const repositories = await listInstallationRepos(installationId);
     res.json({ connected: true, repositories });
   } catch (error) {
+    if (error.message === NOT_CREATED_MESSAGE) {
+      res.status(409).json({ error: NOT_CREATED_MESSAGE });
+      return;
+    }
     console.error('Listing installation repositories failed:', error.message);
     res.status(502).json({ error: error.message });
   }

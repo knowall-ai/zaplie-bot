@@ -5,6 +5,11 @@ import { getAutomations, updateAutomations, getRewardAmounts, updateRewardAmount
 import { loginRequest } from '../services/authConfig';
 import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 import { getGithubInstallUrl, getGithubConnection } from '../services/connectionsService';
+import {
+  getGithubSetupStatus,
+  startGithubAppCreation,
+  GithubSetupStatus,
+} from '../services/setupService';
 import { getAutomationsStats, AutomationsStats } from '../services/automationsStatsService';
 import {
   getWebhookKeys,
@@ -82,6 +87,8 @@ const AutomationsComponent: FunctionComponent = () => {
   const [newKeyLabel, setNewKeyLabel] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [setupStatus, setSetupStatus] = useState<GithubSetupStatus | null>(null);
+  const [creatingApp, setCreatingApp] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -112,6 +119,7 @@ const AutomationsComponent: FunctionComponent = () => {
         const idToken = await acquireIdToken(instance, accounts[0]);
         const connection = await getGithubConnection(idToken);
         setAppInstalled(connection.connected);
+        setSetupStatus(await getGithubSetupStatus(idToken));
         setStats(await getAutomationsStats(idToken));
         if (isAdmin) {
           setWebhookKeys(await getWebhookKeys(idToken));
@@ -187,6 +195,21 @@ const AutomationsComponent: FunctionComponent = () => {
 
   const handleRemoveRepo = (repo: string) => {
     persistRepos(repos.filter(existing => existing !== repo));
+  };
+
+  const handleCreateApp = async () => {
+    if (!accounts[0]) {
+      return;
+    }
+    setCreatingApp(true);
+    try {
+      const idToken = await acquireIdToken(instance, accounts[0]);
+      await startGithubAppCreation(idToken);
+    } catch (err) {
+      console.error('Error starting GitHub App creation:', err);
+      toast.error('Could not start the GitHub App creation.');
+      setCreatingApp(false);
+    }
   };
 
   const handleInstallApp = async () => {
@@ -324,7 +347,13 @@ const AutomationsComponent: FunctionComponent = () => {
             Install the Zaplie GitHub App and pick the repositories to watch. Pull requests,
             issues and reviews in those repositories pay sats automatically.
           </p>
-          {appInstalled && repos.length === 0 && (
+          {setupStatus?.created && (
+            <span className={styles.connHint}>
+              App created as {setupStatus.slug} via the manifest flow. All credentials were
+              exchanged server to server.
+            </span>
+          )}
+          {!setupStatus?.created && appInstalled && repos.length === 0 && (
             <span className={styles.connHint}>
               Installed on GitHub. Syncing the repository list needs the App private key on the
               server; add repositories manually meanwhile.
@@ -351,6 +380,15 @@ const AutomationsComponent: FunctionComponent = () => {
           )}
           {isAdmin && (
             <div className={styles.connCardActions}>
+              {!setupStatus?.created && (
+                <button
+                  className={styles.installButton}
+                  onClick={handleCreateApp}
+                  disabled={creatingApp}
+                >
+                  {creatingApp ? 'Redirecting to GitHub...' : 'Create the Zaplie GitHub App'}
+                </button>
+              )}
               <button className={styles.installButton} onClick={handleInstallApp} disabled={installing}>
                 {installing
                   ? 'Redirecting to GitHub...'

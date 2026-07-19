@@ -7,6 +7,8 @@ const authMiddleware = require('./authMiddleware');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
 const { signState, verifyState } = require('./githubOAuthState');
 const identityStore = require('./identityStore');
+const { getCredentials } = require('./githubAppCredentials');
+const { NOT_CREATED_MESSAGE } = require('./githubAppAuth');
 
 const router = express.Router();
 
@@ -15,16 +17,18 @@ const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const GITHUB_USER_URL = 'https://api.github.com/user';
 const PORTAL_URL = process.env.PORTAL_URL || '/';
 
+// The manifest-created GitHub App also authorizes users, so identity linking
+// uses its OAuth client. The manifest flow is the only way to configure it.
 const requireGithubOAuthConfig = () => {
-  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET;
-  const redirectUri = process.env.GITHUB_OAUTH_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error(
-      'GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET and GITHUB_OAUTH_REDIRECT_URI must be set',
-    );
+  const stored = getCredentials();
+  if (!stored) {
+    throw new Error(NOT_CREATED_MESSAGE);
   }
-  return { clientId, clientSecret, redirectUri };
+  return {
+    clientId: stored.clientId,
+    clientSecret: stored.clientSecret,
+    redirectUri: `${process.env.PORTAL_URL || 'https://localhost:3000'}/api/identities/github/callback`,
+  };
 };
 
 const requireMsalOid = async (req, res) => {
@@ -54,8 +58,7 @@ router.post('/github/authorize-url', async (req, res) => {
   try {
     ({ clientId, redirectUri } = requireGithubOAuthConfig());
   } catch (error) {
-    console.error(error.message);
-    res.status(503).json({ error: 'GitHub OAuth is not configured' });
+    res.status(409).json({ error: error.message });
     return;
   }
 
@@ -84,8 +87,7 @@ router.get('/github/callback', async (req, res) => {
   try {
     ({ clientId, clientSecret, redirectUri } = requireGithubOAuthConfig());
   } catch (error) {
-    console.error(error.message);
-    res.status(503).send('GitHub OAuth is not configured');
+    res.status(409).send(error.message);
     return;
   }
 
