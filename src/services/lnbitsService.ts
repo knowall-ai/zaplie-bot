@@ -287,7 +287,7 @@ const toUser = (
 };
 
 const getUsers = async (
-  adminKey: string,
+  _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
   filterByExtra: { [key: string]: string } | null,
 ): Promise<User[]> => {
   const aadObjectId = filterByExtra?.aadObjectId;
@@ -304,11 +304,11 @@ const getUsers = async (
 };
 
 const createUser = async (
-  adminKey: string,
+  _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
   displayName: string,
-  walletName: string,
+  _walletName: string, // Unused: wallets are created separately via createWallet
   email: string,
-  legacyPassword: string,
+  _legacyPassword: string, // Unused: passwords are not part of the v1.x Users API
   extra: { [key: string]: string },
 ): Promise<User> => {
   const response = await adminFetch('/users/api/v1/user', {
@@ -349,14 +349,6 @@ const getUser = async (
   });
 };
 
-// Wallet links are resolved by name, so the {allowanceWalletId}/{privateWalletId}
-// callers pass have nothing to persist; return the freshly resolved account.
-const updateUser = async (
-  adminKey: string,
-  userId: string,
-  extra: { [key: string]: string },
-): Promise<User | null> => getUser(adminKey, userId);
-
 const createWallet = async (
   adminKey: string,
   userId: string,
@@ -380,8 +372,10 @@ const createWallet = async (
     adminkey: data.adminkey,
     user: data.user,
     inkey: data.inkey,
-    balance_msat: walletWithBalance?.balance_msat,
-    deleted: walletWithBalance?.deleted,
+    // A freshly created wallet is empty and live; fall back to that if the
+    // balance lookup can't resolve it yet (eventual consistency).
+    balance_msat: walletWithBalance?.balance_msat ?? 0,
+    deleted: walletWithBalance?.deleted ?? false,
   };
 };
 
@@ -885,7 +879,6 @@ export {
   getWallets,
   createUser,
   getUser,
-  updateUser,
   getUsers,
   getWalletName,
   getWalletById,

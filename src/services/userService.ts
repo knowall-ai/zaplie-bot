@@ -12,7 +12,6 @@ import {
   getUsers,
   createUser,
   createWallet,
-  updateUser,
   getUser,
   getUserWallets,
   topUpWallet,
@@ -37,8 +36,8 @@ async function applyInitialAllowance(walletId: string): Promise<void> {
   if (!initialAllowanceStr) {
     return;
   }
-  const initialAllowance = parseInt(initialAllowanceStr);
-  if (isNaN(initialAllowance)) {
+  const initialAllowance = Number.parseInt(initialAllowanceStr, 10);
+  if (!Number.isInteger(initialAllowance) || initialAllowance <= 0) {
     console.error('Invalid initial allowance value:', initialAllowanceStr);
     return;
   }
@@ -99,9 +98,7 @@ export class UserService {
 
       const allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
       await applyInitialAllowance(allowanceWallet.id);
-      user = await updateUser(adminKey, user.id, {
-        allowanceWalletId: allowanceWallet.id,
-      });
+      user = { ...user, allowanceWallet };
     } else {
       user = lnbitsUsers[0];
     }
@@ -122,9 +119,7 @@ export class UserService {
       if (allowanceWallet.balance_msat < 1) {
         await applyInitialAllowance(allowanceWallet.id);
       }
-      user = await updateUser(adminKey, user.id, {
-        allowanceWalletId: allowanceWallet.id,
-      });
+      user = { ...user, allowanceWallet };
     }
 
     let privateWallet = user.privateWallet
@@ -140,9 +135,7 @@ export class UserService {
       privateWallet =
         userWallets.find(w => w.name === 'Private') ??
         (await createWallet(adminKey, user.id, 'Private'));
-      user = await updateUser(adminKey, user.id, {
-        privateWalletId: privateWallet.id,
-      });
+      user = { ...user, privateWallet };
     }
 
     this.setCurrentUser(user);
