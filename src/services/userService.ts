@@ -113,10 +113,12 @@ export class UserService {
     }
     if (!allowanceWallet) {
       const userWallets = await getUserWallets(adminKey, user.id);
-      allowanceWallet =
-        userWallets.find(w => w.name === 'Allowance') ??
-        (await createWallet(adminKey, user.id, 'Allowance'));
-      if (allowanceWallet.balance_msat < 1) {
+      // Only fund a wallet we just created: existing users pass through here
+      // every turn, and re-funding on balance would let anyone who spends to
+      // zero get topped back up on their next message.
+      allowanceWallet = userWallets.find(w => w.name === 'Allowance') ?? null;
+      if (!allowanceWallet) {
+        allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
         await applyInitialAllowance(allowanceWallet.id);
       }
       user = { ...user, allowanceWallet };
