@@ -7,9 +7,15 @@
   },
   "host": "REPLACE-WITH-YOUR-BOT-HOST",
   "basePath": "/api/v1",
-  "schemes": ["https"],
-  "consumes": ["application/json"],
-  "produces": ["application/json"],
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
   "securityDefinitions": {
     "api_key": {
       "type": "apiKey",
@@ -17,7 +23,11 @@
       "name": "x-api-key"
     }
   },
-  "security": [{ "api_key": [] }],
+  "security": [
+    {
+      "api_key": []
+    }
+  ],
   "paths": {
     "/rewards": {
       "post": {
@@ -31,7 +41,11 @@
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["reason", "source"],
+              "required": [
+                "recipient",
+                "reason",
+                "source"
+              ],
               "properties": {
                 "recipient": {
                   "type": "string",
@@ -73,16 +87,30 @@
             "schema": {
               "type": "object",
               "properties": {
-                "status": { "type": "string" },
-                "paymentHash": { "type": "string" },
-                "recipient": { "type": "string" },
-                "amountSats": { "type": "integer" }
+                "status": {
+                  "type": "string"
+                },
+                "paymentHash": {
+                  "type": "string"
+                },
+                "recipient": {
+                  "type": "string"
+                },
+                "amountSats": {
+                  "type": "integer"
+                }
               }
             }
           },
-          "202": { "description": "Recipient not on Zaplie yet, reward stored as pending" },
-          "401": { "description": "Invalid API key" },
-          "403": { "description": "Repository not connected" }
+          "202": {
+            "description": "Recipient not on Zaplie yet, reward stored as pending"
+          },
+          "401": {
+            "description": "Invalid API key"
+          },
+          "403": {
+            "description": "Repository not connected"
+          }
         }
       }
     }

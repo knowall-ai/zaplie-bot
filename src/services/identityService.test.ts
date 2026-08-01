@@ -45,6 +45,7 @@ const resolvedUser: User = {
 
 describe('resolvePersonAadByGithubId', () => {
   beforeEach(() => {
+    process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
     jest.clearAllMocks();
   });
 
@@ -61,7 +62,7 @@ describe('resolvePersonAadByGithubId', () => {
         '/identities/resolve?provider=github&providerId=12345678',
       ),
       expect.objectContaining({
-        headers: { Authorization: 'your-secret-token' },
+        headers: { Authorization: 'test-internal-token' },
       }),
     );
   });
@@ -114,6 +115,7 @@ describe('payReward recipientId resolution', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-adminkey';
     process.env.LNBITS_ADMINKEY = 'lnbits-adminkey';
   });

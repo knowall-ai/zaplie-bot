@@ -12,7 +12,7 @@ GitHub webhook ──► Logic App (Request trigger)
                      ▼
                    HTTP POST ► Zaplie POST /api/v1/rewards  (X-Api-Key)
                                  │ validates key + payload
-                                 │ maps GitHub login → LNbits user (explicit allowlist)
+                                 │ resolves the GitHub numeric id to a person via the identity graph
                                  │ pays from the "Automation" treasury wallet
                                  ▼
                                sats land in the recipient's Private wallet
@@ -31,7 +31,7 @@ Set these environment variables on the bot (alongside the existing LNbits ones):
 | --- | --- |
 | `REWARDS_API_KEY` | Shared secret the automation must send in `X-Api-Key`. Endpoint returns 503 when unset. |
 | `REWARDS_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). |
-| `REWARDS_GITHUB_USER_MAP` | JSON object mapping GitHub logins to LNbits user ids, e.g. `{"octocat":"3fa85f64..."}`. Unmapped logins are rejected with 404 — rewards are never paid on a guessed identity. |
+| ~~`REWARDS_GITHUB_USER_MAP`~~ | **Deprecated and no longer read.** Recipients are resolved from the identity graph using the GitHub numeric id sent as `recipientId`. A reward for someone who has not linked their GitHub account is recorded as pending rather than rejected, so the recognition is not lost. |
 | `REWARDS_MAX_AMOUNT_SATS` | Optional per-reward cap. Defaults to 10000 (the same ceiling as the interactive zap card). Requests above it are rejected with 400, whether the amount came from the caller or from the portal config. |
 
 Generate the API key with e.g. `openssl rand -hex 32`.

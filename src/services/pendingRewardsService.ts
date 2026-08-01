@@ -1,3 +1,4 @@
+import { tabBackendAuthHeader } from './internalAuth';
 const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
 
 export interface PendingReward {
@@ -17,7 +18,7 @@ export async function createPendingReward(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: 'your-secret-token',
+      Authorization: tabBackendAuthHeader(),
     },
     body: JSON.stringify(pending),
   });

@@ -48,10 +48,9 @@ router.get('/github/manifest', requireAdmin, async (req, res) => {
     url: PORTAL_URL,
     redirect_url: `${PORTAL_URL}/api/setup/github/callback`,
     callback_urls: [`${PORTAL_URL}/api/identities/github/callback`],
-    hook_attributes: {
-      url: `${PORTAL_URL}/api/setup/github/webhook`,
-      active: false,
-    },
+    // hook_attributes and default_events are omitted until the webhook route
+    // exists. The manifest is baked into every App created from it, so naming
+    // a missing URL would leave a permanent 404 in each customer's App.
     public: false,
     request_oauth_on_install: true,
     default_permissions: {
@@ -59,7 +58,6 @@ router.get('/github/manifest', requireAdmin, async (req, res) => {
       pull_requests: 'read',
       metadata: 'read',
     },
-    default_events: ['pull_request', 'issues'],
   };
   res.json({
     action: `https://github.com/settings/apps/new?state=${state}`,
