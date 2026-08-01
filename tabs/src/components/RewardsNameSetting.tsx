@@ -4,7 +4,7 @@ import { useMsal } from '@azure/msal-react';
 import styles from './setting.module.css';
 import { getRewardName, updateRewardName } from '../apiService';
 import { acquireIdToken } from '../services/adminRole';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { RewardNameContext } from './RewardNameContext';
 
@@ -67,7 +67,6 @@ const CurrencySetting: FunctionComponent = () => {
           </button>
         )}
       </div>
-      <ToastContainer />
     </div>
   );
 };

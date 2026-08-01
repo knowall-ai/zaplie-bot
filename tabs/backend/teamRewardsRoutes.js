@@ -1,7 +1,8 @@
 // filepath: tabs/backend/teamRewardsRoutes.js
 // Org-curated reward catalog (certifications, learning, time off) with a
-// redemption request queue. Requests are fulfilled by an admin; no funds move
-// here, so redeeming is an authenticated write, not a payment.
+// redemption request queue. Redeeming debits the user's Private wallet through
+// payRedemption, so this route does move funds; an admin then fulfils the
+// request itself.
 const express = require('express');
 const fs = require('fs');
 const path = require('path');

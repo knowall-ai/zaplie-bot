@@ -23,7 +23,7 @@ import RewardCertification from '../images/reward-certification.webp';
 import RewardCourse from '../images/reward-course.webp';
 import RewardConference from '../images/reward-conference.webp';
 import RewardRecharge from '../images/reward-recharge.webp';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const stallID = process.env.REACT_APP_LNBITS_STORE_ID as string;
@@ -66,21 +66,22 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
     return tokenResponse.idToken;
   };
 
+  const load = async () => {
+    try {
+      const data = await getTeamRewards(await acquireIdToken());
+      setTeamRewards(data.rewards);
+      setRequestedIds(new Set(data.myRequests));
+      setHistory(data.history);
+    } catch (error) {
+      console.error('Error fetching team rewards:', error);
+      toast.error('Could not load team rewards.');
+    }
+  };
+
   useEffect(() => {
     if (!accounts[0]) {
       return;
     }
-    const load = async () => {
-      try {
-        const data = await getTeamRewards(await acquireIdToken());
-        setTeamRewards(data.rewards);
-        setRequestedIds(new Set(data.myRequests));
-        setHistory(data.history);
-      } catch (error) {
-        console.error('Error fetching team rewards:', error);
-        toast.error('Could not load team rewards.');
-      }
-    };
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, instance]);
@@ -90,6 +91,7 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
     try {
       await redeemTeamReward(await acquireIdToken(), reward.id);
       setRequestedIds(previous => new Set(previous).add(reward.id));
+      await load();
       toast.success(
         `Redeemed for ${new Intl.NumberFormat('en-US').format(reward.priceSats)} ${rewardName}. Your admin will arrange "${reward.name}".`,
       );
@@ -337,8 +339,6 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
           </div>
         </div>
       )}
-
-      <ToastContainer />
       {showPopup && userWallet && selectedReward && (
         <PurchasePopup
           onClose={handleClosePopup}

@@ -9,7 +9,7 @@ import {
   getGithubAuthorizeUrl,
   LinkedIdentity,
 } from '../services/identityService';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Strips the ?github=... return param GitHub's OAuth callback redirects with,
@@ -54,7 +54,7 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
     const load = async () => {
       try {
-        const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account });
+        const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account, forceRefresh: true });
         const mine = await getMyIdentities(tokenResponse.idToken);
         setIdentities(mine);
       } catch (error) {
@@ -73,7 +73,7 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
     setConnecting(true);
     try {
-      const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account });
+      const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account, forceRefresh: true });
       const authorizeUrl = await getGithubAuthorizeUrl(tokenResponse.idToken);
       window.location.href = authorizeUrl;
     } catch (error) {
@@ -106,7 +106,6 @@ const ConnectionsSetting: FunctionComponent = () => {
           </button>
         )}
       </div>
-      <ToastContainer />
     </div>
   );
 };
