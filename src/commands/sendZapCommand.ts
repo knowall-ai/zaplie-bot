@@ -240,8 +240,9 @@ export async function SendZap(
     try {
       await messageRecipient(sender, receiver, zapAmount, zapMessage, context);
     } catch (error) {
-      console.error(
-        'Failed to send a message to the recipient. (' + error.message + ')',
+      console.error('Failed to notify the recipient.', error);
+      await context.sendActivity(
+        `The ${zapAmount} ${globalRewardName} reached ${receiver.displayName}, but they could not be notified.`,
       );
     }
 

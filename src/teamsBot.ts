@@ -44,7 +44,18 @@ export class TeamsBot extends TeamsActivityHandler {
   userState: UserState;
   // A zap card must pay at most once: a double click or a Teams retry
   // re-submits the same replyToId and would pay every recipient again.
-  private processedZapCards = new Set<string>();
+  private static readonly ZAP_CARD_TTL_MS = 24 * 60 * 60 * 1000;
+  private zapCardsInFlight = new Set<string>();
+  private zapCardsPaid = new Map<string, number>();
+
+  private isZapCardTaken(cardId: string): boolean {
+    const paidAt = this.zapCardsPaid.get(cardId);
+    if (paidAt !== undefined && Date.now() - paidAt > TeamsBot.ZAP_CARD_TTL_MS) {
+      this.zapCardsPaid.delete(cardId);
+      return this.zapCardsInFlight.has(cardId);
+    }
+    return this.zapCardsInFlight.has(cardId) || paidAt !== undefined;
+  }
 
   constructor() {
     super();
@@ -96,13 +107,15 @@ export class TeamsBot extends TeamsActivityHandler {
           context.activity.value.action === 'submitZaps'
         ) {
           const cardId = context.activity.replyToId;
-          if (cardId && this.processedZapCards.has(cardId)) {
+          if (cardId && this.isZapCardTaken(cardId)) {
             await context.sendActivity('That zap card was already submitted.');
             return;
           }
           if (cardId) {
-            this.processedZapCards.add(cardId);
+            this.zapCardsInFlight.add(cardId);
           }
+
+          try {
 
           const currentUser = context.turnState.get('user');
     
@@ -212,11 +225,19 @@ export class TeamsBot extends TeamsActivityHandler {
     
           const updatedMessage = MessageFactory.attachment(CardFactory.adaptiveCard(updatedCard));
           updatedMessage.id = context.activity.replyToId;
-          await context.updateActivity(updatedMessage); 
+          await context.updateActivity(updatedMessage);
           await context.sendActivity(
             `Awesome! You sent ${context.activity.value.zapAmount} ${globalRewardName} to your colleague with a zap!`,
           );
 
+          if (cardId) {
+            this.zapCardsPaid.set(cardId, Date.now());
+          }
+          } finally {
+            if (cardId) {
+              this.zapCardsInFlight.delete(cardId);
+            }
+          }
         }
     
         // Trigger command by IM text
