@@ -45,6 +45,19 @@ export class SendZapCommand extends SSOCommand {
   }
 }
 
+export interface SendZapResult {
+  paymentHash: string;
+}
+
+// Thrown only once payInvoice has been called: at that point the payment may
+// have settled even though we failed to confirm it, so a retry is unsafe.
+export class PaymentOutcomeUnknownError extends Error {
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = 'PaymentOutcomeUnknownError';
+  }
+}
+
 export async function SendZap(
   sender: User,
   receiver: User,
@@ -53,7 +66,7 @@ export async function SendZap(
   context: TurnContext,
   updateCard: boolean = true,
   globalRewardName: string
-): Promise<void> {
+): Promise<SendZapResult> {
   try {
     console.log('Sending zap ...');
 
@@ -83,23 +96,34 @@ export async function SendZap(
       extra,
     );
 
-    console.log('Payment Request:', paymentRequest);
-
     if (!paymentRequest) {
       throw new Error('Failed to create an invoice.');
     }
 
     // Pay the invoice
 
-    console.log('sendersWallet: ', sender.allowanceWallet);
+    let result;
+    try {
+      result = await payInvoice(
+        sender.allowanceWallet.adminkey,
+        paymentRequest,
+        extra,
+      );
+    } catch (error) {
+      throw new PaymentOutcomeUnknownError(
+        'The payment request failed after being sent to LNbits.',
+        error,
+      );
+    }
 
-    const result = await payInvoice(
-      sender.allowanceWallet.adminkey,
-      paymentRequest,
-      extra,
-    );
+    if (!result?.payment_hash) {
+      throw new PaymentOutcomeUnknownError(
+        'The payment returned no payment hash, so it cannot be confirmed.',
+      );
+    }
+    const paymentHash: string = result.payment_hash;
 
-    console.log('Payment Result:', result);
+    console.log('Payment result: settled');
 
     if (result && result.payment_hash && updateCard) {
       // Updated adaptive card (read-only)
@@ -237,15 +261,6 @@ export async function SendZap(
       console.log('Adaptive card updated to read-only.');
     }
 
-    try {
-      await messageRecipient(sender, receiver, zapAmount, zapMessage, context);
-    } catch (error) {
-      console.error('Failed to notify the recipient.', error);
-      await context.sendActivity(
-        `The ${zapAmount} ${globalRewardName} reached ${receiver.displayName}, but they could not be notified.`,
-      );
-    }
-
     // TODO: Errors here are not being caught for some reason. Need to fix this. Mario.
 
     /*
@@ -266,8 +281,13 @@ export async function SendZap(
       await context.sendActivity('Failed to pay the invoice.');
     }
       */
+
+    return { paymentHash };
   } catch (error) {
-    throw new Error(error.message);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(String(error));
   }
 }
 
@@ -378,6 +398,10 @@ async function populateWalletChoices() {
 // And possibly:
 // 2. The user has sent a message to the bot (not sure if "continueConversationAsync" will work if the user has not sent a message to the bot).
 // Ref: https://github.com/OfficeDev/microsoft-teams-apps-company-communicator/blob/207013db2ad64ac5c3d365fd4db1a25fd2d703cf/Source/CompanyCommunicator.Common/Services/Teams/Conversations/ConversationService.cs#L70
+// Not called from the payment path: its Bot Framework calls are still
+// commented out below, so it notifies nobody. Wiring it up needs a decision on
+// how the 1:1 conversation is created, tracked separately.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function messageRecipient(
   sender: User,
   receiver: User,

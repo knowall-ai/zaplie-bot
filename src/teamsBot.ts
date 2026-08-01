@@ -11,6 +11,8 @@ import {
 } from 'botbuilder';
 import {  SSOCommandMap } from './commands/SSOCommandMap';
 import { SendZapCommand, SendZap } from './commands/sendZapCommand';
+import { ZapLedger, zapKey } from './services/zapLedger';
+import { processZapRecipient } from './commands/zapRecipient';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
@@ -42,20 +44,9 @@ let userSetupFlag = false;
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
   userState: UserState;
-  // A zap card must pay at most once: a double click or a Teams retry
-  // re-submits the same replyToId and would pay every recipient again.
-  private static readonly ZAP_CARD_TTL_MS = 24 * 60 * 60 * 1000;
-  private zapCardsInFlight = new Set<string>();
-  private zapCardsPaid = new Map<string, number>();
-
-  private isZapCardTaken(cardId: string): boolean {
-    const paidAt = this.zapCardsPaid.get(cardId);
-    if (paidAt !== undefined && Date.now() - paidAt > TeamsBot.ZAP_CARD_TTL_MS) {
-      this.zapCardsPaid.delete(cardId);
-      return this.zapCardsInFlight.has(cardId);
-    }
-    return this.zapCardsInFlight.has(cardId) || paidAt !== undefined;
-  }
+  // Best-effort, single-process protection against paying a recipient twice
+  // from the same card. Not durable: see the note in zapLedger.ts.
+  private zapLedger = new ZapLedger();
 
   constructor() {
     super();
@@ -107,15 +98,21 @@ export class TeamsBot extends TeamsActivityHandler {
           context.activity.value.action === 'submitZaps'
         ) {
           const cardId = context.activity.replyToId;
-          if (cardId && this.isZapCardTaken(cardId)) {
-            await context.sendActivity('That zap card was already submitted.');
+          // Without a card id there is nothing to key the ledger on, so a
+          // double submit could not be told apart from a legitimate one.
+          if (!cardId) {
+            await context.sendActivity(
+              'That zap card cannot be identified, so it was not submitted. Please start a new zap.',
+            );
             return;
           }
-          if (cardId) {
-            this.zapCardsInFlight.add(cardId);
-          }
-
-          try {
+          const keyFor = (recipientId: string) =>
+            zapKey({
+              tenantId: context.activity.conversation.tenantId,
+              conversationId: context.activity.conversation.id,
+              cardId,
+              recipientId,
+            });
 
           const currentUser = context.turnState.get('user');
     
@@ -134,27 +131,52 @@ export class TeamsBot extends TeamsActivityHandler {
           }
     
           let successfulRecipients: string[] = [];
+          const alreadyHandled: string[] = [];
     
           for (const recId of receiverIds) {
-            const receiver = await getUser(adminKey, recId);
-    
-            if (!receiver.privateWallet) {
-              //throw new Error('Receiver wallet not found.');
-              failedRecipients.push(receiver.displayName || `User ID: ${recId}`);
-              continue;
+            const outcome = await processZapRecipient({
+              ledger: this.zapLedger,
+              entryKey: keyFor(recId),
+              recipientId: recId,
+              getReceiver: () => getUser(adminKey, recId),
+              pay: receiver =>
+                SendZap(
+                  currentUser,
+                  receiver as User,
+                  zapMessage,
+                  zapAmount,
+                  context,
+                  false,
+                  globalRewardName,
+                ),
+            });
+
+            if (outcome.status === 'skipped') {
+              alreadyHandled.push(recId);
+            } else if (outcome.status === 'paid') {
+              successfulRecipients.push(outcome.label);
+            } else if (outcome.status === 'needs-checking') {
+              failedRecipients.push(`${outcome.label} (needs checking)`);
+            } else {
+              failedRecipients.push(outcome.label);
             }
-    
-            await SendZap(
-              currentUser,
-              receiver,
-              zapMessage,
-              zapAmount,
-              context,
-              false,
-              globalRewardName
+          }
+
+          // Every recipient was skipped, so this is a duplicate submit and
+          // there is nothing new to report.
+          if (alreadyHandled.length === receiverIds.length) {
+            await context.sendActivity(
+              'That zap card was already submitted, so nothing was sent again.',
             );
-    
-            successfulRecipients.push(receiver.displayName);
+            return;
+          }
+
+          // Nothing was paid this time: the card must not turn green.
+          if (successfulRecipients.length === 0) {
+            await context.sendActivity(
+              `No zaps were sent. Could not complete: ${failedRecipients.join(', ')}`,
+            );
+            return;
           }
           const bulletReceivers = successfulRecipients
             .map((name) => `- ${name}`)
@@ -167,7 +189,7 @@ export class TeamsBot extends TeamsActivityHandler {
           console.log('Remaining Balance:', remainingBalance);
           
           // Assuming zapAmount is the amount sent to each receiver
-          const totalAmountSent = receiverIds.length * zapAmount;
+          const totalAmountSent = successfulRecipients.length * zapAmount;
 
           // Update adaptive card to read-only with list of recipients
           const updatedCard = {
@@ -230,14 +252,6 @@ export class TeamsBot extends TeamsActivityHandler {
             `Awesome! You sent ${context.activity.value.zapAmount} ${globalRewardName} to your colleague with a zap!`,
           );
 
-          if (cardId) {
-            this.zapCardsPaid.set(cardId, Date.now());
-          }
-          } finally {
-            if (cardId) {
-              this.zapCardsInFlight.delete(cardId);
-            }
-          }
         }
     
         // Trigger command by IM text

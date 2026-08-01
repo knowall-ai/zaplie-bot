@@ -350,7 +350,6 @@ const createWallet = async (
       deleted: walletWithBalance?.deleted,
     };
 
-    console.log('createWallet data:', walletData);
 
     return walletData;
   } catch (error) {
@@ -379,7 +378,6 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
     }
 
     const data = await response.json();
-    console.log('Wallet details:', data);
 
     return data;
   } catch (error) {
@@ -630,9 +628,7 @@ const getInvoicePayment = async (inKey: string, invoice: string) => {
 };
 
 const getPaymentsSince = async (lnKey: string, timestamp: number) => {
-  console.log(
-    `getPaymentsSince starting ... (lnKey: ${lnKey}, timestamp: ${timestamp})`,
-  );
+  console.log(`getPaymentsSince starting ... (timestamp: ${timestamp})`);
 
   // Note that the timestamp is in seconds, not milliseconds.
   try {
@@ -683,7 +679,7 @@ const createInvoice = async (
   extra: object,
 ) => {
   console.log(
-    `createInvoice starting ... (lnKey: ${lnKey}, recipientWalletId: ${recipientWalletId}, amount: ${amount}, memo: ${memo}, extra: ${extra})`,
+    `createInvoice starting ... (recipientWalletId: ${recipientWalletId}, amount: ${amount})`,
   );
 
   try {
@@ -701,7 +697,7 @@ const createInvoice = async (
       }),
     });
 
-    console.log('createInvoice: response:', response);
+    console.log('createInvoice: response status:', response.status);
 
     if (!response.ok) {
       throw new Error(`Error creating an invoice (status: ${response.status})`);
@@ -712,8 +708,8 @@ const createInvoice = async (
 
     return data.payment_request;
   } catch (error) {
-    console.error(error);
-    return error;
+    console.error('createInvoice failed.', error);
+    throw error;
   }
 };
 
@@ -722,11 +718,7 @@ const payInvoice = async (
   paymentRequest: string,
   extra: object,
 ) => {
-  console.log(
-    `payInvoice starting ... (paymentRequest: ${paymentRequest}, extra: ${JSON.stringify(
-      extra,
-    )})`,
-  );
+  console.log('payInvoice starting ...');
 
   try {
     //const encodedExtra = JSON.stringify(extra);
@@ -782,7 +774,6 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
     }
 
     const data = await response.json();
-    console.log('getWalletIdByUserId: data:', data);
 
     return data.id;
   } catch (error) {
@@ -831,7 +822,6 @@ async function scheduledTopup() {
 
   const host = getWalletById(hostUserId, hostWalletId);
 
-  console.log('Wallets' , allowancewallets)
 
 
   if (allowancewallets) {
@@ -844,7 +834,6 @@ async function scheduledTopup() {
       tag: 'zap',
     }
 
-    console.log('Extra:', extra);
     if(wallet.balance_msat >0){
 
      const paymentRequest = await createInvoice(
