@@ -11,6 +11,12 @@ const config = {
   foundryModel: process.env.FOUNDRY_MODEL,
 };
 
-console.log('Configuration:', config);
+const redact = (value?: string) => (value ? '[REDACTED]' : value);
+
+console.log('Configuration:', {
+  ...config,
+  botPassword: redact(config.botPassword),
+  clientSecret: redact(config.clientSecret),
+});
 
 export default config;

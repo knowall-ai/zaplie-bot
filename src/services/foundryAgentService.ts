@@ -125,6 +125,35 @@ export async function runConversationalTurn(
   }
 
   const toolsByName = new Map(tools.map(tool => [tool.name, tool]));
+
+  const runToolCall = async (call: any, context: TurnContext): Promise<string> => {
+    const tool = toolsByName.get(call.name);
+    if (!tool) {
+      throw new Error(
+        `foundryAgentService: the agent requested an unregistered tool "${call.name}". ` +
+          `Registered tools: ${[...toolsByName.keys()].join(', ') || 'none'}.`,
+      );
+    }
+
+    let args: unknown;
+    try {
+      args = JSON.parse(call.arguments || '{}');
+    } catch (error) {
+      throw new Error(
+        `foundryAgentService: could not parse the arguments for tool "${call.name}": ` +
+          `${call.arguments} (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+
+    const result = await tool.handler(args, context);
+    if (result === undefined) {
+      throw new Error(
+        `foundryAgentService: tool "${call.name}" returned undefined, which cannot be sent as function_call_output.`,
+      );
+    }
+    return JSON.stringify(result);
+  };
+
   let nextInput: unknown = userText;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -144,20 +173,11 @@ export async function runConversationalTurn(
       };
     }
 
-    // Tool names come from `tools`, which is also what was just registered
-    // on the agent via ensureAgent — an unknown name here means the agent
-    // definition is out of sync with this process, a real bug worth a loud
-    // crash rather than a swallowed error handed back to the model.
     nextInput = await Promise.all(
       functionCalls.map(async (call: any) => ({
         type: 'function_call_output',
         call_id: call.call_id,
-        output: JSON.stringify(
-          await toolsByName.get(call.name)!.handler(
-            JSON.parse(call.arguments || '{}'),
-            turnContext,
-          ),
-        ),
+        output: await runToolCall(call, turnContext),
       })),
     );
   }

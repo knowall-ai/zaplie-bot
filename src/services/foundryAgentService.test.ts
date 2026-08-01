@@ -137,10 +137,7 @@ describe('foundryAgentService.runConversationalTurn', () => {
     });
   });
 
-  test('throws instead of silently continuing when the model calls a tool that was never registered', async () => {
-    // Only possible if the agent definition drifts out of sync with this
-    // process's tool list — a real bug, so it should surface loudly rather
-    // than hand a swallowed error back to the model.
+  test('names the unregistered tool and the registered ones when the agent drifts', async () => {
     mockResponsesCreate.mockResolvedValueOnce({
       output: [
         { type: 'function_call', name: 'not_a_real_tool', call_id: 'call_x', arguments: '{}' },
@@ -150,7 +147,39 @@ describe('foundryAgentService.runConversationalTurn', () => {
 
     await expect(
       runConversationalTurn('do something', 'conv_existing', [noopTool], makeTurnContext()),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/unregistered tool "not_a_real_tool"[\s\S]*Registered tools: /);
+  });
+
+  test('names the tool and the payload when its arguments are not valid JSON', async () => {
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [
+        { type: 'function_call', name: noopTool.name, call_id: 'call_y', arguments: '{not json' },
+      ],
+      output_text: '',
+    });
+
+    await expect(
+      runConversationalTurn('do something', 'conv_existing', [noopTool], makeTurnContext()),
+    ).rejects.toThrow(/could not parse the arguments for tool "noop_tool"[\s\S]*\{not json/);
+  });
+
+  test('rejects a handler that returns undefined instead of sending a non-string output', async () => {
+    const undefinedTool = { ...noopTool, handler: async () => undefined };
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [
+        { type: 'function_call', name: noopTool.name, call_id: 'call_z', arguments: '{}' },
+      ],
+      output_text: '',
+    });
+
+    await expect(
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [undefinedTool as any],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(/returned undefined/);
   });
 
   test('throws instead of looping forever if the model never stops calling tools', async () => {
