@@ -29,6 +29,7 @@ app.use('/api/reports', require('./reportsRoutes'));
 app.use('/api/setup', require('./setupRoutes'));
 
 const { requireAdmin } = require('./adminAuth');
+const { requireSignedInOrBot } = require('./readAuth');
 
 const defaultRewardAmounts = {
   githubPrMergedSats: 1000,
@@ -85,10 +86,11 @@ app.post('/api/reward-amounts', requireAdmin, (req, res) => {
   }
 });
 
-// Config reads the portal needs to render. They sit before the shared-token
-// middleware for the same reason the admin writes above do: the browser
-// cannot hold that secret. Nothing sensitive is returned, and the real fix is
-// the auth model in #184.
+// Config reads sit before the shared-token middleware because the browser
+// cannot hold that secret. reward-name is deliberately open: the portal reads
+// it before sign-in and blocks rendering on it. The other two disclose
+// connected repositories and payout policy, so they take either a verified
+// MSAL token or the bot's shared token.
 // Endpoint to get the reward name
 app.get('/api/reward-name', (req, res) => {
   const data = readData();
@@ -96,13 +98,13 @@ app.get('/api/reward-name', (req, res) => {
 });
 
 // Endpoint to get the connected repository allowlist
-app.get('/api/automations', (req, res) => {
+app.get('/api/automations', requireSignedInOrBot, (req, res) => {
   const data = readData();
   res.send({ repos: data.automations?.repos || [] });
 });
 
 // Endpoint to get automation reward amounts
-app.get('/api/reward-amounts', (req, res) => {
+app.get('/api/reward-amounts', requireSignedInOrBot, (req, res) => {
   const data = readData();
   res.send({ rewardAmounts: { ...defaultRewardAmounts, ...data.rewardAmounts } });
 });
@@ -157,6 +159,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../build', 'index.html'));
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+// Only listen when run directly, so tests can bind an ephemeral port.
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+  });
+}
+
+module.exports = app;

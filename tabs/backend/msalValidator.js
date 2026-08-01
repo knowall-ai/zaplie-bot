@@ -51,4 +51,9 @@ const extractBearerToken = (req) => {
   return match ? match[1] : null;
 };
 
-module.exports = { verifyMsalToken, verifyMsalClaims, extractBearerToken };
+module.exports = {
+  verifyMsalPayload,
+  verifyMsalToken,
+  verifyMsalClaims,
+  extractBearerToken,
+};

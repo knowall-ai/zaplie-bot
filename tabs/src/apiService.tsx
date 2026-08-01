@@ -31,9 +31,11 @@ export const updateRewardName = async (idToken: string, newRewardName: string) =
     throw error;
   }
 };
-export const getRewardAmounts = async () => {
+export const getRewardAmounts = async (idToken: string) => {
   try {
-    const response = await axios.get(`${API_URL}/reward-amounts`);
+    const response = await axios.get(`${API_URL}/reward-amounts`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching reward amounts:', error);
@@ -61,9 +63,11 @@ export const updateRewardAmounts = async (idToken: string, rewardAmounts: Record
   }
 };
 
-export const getAutomations = async () => {
+export const getAutomations = async (idToken: string) => {
   try {
-    const response = await axios.get(`${API_URL}/automations`);
+    const response = await axios.get(`${API_URL}/automations`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching automations:', error);
