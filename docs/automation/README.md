@@ -63,6 +63,7 @@ az group create --name zaplie-automation --location westeurope
 
 az deployment group create \
   --resource-group zaplie-automation \
+  --name github-rewards-logicapp \
   --template-file docs/automation/github-rewards-logicapp.json \
   --parameters \
       zaplieRewardsUrl="https://<bot-domain>/api/v1/rewards" \

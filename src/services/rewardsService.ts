@@ -86,11 +86,17 @@ export async function payReward(
   const treasuryAdminKey = requiredEnv('REWARDS_TREASURY_ADMINKEY');
 
   const userId = lookupLnbitsUserId(reward.recipient);
+  const adminKey = process.env.LNBITS_ADMINKEY;
+  if (!adminKey) {
+    throw new Error('LNBITS_ADMINKEY is not set');
+  }
+
   // getUserWallets ignores adminKey; it authenticates via LNBITS_USERNAME/PASSWORD
-  const wallets = await getUserWallets(
-    process.env.LNBITS_ADMINKEY as string,
-    userId,
-  );
+  const wallets = await getUserWallets(adminKey, userId);
+  if (!Array.isArray(wallets)) {
+    throw new Error(`Could not read the wallets for LNbits user ${userId}`);
+  }
+
   const privateWallet = wallets.find(wallet => wallet.name === 'Private');
   if (!privateWallet) {
     throw new Error(`LNbits user ${userId} has no Private wallet`);
