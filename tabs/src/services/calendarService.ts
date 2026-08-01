@@ -36,7 +36,11 @@ export async function fetchRecentMeetings(
   });
 
   const response = await fetch(`${CALENDAR_VIEW_ENDPOINT}?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      // Without this, start.dateTime comes back in the mailbox time zone.
+      Prefer: 'outlook.timezone="UTC"',
+    },
   });
 
   if (!response.ok) {

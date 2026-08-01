@@ -759,8 +759,9 @@ const getWalletTransactionsSince = async (
 
     logger.debug("DATA",data);
 
-    // Show all payments (timestamp filter removed)
-    const paymentsSince = data;
+    const paymentsSince = timestamp
+      ? data.filter((payment: any) => Number(payment.time) >= timestamp)
+      : data;
 
     // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra

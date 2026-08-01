@@ -9,6 +9,7 @@ export interface ZapHistory {
 export async function fetchZapHistory(
   adminKey: string,
   currentUserAadObjectId: string,
+  sinceEpochSeconds: number,
 ): Promise<ZapHistory> {
   const allUsers = await getUsers(adminKey, {});
   if (!allUsers) {
@@ -26,7 +27,11 @@ export async function fetchZapHistory(
     return { allUsers, zappedUserIds: new Set() };
   }
 
-  const transactions = await getWalletTransactionsSince(allowanceWallet.inkey, 0, null);
+  const transactions = await getWalletTransactionsSince(
+    allowanceWallet.inkey,
+    sinceEpochSeconds,
+    null,
+  );
 
   const zappedUserIds = new Set<string>();
   transactions

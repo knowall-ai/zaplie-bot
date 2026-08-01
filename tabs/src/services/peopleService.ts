@@ -25,10 +25,10 @@ export async function fetchRelevantPeople(
   }
 
   const data = await response.json();
-  return data.value
+  return (data.value ?? [])
     .filter(
       (person: any) =>
-        person.personType.class === 'Person' && person.scoredEmailAddresses.length > 0,
+        person?.personType?.class === 'Person' && person?.scoredEmailAddresses?.[0]?.address,
     )
     .map((person: any) => ({
       name: person.displayName,

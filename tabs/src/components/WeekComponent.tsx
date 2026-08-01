@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import styles from './WeekComponent.module.css';
-import { loginRequest } from '../services/authConfig';
+import { weekScopesRequest } from '../services/authConfig';
 import { fetchRecentMeetings, GraphEvent } from '../services/calendarService';
 import { fetchRelevantPeople } from '../services/peopleService';
 import { fetchZapHistory } from '../services/zapHistoryService';
@@ -70,7 +70,7 @@ const WeekComponent: React.FC = () => {
 
       let accessToken: string;
       try {
-        const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account });
+        const tokenResponse = await instance.acquireTokenSilent({ ...weekScopesRequest, account });
         accessToken = tokenResponse.accessToken;
       } catch (tokenError) {
         if (tokenError instanceof InteractionRequiredAuthError) {
@@ -84,7 +84,11 @@ const WeekComponent: React.FC = () => {
       const [events, relevantPeople, { allUsers, zappedUserIds }] = await Promise.all([
         fetchRecentMeetings(accessToken, DAYS_BACK),
         fetchRelevantPeople(accessToken, 10),
-        fetchZapHistory(adminKey, account.localAccountId),
+        fetchZapHistory(
+          adminKey,
+          account.localAccountId,
+          Math.floor(Date.now() / 1000) - DAYS_BACK * 24 * 60 * 60,
+        ),
       ]);
       setMeetings(events);
       const selfEmail = account.username.toLowerCase();
@@ -148,7 +152,13 @@ const WeekComponent: React.FC = () => {
     if (!account) {
       return;
     }
-    await instance.acquireTokenPopup({ ...loginRequest, account });
+    try {
+      await instance.acquireTokenPopup({ ...weekScopesRequest, account });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Consent was not granted');
+      return;
+    }
+    setError(null);
     setReloadCount(count => count + 1);
   };
 

@@ -22,8 +22,12 @@ export const msalConfig: Configuration = {
 };
 
 // Add here scopes for id token to be used at MS Identity Platform endpoints.
-// Calendars.Read and People.Read power the "Your week" page's client-side Graph calls.
 export const loginRequest: PopupRequest = {
+  scopes: ['User.Read'],
+};
+
+// Requested only by the "Your week" page, so signing in never depends on them.
+export const weekScopesRequest: PopupRequest = {
   scopes: ['User.Read', 'Calendars.Read', 'People.Read'],
 };
 
