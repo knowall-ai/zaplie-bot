@@ -18,6 +18,16 @@ export function validateZapSubmit(
     );
   }
 
+  if (!Number.isInteger(recipientCount) || recipientCount < 1) {
+    throw new Error('No valid recipients were selected, so no zaps were sent.');
+  }
+
+  // NaN passes `typeof x === 'number'` and every comparison against it is
+  // false, so an unreadable balance would skip the budget check entirely.
+  if (!Number.isFinite(liveBalance) || liveBalance < 0) {
+    throw new Error('Could not read your live balance, so no zaps were sent.');
+  }
+
   const totalRequired = amount * recipientCount;
   if (totalRequired > liveBalance) {
     throw new Error(

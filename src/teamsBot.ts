@@ -110,9 +110,6 @@ export class TeamsBot extends TeamsActivityHandler {
           }
 
           const liveBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
-          if (typeof liveBalance !== 'number') {
-            throw new Error('Could not read your live balance, so no zaps were sent.');
-          }
           const amount = validateZapSubmit(
             zapAmount,
             receiverIds.length,
