@@ -3,19 +3,10 @@ import axios from 'axios';
 
 const API_URL = '/api';
 
-// Example: Get the authentication token (replace with actual logic)
-const getAuthToken = () => {
-  return 'your-secret-token'; // Replace with actual token retrieval logic
-};
-
 export const getRewardName = async () => {
   try {
     console.log('Fetching reward name');
-    const response = await axios.get(`${API_URL}/reward-name`, {
-      headers: {
-        Authorization: getAuthToken(),
-      },
-    });
+    const response = await axios.get(`${API_URL}/reward-name`);
     return response.data;
   } catch (error) {
     console.error('Error fetching reward name:', error);
@@ -23,14 +14,14 @@ export const getRewardName = async () => {
   }
 };
 
-export const updateRewardName = async (newRewardName: string) => {
+export const updateRewardName = async (idToken: string, newRewardName: string) => {
   try {
     const response = await axios.post(
       `${API_URL}/reward-name`,
       { newRewardName },
       {
         headers: {
-          Authorization: getAuthToken(),
+          Authorization: `Bearer ${idToken}`,
         },
       },
     );
@@ -42,11 +33,7 @@ export const updateRewardName = async (newRewardName: string) => {
 };
 export const getRewardAmounts = async () => {
   try {
-    const response = await axios.get(`${API_URL}/reward-amounts`, {
-      headers: {
-        Authorization: getAuthToken(),
-      },
-    });
+    const response = await axios.get(`${API_URL}/reward-amounts`);
     return response.data;
   } catch (error) {
     console.error('Error fetching reward amounts:', error);
@@ -79,11 +66,7 @@ export const updateRewardAmounts = async (
 
 export const getAutomations = async () => {
   try {
-    const response = await axios.get(`${API_URL}/automations`, {
-      headers: {
-        Authorization: getAuthToken(),
-      },
-    });
+    const response = await axios.get(`${API_URL}/automations`);
     return response.data;
   } catch (error) {
     console.error('Error fetching automations:', error);
