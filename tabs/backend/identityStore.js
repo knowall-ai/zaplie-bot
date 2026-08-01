@@ -3,6 +3,7 @@
 // Gitignored — see identities.json.
 const fs = require('fs');
 const path = require('path');
+const { writeJsonSecure } = require('./secureJsonStore');
 
 const STORE_PATH = path.join(__dirname, 'identities.json');
 
@@ -18,7 +19,7 @@ const readStore = () => {
 };
 
 const writeStore = (store) => {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
+  writeJsonSecure(STORE_PATH, store);
 };
 
 const findByProviderId = (provider, providerId) => {
