@@ -29,11 +29,7 @@ export async function getAccessToken(
   username: string,
   password: string,
 ): Promise<string> {
-  /*console.log(
-    `getAccessToken starting ... (username: ${username}, filterById: ${password}))`,
-  );*/
   if (accessToken) {
-    //console.log('Using cached access token: ' + accessToken);
     return accessToken;
   } else {
     console.log('No cached access token found');
@@ -85,7 +81,7 @@ export async function getAccessToken(
       accessToken = data.access_token;
       if (accessToken) {
         //localStorage.setItem('accessToken', accessToken);
-        console.log('Access token fetched and stored: ' + accessToken);
+        console.log('Access token fetched and stored.');
       } else {
         throw new Error('Access token is null, cannot store in localStorage.');
       }
@@ -112,7 +108,7 @@ const getWallets = async (
   filterById?: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getWallets starting ... (adminKey: ${adminKey}, filterByName: ${filterByName}, filterById: ${filterById}))`,
+    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById})`,
   );
 
   try {
@@ -182,7 +178,7 @@ const getUserWallets = async (
   userId: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getUserWallets starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getUserWallets starting ... (userId: ${userId})`,
   );
 
   try {
@@ -239,7 +235,7 @@ const getUsers = async (
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<User[] | null> => {
   console.log(
-    `getUsers starting ... (adminKey: ${adminKey}, filterByExtra: ${JSON.stringify(
+    `getUsers starting ... (filterByExtra: ${JSON.stringify(
       filterByExtra,
     )})`,
   );
@@ -263,9 +259,9 @@ const createUser = async (
   extra: { [key: string]: string }, // Ensure extra is an object, not a string
 ): Promise<User | null> => {
   console.log(
-    `createUser starting ... (adminKey: ${adminKey}, userName: ${userName}, email: ${email}, password: ${password}, extra: ${JSON.stringify(
+    `createUser starting ... (userName: ${userName}, email: ${email}, extra: ${JSON.stringify(
       extra,
-    )}))`,
+    )})`,
   );
 
   // LNbits v1+ core API doesn't support user creation with custom metadata
@@ -283,7 +279,7 @@ const getUser = async (
   userId: string,
 ): Promise<User | null> => {
   console.log(
-    `getUser starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getUser starting ... (userId: ${userId})`,
   );
 
   // LNbits v1+ core API doesn't support user details with custom metadata
@@ -302,7 +298,7 @@ const updateUser = async (
   extra: { [key: string]: string }, // Ensure extra is an object, not a string
 ): Promise<User | null> => {
   console.log(
-    `updateUser starting ... (adminKey: ${adminKey}, userId: ${userId}, extra: ${JSON.stringify(
+    `updateUser starting ... (userId: ${userId}, extra: ${JSON.stringify(
       extra,
     )}))`,
   );
@@ -322,7 +318,7 @@ const createWallet = async (
   walletName: string,
 ): Promise<Wallet | null> => {
   console.log(
-    `createWallet starting ... (adminKey: ${adminKey}, userId: ${userId}, walletName: ${walletName}))`,
+    `createWallet starting ... (userId: ${userId}, walletName: ${walletName})`,
   );
 
   try {
@@ -364,7 +360,6 @@ const createWallet = async (
       deleted: walletWithBalance?.deleted,
     };
 
-    console.log('createWallet data:', walletData);
 
     return walletData;
   } catch (error) {
@@ -375,7 +370,7 @@ const createWallet = async (
 
 const getWalletDetails = async (inKey: string, walletId: string) => {
   console.log(
-    `getWalletDetails starting ... (inKey: ${inKey}, walletId: ${walletId}))`,
+    `getWalletDetails starting ... (walletId: ${walletId})`,
   );
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallets/${walletId}`, {
@@ -393,7 +388,6 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
     }
 
     const data = await response.json();
-    console.log('Wallet details:', data);
 
     return data;
   } catch (error) {
@@ -403,7 +397,7 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
 };
 
 const getWalletBalance = async (inKey: string) => {
-  console.log(`getWalletBalance starting ... (inKey: ${inKey})`);
+  console.log(`getWalletBalance starting ... (no key logged)`);
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
       method: 'GET',
@@ -431,7 +425,7 @@ const getWalletBalance = async (inKey: string) => {
 };
 
 const getWalletName = async (inKey: string) => {
-  console.log(`getWalletName starting ... (inKey: ${inKey})`);
+  console.log(`getWalletName starting ... (no key logged)`);
 
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
@@ -456,7 +450,7 @@ const getWalletName = async (inKey: string) => {
 };
 
 const getPayments = async (inKey: string) => {
-  console.log(`getPayments starting ... (inKey: ${inKey})`);
+  console.log(`getPayments starting ... (no key logged)`);
 
   try {
     const response = await fetch(`${lnbiturl}/api/v1/payments?limit=100`, {
@@ -481,7 +475,7 @@ const getPayments = async (inKey: string) => {
 
 const getWalletPayLinks = async (inKey: string, walletId: string) => {
   console.log(
-    `getWalletPayLinks starting ... (inKey: ${inKey}, walletId: ${walletId})`,
+    `getWalletPayLinks starting ... (walletId: ${walletId})`,
   );
 
   try {
@@ -579,7 +573,7 @@ const getWalletById = async (
 
 // May need fixing!
 const getWalletIdFromKey = async (inKey: string) => {
-  console.log(`getWalletIdFromKey starting ... (inKey: ${inKey})`);
+  console.log(`getWalletIdFromKey starting ... (no key logged)`);
 
   try {
     const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
@@ -644,7 +638,7 @@ const getInvoicePayment = async (inKey: string, invoice: string) => {
 
 const getPaymentsSince = async (lnKey: string, timestamp: number) => {
   console.log(
-    `getPaymentsSince starting ... (lnKey: ${lnKey}, timestamp: ${timestamp})`,
+    `getPaymentsSince starting ... (timestamp: ${timestamp})`,
   );
 
   // Note that the timestamp is in seconds, not milliseconds.
@@ -696,7 +690,7 @@ const createInvoice = async (
   extra: object,
 ) => {
   console.log(
-    `createInvoice starting ... (lnKey: ${lnKey}, recipientWalletId: ${recipientWalletId}, amount: ${amount}, memo: ${memo}, extra: ${extra})`,
+    `createInvoice starting ... (recipientWalletId: ${recipientWalletId}, amount: ${amount})`,
   );
 
   try {
@@ -714,7 +708,7 @@ const createInvoice = async (
       }),
     });
 
-    console.log('createInvoice: response:', response);
+    console.log('createInvoice: response status:', response.status);
 
     if (!response.ok) {
       throw new Error(`Error creating an invoice (status: ${response.status})`);
@@ -736,9 +730,7 @@ const payInvoice = async (
   extra: object,
 ) => {
   console.log(
-    `payInvoice starting ... (adminKey: ${adminKey}, paymentRequest: ${paymentRequest}, extra: ${JSON.stringify(
-      extra,
-    )})`,
+    'payInvoice starting ...',
   );
 
   try {
@@ -773,7 +765,7 @@ const payInvoice = async (
 // TODO: This method needs checking!
 const getWalletIdByUserId = async (adminKey: string, userId: string) => {
   console.log(
-    `getWalletIdByUserId starting ... (adminKey: ${adminKey}, userId: ${userId})`,
+    `getWalletIdByUserId starting ... (userId: ${userId})`,
   );
 
   try {
@@ -795,7 +787,6 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
     }
 
     const data = await response.json();
-    console.log('getWalletIdByUserId: data:', data);
 
     return data.id;
   } catch (error) {
@@ -842,7 +833,6 @@ async function scheduledTopup() {
 
   const host = getWalletById(hostUserId, hostWalletId);
 
-  console.log('Wallets' , allowancewallets)
 
 
   if (allowancewallets) {
@@ -855,7 +845,6 @@ async function scheduledTopup() {
       tag: 'zap',
     }
 
-    console.log('Extra:', extra);
     if(wallet.balance_msat >0){
 
      const paymentRequest = await createInvoice(
