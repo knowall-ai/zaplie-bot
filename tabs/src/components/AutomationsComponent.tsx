@@ -153,9 +153,14 @@ const AutomationsComponent: FunctionComponent = () => {
   useEffect(() => {
     const load = async () => {
       try {
+        const account = accounts[0];
+        if (!account) {
+          throw new Error('You need to be signed in to view automations.');
+        }
+        const idToken = await acquireIdToken(instance, account);
         const [automations, rewardAmounts] = await Promise.all([
-          getAutomations(),
-          getRewardAmounts(),
+          getAutomations(idToken),
+          getRewardAmounts(idToken),
         ]);
         setRepos(automations.repos || []);
         setAmounts(rewardAmounts.rewardAmounts || {});
@@ -168,7 +173,8 @@ const AutomationsComponent: FunctionComponent = () => {
       }
     };
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts, instance]);
 
   const isAdmin = isZaplieAdmin(accounts[0]);
 

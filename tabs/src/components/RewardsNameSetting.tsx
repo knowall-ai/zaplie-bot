@@ -7,17 +7,18 @@ import React, {
 } from 'react';
 import styles from './setting.module.css';
 import { getRewardName, updateRewardName } from '../apiService';
-import { ToastContainer, toast } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { RewardNameContext } from './RewardNameContext';
 import { useMsal } from '@azure/msal-react';
-import { acquireIdToken } from '../services/adminRole';
+import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 
 const CurrencySetting: FunctionComponent = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currency, setCurrency] = useState(''); // Default value
   const { setRewardName } = useContext(RewardNameContext);
   const { instance, accounts } = useMsal();
+  const isAdmin = isZaplieAdmin(accounts[0]);
 
   useEffect(() => {
     const fetchRewardName = async () => {
@@ -66,17 +67,17 @@ const CurrencySetting: FunctionComponent = () => {
           title="Reward name"
           placeholder="Enter currency"
         />
-        {!isEditing ? (
-          <button onClick={handleEditClick} className={styles.editButton}>
-            Edit
-          </button>
-        ) : (
-          <button onClick={handleSaveClick} className={styles.saveButton}>
-            Save
-          </button>
-        )}
+        {isAdmin &&
+          (!isEditing ? (
+            <button onClick={handleEditClick} className={styles.editButton}>
+              Edit
+            </button>
+          ) : (
+            <button onClick={handleSaveClick} className={styles.saveButton}>
+              Save
+            </button>
+          ))}
       </div>
-      <ToastContainer />
     </div>
   );
 };
