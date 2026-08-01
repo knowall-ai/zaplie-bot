@@ -85,9 +85,10 @@ app.post('/api/reward-amounts', requireAdmin, (req, res) => {
   }
 });
 
-// Use the authentication middleware for API routes
-app.use('/api', authMiddleware);
-
+// Config reads the portal needs to render. They sit before the shared-token
+// middleware for the same reason the admin writes above do: the browser
+// cannot hold that secret. Nothing sensitive is returned, and the real fix is
+// the auth model in #184.
 // Endpoint to get the reward name
 app.get('/api/reward-name', (req, res) => {
   const data = readData();
@@ -106,8 +107,7 @@ app.get('/api/reward-amounts', (req, res) => {
   res.send({ rewardAmounts: { ...defaultRewardAmounts, ...data.rewardAmounts } });
 });
 
-// Endpoint to update the reward name
-app.post('/api/reward-name', (req, res) => {
+app.post('/api/reward-name', requireAdmin, (req, res) => {
   const { newRewardName } = req.body;
   if (newRewardName) {
     const data = readData();
@@ -118,6 +118,11 @@ app.post('/api/reward-name', (req, res) => {
     res.status(400).send({ message: 'Invalid reward name' });
   }
 });
+
+// Use the authentication middleware for API routes
+app.use('/api', authMiddleware);
+
+// Endpoint to update the reward name
 
 // Endpoint the bot posts to when a reward's recipient can't be resolved to a
 // Zaplie person yet (identity graph and env-map fallback both miss).
