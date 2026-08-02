@@ -5,12 +5,17 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('./authMiddleware'); // Import the authentication middleware
+const weekRoutes = require('./weekRoutes');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
+
+// Mounted before the generic authMiddleware below: it authenticates with a
+// real MSAL token, not the placeholder API token.
+app.use('/api/week', weekRoutes);
 
 const dataFilePath = path.join(__dirname, 'data.json');
 
@@ -63,6 +68,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../build', 'index.html'));
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+// Only listen when run directly, so tests can bind an ephemeral port.
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+  });
+}
+
+module.exports = app;

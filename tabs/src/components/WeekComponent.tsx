@@ -10,7 +10,6 @@ import SendZapsPopup from './SendZapsPopup';
 import ZapIcon from '../images/ZapIcon.svg';
 import CalendarIcon from '../images/Calendar.svg';
 
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 const DAYS_BACK = 7;
 
 // Graph returns UTC without a 'Z' suffix; append it so the browser renders local time.
@@ -69,9 +68,11 @@ const WeekComponent: React.FC = () => {
       setNeedsConsent(false);
 
       let accessToken: string;
+      let idToken: string;
       try {
         const tokenResponse = await instance.acquireTokenSilent({ ...weekScopesRequest, account });
         accessToken = tokenResponse.accessToken;
+        idToken = tokenResponse.idToken;
       } catch (tokenError) {
         if (tokenError instanceof InteractionRequiredAuthError) {
           setNeedsConsent(true);
@@ -85,8 +86,7 @@ const WeekComponent: React.FC = () => {
         fetchRecentMeetings(accessToken, DAYS_BACK),
         fetchRelevantPeople(accessToken, 10),
         fetchZapHistory(
-          adminKey,
-          account.localAccountId,
+          idToken,
           Math.floor(Date.now() / 1000) - DAYS_BACK * 24 * 60 * 60,
         ),
       ]);

@@ -1,47 +1,32 @@
-import { getUsers, getUserWallets, getWalletTransactionsSince } from './lnbitsServiceLocal';
-
 export interface ZapHistory {
   allUsers: User[];
   zappedUserIds: Set<string>;
 }
 
-// Recipient id lives in transaction.extra.to.user — the same field FeedList.tsx reads.
+interface ZapHistoryResponse {
+  allUsers: Omit<User, 'privateWallet' | 'allowanceWallet'>[];
+  zappedUserIds: string[];
+}
+
+// idToken as bearer follows the same convention as the other portal pages; a
+// proper API access-token scope is pending the tab-backend auth redesign (#184).
 export async function fetchZapHistory(
-  adminKey: string,
-  currentUserAadObjectId: string,
+  idToken: string,
   sinceEpochSeconds: number,
 ): Promise<ZapHistory> {
-  const allUsers = await getUsers(adminKey, {});
-  if (!allUsers) {
-    throw new Error('LNbits getUsers returned null');
+  const response = await fetch(`/api/week/zap-history?sinceTs=${sinceEpochSeconds}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Zap history request failed (status: ${response.status})`);
   }
-
-  const currentUser = allUsers.find(u => u.aadObjectId === currentUserAadObjectId);
-  if (!currentUser) {
-    return { allUsers, zappedUserIds: new Set() };
-  }
-
-  const wallets = await getUserWallets(adminKey, currentUser.id);
-  const allowanceWallet = wallets?.find(w => w.name.toLowerCase().includes('allowance'));
-  if (!allowanceWallet) {
-    return { allUsers, zappedUserIds: new Set() };
-  }
-
-  const transactions = await getWalletTransactionsSince(
-    allowanceWallet.inkey,
-    sinceEpochSeconds,
-    null,
-  );
-
-  const zappedUserIds = new Set<string>();
-  transactions
-    .filter(t => t.amount < 0 && !t.memo?.includes('Weekly Allowance cleared'))
-    .forEach(t => {
-      const recipientId = t.extra?.to?.user;
-      if (recipientId) {
-        zappedUserIds.add(recipientId);
-      }
-    });
-
-  return { allUsers, zappedUserIds };
+  const data: ZapHistoryResponse = await response.json();
+  return {
+    allUsers: data.allUsers.map(user => ({
+      ...user,
+      privateWallet: null,
+      allowanceWallet: null,
+    })),
+    zappedUserIds: new Set(data.zappedUserIds),
+  };
 }
