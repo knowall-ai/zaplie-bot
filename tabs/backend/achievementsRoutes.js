@@ -213,6 +213,34 @@ const computeAchievements = async (aadOid) => {
   };
 };
 
+// computeAchievements refetches every user, wallet and up to 20k payments, so
+// a short TTL cache absorbs repeated portal/bot calls for the same person.
+const ACHIEVEMENTS_TTL_MS = 15_000;
+const achievementsCache = new Map(); // aadOid -> { promise, expiresAt }
+
+const getAchievements = (aadOid) => {
+  const now = Date.now();
+  for (const [key, entry] of achievementsCache) {
+    if (entry.expiresAt <= now) {
+      achievementsCache.delete(key);
+    }
+  }
+  const cached = achievementsCache.get(aadOid);
+  if (cached) {
+    return cached.promise;
+  }
+  // The in-flight promise is cached so concurrent calls share one computation.
+  const promise = computeAchievements(aadOid);
+  achievementsCache.set(aadOid, { promise, expiresAt: now + ACHIEVEMENTS_TTL_MS });
+  promise.catch(() => {
+    // A rejection must not poison the cache for the rest of the TTL window.
+    if (achievementsCache.get(aadOid)?.promise === promise) {
+      achievementsCache.delete(aadOid);
+    }
+  });
+  return promise;
+};
+
 // GET /api/achievements/me — the signed-in user's achievements (portal).
 router.get('/me', async (req, res) => {
   const token = extractBearerToken(req);
@@ -229,7 +257,7 @@ router.get('/me', async (req, res) => {
     return;
   }
   try {
-    const result = await computeAchievements(oid);
+    const result = await getAchievements(oid);
     if (!result) {
       res.status(404).json({ error: 'no wallet account for this person' });
       return;
@@ -249,7 +277,7 @@ router.get('/for-person', authMiddleware, async (req, res) => {
     return;
   }
   try {
-    const result = await computeAchievements(aad);
+    const result = await getAchievements(aad);
     if (!result) {
       res.status(404).json({ error: 'no wallet account for this person' });
       return;
@@ -262,3 +290,4 @@ router.get('/for-person', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.getAchievements = getAchievements;
