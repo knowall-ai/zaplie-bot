@@ -27,12 +27,20 @@ jest.mock('./msalValidator', () => {
   };
 });
 
+const fs = require('fs');
+const path = require('path');
+
+// The admin write hits the real data.json, so snapshot it and put it back.
+const DATA_FILE = path.join(__dirname, 'data.json');
+let dataBackup;
+
 const app = require('./server');
 
 let server;
 let base;
 
 beforeAll(async () => {
+  dataBackup = fs.existsSync(DATA_FILE) ? fs.readFileSync(DATA_FILE) : null;
   await new Promise(resolve => {
     server = app.listen(0, () => {
       base = `http://127.0.0.1:${server.address().port}`;
@@ -43,6 +51,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise(resolve => server.close(resolve));
+  if (dataBackup !== null) {
+    fs.writeFileSync(DATA_FILE, dataBackup);
+  }
 });
 
 // Jest's node environment does not expose global fetch here, so use node:http.
