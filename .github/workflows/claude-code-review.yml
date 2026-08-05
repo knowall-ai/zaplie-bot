@@ -12,6 +12,10 @@ on:
 
 jobs:
   claude-review:
+    # Fork PRs get neither secrets nor OIDC tokens on pull_request runs, so the
+    # action cannot authenticate — skip them instead of failing the check.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
