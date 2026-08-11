@@ -3,12 +3,18 @@ import {
   describe,
   test,
   beforeEach,
+  afterEach,
   jest,
 } from '@jest/globals';
 
 const BASE = 'https://lnbits.test';
 const USERNAME = 'lnbits-admin';
 const PASSWORD = 'lnbits-secret';
+
+const originalFetch = global.fetch;
+const originalNodeUrl = process.env.LNBITS_NODE_URL;
+const originalUsername = process.env.LNBITS_USERNAME;
+const originalPassword = process.env.LNBITS_PASSWORD;
 
 type LnbitsService = typeof import('./lnbitsService');
 
@@ -47,6 +53,23 @@ beforeEach(() => {
   // The module caches the access token at module scope; each test gets a fresh copy.
   jest.resetModules();
   service = require('./lnbitsService');
+});
+
+const restoreEnv = (key: string, value: string | undefined) => {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
+};
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  restoreEnv('LNBITS_NODE_URL', originalNodeUrl);
+  restoreEnv('LNBITS_USERNAME', originalUsername);
+  restoreEnv('LNBITS_PASSWORD', originalPassword);
+  fetchMock.mockReset();
+  jest.resetModules();
 });
 
 const stubAuth = (token = 'tok-1') => {
