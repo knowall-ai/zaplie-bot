@@ -1,7 +1,6 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext } from 'botbuilder';
 import { getUserWallets } from '../services/lnbitsService';
-import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 
@@ -11,9 +10,7 @@ export class ShowMyBalanceCommand extends SSOCommand {
       //await context.sendActivity('Showing your balance...');
       console.log('Showing your balance...');
 
-      // Fetch the latest reward name
-      const globalRewardName = await getRewardName();
-      console.log('Fetched Reward Name:', globalRewardName);
+      const globalRewardName = process.env.LNBITS_POINTS_LABEL as string;
 
       // Retrieve the user object from the turn state
       const user = context.turnState.get('user') as User;

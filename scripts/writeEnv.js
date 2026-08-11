@@ -16,6 +16,7 @@ const selectedVars = {
   LNBITS_USERNAME: envConfig.LNBITS_USERNAME,
   LNBITS_PASSWORD: envConfig.LNBITS_PASSWORD,
   LNBITS_ADMINKEY: envConfig.LNBITS_ADMINKEY,
+  LNBITS_POINTS_LABEL: envConfig.LNBITS_POINTS_LABEL,
   WEBSITE_URL: envConfig.WEBSITE_URL,
   CONTENT_URL: envConfig.CONTENT_URL,
 };
@@ -28,8 +29,10 @@ const appendEnvFile = (filePath, vars) => {
     existingEnv = dotenv.parse(fs.readFileSync(filePath));
   }
 
-  // Filter out variables that already exist
-  const newVars = Object.entries(vars).filter(([key]) => !existingEnv[key]);
+  // Filter out variables that already exist or have no value in the source
+  const newVars = Object.entries(vars).filter(
+    ([key, value]) => value !== undefined && !existingEnv[key],
+  );
 
   if (newVars.length > 0) {
     const envFileContent = '\n' + newVars
@@ -49,6 +52,7 @@ appendEnvFile(envOutputPath, {
   LNBITS_USERNAME: selectedVars.LNBITS_USERNAME,
   LNBITS_PASSWORD: selectedVars.LNBITS_PASSWORD,
   LNBITS_ADMINKEY: selectedVars.LNBITS_ADMINKEY,
+  LNBITS_POINTS_LABEL: selectedVars.LNBITS_POINTS_LABEL,
   WEBSITE_URL: selectedVars.WEBSITE_URL,
   CONTENT_URL: selectedVars.CONTENT_URL,
 });

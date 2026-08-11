@@ -1,7 +1,6 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory } from 'botbuilder';
 import { getWallets, getUser } from '../services/lnbitsService';
-import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 
@@ -12,9 +11,7 @@ export class ShowLeaderboardCommand extends SSOCommand {
       //await context.sendActivity('Showing leaderboard...');
       console.log('Showing leaderboard...');
 
-      // Fetch the latest reward name
-      const globalRewardName = await getRewardName();
-      console.log('Fetched Reward Name:', globalRewardName);
+      const globalRewardName = process.env.LNBITS_POINTS_LABEL as string;
 
       // Call the getWallets function
       const wallets = await getWallets(adminKey, 'Private');
