@@ -12,9 +12,58 @@ export interface RecipientDeps {
   entryKey: string;
   recipientId: string;
   // Typed as nullable on purpose: the LNbits lookup can legitimately miss.
-  getReceiver: () => Promise<{ displayName?: string; privateWallet?: unknown } | null>;
-  pay: (receiver: { displayName?: string }) => Promise<{ paymentHash: string }>;
+  getReceiver: () => Promise<ZapRecipient | null>;
+  validateReceiver?: (receiver: ZapRecipient) => string | null;
+  pay: (receiver: ZapRecipient) => Promise<{ paymentHash: string }>;
 }
+
+export interface ZapRecipient {
+  id?: string;
+  aadObjectId?: string;
+  displayName?: string;
+  privateWallet?: unknown;
+}
+
+export const validateSelfZap = (
+  sender: Pick<ZapRecipient, 'id' | 'aadObjectId'>,
+  receiver: Pick<ZapRecipient, 'id' | 'aadObjectId'>,
+): string | null => {
+  const sameUserId = Boolean(sender.id && receiver.id === sender.id);
+  const sameAadObjectId = Boolean(
+    sender.aadObjectId && receiver.aadObjectId === sender.aadObjectId,
+  );
+  return sameUserId || sameAadObjectId ? 'you cannot zap yourself' : null;
+};
+
+export const normalizeRecipientIds = (rawReceiverIds: unknown): string[] => {
+  const submittedReceiverIds = Array.isArray(rawReceiverIds)
+    ? rawReceiverIds
+    : typeof rawReceiverIds === 'string'
+      ? rawReceiverIds.split(',')
+      : [];
+
+  return Array.from(
+    new Set(
+      submittedReceiverIds
+        .filter((id): id is string => typeof id === 'string')
+        .map(id => id.trim())
+        .filter(id => id.length > 0),
+    ),
+  );
+};
+
+export const getPendingRecipientIds = (
+  ledger: ZapLedger,
+  recipientIds: string[],
+  entryKey: (recipientId: string) => string,
+): string[] => recipientIds.filter(id => !ledger.get(entryKey(id)));
+
+export const hasUnknownRecipientOutcome = (
+  ledger: ZapLedger,
+  recipientIds: string[],
+  entryKey: (recipientId: string) => string,
+): boolean =>
+  recipientIds.some(id => ledger.get(entryKey(id))?.state === 'unknown');
 
 // One recipient of a zap card. Extracted from the submitZaps loop so the
 // ledger transitions are exercised by tests rather than re-implemented in them.
@@ -23,6 +72,7 @@ export async function processZapRecipient({
   entryKey,
   recipientId,
   getReceiver,
+  validateReceiver,
   pay,
 }: RecipientDeps): Promise<RecipientOutcome> {
   if (ledger.get(entryKey) || !ledger.tryAcquire(entryKey)) {
@@ -43,6 +93,12 @@ export async function processZapRecipient({
   if (!receiver?.privateWallet) {
     ledger.releaseIfProcessing(entryKey);
     return { status: 'failed', label };
+  }
+
+  const validationError = validateReceiver?.(receiver);
+  if (validationError) {
+    ledger.releaseIfProcessing(entryKey);
+    return { status: 'failed', label: `${label} (${validationError})` };
   }
 
   let paid;

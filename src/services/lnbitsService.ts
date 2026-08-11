@@ -55,11 +55,14 @@ export async function getAccessToken(
 
   // No access token and no request in progress, create a new one
   console.log('No cached access token found, requesting a new one');
+  // Resolve required configuration before the request catch so a missing
+  // variable keeps its actionable name instead of becoming a generic error.
+  const nodeUrl = lnbitsUrl();
 
   // Store the promise of the request
   accessTokenPromise = (async (): Promise<string> => {
     try {
-      const response = await fetch(`${lnbitsUrl()}/api/v1/auth`, {
+      const response = await fetch(`${nodeUrl}/api/v1/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +189,7 @@ const getWallets = async (
 const getUserWallets = async (
   adminKey: string,
   userId: string,
-): Promise<Wallet[] | null> => {
+): Promise<Wallet[]> => {
   console.log(
     `getUserWallets starting ... (userId: ${userId})`,
   );
@@ -238,124 +241,156 @@ const getUserWallets = async (
   }
 };
 
-// Note: LNbits v1+ core API doesn't provide user listing/filtering with custom metadata.
-// User management with custom metadata must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
+const adminFetch = async (
+  path: string,
+  init?: RequestInit,
+): Promise<Response> => {
+  const { userName, password } = lnbitsCredentials();
+  const accessToken = await getAccessToken(userName, password);
+  return fetch(`${lnbitsUrl()}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      ...init?.headers,
+    },
+  });
+};
+
+// The Azure AD object id is stored in the account's `external_id` (LNbits `extra`
+// is a fixed profile schema); the Allowance/Private wallets are matched by name.
+interface RawLnbitsUser {
+  id: string;
+  username?: string;
+  email?: string;
+  external_id?: string;
+  extra?: { display_name?: string; picture?: string } | null;
+}
+
+// The user list omits display_name, so derive a readable name from the email
+// local-part (e.g. "john.doe@acme.com" -> "John Doe").
+const prettifyName = (email: string): string =>
+  email
+    .split('@')[0]
+    .split('.')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const toUser = (
+  raw: RawLnbitsUser,
+  wallets: { allowanceWallet: Wallet | null; privateWallet: Wallet | null } = {
+    allowanceWallet: null,
+    privateWallet: null,
+  },
+): User => {
+  const extra = raw.extra || {};
+  return {
+    id: raw.id,
+    displayName:
+      extra.display_name ||
+      raw.username ||
+      (raw.email ? prettifyName(raw.email) : '') ||
+      raw.id,
+    profileImg: extra.picture || '',
+    aadObjectId: raw.external_id || '',
+    email: raw.email || raw.username || '',
+    allowanceWallet: wallets.allowanceWallet,
+    privateWallet: wallets.privateWallet,
+  };
+};
+
 const getUsers = async (
-  adminKey: string,
-  filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
-): Promise<User[] | null> => {
-
-  // LNbits v1+ core API doesn't support user listing with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'getUsers is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
+  filterByExtra: { [key: string]: string } | null,
+): Promise<User[]> => {
+  const aadObjectId = filterByExtra?.aadObjectId;
+  const query = aadObjectId
+    ? `?external_id=${encodeURIComponent(aadObjectId)}`
+    : '';
+  const response = await adminFetch(`/users/api/v1/user${query}`);
+  if (!response.ok) {
+    throw new Error(`Error getting users (status: ${response.status})`);
+  }
+  const body = await response.json();
+  const rawUsers: RawLnbitsUser[] = body.data;
+  return rawUsers.map(raw => toUser(raw));
 };
 
-// Note: LNbits v1+ core API doesn't provide user creation with custom metadata.
-// User creation must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
 const createUser = async (
-  adminKey: string,
-  userName: string,
-  walletName: string,
+  _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
+  displayName: string,
+  _walletName: string, // Unused: wallets are created separately via createWallet
   email: string,
-  password: string,
-  extra: { [key: string]: string }, // Ensure extra is an object, not a string
-): Promise<User | null> => {
-
-  // LNbits v1+ core API doesn't support user creation with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'createUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  _legacyPassword: string, // Unused: passwords are not part of the v1.x Users API
+  extra: { [key: string]: string },
+): Promise<User> => {
+  const response = await adminFetch('/users/api/v1/user', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email || undefined,
+      external_id: extra.aadObjectId,
+      extra: { display_name: displayName, picture: extra.profileImg },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Error creating user (status: ${response.status})`);
+  }
+  return toUser(await response.json());
 };
 
-// Note: LNbits v1+ core API doesn't provide user details with custom metadata.
-// User details must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
 const getUser = async (
   adminKey: string,
   userId: string,
 ): Promise<User | null> => {
-
-  // LNbits v1+ core API doesn't support user details with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'getUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  if (!userId) {
+    return null;
+  }
+  const response = await adminFetch(`/users/api/v1/user/${userId}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Error getting user (status: ${response.status})`);
+  }
+  const raw: RawLnbitsUser = await response.json();
+  const wallets = await getUserWallets(adminKey, userId);
+  const byName = (name: string) =>
+    wallets.find(wallet => wallet.name === name) ?? null;
+  return toUser(raw, {
+    allowanceWallet: byName('Allowance'),
+    privateWallet: byName('Private'),
+  });
 };
 
-// Note: LNbits v1+ core API doesn't provide user updates with custom metadata.
-// User updates must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
-const updateUser = async (
-  adminKey: string,
-  userId: string,
-  extra: { [key: string]: string }, // Ensure extra is an object, not a string
-): Promise<User | null> => {
-  // LNbits v1+ core API doesn't support user updates with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'updateUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
-};
-
-// Note: LNbits v1+ core API uses /api/v1/wallet endpoint for wallet creation
-// Wallet creation is now done through the core API, not UserManager
 const createWallet = async (
-  adminKey: string,
+  _adminKey: string,
   userId: string,
   walletName: string,
-): Promise<Wallet | null> => {
-
-  try {
-    const { userName, password } = lnbitsCredentials();
-    const accessToken = await getAccessToken(userName, password);
-
-    // Prepare the request body
-    const requestBody = {
-      user_id: userId,
-      wallet_name: walletName,
-    };
-
-    const response = await fetch(`${lnbitsUrl()}/api/v1/wallet`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error creating wallet (status: ${response.status})`);
-    }
-
-    const data = await response.json();
-
-    // Await the wallet promises
-    const walletWithBalance = await getWalletById(data.user, data.id);
-
-    // Map the wallet to match the Wallet interface
-    let walletData: Wallet = {
-      id: data.id,
-      admin: data.admin,
-      name: data.name,
-      adminkey: data.adminkey,
-      user: data.user,
-      inkey: data.inkey,
-      balance_msat: walletWithBalance?.balance_msat,
-      deleted: walletWithBalance?.deleted,
-    };
-
-
-    return walletData;
-  } catch (error) {
-    console.error(error);
-    return error;
+): Promise<Wallet> => {
+  // Admin creates the wallet under the target user. POST /api/v1/wallet ignores
+  // user_id and creates under the caller, so the per-user route is required.
+  const response = await adminFetch(`/users/api/v1/user/${userId}/wallet`, {
+    method: 'POST',
+    body: JSON.stringify({ name: walletName }),
+  });
+  if (!response.ok) {
+    throw new Error(`Error creating wallet (status: ${response.status})`);
   }
+  const data = await response.json();
+  const walletWithBalance = await getWalletById(data.user, data.id);
+  return {
+    id: data.id,
+    admin: data.admin,
+    name: data.name,
+    adminkey: data.adminkey,
+    user: data.user,
+    inkey: data.inkey,
+    // A freshly created wallet is empty and live; fall back to that if the
+    // balance lookup can't resolve it yet (eventual consistency).
+    balance_msat: walletWithBalance?.balance_msat ?? 0,
+    deleted: walletWithBalance?.deleted ?? false,
+  };
 };
 
 const getWalletDetails = async (inKey: string, walletId: string) => {
@@ -851,7 +886,6 @@ export {
   getWallets,
   createUser,
   getUser,
-  updateUser,
   getUsers,
   getWalletName,
   getWalletById,

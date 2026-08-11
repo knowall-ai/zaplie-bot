@@ -3,7 +3,14 @@
 import { expect, describe, test, jest, beforeEach } from '@jest/globals';
 import { ZapLedger, zapKey } from '../services/zapLedger';
 import { PaymentOutcomeUnknownError } from './sendZapCommand';
-import { processZapRecipient } from './zapRecipient';
+import { validateZapSubmit } from './zapBudget';
+import {
+  getPendingRecipientIds,
+  hasUnknownRecipientOutcome,
+  normalizeRecipientIds,
+  processZapRecipient,
+  validateSelfZap,
+} from './zapRecipient';
 
 const ENTRY_KEY = zapKey({
   tenantId: 'tenant-1',
@@ -70,6 +77,31 @@ describe('processZapRecipient', () => {
     expect(ledger.get(ENTRY_KEY)).toBeUndefined();
   });
 
+  test('a forged self-zap is rejected before the payment call', async () => {
+    const pay = jest.fn(okPay);
+
+    await expect(
+      run(ledger, {
+        getReceiver: async () => ({ ...receiverOk, id: 'sender-1' }),
+        validateReceiver: receiver =>
+          validateSelfZap({ id: 'sender-1' }, receiver),
+        pay,
+      }),
+    ).resolves.toEqual({
+      status: 'failed',
+      label: 'Alice (you cannot zap yourself)',
+    });
+
+    expect(pay).not.toHaveBeenCalled();
+    expect(ledger.get(ENTRY_KEY)).toBeUndefined();
+    expect(
+      validateSelfZap(
+        { aadObjectId: 'aad-sender' },
+        { aadObjectId: 'aad-sender' },
+      ),
+    ).toBe('you cannot zap yourself');
+  });
+
   test('an insufficient balance frees the slot so a retry can pay', async () => {
     await expect(
       run(ledger, {
@@ -93,6 +125,9 @@ describe('processZapRecipient', () => {
     ).resolves.toMatchObject({ status: 'needs-checking' });
 
     expect(ledger.get(ENTRY_KEY)?.state).toBe('unknown');
+    expect(
+      hasUnknownRecipientOutcome(ledger, ['alice'], () => ENTRY_KEY),
+    ).toBe(true);
 
     const retryPay = jest.fn(okPay);
     await expect(run(ledger, { pay: retryPay })).resolves.toEqual({ status: 'skipped' });
@@ -105,6 +140,53 @@ describe('processZapRecipient', () => {
     const secondPay = jest.fn(okPay);
     await expect(run(ledger, { pay: secondPay })).resolves.toEqual({ status: 'skipped' });
     expect(secondPay).not.toHaveBeenCalled();
+  });
+
+  test('a partial retry budgets only recipients that are still pending', async () => {
+    await run(ledger);
+    const entryKey = (recipientId: string) =>
+      zapKey({
+        tenantId: 'tenant-1',
+        conversationId: 'conv-1',
+        cardId: 'card-1',
+        recipientId,
+      });
+
+    const pending = getPendingRecipientIds(
+      ledger,
+      ['alice', 'bob'],
+      entryKey,
+    );
+
+    expect(pending).toEqual(['bob']);
+    expect(validateZapSubmit('100', pending.length, 100, 'Sats')).toBe(100);
+
+    const retryPay = jest.fn(async () => ({ paymentHash: 'hash-bob' }));
+    for (const recipientId of pending) {
+      await processZapRecipient({
+        ledger,
+        entryKey: entryKey(recipientId),
+        recipientId,
+        getReceiver: async () => ({
+          displayName: 'Bob',
+          privateWallet: { id: 'wallet-bob' },
+        }),
+        pay: retryPay,
+      });
+    }
+
+    expect(retryPay).toHaveBeenCalledTimes(1);
+    expect(ledger.get(entryKey('alice'))?.paymentHash).toBe('hash-1');
+    expect(ledger.get(entryKey('bob'))?.paymentHash).toBe('hash-bob');
+  });
+
+  test('normalizes and de-duplicates untrusted card recipient ids', () => {
+    expect(normalizeRecipientIds([' alice ', 'alice', '', 42, 'bob'])).toEqual([
+      'alice',
+      'bob',
+    ]);
+    expect(normalizeRecipientIds('alice, bob,alice')).toEqual(['alice', 'bob']);
+    expect(normalizeRecipientIds({ recipient: 'alice' })).toEqual([]);
   });
 
   test('a card update failure after payment does not re-enable the payment', async () => {

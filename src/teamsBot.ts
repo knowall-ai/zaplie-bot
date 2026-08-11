@@ -12,7 +12,14 @@ import {
 import {  SSOCommandMap } from './commands/SSOCommandMap';
 import { SendZapCommand, SendZap } from './commands/sendZapCommand';
 import { ZapLedger, zapKey } from './services/zapLedger';
-import { processZapRecipient } from './commands/zapRecipient';
+import {
+  getPendingRecipientIds,
+  hasUnknownRecipientOutcome,
+  normalizeRecipientIds,
+  processZapRecipient,
+  validateSelfZap,
+} from './commands/zapRecipient';
+import { validateZapSubmit } from './commands/zapBudget';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
@@ -114,37 +121,79 @@ export class TeamsBot extends TeamsActivityHandler {
               recipientId,
             });
 
-          const currentUser = context.turnState.get('user');
-    
-          let receiverIds = context.activity.value.zapReceiverId;
-          if (typeof receiverIds === 'string' && receiverIds.indexOf(',') > -1) {
-            receiverIds = receiverIds.split(',').map((id: string) => id.trim());
-          } else if (typeof receiverIds === 'string') {
-            receiverIds = [receiverIds];
-          }
-    
+          const currentUser: User | undefined = context.turnState.get('user');
+          const receiverIds = normalizeRecipientIds(
+            context.activity.value.zapReceiverId,
+          );
+
           const zapMessage = context.activity.value.zapMessage;
           const zapAmount = context.activity.value.zapAmount;
-    
-          if (!currentUser.allowanceWallet.id) {
+
+          const sendingWallet = currentUser?.allowanceWallet;
+          if (!currentUser || (!currentUser.id && !currentUser.aadObjectId)) {
+            throw new Error(
+              'Could not verify your sender identity, so no zaps were sent.',
+            );
+          }
+          if (
+            !sendingWallet?.id ||
+            !sendingWallet.inkey ||
+            !sendingWallet.adminkey
+          ) {
             throw new Error('No sending wallet found.');
           }
-    
+
+          if (receiverIds.length === 0) {
+            throw new Error('No valid recipients were selected, so no zaps were sent.');
+          }
+
+          if (currentUser.id && receiverIds.includes(currentUser.id)) {
+            throw new Error('You cannot zap yourself, so no zaps were sent.');
+          }
+
+          const pendingReceiverIds = getPendingRecipientIds(
+            this.zapLedger,
+            receiverIds,
+            keyFor,
+          );
+          const handledSubmitMessage = () =>
+            hasUnknownRecipientOutcome(
+              this.zapLedger,
+              receiverIds,
+              keyFor,
+            )
+              ? 'One or more payments from this zap still need checking, so nothing was retried.'
+              : 'That zap card was already submitted, so nothing was sent again.';
+          if (pendingReceiverIds.length === 0) {
+            await context.sendActivity(handledSubmitMessage());
+            return;
+          }
+
+          const liveBalance = await getWalletBalance(sendingWallet.inkey);
+          const amount = validateZapSubmit(
+            zapAmount,
+            pendingReceiverIds.length,
+            liveBalance,
+            globalRewardName,
+          );
+
           let successfulRecipients: string[] = [];
           const alreadyHandled: string[] = [];
     
-          for (const recId of receiverIds) {
+          for (const recId of pendingReceiverIds) {
             const outcome = await processZapRecipient({
               ledger: this.zapLedger,
               entryKey: keyFor(recId),
               recipientId: recId,
               getReceiver: () => getUser(adminKey, recId),
+              validateReceiver: receiver =>
+                validateSelfZap(currentUser, receiver),
               pay: receiver =>
                 SendZap(
                   currentUser,
                   receiver as User,
                   zapMessage,
-                  zapAmount,
+                  amount,
                   context,
                   false,
                   globalRewardName,
@@ -164,10 +213,8 @@ export class TeamsBot extends TeamsActivityHandler {
 
           // Every recipient was skipped, so this is a duplicate submit and
           // there is nothing new to report.
-          if (alreadyHandled.length === receiverIds.length) {
-            await context.sendActivity(
-              'That zap card was already submitted, so nothing was sent again.',
-            );
+          if (alreadyHandled.length === pendingReceiverIds.length) {
+            await context.sendActivity(handledSubmitMessage());
             return;
           }
 
@@ -188,8 +235,7 @@ export class TeamsBot extends TeamsActivityHandler {
           const remainingBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
           console.log('Remaining Balance:', remainingBalance);
           
-          // Assuming zapAmount is the amount sent to each receiver
-          const totalAmountSent = successfulRecipients.length * zapAmount;
+          const totalAmountSent = successfulRecipients.length * amount;
 
           // Update adaptive card to read-only with list of recipients
           const updatedCard = {
@@ -224,7 +270,7 @@ export class TeamsBot extends TeamsActivityHandler {
               },
               {
                 type: 'TextBlock',
-                text: `**Amount (${globalRewardName}):** ${zapAmount}`,
+                text: `**Amount (${globalRewardName}):** ${amount}`,
                 wrap: true
               },
               
@@ -249,7 +295,7 @@ export class TeamsBot extends TeamsActivityHandler {
           updatedMessage.id = context.activity.replyToId;
           await context.updateActivity(updatedMessage);
           await context.sendActivity(
-            `Awesome! You sent ${context.activity.value.zapAmount} ${globalRewardName} to your colleague with a zap!`,
+            `Awesome! You sent ${amount} ${globalRewardName} to your colleague with a zap!`,
           );
 
         }
