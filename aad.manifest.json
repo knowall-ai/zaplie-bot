@@ -98,8 +98,12 @@
           "type": "Web"
         },
         {
-            "url": "http://localhost:3000",
-            "type": "spa"
+            "url": "https://localhost:3000",
+            "type": "Spa"
+        },
+        {
+            "url": "https://localhost:3000/auth-end",
+            "type": "Spa"
         }
     ]
 }
