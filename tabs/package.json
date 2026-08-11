@@ -38,6 +38,7 @@
     "server": "node backend/server.js",
     "client": "react-scripts start",
     "build": "react-scripts build",
+    "test:backend": "node --test backend/*.test.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

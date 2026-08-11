@@ -1,9 +1,9 @@
 // filepath: tabs/backend/identityRoutes.js
 // "Connect GitHub" self-linking flow. Person canonical = LNbits user, anchored
 // to aadObjectId; GitHub is an optional linked identity, matched by numeric id
-// only (never the renamable login). See docs/wilmer/implementacion/identidad/.
+// only (never the renamable login). See docs/identity-connections.md.
 const express = require('express');
-const authMiddleware = require('./authMiddleware');
+const internalAuthMiddleware = require('./internalAuthMiddleware');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
 const { signState, verifyState } = require('./githubOAuthState');
 const identityStore = require('./identityStore');
@@ -150,9 +150,9 @@ router.get('/mine', async (req, res) => {
   res.json({ identities: identityStore.findByPersonAad(oid) });
 });
 
-// GET /api/identities/resolve — internal, called by the bot (same weak
-// placeholder-token pattern as /api/reward-amounts; known limitation, issue #171).
-router.get('/resolve', authMiddleware, (req, res) => {
+// GET /api/identities/resolve — internal, called by the bot with the shared
+// TAB_BACKEND_TOKEN. Browser clients must never receive this credential.
+router.get('/resolve', internalAuthMiddleware, (req, res) => {
   const { provider, providerId } = req.query;
   if (typeof provider !== 'string' || typeof providerId !== 'string') {
     res.status(400).json({ error: 'provider and providerId are required' });

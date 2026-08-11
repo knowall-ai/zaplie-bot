@@ -28,6 +28,7 @@
 .title {
   width: 100%; /* Make title width responsive */
   height: auto; /* Allow height to adjust based on content */
+  margin: 0;
   font-family: 'Inter';
   font-style: normal;
   font-weight: 700;

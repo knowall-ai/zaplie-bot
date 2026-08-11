@@ -2,13 +2,30 @@ import { resolvePersonAadByGithubId } from './identityService';
 import { payReward } from './rewardsService';
 import { getUserWallets, getUsers, createInvoice, payInvoice } from './lnbitsService';
 import { createPendingReward } from './pendingRewardsService';
-import { expect, describe, test, beforeEach, jest } from '@jest/globals';
+import {
+  afterAll,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 
 jest.mock('./lnbitsService');
 jest.mock('./pendingRewardsService');
 
 const mockFetch = jest.fn<typeof fetch>();
 global.fetch = mockFetch as unknown as typeof fetch;
+
+const originalTabBackendToken = process.env.TAB_BACKEND_TOKEN;
+
+afterAll(() => {
+  if (originalTabBackendToken === undefined) {
+    delete process.env.TAB_BACKEND_TOKEN;
+  } else {
+    process.env.TAB_BACKEND_TOKEN = originalTabBackendToken;
+  }
+});
 
 const mockedGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
 const mockedGetUserWallets = getUserWallets as jest.MockedFunction<
@@ -46,6 +63,7 @@ const resolvedUser: User = {
 describe('resolvePersonAadByGithubId', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
   });
 
   test('resolve happy path: returns the personAad for a linked GitHub id', async () => {
@@ -61,7 +79,7 @@ describe('resolvePersonAadByGithubId', () => {
         '/identities/resolve?provider=github&providerId=12345678',
       ),
       expect.objectContaining({
-        headers: { Authorization: 'your-secret-token' },
+        headers: { Authorization: 'test-internal-token' },
       }),
     );
   });
@@ -86,6 +104,15 @@ describe('resolvePersonAadByGithubId', () => {
     await expect(resolvePersonAadByGithubId('12345678')).rejects.toThrow(
       'identity resolve failed: 500',
     );
+  });
+
+  test('fails before fetching when the internal token is missing', async () => {
+    delete process.env.TAB_BACKEND_TOKEN;
+
+    await expect(resolvePersonAadByGithubId('12345678')).rejects.toThrow(
+      'TAB_BACKEND_TOKEN',
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
@@ -114,6 +141,7 @@ describe('payReward recipientId resolution', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-adminkey';
     process.env.LNBITS_ADMINKEY = 'lnbits-adminkey';
   });

@@ -35,9 +35,12 @@ Set these environment variables on the bot (alongside the existing LNbits ones):
 | `REWARDS_API_KEY` | Shared secret the automation must send in `X-Api-Key`. Endpoint returns 503 when unset. |
 | `REWARDS_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). |
 | `WEBSITE_API_URL` | Base URL of the tabs backend API used for identity resolution, pending rewards, and reward-amount configuration. |
+| `TAB_BACKEND_TOKEN` | Separate server-to-server secret used for internal identity resolution and pending-reward writes. Configure the same value on both processes and never expose it to browser code. |
 | `REWARDS_MAX_AMOUNT_SATS` | Optional per-reward cap. Defaults to 10000 (the same ceiling as the interactive zap card). Requests above it are rejected with 400, whether the amount came from the caller or from the portal config. |
 
-Generate the API key with e.g. `openssl rand -hex 32`.
+Generate `REWARDS_API_KEY` and `TAB_BACKEND_TOKEN` independently with e.g.
+`openssl rand -hex 32`. See [Identity connections](../identity-connections.md)
+for the tracked Entra, GitHub OAuth, and bot-to-backend setup.
 
 ### Treasury wallet
 

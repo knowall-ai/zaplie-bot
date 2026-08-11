@@ -1,19 +1,17 @@
-// filepath: /c:/projects/ZapVibes/tabs/backend/authMiddleware.js
+// Legacy browser/API authentication. Do not add TAB_BACKEND_TOKEN here: this
+// middleware is still called from browser code and must migrate to verified
+// MSAL identity and roles separately.
 const authMiddleware = (req, res, next) => {
-    // Example: Check for a token in the request headers
-    const token = req.headers['authorization'];
-  
-    if (!token) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-  
-    // Verify the token (this is a placeholder, replace with actual token verification logic)
-    if (token !== 'your-secret-token') {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-  
-    // If token is valid, proceed to the next middleware or route handler
-    next();
-  };
-  
-  module.exports = authMiddleware;
+  const token = req.headers['authorization'];
+  if (!token) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (token !== 'your-secret-token') {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  next();
+};
+
+module.exports = authMiddleware;

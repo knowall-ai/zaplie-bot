@@ -1,14 +1,13 @@
-const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
+import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
-// Placeholder token matches the tab backend's auth (known limitation, issue #171).
 export async function resolvePersonAadByGithubId(
   githubId: string,
 ): Promise<string | null> {
   const response = await fetch(
-    `${API_URL}/identities/resolve?provider=github&providerId=${encodeURIComponent(
+    `${tabBackendApiUrl()}/identities/resolve?provider=github&providerId=${encodeURIComponent(
       githubId,
     )}`,
-    { headers: { Authorization: 'your-secret-token' } },
+    { headers: { Authorization: tabBackendAuthHeader() } },
   );
   if (response.status === 404) {
     return null;
