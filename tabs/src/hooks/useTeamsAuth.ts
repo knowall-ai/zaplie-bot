@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
-import * as microsoftTeams from '@microsoft/teams-js';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { clearApiCache } from '../services/lnbitsServiceLocal';
+import { teamsContextQueryOptions } from '../services/teamsContextService';
 
 interface UseTeamsAuthReturn {
   isInTeams: boolean;
@@ -18,42 +19,14 @@ interface UseTeamsAuthReturn {
  */
 export const useTeamsAuth = (): UseTeamsAuthReturn => {
   const { instance, accounts, inProgress } = useMsal();
-  const [isInTeams, setIsInTeams] = useState<boolean>(false);
-  const [isTeamsInitializing, setIsTeamsInitializing] = useState<boolean>(true);
+  const {
+    data: isInTeams = false,
+    isPending: isTeamsInitializing,
+  } = useQuery(teamsContextQueryOptions);
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
   // Ref to prevent race conditions in concurrent React mode
   const logoutInProgressRef = useRef<boolean>(false);
-
-  // Initialize Teams SDK and detect if running in Teams
-  useEffect(() => {
-    let mounted = true;
-
-    const initializeTeams = async () => {
-      try {
-        await microsoftTeams.app.initialize();
-        const context = await microsoftTeams.app.getContext();
-        if (context && mounted) {
-          setIsInTeams(true);
-        }
-      } catch {
-        // Not running in Teams context - this is expected for web browser
-        if (mounted) {
-          setIsInTeams(false);
-        }
-      } finally {
-        if (mounted) {
-          setIsTeamsInitializing(false);
-        }
-      }
-    };
-
-    initializeTeams();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const handleLogout = useCallback(async () => {
     // Check if MSAL has an interaction in progress
