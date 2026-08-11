@@ -157,10 +157,11 @@ async function resolveRecipientUserId(
   if (!personAad) {
     return null;
   }
-  const users = await getUsers(process.env.LNBITS_ADMINKEY as string, {
+  const adminKey = requiredEnv('LNBITS_ADMINKEY');
+  const users = await getUsers(adminKey, {
     aadObjectId: personAad,
   });
-  if (users.length === 0) {
+  if (!Array.isArray(users) || users.length === 0) {
     throw new Error(`linked person ${personAad} has no LNbits user`);
   }
   return users[0].id;
@@ -184,10 +185,7 @@ export async function payReward(
     return { pending: true };
   }
 
-  const adminKey = process.env.LNBITS_ADMINKEY;
-  if (!adminKey) {
-    throw new Error('LNBITS_ADMINKEY is not set');
-  }
+  const adminKey = requiredEnv('LNBITS_ADMINKEY');
 
   // getUserWallets ignores adminKey; it authenticates via LNBITS_USERNAME/PASSWORD
   const wallets = await getUserWallets(adminKey, userId);

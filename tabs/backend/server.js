@@ -63,8 +63,8 @@ app.post('/api/reward-name', (req, res) => {
   }
 });
 
-// Endpoint the bot posts to when a reward's recipient can't be resolved to a
-// Zaplie person yet (identity graph and env-map fallback both miss).
+// Endpoint the bot posts to when the identity graph has no GitHub link for a
+// reward recipient yet.
 app.post('/api/pending-rewards', (req, res) => {
   const { provider, providerId, recipientLabel, amountSats, reason, source } = req.body || {};
   if (

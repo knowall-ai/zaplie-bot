@@ -1,6 +1,10 @@
-import React, { FunctionComponent, useEffect, useState } from 'react';
+import React, {
+  FunctionComponent,
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import { useMsal } from '@azure/msal-react';
-import styles from './setting.module.css';
 import connectionStyles from './connections.module.css';
 import GithubIcon from '../images/GitHub.svg';
 import { loginRequest } from '../services/authConfig';
@@ -9,8 +13,7 @@ import {
   getGithubAuthorizeUrl,
   LinkedIdentity,
 } from '../services/identityService';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast } from 'react-toastify';
 
 // Strips the ?github=... return param GitHub's OAuth callback redirects with,
 // after surfacing it as a toast, so a page refresh doesn't re-show it.
@@ -22,7 +25,7 @@ const useGithubReturnStatus = () => {
       return;
     }
     if (status === 'connected') {
-      toast.success('GitHub connected successfully!');
+      toast.success('GitHub connected.');
     } else if (status === 'conflict') {
       toast.error('That GitHub account is already linked to another person.');
     } else {
@@ -40,40 +43,51 @@ const useGithubReturnStatus = () => {
 
 const ConnectionsSetting: FunctionComponent = () => {
   const { instance, accounts } = useMsal();
+  const account = accounts[0];
   const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
   useGithubReturnStatus();
 
-  useEffect(() => {
-    const account = accounts[0];
+  const loadIdentities = useCallback(async () => {
+    setLoadError(false);
     if (!account) {
+      setIdentities([]);
       setLoading(false);
       return;
     }
-    const load = async () => {
-      try {
-        const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account });
-        const mine = await getMyIdentities(tokenResponse.idToken);
-        setIdentities(mine);
-      } catch (error) {
-        console.error('Error fetching connections:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [accounts, instance]);
+    setLoading(true);
+    try {
+      const tokenResponse = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account,
+      });
+      const mine = await getMyIdentities(tokenResponse.idToken);
+      setIdentities(mine);
+    } catch (error) {
+      console.error('Error fetching connections:', error);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [account, instance]);
+
+  useEffect(() => {
+    void loadIdentities();
+  }, [loadIdentities]);
 
   const handleConnect = async () => {
-    const account = accounts[0];
     if (!account) {
       return;
     }
     setConnecting(true);
     try {
-      const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account });
+      const tokenResponse = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account,
+      });
       const authorizeUrl = await getGithubAuthorizeUrl(tokenResponse.idToken);
       window.location.href = authorizeUrl;
     } catch (error) {
@@ -83,31 +97,108 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
   };
 
-  const githubIdentity = identities.find(identity => identity.provider === 'github');
+  const handleRetry = () => {
+    void loadIdentities();
+  };
+
+  const githubIdentity = identities.find(
+    identity => identity.provider === 'github',
+  );
 
   return (
-    <div className={styles.currencySetting}>
-      <label className={styles.label}>Connections</label>
-      <div className={connectionStyles.row}>
-        <img src={GithubIcon} alt="GitHub" className={connectionStyles.icon} />
-        {loading ? (
-          <span className={connectionStyles.status}>Loading...</span>
-        ) : githubIdentity ? (
-          <span className={connectionStyles.connected}>
-            Connected as @{githubIdentity.providerHandle}
-          </span>
-        ) : (
-          <button
-            onClick={handleConnect}
-            disabled={connecting}
-            className={connectionStyles.connectButton}
-          >
-            {connecting ? 'Redirecting…' : 'Connect GitHub'}
-          </button>
-        )}
+    <section
+      className={connectionStyles.section}
+      aria-labelledby="connections-heading"
+    >
+      <div className={connectionStyles.sectionHeader}>
+        <div>
+          <h2 id="connections-heading" className={connectionStyles.heading}>
+            Connections
+          </h2>
+          <p className={connectionStyles.intro}>
+            Link accounts so automated rewards reach the right Zaplie profile.
+          </p>
+        </div>
       </div>
-      <ToastContainer />
-    </div>
+
+      <div className={connectionStyles.card} aria-busy={loading}>
+        <div className={connectionStyles.provider}>
+          <span className={connectionStyles.iconFrame} aria-hidden="true">
+            <img src={GithubIcon} alt="" className={connectionStyles.icon} />
+          </span>
+
+          <div className={connectionStyles.providerCopy}>
+            <h3 className={connectionStyles.providerName}>GitHub</h3>
+            {loading ? (
+              <div className={connectionStyles.loadingLines} aria-hidden="true">
+                <span className={connectionStyles.loadingLine} />
+                <span
+                  className={`${connectionStyles.loadingLine} ${connectionStyles.loadingLineShort}`}
+                />
+              </div>
+            ) : loadError ? (
+              <p className={connectionStyles.errorText} role="alert">
+                We couldn't load this connection. Try again.
+              </p>
+            ) : githubIdentity ? (
+              <p
+                className={connectionStyles.accountHandle}
+                title={`@${githubIdentity.providerHandle}`}
+              >
+                Connected as @{githubIdentity.providerHandle}
+              </p>
+            ) : (
+              <p className={connectionStyles.providerDescription}>
+                Connect GitHub to receive rewards from pull requests and other
+                automations.
+              </p>
+            )}
+            {loading ? (
+              <span className={connectionStyles.visuallyHidden} role="status">
+                Loading GitHub connection…
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className={connectionStyles.actions}>
+          {loading ? (
+            <span
+              className={connectionStyles.buttonPlaceholder}
+              aria-hidden="true"
+            />
+          ) : loadError ? (
+            <button
+              type="button"
+              onClick={handleRetry}
+              className={connectionStyles.secondaryButton}
+            >
+              Retry
+            </button>
+          ) : githubIdentity ? (
+            <span className={connectionStyles.connectedBadge}>
+              <span aria-hidden="true">✓</span>
+              Connected
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={connecting}
+              aria-busy={connecting}
+              className={connectionStyles.connectButton}
+            >
+              {connecting ? 'Redirecting…' : 'Connect GitHub'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <p className={connectionStyles.identityNote}>
+        Zaplie matches your stable GitHub account ID, so changing your username
+        won't interrupt reward routing.
+      </p>
+    </section>
   );
 };
 

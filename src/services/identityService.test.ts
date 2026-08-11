@@ -192,6 +192,29 @@ describe('payReward recipientId resolution', () => {
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 
+  test('throws a clear error when the LNbits user lookup returns null', async () => {
+    linkResolves();
+    mockedGetUsers.mockResolvedValue(null);
+
+    await expect(payReward(rewardWithRecipientId)).rejects.toThrow(
+      'has no LNbits user',
+    );
+    expect(mockedGetUserWallets).not.toHaveBeenCalled();
+    expect(mockedPayInvoice).not.toHaveBeenCalled();
+  });
+
+  test('validates LNBITS_ADMINKEY before looking up an LNbits user', async () => {
+    linkResolves();
+    delete process.env.LNBITS_ADMINKEY;
+
+    await expect(payReward(rewardWithRecipientId)).rejects.toThrow(
+      'LNBITS_ADMINKEY is not set',
+    );
+    expect(mockedGetUsers).not.toHaveBeenCalled();
+    expect(mockedGetUserWallets).not.toHaveBeenCalled();
+    expect(mockedPayInvoice).not.toHaveBeenCalled();
+  });
+
   test('rejects a reward with no recipientId with a 400', async () => {
     const { recipientId: _omit, ...withoutId } = rewardWithRecipientId;
 

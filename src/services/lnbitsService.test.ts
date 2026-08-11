@@ -1,79 +1,184 @@
-// lnbitsService.test.ts
 import {
-    getAccessToken,
-    createInvoice,
-    getWallets,
-    getUserWallets,
-    payInvoice
-  } from './lnbitsService'; // Adjust import as necessary
-  
-  import { 
-    expect, 
-    describe, 
-    test,
-    beforeEach,
-    jest
-   } from '@jest/globals';
-  
-  // Mock the necessary dependencies (like fetch)
-  jest.mock('./lnbitsService');
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 
-  const mockGetAccessToken = getAccessToken as jest.MockedFunction<typeof getAccessToken>;
-  const mockCreateInvoice = createInvoice as jest.MockedFunction<typeof createInvoice>;
-  const mockGetWallets = getWallets as jest.MockedFunction<typeof getWallets>;
-  const mockGetUserWallets = getUserWallets as jest.MockedFunction<typeof getUserWallets>;
-  const mockPayInvoice = payInvoice as jest.MockedFunction<typeof payInvoice>;
+const mockFetch = jest.fn<typeof fetch>();
+let lnbitsService: typeof import('./lnbitsService');
 
-  describe('LNbitsService tests', () => {
-    const mockAccessToken = 'testAccessToken';
-    const mockAdminKey = 'adminKey';
-    const mockInKey = 'inKey';
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === 'content-type' ? 'application/json' : null,
+    },
+    json: async () => body,
+  } as unknown as Response;
+}
 
-    beforeEach(() => {
-      jest.clearAllMocks();
-    });
+describe('lnbitsService HTTP behavior', () => {
+  beforeEach(async () => {
+    jest.resetModules();
+    mockFetch.mockReset();
+    global.fetch = mockFetch as unknown as typeof fetch;
+    process.env.LNBITS_NODE_URL = 'https://lnbits.test';
+    process.env.LNBITS_USERNAME = 'service-user';
+    process.env.LNBITS_PASSWORD = 'service-password';
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    lnbitsService = await import('./lnbitsService');
+  });
 
-    test('getAccessToken should return cached token', async () => {
-      mockGetAccessToken.mockResolvedValue(mockAccessToken);
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete process.env.LNBITS_NODE_URL;
+    delete process.env.LNBITS_USERNAME;
+    delete process.env.LNBITS_PASSWORD;
+  });
 
-      const token = await getAccessToken('user', 'pass');
-      expect(token).toBe(mockAccessToken);
-    });
+  test('gets an access token from LNbits and reuses the in-memory cache', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ access_token: 'access-token' }),
+    );
 
-    test('createInvoice should return payment request', async () => {
-      const mockPaymentRequest = 'lnbc1...';
-      mockCreateInvoice.mockResolvedValue(mockPaymentRequest);
+    await expect(
+      lnbitsService.getAccessToken('service-user', 'service-password'),
+    ).resolves.toBe('access-token');
+    await expect(
+      lnbitsService.getAccessToken('service-user', 'service-password'),
+    ).resolves.toBe('access-token');
 
-      const result = await createInvoice(mockInKey, 'walletId', 1000, 'test', {});
-      expect(result).toBe(mockPaymentRequest);
-      expect(createInvoice).toHaveBeenCalledWith(mockInKey, 'walletId', 1000, 'test', {});
-    });
-
-    test('getWallets should return filtered wallet data', async () => {
-      const mockWallets = [{ id: '1', name: 'testWallet' }] as unknown as Wallet[];
-      mockGetWallets.mockResolvedValue(mockWallets);
-
-      const wallets = await getWallets(mockAdminKey);
-      expect(wallets).toEqual(mockWallets);
-      expect(getWallets).toHaveBeenCalledWith(mockAdminKey);
-    });
-
-    test('getUserWallets should return user wallets', async () => {
-      const mockUserWallets = [{ id: 'wallet1', name: 'userWallet' }] as unknown as Wallet[];
-      mockGetUserWallets.mockResolvedValue(mockUserWallets);
-
-      const result = await getUserWallets(mockAdminKey, 'userId');
-      expect(result).toEqual(mockUserWallets);
-      expect(getUserWallets).toHaveBeenCalledWith(mockAdminKey, 'userId');
-    });
-
-    test('payInvoice should resolve payment', async () => {
-      const mockPaymentResult = { payment_hash: '123abc' };
-      mockPayInvoice.mockResolvedValue(mockPaymentResult);
-
-      const result = await payInvoice(mockAdminKey, 'paymentRequest', {});
-      expect(result).toEqual(mockPaymentResult);
-      expect(payInvoice).toHaveBeenCalledWith(mockAdminKey, 'paymentRequest', {});
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith('https://lnbits.test/api/v1/auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        username: 'service-user',
+        password: 'service-password',
+      }),
     });
   });
-  
+
+  test('creates an invoice through the LNbits payments endpoint', async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ payment_request: 'lnbc-payment-request' }),
+    );
+
+    await expect(
+      lnbitsService.createInvoice(
+        'invoice-key',
+        'wallet-1',
+        210,
+        'GitHub reward',
+        { source: 'github' },
+      ),
+    ).resolves.toBe('lnbc-payment-request');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://lnbits.test/api/v1/payments',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': 'invoice-key',
+        },
+        body: JSON.stringify({
+          out: false,
+          amount: 210,
+          memo: 'GitHub reward',
+          extra: { source: 'github' },
+        }),
+      },
+    );
+  });
+
+  test('loads a user wallet collection and removes deleted wallets', async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'access-token' }))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: 'wallet-active',
+            name: 'Private',
+            user: 'user-1',
+            adminkey: 'admin-key',
+            inkey: 'invoice-key',
+            balance_msat: 210000,
+            deleted: false,
+          },
+          {
+            id: 'wallet-deleted',
+            name: 'Old wallet',
+            user: 'user-1',
+            adminkey: 'old-admin-key',
+            inkey: 'old-invoice-key',
+            balance_msat: 0,
+            deleted: true,
+          },
+        ]),
+      );
+
+    await expect(
+      lnbitsService.getUserWallets('unused-admin-key', 'user-1'),
+    ).resolves.toEqual([
+      {
+        id: 'wallet-active',
+        admin: null,
+        name: 'Private',
+        user: 'user-1',
+        adminkey: 'admin-key',
+        inkey: 'invoice-key',
+        balance_msat: 210000,
+        deleted: false,
+      },
+    ]);
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'https://lnbits.test/users/api/v1/user/user-1/wallet',
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer access-token',
+        },
+      },
+    );
+  });
+
+  test('pays an invoice with the treasury key and preserves payment metadata', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ payment_hash: 'hash-1' }));
+
+    await expect(
+      lnbitsService.payInvoice('treasury-key', 'lnbc-payment-request', {
+        source: 'github',
+      }),
+    ).resolves.toEqual({ payment_hash: 'hash-1' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://lnbits.test/api/v1/payments',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': 'treasury-key',
+        },
+        body: JSON.stringify({
+          out: true,
+          bolt11: 'lnbc-payment-request',
+          extra: { source: 'github' },
+        }),
+      },
+    );
+  });
+});

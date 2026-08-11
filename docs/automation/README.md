@@ -6,16 +6,19 @@ flow: **pay a reward when a GitHub pull request is merged**, delivered as an
 Azure Logic App (Consumption) ARM template that each organisation deploys and
 customises in the workflow designer (trigger conditions, amounts, extra steps).
 
-```
-GitHub webhook ──► Logic App (Request trigger)
-                     │ condition: action == 'closed' && pull_request.merged == true
-                     ▼
-                   HTTP POST ► Zaplie POST /api/v1/rewards  (X-Api-Key)
-                                 │ validates key + payload
-                                 │ maps GitHub login → LNbits user (explicit allowlist)
-                                 │ pays from the "Automation" treasury wallet
-                                 ▼
-                               sats land in the recipient's Private wallet
+```text
+GitHub webhook --> Logic App (Request trigger)
+                    | condition: action == 'closed' && pull_request.merged == true
+                    v
+                  HTTP POST --> Zaplie POST /api/v1/rewards (X-Api-Key)
+                                  | validates key + payload
+                                  | resolves recipientId (stable GitHub numeric id)
+                                  | through the identity graph
+                                  |
+                                  +-- linked --> pays from the Automation treasury
+                                  |               to the recipient's Private wallet
+                                  |
+                                  `-- unlinked -> records a pending reward for later
 ```
 
 The Logic App uses the generic **Request trigger** instead of the native GitHub
@@ -31,7 +34,7 @@ Set these environment variables on the bot (alongside the existing LNbits ones):
 | --- | --- |
 | `REWARDS_API_KEY` | Shared secret the automation must send in `X-Api-Key`. Endpoint returns 503 when unset. |
 | `REWARDS_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). |
-| `REWARDS_GITHUB_USER_MAP` | JSON object mapping GitHub logins to LNbits user ids, e.g. `{"octocat":"3fa85f64..."}`. Unmapped logins are rejected with 404 — rewards are never paid on a guessed identity. |
+| `WEBSITE_API_URL` | Base URL of the tabs backend API used for identity resolution, pending rewards, and reward-amount configuration. |
 | `REWARDS_MAX_AMOUNT_SATS` | Optional per-reward cap. Defaults to 10000 (the same ceiling as the interactive zap card). Requests above it are rejected with 400, whether the amount came from the caller or from the portal config. |
 
 Generate the API key with e.g. `openssl rand -hex 32`.
@@ -116,7 +119,10 @@ this payload — GitHub webhooks cannot target the endpoint directly):
 curl -s -X POST https://<bot-domain>/api/v1/rewards \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $REWARDS_API_KEY" \
-  -d '{"recipient":"octocat","eventType":"githubPrMerged","reason":"GitHub: PR #1 merged","source":"github"}'
+  -d '{"recipient":"octocat","recipientId":"583231","eventType":"githubPrMerged","reason":"GitHub: PR #1 merged","source":"github"}'
 ```
 
-Expected: `{"status":"paid","paymentHash":"...","recipient":"octocat","amountSats":<configured value>}`.
+When that GitHub id is linked, expect
+`{"status":"paid","paymentHash":"...","recipient":"octocat","amountSats":<configured value>}`.
+When it is not linked, expect a `pending` response and a pending-reward record;
+Zaplie never guesses from the login label.

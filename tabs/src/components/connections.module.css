@@ -1,43 +1,285 @@
-/* filepath: tabs/src/components/connections.module.css */
-.row {
+.section {
   width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.heading {
+  margin: 0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.intro {
+  max-width: 62ch;
+  margin: 5px 0 0;
+  color: #b8b8b5;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.card {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background-color: #242223;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.provider {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.iconFrame {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background-color: #191819;
 }
 
 .icon {
-  width: 20px;
-  height: 20px;
-  flex: none;
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 
-.status {
-  font-size: 12px;
-  color: #d6d6d6;
+.providerCopy {
+  min-width: 0;
 }
 
-.connected {
-  font-size: 12px;
-  color: #84cc16;
+.providerName {
+  margin: 0;
+  color: #ffffff;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.3;
+}
+
+.providerDescription,
+.accountHandle,
+.errorText {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.providerDescription {
+  max-width: 52ch;
+  color: #b8b8b5;
+}
+
+.accountHandle {
+  max-width: 52ch;
+  overflow-wrap: anywhere;
+  color: #d8d8d5;
+}
+
+.errorText {
+  color: #fca5a5;
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.connectedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid rgba(132, 204, 22, 0.28);
+  border-radius: 7px;
+  background-color: rgba(132, 204, 22, 0.1);
+  color: #bef264;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.connectButton,
+.secondaryButton {
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition-property: background-color, border-color, color, box-shadow,
+    transform;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
 }
 
 .connectButton {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  background-color: #5b5fc7;
-  color: white;
-  font-size: 12px;
-  cursor: pointer;
+  border: 1px solid #84cc16;
+  background-color: #84cc16;
+  color: #152000;
 }
 
-.connectButton:hover {
-  background-color: #4850b8;
+.secondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background-color: transparent;
+  color: #f4f4f2;
+}
+
+@media (hover: hover) {
+  .connectButton:hover {
+    border-color: #a3e635;
+    background-color: #a3e635;
+    box-shadow: 0 6px 18px rgba(132, 204, 22, 0.14);
+    transform: translateY(-1px);
+  }
+
+  .secondaryButton:hover {
+    border-color: rgba(255, 255, 255, 0.32);
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.connectButton:active,
+.secondaryButton:active {
+  transform: translateY(1px);
+}
+
+.connectButton:focus-visible,
+.secondaryButton:focus-visible {
+  outline: 3px solid rgba(190, 242, 100, 0.48);
+  outline-offset: 3px;
 }
 
 .connectButton:disabled {
   opacity: 0.6;
-  cursor: default;
+  cursor: wait;
+  box-shadow: none;
+  transform: none;
+}
+
+.identityNote {
+  max-width: 72ch;
+  margin: 0;
+  color: #969693;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.loadingLines {
+  width: min(320px, 42vw);
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loadingLine,
+.buttonPlaceholder {
+  display: block;
+  border-radius: 5px;
+  background-color: #3b393a;
+  animation: connectionPulse 1.4s ease-in-out infinite;
+}
+
+.loadingLine {
+  width: 100%;
+  height: 8px;
+}
+
+.loadingLineShort {
+  width: 62%;
+}
+
+.buttonPlaceholder {
+  width: 104px;
+  height: 36px;
+  border-radius: 7px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes connectionPulse {
+  0%,
+  100% {
+    opacity: 0.48;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (max-width: 560px) {
+  .card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+    padding: 15px;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .connectButton,
+  .secondaryButton,
+  .buttonPlaceholder {
+    width: 100%;
+  }
+
+  .loadingLines {
+    width: min(62vw, 260px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connectButton,
+  .secondaryButton {
+    transition-duration: 0.01ms;
+  }
+
+  .loadingLine,
+  .buttonPlaceholder {
+    animation: none;
+    opacity: 0.7;
+  }
 }

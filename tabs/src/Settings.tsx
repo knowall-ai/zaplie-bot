@@ -1,4 +1,4 @@
-import CurrencySetting from './components/RewardsNameSetting'
+import CurrencySetting from './components/RewardsNameSetting';
 import ConnectionsSetting from './components/ConnectionsSetting';
 import styles from './components/setting.module.css';
 import { KNOWALL_CONSTANTS } from './constants/branding';
