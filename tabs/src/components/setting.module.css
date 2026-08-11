@@ -87,6 +87,11 @@
   color: black; /* Text color when editing */
 }
 
+.compactInput {
+  flex: 0 1 12rem;
+  max-width: 100%;
+}
+
 .textArea {
   width: 100%;
   padding: 8px;
@@ -101,6 +106,20 @@
   color: black;
 }
 
+.textAreaGroup {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.textAreaGroup .textArea {
+  flex: 1 1 100%;
+}
+
+.textAreaGroup .editButton,
+.textAreaGroup .saveButton {
+  margin-left: auto;
+}
+
 .editButton,
 .saveButton {
   width: 100px; /* Set button width to 100px */
@@ -108,11 +127,18 @@
   border: none;
   border-radius: 4px;
   background-color: #84cc16;
-  color: white;
+  color: #1f1f1f;
   cursor: pointer;
+  font-weight: 600;
 }
 
 .editButton:hover,
 .saveButton:hover {
-  background-color: #005a9e;
+  background-color: #6ba513;
+}
+
+.editButton:focus-visible,
+.saveButton:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
 }

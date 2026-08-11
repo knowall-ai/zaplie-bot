@@ -50,7 +50,7 @@ const CurrencySetting: FunctionComponent = () => {
           value={currency}
           onChange={(e) => setCurrency(e.target.value)}
           disabled={!isEditing}
-          className={`${styles.textBox} ${isEditing ? styles.editing : ''}`}
+          className={`${styles.textBox} ${styles.compactInput} ${isEditing ? styles.editing : ''}`}
           title="Reward name"
           placeholder="Enter currency"
         />

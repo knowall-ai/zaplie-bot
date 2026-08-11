@@ -41,7 +41,7 @@ const BotPersonaSetting: FunctionComponent = () => {
   return (
     <div className={styles.currencySetting}>
       <label className={styles.label}>Bot Persona / Prompt</label>
-      <div className={styles.inputGroup}>
+      <div className={`${styles.inputGroup} ${styles.textAreaGroup}`}>
         <textarea
           value={persona}
           onChange={(e) => setPersona(e.target.value)}

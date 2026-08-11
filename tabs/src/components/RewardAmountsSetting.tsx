@@ -57,7 +57,7 @@ const RewardAmountsSetting: FunctionComponent = () => {
             value={amounts[key]}
             onChange={(e) => handleAmountChange(key, e.target.value)}
             disabled={!isEditing}
-            className={`${styles.textBox} ${isEditing ? styles.editing : ''}`}
+            className={`${styles.textBox} ${styles.compactInput} ${isEditing ? styles.editing : ''}`}
             title={REWARD_LABELS[key] || key}
           />
         </div>
