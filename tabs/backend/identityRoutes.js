@@ -7,6 +7,8 @@ const authMiddleware = require('./authMiddleware');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
 const { signState, verifyState } = require('./githubOAuthState');
 const identityStore = require('./identityStore');
+const { requireLnbitsConfig, getLnbitsToken, lnbitsGet } = require('./lnbitsAdmin');
+const { findUniqueUserByAadObjectId } = require('./lnbitsUserDirectory');
 
 const router = express.Router();
 
@@ -152,7 +154,7 @@ router.get('/mine', async (req, res) => {
 
 // GET /api/identities/resolve — internal, called by the bot (same weak
 // placeholder-token pattern as /api/reward-amounts; known limitation, issue #171).
-router.get('/resolve', authMiddleware, (req, res) => {
+router.get('/resolve', authMiddleware, async (req, res) => {
   const { provider, providerId } = req.query;
   if (typeof provider !== 'string' || typeof providerId !== 'string') {
     res.status(400).json({ error: 'provider and providerId are required' });
@@ -163,7 +165,24 @@ router.get('/resolve', authMiddleware, (req, res) => {
     res.status(404).json({ error: 'no identity linked' });
     return;
   }
-  res.json({ personAad: identity.personAad });
+
+  try {
+    const config = requireLnbitsConfig();
+    const accessToken = await getLnbitsToken(config);
+    const usersBody = await lnbitsGet(`${config.nodeUrl}/users/api/v1/user`, accessToken);
+    const user = findUniqueUserByAadObjectId(usersBody?.data, identity.personAad);
+    if (!user || typeof user.id !== 'string' || user.id.length === 0) {
+      res.status(502).json({
+        error: `linked person ${identity.personAad} has no LNbits user`,
+      });
+      return;
+    }
+    res.json({ personAad: identity.personAad, lnbitsUserId: user.id });
+  } catch (error) {
+    console.error('LNbits identity resolution failed:', error.message);
+    const status = error.message.includes('must be set') ? 503 : 502;
+    res.status(status).json({ error: error.message });
+  }
 });
 
 module.exports = router;

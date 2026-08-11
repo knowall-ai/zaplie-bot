@@ -1,9 +1,8 @@
-const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
+import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
-// Placeholder token matches the tab backend's auth (known limitation, issue #171).
 export async function getWebhookKeyHashes(): Promise<string[]> {
-  const response = await fetch(`${API_URL}/webhook-keys/hashes`, {
-    headers: { Authorization: 'your-secret-token' },
+  const response = await fetch(`${tabBackendApiUrl()}/webhook-keys/hashes`, {
+    headers: { Authorization: tabBackendAuthHeader() },
   });
   if (!response.ok) {
     throw new Error(`webhook key hashes fetch failed: ${response.status}`);

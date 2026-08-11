@@ -1,14 +1,18 @@
-const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
+import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
-// Placeholder token matches the tab backend's auth (known limitation, issue #171).
-export async function resolvePersonAadByGithubId(
+export interface ResolvedRewardRecipient {
+  personAad: string;
+  lnbitsUserId: string;
+}
+
+export async function resolveRewardRecipientByGithubId(
   githubId: string,
-): Promise<string | null> {
+): Promise<ResolvedRewardRecipient | null> {
   const response = await fetch(
-    `${API_URL}/identities/resolve?provider=github&providerId=${encodeURIComponent(
+    `${tabBackendApiUrl()}/identities/resolve?provider=github&providerId=${encodeURIComponent(
       githubId,
     )}`,
-    { headers: { Authorization: 'your-secret-token' } },
+    { headers: { Authorization: tabBackendAuthHeader() } },
   );
   if (response.status === 404) {
     return null;
@@ -17,5 +21,13 @@ export async function resolvePersonAadByGithubId(
     throw new Error(`identity resolve failed: ${response.status}`);
   }
   const data = await response.json();
-  return typeof data.personAad === 'string' ? data.personAad : null;
+  if (
+    typeof data.personAad !== 'string' ||
+    data.personAad.length === 0 ||
+    typeof data.lnbitsUserId !== 'string' ||
+    data.lnbitsUserId.length === 0
+  ) {
+    throw new Error('identity resolve returned an invalid recipient');
+  }
+  return { personAad: data.personAad, lnbitsUserId: data.lnbitsUserId };
 }

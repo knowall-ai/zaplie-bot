@@ -4,13 +4,11 @@
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
 const { requireLnbitsConfig, getLnbitsToken, lnbitsGet } = require('./lnbitsAdmin');
+const { summarizeAutomationPayments } = require('./automationPayments');
 
 const router = express.Router();
 
 const TREASURY_USERNAME = process.env.TREASURY_USERNAME || 'automation';
-
-const paymentEpoch = (time) =>
-  typeof time === 'number' ? time : Date.parse(time) / 1000;
 
 router.get('/', async (req, res) => {
   const token = extractBearerToken(req);
@@ -47,27 +45,22 @@ router.get('/', async (req, res) => {
       `${config.nodeUrl}/users/api/v1/user/${treasury.id}/wallet`,
       accessToken,
     );
-    let paidSats = 0;
-    let payments = 0;
-    for (const wallet of wallets) {
-      if (wallet.deleted === true) {
-        continue;
-      }
-      const response = await fetch(`${config.nodeUrl}/api/v1/payments?limit=1000`, {
-        headers: { 'X-Api-Key': wallet.inkey },
-      });
-      if (!response.ok) {
-        throw new Error(`treasury payments fetch failed (status: ${response.status})`);
-      }
-      const list = await response.json();
-      for (const payment of Array.isArray(list) ? list : []) {
-        if (payment.amount < 0 && paymentEpoch(payment.time) >= sinceTs) {
-          paidSats += Math.abs(payment.amount) / 1000;
-          payments += 1;
-        }
-      }
-    }
-    res.json({ paidSatsThisMonth: Math.round(paidSats), paymentsThisMonth: payments });
+    const paymentLists = await Promise.all(
+      wallets
+        .filter((wallet) => wallet.deleted !== true)
+        .map(async (wallet) => {
+          const response = await fetch(`${config.nodeUrl}/api/v1/payments?limit=1000`, {
+            headers: { 'X-Api-Key': wallet.inkey },
+          });
+          if (!response.ok) {
+            throw new Error(`treasury payments fetch failed (status: ${response.status})`);
+          }
+          return response.json();
+        }),
+    );
+    res.json(
+      summarizeAutomationPayments(paymentLists.flat(), usersBody.data, sinceTs),
+    );
   } catch (error) {
     console.error('Automations stats failed:', error.message);
     res.status(502).json({ error: error.message });

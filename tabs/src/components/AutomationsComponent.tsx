@@ -5,7 +5,12 @@ import { getAutomations, updateAutomations, getRewardAmounts, updateRewardAmount
 import { loginRequest } from '../services/authConfig';
 import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 import { getGithubInstallUrl, getGithubConnection } from '../services/connectionsService';
-import { getAutomationsStats, AutomationsStats } from '../services/automationsStatsService';
+import {
+  getAutomationsStats,
+  AutomationsStats,
+  AutomationAudience,
+  AutomationRecipient,
+} from '../services/automationsStatsService';
 import {
   getWebhookKeys,
   createWebhookKey,
@@ -14,11 +19,6 @@ import {
 } from '../services/webhookKeysService';
 import GithubIcon from '../images/GitHub.svg';
 import ZapIcon from '../images/ZapIcon.svg';
-import AutomationsBanner from '../images/automations-banner.webp';
-import RulePrMerged from '../images/rule-pr-merged.webp';
-import RuleIssueClosed from '../images/rule-issue-closed.webp';
-import RuleReview from '../images/rule-review.webp';
-import RuleTimesheet from '../images/rule-timesheet.webp';
 import MicrosoftIcon from '../images/Microsoft.svg';
 import SlackIcon from '../images/Slack.svg';
 import FlowArrowIcon from '../images/FlowArrow.svg';
@@ -31,30 +31,26 @@ const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 // Per-event rule metadata for the list; the amounts themselves come from /api/reward-amounts.
 const RULE_META: Record<
   string,
-  { title: string; icon: string; photo: string; sentence: (sats: number) => string }
+  { title: string; icon: string; sentence: (sats: number) => string }
 > = {
   githubPrMergedSats: {
     title: 'Pull request merged',
     icon: GithubIcon,
-    photo: RulePrMerged,
     sentence: sats => `When a pull request is merged in a connected repository, the author gets ${sats} sats.`,
   },
   githubIssueClosedSats: {
     title: 'Issue closed',
     icon: GithubIcon,
-    photo: RuleIssueClosed,
     sentence: sats => `When an issue is closed in a connected repository, the closer gets ${sats} sats.`,
   },
   githubReviewSubmittedSats: {
     title: 'Review submitted',
     icon: GithubIcon,
-    photo: RuleReview,
     sentence: sats => `When a code review is submitted in a connected repository, the reviewer gets ${sats} sats.`,
   },
   timesheetWeekSats: {
     title: 'Timesheet week complete',
     icon: ClockIcon,
-    photo: RuleTimesheet,
     sentence: sats => `When a flow reports a completed timesheet week, the teammate gets ${sats} sats.`,
   },
 };
@@ -64,6 +60,57 @@ const RULE_ORDER = [
   'githubReviewSubmittedSats',
   'timesheetWeekSats',
 ];
+
+const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const AUDIENCES: Array<{ key: AutomationAudience; label: string }> = [
+  { key: 'teammates', label: 'teammates' },
+  { key: 'copilots', label: 'copilots' },
+  { key: 'customers', label: 'customers' },
+];
+
+const EngagementPanel: FunctionComponent<{
+  label: string;
+  recipients: AutomationRecipient[];
+}> = ({ label, recipients }) => {
+  const maxSats = Math.max(...recipients.map(recipient => recipient.paidSats), 1);
+  return (
+    <article className={styles.engagementPanel}>
+      <h4 className={styles.engagementTitle}>Most engaged {label}</h4>
+      {recipients.length === 0 ? (
+        <p className={styles.emptyState}>No automated payouts this month.</p>
+      ) : (
+        <ol className={styles.engagementList}>
+          {recipients.map(recipient => (
+            <li key={recipient.id} className={styles.engagementItem}>
+              <span className={styles.avatar} aria-hidden="true">
+                {recipient.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              <span className={styles.engagementDetails}>
+                <span className={styles.engagementName}>{recipient.displayName}</span>
+                <span className={styles.engagementTrack} aria-hidden="true">
+                  <span
+                    className={styles.engagementFill}
+                    style={{ width: `${Math.max(8, (recipient.paidSats / maxSats) * 100)}%` }}
+                  />
+                </span>
+              </span>
+              <span className={styles.engagementValue}>
+                {NUMBER_FORMATTER.format(recipient.paidSats)} sats
+                <small>{recipient.paymentCount} payments</small>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </article>
+  );
+};
 
 const AutomationsComponent: FunctionComponent = () => {
   const { instance, accounts } = useMsal();
@@ -78,6 +125,7 @@ const AutomationsComponent: FunctionComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const [appInstalled, setAppInstalled] = useState(false);
   const [stats, setStats] = useState<AutomationsStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [webhookKeys, setWebhookKeys] = useState<WebhookKey[]>([]);
   const [newKeyLabel, setNewKeyLabel] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
@@ -105,20 +153,26 @@ const AutomationsComponent: FunctionComponent = () => {
 
   useEffect(() => {
     if (!accounts[0]) {
+      setStatsLoading(false);
       return;
     }
+    setStatsLoading(true);
     const loadConnections = async () => {
       try {
         const idToken = await acquireIdToken(instance, accounts[0]);
-        const connection = await getGithubConnection(idToken);
+        const [connection, statsData, keys] = await Promise.all([
+          getGithubConnection(idToken),
+          getAutomationsStats(idToken),
+          isAdmin ? getWebhookKeys(idToken) : Promise.resolve([]),
+        ]);
         setAppInstalled(connection.connected);
-        setStats(await getAutomationsStats(idToken));
-        if (isAdmin) {
-          setWebhookKeys(await getWebhookKeys(idToken));
-        }
+        setStats(statsData);
+        setWebhookKeys(keys);
       } catch (err) {
         console.error('Error fetching connections state:', err);
         toast.error('Could not load connection status.');
+      } finally {
+        setStatsLoading(false);
       }
     };
     loadConnections();
@@ -216,12 +270,17 @@ const AutomationsComponent: FunctionComponent = () => {
   };
 
   const handleSaveAmount = async (key: string) => {
-    setEditingKey(null);
+    const nextAmount = Number(editingValue);
+    if (!Number.isInteger(nextAmount) || nextAmount <= 0) {
+      toast.error('Reward amount must be a positive whole number of sats.');
+      return;
+    }
     try {
       const idToken = await acquireIdToken(instance, accounts[0]);
       // `amounts` only changes on a successful save, so another card's unsaved edit can't bleed in here.
-      const data = await updateRewardAmounts(idToken, { ...amounts, [key]: Number(editingValue) });
+      const data = await updateRewardAmounts(idToken, { ...amounts, [key]: nextAmount });
       setAmounts(data.rewardAmounts);
+      setEditingKey(null);
       toast.success('Reward amount updated.');
     } catch (err) {
       toast.error('Could not update the reward amount.');
@@ -236,26 +295,39 @@ const AutomationsComponent: FunctionComponent = () => {
     return <div className={styles.automationscomponent}><p className={styles.errorText}>{error}</p></div>;
   }
 
+  const activeWebhookKeyCount = webhookKeys.filter(key => !key.revokedAt).length;
+
   return (
     <div className={styles.automationscomponent}>
-      <div className={styles.banner}>
-        <img src={AutomationsBanner} alt="" className={styles.bannerImage} />
-        <div className={styles.bannerOverlay} />
+      <header className={styles.banner}>
         <div className={styles.bannerText}>
+          <span className={styles.eyebrow}>Workflow control centre</span>
           <h2 className={styles.title}>Automations</h2>
           <p className={styles.bannerSubtitle}>
             Reward real work automatically. Connect the tools where work happens, set how many
             sats each event pays, and Zaplie sends the reward the moment it happens.
           </p>
+          <nav className={styles.sectionNav} aria-label="Automations sections">
+            <a href="#automation-engagement">Recipients</a>
+            <a href="#automation-history">History</a>
+            <a href="#automation-connections">Connections</a>
+            <a href="#automation-rules">Reward rules</a>
+          </nav>
         </div>
-      </div>
+        <div className={styles.bannerMetric}>
+          <span className={styles.bannerMetricValue}>
+            {stats ? NUMBER_FORMATTER.format(stats.paymentsThisMonth) : '—'}
+          </span>
+          <span className={styles.bannerMetricLabel}>payments automated this month</span>
+        </div>
+      </header>
 
       {stats && (
         <div className={styles.statPanel}>
           <div className={styles.statHero}>
             <span className={styles.statHeroLabel}>Total automated</span>
             <span className={styles.statHeroValue}>
-              {new Intl.NumberFormat('en-US').format(stats.paidSatsThisMonth)}
+              {NUMBER_FORMATTER.format(stats.paidSatsThisMonth)}
               <span className={styles.statHeroUnit}> sats</span>
             </span>
             <span className={styles.statHeroSub}>this month</span>
@@ -272,14 +344,81 @@ const AutomationsComponent: FunctionComponent = () => {
               </span>
             </div>
             <div className={styles.statRow}>
-              <span className={styles.statRowLabel}>Active connections</span>
+              <span className={styles.statRowLabel}>Repositories watched</span>
               <span className={styles.statRowValue}>
-                {(appInstalled ? 1 : 0) + (webhookKeys.some(k => !k.revokedAt) ? 1 : 0) + 1}
+                {repos.length}
               </span>
             </div>
           </div>
         </div>
       )}
+
+      <section id="automation-engagement" className={styles.activitySection}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.sectionKicker}>Live treasury data</span>
+            <h3 className={styles.sectionHeading}>Who automation is rewarding</h3>
+          </div>
+          <p>Ranked by completed automated payments this month.</p>
+        </div>
+        {statsLoading ? (
+          <p className={styles.emptyState}>Loading recipient activity…</p>
+        ) : stats ? (
+          <div className={styles.engagementScroller}>
+            {AUDIENCES.map(audience => (
+              <EngagementPanel
+                key={audience.key}
+                label={audience.label}
+                recipients={stats.engagementByAudience[audience.key]}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className={styles.emptyState}>Recipient activity is unavailable right now.</p>
+        )}
+      </section>
+
+      <section id="automation-history" className={styles.activitySection}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.sectionKicker}>Audit trail</span>
+            <h3 className={styles.sectionHeading}>History</h3>
+          </div>
+          <p>Latest completed payouts from the automation treasury.</p>
+        </div>
+        {statsLoading ? (
+          <p className={styles.emptyState}>Loading automation history…</p>
+        ) : stats && stats.recentPayments.length > 0 ? (
+          <ol className={styles.historyList}>
+            {stats.recentPayments.map(payment => (
+              <li key={payment.id} className={styles.historyItem}>
+                <span className={styles.historySource}>{payment.source}</span>
+                <span className={styles.historyCopy}>
+                  <strong>{payment.memo}</strong>
+                  <span>
+                    {payment.recipient.displayName}
+                    {payment.paidAt ? (
+                      <>
+                        {' · '}
+                        <time dateTime={payment.paidAt}>
+                          {DATE_FORMATTER.format(new Date(payment.paidAt))}
+                        </time>
+                      </>
+                    ) : null}
+                  </span>
+                </span>
+                <span className={styles.historyAmount}>
+                  +{NUMBER_FORMATTER.format(payment.amountSats)} sats
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className={styles.emptyState}>
+            {stats ? 'No automated payouts have been recorded yet.' : 'Automation history is unavailable right now.'}
+          </p>
+        )}
+      </section>
 
       <div className={styles.steps}>
         <div className={styles.step}>
@@ -302,7 +441,7 @@ const AutomationsComponent: FunctionComponent = () => {
         </div>
       </div>
 
-      <h3 className={styles.sectionHeading}>Connections</h3>
+      <h3 id="automation-connections" className={styles.sectionHeading}>Connections</h3>
       <div className={styles.connGrid}>
         <div className={styles.connCard}>
           <div className={styles.connCardHead}>
@@ -387,8 +526,8 @@ const AutomationsComponent: FunctionComponent = () => {
             <div className={styles.connCardTitle}>
               <span className={styles.connName}>Power Automate and Logic Apps</span>
               <span className={styles.connStatus}>
-                {webhookKeys.some(k => !k.revokedAt)
-                  ? `${webhookKeys.filter(k => !k.revokedAt).length} active ${webhookKeys.filter(k => !k.revokedAt).length === 1 ? 'key' : 'keys'}`
+                {activeWebhookKeyCount > 0
+                  ? `${activeWebhookKeyCount} active ${activeWebhookKeyCount === 1 ? 'key' : 'keys'}`
                   : 'Available today'}
               </span>
             </div>
@@ -399,7 +538,7 @@ const AutomationsComponent: FunctionComponent = () => {
           </p>
           {isAdmin && (
             <>
-              {webhookKeys.filter(k => !k.revokedAt).length > 0 && (
+              {activeWebhookKeyCount > 0 && (
                 <div className={styles.keyList}>
                   {webhookKeys
                     .filter(k => !k.revokedAt)
@@ -505,59 +644,76 @@ const AutomationsComponent: FunctionComponent = () => {
         </div>
       </div>
 
-      <h3 className={styles.sectionHeading}>Reward rules</h3>
-      <div className={styles.section}>
+      <div id="automation-rules" className={styles.sectionHeader}>
+        <div>
+          <span className={styles.sectionKicker}>Admin controlled</span>
+          <h3 className={styles.sectionHeading}>Reward rules</h3>
+        </div>
+        <p>Every amount is enforced again by the server before it is saved or paid.</p>
+      </div>
+      <div className={styles.ruleGrid}>
         {RULE_ORDER.filter(key => key in amounts).map(key => {
           const meta = RULE_META[key];
           const isEditing = editingKey === key;
           return (
-            <div key={key} className={styles.ruleRow}>
-              <img src={meta.photo} alt="" className={styles.rulePhoto} />
-              <span className={styles.cardBadge}>
-                <img src={meta.icon} alt="" />
-              </span>
+            <article key={key} className={styles.ruleCard}>
+              <div className={styles.ruleCardHeader}>
+                <span className={styles.cardBadge}>
+                  <img src={meta.icon} alt="" />
+                </span>
+                <span className={styles.ruleStatus}>Active</span>
+              </div>
               <div className={styles.ruleInfo}>
                 <span className={styles.ruleTitle}>{meta.title}</span>
                 <span className={styles.ruleSentence}>{meta.sentence(amounts[key])}</span>
               </div>
-              {isEditing ? (
-                <input
-                  type="number"
-                  value={editingValue}
-                  onChange={e => setEditingValue(e.target.value)}
-                  className={styles.satsInput}
-                  autoFocus
-                />
-              ) : (
-                <span className={styles.satsChip}>
-                  <img src={ZapIcon} alt="" />
-                  {amounts[key]} sats
-                </span>
-              )}
-              {isAdmin &&
-                (isEditing ? (
-                  <button className={styles.cardSaveButton} onClick={() => handleSaveAmount(key)}>
-                    Save
-                  </button>
+              <div className={styles.ruleFooter}>
+                {isEditing ? (
+                  <label className={styles.amountEditor}>
+                    <span>Sats</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={editingValue}
+                      onChange={e => setEditingValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleSaveAmount(key);
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingKey(null);
+                        }
+                      }}
+                      className={styles.satsInput}
+                      autoFocus
+                    />
+                  </label>
                 ) : (
-                  <button className={styles.cardEditButton} onClick={() => handleStartEdit(key)}>
-                    Edit
-                  </button>
-                ))}
-            </div>
+                  <span className={styles.satsChip}>
+                    <img src={ZapIcon} alt="" />
+                    {NUMBER_FORMATTER.format(amounts[key])} sats
+                  </span>
+                )}
+                {isAdmin &&
+                  (isEditing ? (
+                    <div className={styles.ruleActions}>
+                      <button className={styles.cardEditButton} onClick={() => setEditingKey(null)}>
+                        Cancel
+                      </button>
+                      <button className={styles.cardSaveButton} onClick={() => handleSaveAmount(key)}>
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <button className={styles.cardEditButton} onClick={() => handleStartEdit(key)}>
+                      Edit amount
+                    </button>
+                  ))}
+              </div>
+            </article>
           );
         })}
-
-        <div className={`${styles.ruleRow} ${styles.ruleRowMuted}`}>
-          <span className={styles.comingSoonBadge}>Coming soon</span>
-          <div className={styles.ruleInfo}>
-            <span className={styles.ruleTitle}>Streak bonus</span>
-            <span className={styles.ruleSentence}>
-              Aggregate rules that reward sustained activity, like five merged pull requests in
-              a week.
-            </span>
-          </div>
-        </div>
       </div>
 
       <ToastContainer />

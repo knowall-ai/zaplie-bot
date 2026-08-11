@@ -92,6 +92,14 @@
                           }
                         }
                       }
+                    },
+                    "repository": {
+                      "type": "object",
+                      "properties": {
+                        "full_name": {
+                          "type": "string"
+                        }
+                      }
                     }
                   }
                 }
@@ -134,6 +142,7 @@
                       "recipient": "@triggerBody()?['pull_request']?['user']?['login']",
                       "recipientId": "@triggerBody()?['pull_request']?['user']?['id']",
                       "eventType": "githubPrMerged",
+                      "repo": "@triggerBody()?['repository']?['full_name']",
                       "reason": "GitHub: PR #@{triggerBody()?['number']} merged - @{triggerBody()?['pull_request']?['title']}",
                       "source": "github"
                     }

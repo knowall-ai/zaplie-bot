@@ -7,6 +7,10 @@ const fs = require('fs');
 const authMiddleware = require('./authMiddleware'); // Import the authentication middleware
 const identityRoutes = require('./identityRoutes');
 const pendingRewardsStore = require('./pendingRewardsStore');
+const {
+  DEFAULT_REWARD_AMOUNTS,
+  validateRewardAmountPatch,
+} = require('./rewardAmounts');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -16,7 +20,7 @@ app.use(bodyParser.json());
 
 // Mounted before the generic authMiddleware below: its user-facing routes
 // (authorize-url, mine) authenticate with a real MSAL token, not the
-// placeholder API token, and /resolve applies authMiddleware itself.
+// shared backend token, and /resolve applies authMiddleware itself.
 app.use('/api/identities', identityRoutes);
 
 // Same reason: user-facing routes here authenticate with a real MSAL token
@@ -29,12 +33,7 @@ app.use('/api/reports', require('./reportsRoutes'));
 
 const { requireAdmin } = require('./adminAuth');
 
-const defaultRewardAmounts = {
-  githubPrMergedSats: 1000,
-  githubIssueClosedSats: 500,
-  githubReviewSubmittedSats: 300,
-  timesheetWeekSats: 800,
-};
+const defaultRewardAmounts = DEFAULT_REWARD_AMOUNTS;
 
 const dataFilePath = path.join(__dirname, 'data.json');
 
@@ -58,7 +57,7 @@ const writeData = (data) => {
   }
 };
 
-// Admin config writes are registered before the placeholder authMiddleware:
+// Admin config writes are registered before the shared-token authMiddleware:
 // they authenticate with the caller's MSAL idToken + Zaplie.Admin app role.
 app.post('/api/automations', requireAdmin, (req, res) => {
   const { repos } = req.body;
@@ -73,15 +72,35 @@ app.post('/api/automations', requireAdmin, (req, res) => {
 });
 
 app.post('/api/reward-amounts', requireAdmin, (req, res) => {
-  const { rewardAmounts } = req.body;
-  if (rewardAmounts && typeof rewardAmounts === 'object' && !Array.isArray(rewardAmounts)) {
-    const data = readData();
-    data.rewardAmounts = { ...defaultRewardAmounts, ...data.rewardAmounts, ...rewardAmounts };
-    writeData(data);
-    res.send({ message: 'Reward amounts updated successfully', rewardAmounts: data.rewardAmounts });
-  } else {
-    res.status(400).send({ message: 'Invalid reward amounts' });
+  const { rewardAmounts } = req.body || {};
+  const validation = validateRewardAmountPatch(rewardAmounts);
+  if (!validation.valid) {
+    res
+      .status(validation.configurationError ? 500 : 400)
+      .send({ message: validation.message });
+    return;
   }
+
+  const data = readData();
+  const nextRewardAmounts = {
+    ...defaultRewardAmounts,
+    ...data.rewardAmounts,
+    ...rewardAmounts,
+  };
+  const storedValidation = validateRewardAmountPatch(nextRewardAmounts);
+  if (!storedValidation.valid) {
+    res.status(500).send({
+      message: `Stored reward amounts are invalid: ${storedValidation.message}`,
+    });
+    return;
+  }
+
+  data.rewardAmounts = nextRewardAmounts;
+  writeData(data);
+  res.send({
+    message: 'Reward amounts updated successfully',
+    rewardAmounts: data.rewardAmounts,
+  });
 });
 
 // Use the authentication middleware for API routes

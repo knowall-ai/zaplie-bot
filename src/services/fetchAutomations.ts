@@ -1,9 +1,8 @@
-const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
+import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
-// Placeholder token matches the tab backend's auth (known limitation, issue #171).
 export async function getAutomations(): Promise<{ repos: string[] }> {
-  const response = await fetch(`${API_URL}/automations`, {
-    headers: { Authorization: 'your-secret-token' },
+  const response = await fetch(`${tabBackendApiUrl()}/automations`, {
+    headers: { Authorization: tabBackendAuthHeader() },
   });
   if (!response.ok) {
     throw new Error(`automations fetch failed: ${response.status}`);

@@ -224,6 +224,12 @@ const getUserWallets = async (
   }
 };
 
+// LNbits v1+ wallet lookup authenticates with the server-side username/password
+// flow. Keep the legacy two-argument function for existing callers while new
+// code avoids implying that an admin key participates in this request.
+const getUserWalletsByUserId = async (userId: string): Promise<Wallet[] | null> =>
+  getUserWallets('', userId);
+
 // Note: LNbits v1+ core API doesn't provide user listing/filtering with custom metadata.
 // User management with custom metadata must be handled at the application layer.
 // This function is deprecated and should be replaced with application-level user management.
@@ -868,6 +874,7 @@ export {
   getWalletDetails,
   getWalletPayLinks,
   getUserWallets,
+  getUserWalletsByUserId,
   getInvoicePayment,
   getPaymentsSince,
   createInvoice,

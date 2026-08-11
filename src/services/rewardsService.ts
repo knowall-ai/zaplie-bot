@@ -1,7 +1,7 @@
-import { getUserWallets, getUsers, createInvoice, payInvoice } from './lnbitsService';
+import { getUserWalletsByUserId, createInvoice, payInvoice } from './lnbitsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
 import { getAutomations } from './fetchAutomations';
-import { resolvePersonAadByGithubId } from './identityService';
+import { resolveRewardRecipientByGithubId } from './identityService';
 import { createPendingReward } from './pendingRewardsService';
 
 const TREASURY_DISPLAY_NAME = 'Automation';
@@ -29,6 +29,8 @@ export interface ResolvedRewardRequest {
   recipient: string;
   recipientId?: string;
   amountSats: number;
+  eventType?: string;
+  repo?: string;
   reason: string;
   source: string;
 }
@@ -170,17 +172,11 @@ async function resolveRecipientUserId(
   if (!reward.recipientId) {
     throw new RewardError('recipientId is required to resolve the recipient', 400);
   }
-  const personAad = await resolvePersonAadByGithubId(reward.recipientId);
-  if (!personAad) {
+  const resolvedRecipient = await resolveRewardRecipientByGithubId(reward.recipientId);
+  if (!resolvedRecipient) {
     return null;
   }
-  const users = await getUsers(process.env.LNBITS_ADMINKEY as string, {
-    aadObjectId: personAad,
-  });
-  if (users.length === 0) {
-    throw new Error(`linked person ${personAad} has no LNbits user`);
-  }
-  return users[0].id;
+  return resolvedRecipient.lnbitsUserId;
 }
 
 export async function payReward(
@@ -201,13 +197,7 @@ export async function payReward(
     return { pending: true };
   }
 
-  const adminKey = process.env.LNBITS_ADMINKEY;
-  if (!adminKey) {
-    throw new Error('LNBITS_ADMINKEY is not set');
-  }
-
-  // getUserWallets ignores adminKey; it authenticates via LNBITS_USERNAME/PASSWORD
-  const wallets = await getUserWallets(adminKey, userId);
+  const wallets = await getUserWalletsByUserId(userId);
   if (!Array.isArray(wallets)) {
     throw new Error(`Could not read the wallets for LNbits user ${userId}`);
   }
@@ -220,12 +210,16 @@ export async function payReward(
   // shape the feed/transaction log read; unlike SendZap, no wallet keys persisted
   const extra = {
     tag: 'zap',
+    automation: true,
+    eventType: reward.eventType,
+    repo: reward.repo,
     source: reward.source,
     from: { displayName: TREASURY_DISPLAY_NAME },
     to: {
       id: privateWallet.id,
       name: privateWallet.name,
       user: privateWallet.user,
+      displayName: reward.recipient,
     },
   };
 

@@ -1,18 +1,11 @@
-// filepath: /c:/projects/ZapVibes/src/services/fetchRewardsName.ts
-const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
-
-// Example: Get the authentication token (replace with actual logic)
-const getAuthToken = () => {
-  return 'your-secret-token'; // Replace with actual token retrieval logic
-};
+import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
 export const getRewardName = async () => {
   try {
-    console.log(API_URL);
-    const response = await fetch(`${API_URL}/reward-name`, {
+    const response = await fetch(`${tabBackendApiUrl()}/reward-name`, {
       method: 'GET',
       headers: {
-        'Authorization': getAuthToken(),
+        'Authorization': tabBackendAuthHeader(),
         'Content-Type': 'application/json'
       }
     });
