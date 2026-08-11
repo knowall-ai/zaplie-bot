@@ -24,3 +24,4 @@ appPackage/manifest.json
 
 # Generated documentation PDF
 docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
+docs/.asciidoctor/
