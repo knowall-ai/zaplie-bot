@@ -2,7 +2,7 @@
 name: Enhancement
 about: Suggest a small enhancement to help us improve
 title: "[ENHANCEMENT] Title"
-labels: ''
+labels: 'enhancement'
 assignees: ''
 
 ---
