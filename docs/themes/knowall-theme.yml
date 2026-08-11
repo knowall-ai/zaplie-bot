@@ -1,0 +1,234 @@
+extends: default
+
+font:
+  catalog:
+    merge: true
+    DejaVu Sans Mono:
+      normal: DejaVuSansMono.ttf
+      bold: DejaVuSansMono-Bold.ttf
+      italic: DejaVuSansMono-Oblique.ttf
+      bold_italic: DejaVuSansMono-BoldOblique.ttf
+
+# KnowAll AI Brand Colors
+# Primary Green: #22C55E
+# Dark Background: #1A1A2E
+# Text Primary: #1E293B
+# Text Secondary: #64748B
+
+labels:
+  chapter: ~
+  part: ~
+
+page:
+  size: A4
+  layout: portrait
+  margin: [0.75in, 1in, 0.75in, 1in]
+  background_color: FFFFFF
+
+base:
+  font_family: Helvetica
+  font_size: 10
+  line_height: 1.4
+  text_align: left
+  font_color: 1E293B
+
+link:
+  font_color: 22C55E
+
+header:
+  font_family: Helvetica
+  font_size: 9
+  font_color: 64748B
+  height: 0.5in
+  line_height: 1
+  vertical_align: bottom
+  border_color: 22C55E
+  border_width: 0.5
+  recto:
+    left:
+      content: ~
+    center:
+      content: ~
+    right:
+      content: '*CONFIDENTIAL*'
+  verso:
+    left:
+      content: '*CONFIDENTIAL*'
+    center:
+      content: ~
+    right:
+      content: ~
+
+footer:
+  font_family: Helvetica
+  font_size: 9
+  font_color: 64748B
+  height: 0.5in
+  line_height: 1
+  vertical_align: top
+  border_color: 22C55E
+  border_width: 0.5
+  recto:
+    left:
+      content: 'KnowAll AI'
+    center:
+      content: ~
+    right:
+      content: '{page-number}'
+  verso:
+    left:
+      content: 'KnowAll AI'
+    center:
+      content: ~
+    right:
+      content: '{page-number}'
+
+title_page:
+  font_family: Helvetica
+  background_image: knowall-sidebar-clean.png
+  title:
+    top: 20%
+    font_size: 27
+    font_color: 1E293B
+    line_height: 1.3
+    align: left
+    margin_left: 250
+  subtitle:
+    font_size: 15
+    font_color: 64748B
+    line_height: 1.2
+    margin_top: 8
+    margin_left: 250
+    align: left
+  authors:
+    font_size: 10
+    font_color: 22C55E
+    align: left
+    margin_top: 350
+    margin_left: 250
+  revision:
+    font_size: 9
+    font_color: 64748B
+    align: left
+    margin_top: 2
+    margin_left: 250
+
+chapter:
+  font_family: Helvetica
+  font_size: 18
+  font_color: 1A1A2E
+  align: left
+  display_label: false
+
+heading:
+  font_family: Helvetica
+  font_color: 1A1A2E
+  chapter:
+    break-before: auto
+  h1_font_size: 18
+  h1_font_color: 1A1A2E
+  h2_font_size: 15
+  h2_font_color: 22C55E
+  h3_font_size: 12
+  h3_font_color: 1A1A2E
+  h4_font_size: 11
+  h4_font_color: 64748B
+  h5_font_size: 10
+  h6_font_size: 10
+
+list:
+  font_family: Helvetica
+  indent: 20
+  item_spacing: 4
+
+ulist:
+  font_family: Helvetica
+  marker_font_size: 10
+  text_indent: 15
+  marker_indent: 0
+
+olist:
+  font_family: Helvetica
+  marker_font_size: 10
+  text_indent: 15
+  marker_indent: 0
+
+table:
+  font_family: Helvetica
+  width: 100%
+  font_size: 8
+  cell_padding: 3
+  border_color: E2E8F0
+  border_width: 0.5
+  head:
+    font_family: Helvetica
+    font_style: bold
+    font_size: 8
+    font_color: FFFFFF
+    background_color: 1A1A2E
+  body:
+    font_family: Helvetica
+    font_size: 8
+    stripe_background_color: F8FAFC
+
+code:
+  font_family: DejaVu Sans Mono
+  font_size: 9
+  background_color: F1F5F9
+  border_color: E2E8F0
+  border_width: 0.5
+
+literal:
+  font_family: DejaVu Sans Mono
+  font_size: 9
+
+sidebar:
+  font_family: Helvetica
+  font_size: 10
+  background_color: F0FDF4
+  border_color: 22C55E
+  border_width: 1
+
+admonition:
+  font_family: Helvetica
+  font_size: 10
+  label:
+    font_color: 22C55E
+  icon:
+    important:
+      stroke_color: EF4444
+    note:
+      stroke_color: 22C55E
+    tip:
+      stroke_color: 22C55E
+    warning:
+      stroke_color: F59E0B
+    caution:
+      stroke_color: EF4444
+
+blockquote:
+  font_family: Helvetica
+  font_size: 10
+  font_color: 64748B
+  border_color: 22C55E
+  border_width: 3
+
+role:
+  grey:
+    font_color: 999999
+  legal:
+    font_color: 999999
+    font_size: 8
+  legal-heading:
+    font_color: 999999
+    font_size: 10
+    font_style: bold
+    text_transform: uppercase
+
+toc:
+  font_family: Helvetica
+  font_size: 10
+  line_height: 1.5
+  indent: 16
+  dot_leader:
+    font_color: CBD5E1
