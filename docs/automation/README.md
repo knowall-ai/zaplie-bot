@@ -1,10 +1,15 @@
 # Automated rewards via Logic Apps
 
-Zaplie exposes a generic rewards endpoint that external automations call to pay
-sats for events your organisation cares about. This folder ships the first
-flow: **pay a reward when a GitHub pull request is merged**, delivered as an
+This draft ships a GitHub-specific rewards pilot: **pay a reward when a GitHub
+pull request is merged**, delivered as an
 Azure Logic App (Consumption) ARM template that each organisation deploys and
-customises in the workflow designer (trigger conditions, amounts, extra steps).
+customises in the workflow designer (trigger conditions and non-payment steps).
+
+> **Not production-ready:** the endpoint still needs durable idempotency,
+> aggregate budget enforcement and reconciliation of unknown payment outcomes.
+> The sample Request trigger also does not yet verify GitHub's webhook signature,
+> so `source: "github"` is a payload claim rather than authenticated provenance.
+> Keep the PR in draft and do not connect a funded treasury yet.
 
 ```
 GitHub webhook ──► Logic App (Request trigger)
@@ -14,7 +19,7 @@ GitHub webhook ──► Logic App (Request trigger)
                                  │ validates key + payload
                                  │ checks repository against the connected allowlist
                                  │ resolves GitHub numeric id → verified identity → LNbits user
-                                 │ records an unlinked recipient as pending
+                                 │ records an unlinked recipient as pending (no auto-settlement yet)
                                  │ pays from the "Automation" treasury wallet
                                  ▼
                                sats land in the recipient's Private wallet
@@ -31,11 +36,11 @@ Set these environment variables on the bot (alongside the existing LNbits ones):
 
 | Variable | Purpose |
 | --- | --- |
-| `REWARDS_API_KEY` | Shared secret the automation must send in `X-Api-Key`. Endpoint returns 503 when unset. |
+| `REWARDS_API_KEY` | Optional environment-managed key accepted in `X-Api-Key`. The endpoint returns 503 only when neither this key nor an active portal-managed key exists. |
 | `REWARDS_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). |
 | `WEBSITE_API_URL` | Base URL of the portal backend API. The bot uses it for reward-rule configuration and verified identity resolution; for example `https://<portal-domain>/api`. |
 | `TAB_BACKEND_TOKEN` | Separate shared secret the bot sends to the portal backend. The bot and portal backend must use the same non-placeholder value. |
-| `REWARDS_MAX_AMOUNT_SATS` | Optional per-reward cap. Defaults to 10000 (the same ceiling as the interactive zap card). Requests above it are rejected with 400, whether the amount came from the caller or from the portal config. |
+| `REWARDS_MAX_AMOUNT_SATS` | Optional cap for configured reward rules. Defaults to 10000 (the same ceiling as the interactive zap card). Invalid configured amounts fail closed. |
 
 Generate `REWARDS_API_KEY` and `TAB_BACKEND_TOKEN` independently with e.g.
 `openssl rand -hex 32`.
@@ -55,10 +60,10 @@ may display an unattributed sender there — known limitation).
 
 The HTTP action in the template has its retry policy disabled on purpose:
 the endpoint is not idempotent, and a retry after a timed-out-but-executed
-payment would pay the same PR twice. GitHub only redelivers webhooks
-manually, so with retries off each merged PR produces at most one payment
-attempt. An idempotency key (GitHub's `X-GitHub-Delivery` id) is the planned
-follow-up for at-most-once guarantees across redeliveries.
+payment could pay the same PR twice. This only reduces the duplicate-payment
+risk; manual redelivery and an unknown network outcome remain unsafe. Durable
+storage keyed by GitHub's `X-GitHub-Delivery` id, plus payment reconciliation,
+is required before this flow can provide at-most-once behavior.
 
 ## 2. Deploy the Logic App
 
@@ -104,11 +109,10 @@ under **Automations → Reward rules**, keyed by `eventType`
 (the template sends `eventType: "githubPrMerged"`, which the bot resolves
 against the portal's `githubPrMergedSats` value). Open the Logic App in the
 Azure portal designer to change anything else without touching code: edit the
-condition (e.g. only PRs into `main`, or reward issue closers instead), or add
-steps (Teams notification, approval). The HTTP action body also accepts an
-explicit `amountSats` field as an override of the configured amount, for flows
-that want to decide the amount themselves. Any event source that can POST
-JSON can drive the same Zaplie endpoint — GitHub is just the first flow.
+condition (for example, only PRs into `main`) or add non-payment steps such as a
+Teams notification. The endpoint rejects caller-supplied amounts and non-GitHub
+sources. Provider-aware flows such as timesheets require a separate identity and
+idempotency contract and are intentionally not advertised by this draft.
 
 ### Power Pulse is a pending product decision
 

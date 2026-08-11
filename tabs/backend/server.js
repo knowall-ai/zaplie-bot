@@ -9,6 +9,7 @@ const identityRoutes = require('./identityRoutes');
 const pendingRewardsStore = require('./pendingRewardsStore');
 const {
   DEFAULT_REWARD_AMOUNTS,
+  migrateRewardAmounts,
   validateRewardAmountPatch,
 } = require('./rewardAmounts');
 
@@ -52,8 +53,10 @@ const readData = () => {
 const writeData = (data) => {
   try {
     fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2));
+    return true;
   } catch (error) {
     console.error('Error writing data file:', error);
+    return false;
   }
 };
 
@@ -64,7 +67,10 @@ app.post('/api/automations', requireAdmin, (req, res) => {
   if (Array.isArray(repos) && repos.every((repo) => typeof repo === 'string' && repo.length > 0)) {
     const data = readData();
     data.automations = { repos };
-    writeData(data);
+    if (!writeData(data)) {
+      res.status(500).send({ message: 'Automations could not be persisted' });
+      return;
+    }
     res.send({ message: 'Automations updated successfully', repos: data.automations.repos });
   } else {
     res.status(400).send({ message: 'Invalid repos' });
@@ -82,9 +88,18 @@ app.post('/api/reward-amounts', requireAdmin, (req, res) => {
   }
 
   const data = readData();
+  let storedRewardAmounts;
+  try {
+    storedRewardAmounts = migrateRewardAmounts(data.rewardAmounts);
+  } catch (error) {
+    res.status(500).send({
+      message: `Stored reward amounts are invalid: ${error.message}`,
+    });
+    return;
+  }
   const nextRewardAmounts = {
     ...defaultRewardAmounts,
-    ...data.rewardAmounts,
+    ...storedRewardAmounts,
     ...rewardAmounts,
   };
   const storedValidation = validateRewardAmountPatch(nextRewardAmounts);
@@ -96,7 +111,10 @@ app.post('/api/reward-amounts', requireAdmin, (req, res) => {
   }
 
   data.rewardAmounts = nextRewardAmounts;
-  writeData(data);
+  if (!writeData(data)) {
+    res.status(500).send({ message: 'Reward amounts could not be persisted' });
+    return;
+  }
   res.send({
     message: 'Reward amounts updated successfully',
     rewardAmounts: data.rewardAmounts,
@@ -121,7 +139,19 @@ app.get('/api/automations', (req, res) => {
 // Endpoint to get automation reward amounts
 app.get('/api/reward-amounts', (req, res) => {
   const data = readData();
-  res.send({ rewardAmounts: { ...defaultRewardAmounts, ...data.rewardAmounts } });
+  try {
+    const storedRewardAmounts = migrateRewardAmounts(data.rewardAmounts);
+    const rewardAmounts = { ...defaultRewardAmounts, ...storedRewardAmounts };
+    const validation = validateRewardAmountPatch(rewardAmounts);
+    if (!validation.valid) {
+      throw new Error(validation.message);
+    }
+    res.send({ rewardAmounts });
+  } catch (error) {
+    res.status(500).send({
+      message: `Stored reward amounts are invalid: ${error.message}`,
+    });
+  }
 });
 
 // Endpoint to update the reward name
@@ -130,7 +160,10 @@ app.post('/api/reward-name', (req, res) => {
   if (newRewardName) {
     const data = readData();
     data.rewardName = newRewardName;
-    writeData(data);
+    if (!writeData(data)) {
+      res.status(500).send({ message: 'Reward name could not be persisted' });
+      return;
+    }
     res.send({ message: 'Reward name updated successfully', rewardName: data.rewardName });
   } else {
     res.status(400).send({ message: 'Invalid reward name' });

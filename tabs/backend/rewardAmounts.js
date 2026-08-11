@@ -2,10 +2,24 @@ const DEFAULT_REWARD_AMOUNTS = Object.freeze({
   githubPrMergedSats: 1000,
   githubIssueClosedSats: 500,
   githubReviewSubmittedSats: 300,
-  timesheetWeekSats: 800,
 });
 
 const DEFAULT_MAX_REWARD_SATS = 10000;
+const DEPRECATED_REWARD_AMOUNT_KEYS = new Set(['timesheetWeekSats']);
+
+const migrateRewardAmounts = (rewardAmounts) => {
+  if (rewardAmounts === undefined) {
+    return {};
+  }
+  if (!rewardAmounts || typeof rewardAmounts !== 'object' || Array.isArray(rewardAmounts)) {
+    throw new Error('Stored rewardAmounts must be an object');
+  }
+  return Object.fromEntries(
+    Object.entries(rewardAmounts).filter(
+      ([key]) => !DEPRECATED_REWARD_AMOUNT_KEYS.has(key),
+    ),
+  );
+};
 
 const maxRewardSats = () => {
   const configured = process.env.REWARDS_MAX_AMOUNT_SATS;
@@ -57,6 +71,7 @@ const validateRewardAmountPatch = (rewardAmounts) => {
 
 module.exports = {
   DEFAULT_REWARD_AMOUNTS,
+  migrateRewardAmounts,
   maxRewardSats,
   validateRewardAmountPatch,
 };

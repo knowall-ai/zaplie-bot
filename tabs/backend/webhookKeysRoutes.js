@@ -1,6 +1,6 @@
 // filepath: tabs/backend/webhookKeysRoutes.js
-// API keys for inbound reward flows (Logic Apps, Power Automate, timesheet
-// systems). Keys are stored as SHA-256 hashes and shown in full exactly once
+// API keys for the draft GitHub Logic App reward flow. Keys are stored as
+// SHA-256 hashes and shown in full exactly once
 // at creation; the bot validates presented keys against the active hashes.
 const express = require('express');
 const fs = require('fs');

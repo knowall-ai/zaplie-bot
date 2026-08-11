@@ -109,8 +109,8 @@ const ConnectionsSetting: FunctionComponent = () => {
           <div className={connectionStyles.cardText}>
             <span className={connectionStyles.cardTitle}>GitHub</span>
             <span className={connectionStyles.cardHint}>
-              Link your account so automated rewards for your pull requests, issues and
-              reviews land in your wallet.
+              Link your account so eligible GitHub rewards can resolve to your wallet. The
+              pull-request flow is still a draft pilot.
             </span>
           </div>
           {loading ? (

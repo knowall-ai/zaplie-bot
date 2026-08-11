@@ -156,11 +156,9 @@ server.post('/api/v1/rewards', async (req, res) => {
 
   try {
     const request = parseRewardRequest(req.body);
-    // The repo allowlist guards GitHub attribution; non-GitHub events (like
-    // timesheet flows) carry no repo and are trusted via the API key + cap.
-    if (request.repo !== undefined || request.eventType?.startsWith('github')) {
-      await assertRepoConnected(request.repo);
-    }
+    // This draft endpoint is deliberately restricted to GitHub. Generic flow
+    // identities need a separate provider-aware contract before they can pay.
+    await assertRepoConnected(request.repo);
     const amountSats = await resolveAmountSats(request);
     const result = await payReward({ ...request, amountSats });
     if ('pending' in result) {

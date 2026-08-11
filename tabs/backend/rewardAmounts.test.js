@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   DEFAULT_REWARD_AMOUNTS,
+  migrateRewardAmounts,
   maxRewardSats,
   validateRewardAmountPatch,
 } = require('./rewardAmounts');
@@ -20,6 +21,23 @@ test('accepts known reward rules with positive integer values', () => {
   assert.deepEqual(
     validateRewardAmountPatch({ githubPrMergedSats: 750 }),
     { valid: true },
+  );
+});
+
+test('drops the retired timesheet rule while preserving GitHub rules', () => {
+  assert.deepEqual(
+    migrateRewardAmounts({
+      githubPrMergedSats: 750,
+      timesheetWeekSats: 800,
+    }),
+    { githubPrMergedSats: 750 },
+  );
+});
+
+test('fails loudly for malformed stored reward amounts', () => {
+  assert.throws(
+    () => migrateRewardAmounts(null),
+    /Stored rewardAmounts must be an object/,
   );
 });
 
@@ -47,10 +65,10 @@ test('uses and validates the configured reward cap', () => {
   process.env.REWARDS_MAX_AMOUNT_SATS = '250';
   assert.equal(maxRewardSats(), 250);
   assert.deepEqual(
-    validateRewardAmountPatch({ timesheetWeekSats: 251 }),
+    validateRewardAmountPatch({ githubReviewSubmittedSats: 251 }),
     {
       valid: false,
-      message: 'timesheetWeekSats exceeds the per-reward cap of 250',
+      message: 'githubReviewSubmittedSats exceeds the per-reward cap of 250',
     },
   );
 

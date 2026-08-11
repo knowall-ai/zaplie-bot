@@ -5,6 +5,22 @@ import { resolveRewardRecipientByGithubId } from './identityService';
 import { createPendingReward } from './pendingRewardsService';
 
 const TREASURY_DISPLAY_NAME = 'Automation';
+const GITHUB_REWARD_EVENT_TYPES = [
+  'githubPrMerged',
+  'githubIssueClosed',
+  'githubReviewSubmitted',
+] as const;
+
+type GithubRewardEventType = (typeof GITHUB_REWARD_EVENT_TYPES)[number];
+
+function isGithubRewardEventType(
+  value: unknown,
+): value is GithubRewardEventType {
+  return (
+    typeof value === 'string' &&
+    (GITHUB_REWARD_EVENT_TYPES as readonly string[]).includes(value)
+  );
+}
 
 export class RewardError extends Error {
   constructor(
@@ -17,12 +33,11 @@ export class RewardError extends Error {
 
 export interface RewardRequest {
   recipient: string; // external identity, e.g. GitHub login (label only)
-  recipientId?: string; // stable numeric provider id, e.g. GitHub user id — never the login
-  amountSats?: number;
-  eventType?: string;
-  repo?: string; // owner/repo, checked against the connected-repos allowlist
+  recipientId: string; // stable GitHub numeric user id — never the login
+  eventType: GithubRewardEventType;
+  repo: string; // owner/repo, checked against the connected-repos allowlist
   reason: string;
-  source: string;
+  source: 'github';
 }
 
 export interface ResolvedRewardRequest {
@@ -38,52 +53,63 @@ export interface ResolvedRewardRequest {
 export function parseRewardRequest(body: unknown): RewardRequest {
   const { recipient, recipientId, amountSats, eventType, repo, reason, source } =
     (body ?? {}) as Record<string, unknown>;
-  if (typeof recipient !== 'string' || recipient.length === 0) {
+  if (typeof recipient !== 'string' || recipient.trim().length === 0) {
     throw new RewardError('recipient must be a non-empty string', 400);
   }
-  if (
-    recipientId !== undefined &&
-    ((typeof recipientId !== 'string' && typeof recipientId !== 'number') ||
-      String(recipientId).length === 0)
-  ) {
+  const normalizedRecipientId = normalizeGithubId(recipientId);
+  if (normalizedRecipientId === null) {
     throw new RewardError(
-      'recipientId must be a non-empty string or number',
+      'recipientId must be a positive GitHub integer id',
       400,
     );
   }
-  if (repo !== undefined && (typeof repo !== 'string' || repo.length === 0)) {
-    throw new RewardError('repo must be a non-empty string', 400);
+  if (
+    typeof repo !== 'string' ||
+    !/^[^/\s]+\/[^/\s]+$/.test(repo)
+  ) {
+    throw new RewardError('repo must use the owner/repository format', 400);
   }
   if (amountSats !== undefined) {
-    validateAmountSats(amountSats);
-  } else if (typeof eventType !== 'string' || eventType.length === 0) {
-    throw new RewardError('either amountSats or eventType is required', 400);
+    throw new RewardError(
+      'amountSats is not accepted; use a configured eventType',
+      400,
+    );
   }
-  if (typeof reason !== 'string' || reason.length === 0) {
+  if (!isGithubRewardEventType(eventType)) {
+    throw new RewardError(
+      `eventType must be one of: ${GITHUB_REWARD_EVENT_TYPES.join(', ')}`,
+      400,
+    );
+  }
+  if (typeof reason !== 'string' || reason.trim().length === 0) {
     throw new RewardError('reason must be a non-empty string', 400);
   }
-  if (typeof source !== 'string' || source.length === 0) {
-    throw new RewardError('source must be a non-empty string', 400);
+  if (source !== 'github') {
+    throw new RewardError('source must be github', 400);
   }
   return {
-    recipient,
+    recipient: recipient.trim(),
     // GitHub ids are numbers over the wire; store as a string to match the identity store's key
-    recipientId: recipientId !== undefined ? String(recipientId) : undefined,
-    // already validated above; cast reflects that, not new trust
-    amountSats: amountSats as number | undefined,
-    // eventType is unused when amountSats is set, so a malformed one is dropped, not a 400
-    eventType: typeof eventType === 'string' ? eventType : undefined,
-    repo: typeof repo === 'string' ? repo : undefined,
-    reason,
+    recipientId: normalizedRecipientId,
+    eventType,
+    repo,
+    reason: reason.trim(),
     source,
   };
 }
 
-// This is what makes "connect several repos" have real effect.
-export async function assertRepoConnected(repo: string | undefined): Promise<void> {
-  if (!repo) {
-    throw new RewardError('repo is required', 400);
+function normalizeGithubId(value: unknown): string | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? String(value) : null;
   }
+  if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) {
+    return value;
+  }
+  return null;
+}
+
+// This is what makes "connect several repos" have real effect.
+export async function assertRepoConnected(repo: string): Promise<void> {
   const { repos } = await getAutomations();
   if (!repos.includes(repo)) {
     throw new RewardError(`repo '${repo}' is not connected`, 403);
@@ -98,32 +124,15 @@ function isPositiveInteger(amountSats: unknown): amountSats is number {
   );
 }
 
-// single cap-check predicate shared with resolveAmountSats so the two amount sources can't drift
+// Configured rewards fail closed when a portal value is malformed or above the cap.
 function isValidRewardAmount(amountSats: unknown): amountSats is number {
   return isPositiveInteger(amountSats) && amountSats <= maxAmountSats();
-}
-
-function validateAmountSats(amountSats: unknown): asserts amountSats is number {
-  if (!isPositiveInteger(amountSats)) {
-    throw new RewardError('amountSats must be a positive integer', 400);
-  }
-  if (!isValidRewardAmount(amountSats)) {
-    throw new RewardError(
-      `amountSats exceeds the per-reward cap of ${maxAmountSats()}`,
-      400,
-    );
-  }
 }
 
 export async function resolveAmountSats(
   request: RewardRequest,
 ): Promise<number> {
-  if (request.amountSats !== undefined) {
-    return request.amountSats;
-  }
-
-  // parseRewardRequest guarantees eventType is set when amountSats is absent.
-  const eventType = request.eventType as string;
+  const eventType = request.eventType;
   const configKey = `${eventType}Sats`;
   const rewardAmounts = await getRewardAmounts();
   const amountSats = Object.prototype.hasOwnProperty.call(

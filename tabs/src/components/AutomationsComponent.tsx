@@ -22,7 +22,6 @@ import ZapIcon from '../images/ZapIcon.svg';
 import MicrosoftIcon from '../images/Microsoft.svg';
 import SlackIcon from '../images/Slack.svg';
 import FlowArrowIcon from '../images/FlowArrow.svg';
-import ClockIcon from '../images/Clock.svg';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -31,34 +30,36 @@ const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 // Per-event rule metadata for the list; the amounts themselves come from /api/reward-amounts.
 const RULE_META: Record<
   string,
-  { title: string; icon: string; sentence: (sats: number) => string }
+  {
+    title: string;
+    icon: string;
+    status: string;
+    sentence: (sats: number) => string;
+  }
 > = {
   githubPrMergedSats: {
     title: 'Pull request merged',
     icon: GithubIcon,
+    status: 'Draft flow',
     sentence: sats => `When a pull request is merged in a connected repository, the author gets ${sats} sats.`,
   },
   githubIssueClosedSats: {
     title: 'Issue closed',
     icon: GithubIcon,
-    sentence: sats => `When an issue is closed in a connected repository, the closer gets ${sats} sats.`,
+    status: 'Flow required',
+    sentence: sats => `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
   },
   githubReviewSubmittedSats: {
     title: 'Review submitted',
     icon: GithubIcon,
-    sentence: sats => `When a code review is submitted in a connected repository, the reviewer gets ${sats} sats.`,
-  },
-  timesheetWeekSats: {
-    title: 'Timesheet week complete',
-    icon: ClockIcon,
-    sentence: sats => `When a flow reports a completed timesheet week, the teammate gets ${sats} sats.`,
+    status: 'Flow required',
+    sentence: sats => `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
   },
 };
 const RULE_ORDER = [
   'githubPrMergedSats',
   'githubIssueClosedSats',
   'githubReviewSubmittedSats',
-  'timesheetWeekSats',
 ];
 
 const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
@@ -182,7 +183,7 @@ const AutomationsComponent: FunctionComponent = () => {
   const handleCreateKey = async () => {
     const label = newKeyLabel.trim();
     if (!label) {
-      toast.error('Give the key a label, like "Timesheet flow".');
+      toast.error('Give the key a label, like "GitHub Logic App".');
       return;
     }
     setCreatingKey(true);
@@ -304,8 +305,8 @@ const AutomationsComponent: FunctionComponent = () => {
           <span className={styles.eyebrow}>Workflow control centre</span>
           <h2 className={styles.title}>Automations</h2>
           <p className={styles.bannerSubtitle}>
-            Reward real work automatically. Connect the tools where work happens, set how many
-            sats each event pays, and Zaplie sends the reward the moment it happens.
+            Preview the GitHub rewards pilot, configure its rules and inspect recorded treasury
+            activity. Keep its treasury unfunded until the safety blockers are closed.
           </p>
           <nav className={styles.sectionNav} aria-label="Automations sections">
             <a href="#automation-engagement">Recipients</a>
@@ -424,7 +425,7 @@ const AutomationsComponent: FunctionComponent = () => {
         <div className={styles.step}>
           <span className={styles.stepNum}>1</span>
           <span className={styles.stepText}>
-            Connect a source below, like GitHub or a business flow.
+            Connect GitHub and deploy the pull-request sample flow.
           </span>
         </div>
         <div className={styles.step}>
@@ -460,8 +461,8 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
           </div>
           <p className={styles.connDescription}>
-            Install the Zaplie GitHub App and pick the repositories to watch. Pull requests,
-            issues and reviews in those repositories pay sats automatically.
+            Install the Zaplie GitHub App and pick repositories for the draft pull-request flow.
+            Issue and review rewards require separate verified flows.
           </p>
           {appInstalled && repos.length === 0 && (
             <span className={styles.connHint}>
@@ -524,17 +525,13 @@ const AutomationsComponent: FunctionComponent = () => {
               <img src={FlowArrowIcon} alt="" />
             </span>
             <div className={styles.connCardTitle}>
-              <span className={styles.connName}>Power Automate and Logic Apps</span>
-              <span className={styles.connStatus}>
-                {activeWebhookKeyCount > 0
-                  ? `${activeWebhookKeyCount} active ${activeWebhookKeyCount === 1 ? 'key' : 'keys'}`
-                  : 'Available today'}
-              </span>
+              <span className={styles.connName}>GitHub Logic Apps pilot</span>
+              <span className={styles.connStatus}>Draft — not production ready</span>
             </div>
           </div>
           <p className={styles.connDescription}>
-            Business flows such as timesheet completion or approvals POST to the rewards
-            endpoint with an API key you create here. Sample flow in docs/automation.
+            Create a key for the GitHub pull-request sample flow. Production use remains
+            blocked until durable idempotency and aggregate budget controls land.
           </p>
           {isAdmin && (
             <>
@@ -581,7 +578,7 @@ const AutomationsComponent: FunctionComponent = () => {
               <div className={styles.addRow}>
                 <input
                   type="text"
-                  placeholder='Key label, like "Timesheet flow"'
+                  placeholder='Key label, like "GitHub Logic App"'
                   value={newKeyLabel}
                   onChange={e => setNewKeyLabel(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleCreateKey()}
@@ -609,22 +606,6 @@ const AutomationsComponent: FunctionComponent = () => {
           <p className={styles.connDescription}>
             Calendar and people signals from Microsoft Graph already power Your week and the
             assistant's suggestions. Shared inbox digests are next.
-          </p>
-        </div>
-
-        <div className={styles.connCard}>
-          <div className={styles.connCardHead}>
-            <span className={styles.cardBadge}>
-              <img src={ClockIcon} alt="" />
-            </span>
-            <div className={styles.connCardTitle}>
-              <span className={styles.connName}>Timesheets and CRM</span>
-              <span className={styles.connStatus}>Via API key today</span>
-            </div>
-          </div>
-          <p className={styles.connDescription}>
-            Any system that can call a webhook, like a timesheet app or CRM, rewards teammates
-            today using a flow API key. Native connectors are on the roadmap.
           </p>
         </div>
 
@@ -661,7 +642,7 @@ const AutomationsComponent: FunctionComponent = () => {
                 <span className={styles.cardBadge}>
                   <img src={meta.icon} alt="" />
                 </span>
-                <span className={styles.ruleStatus}>Active</span>
+                <span className={styles.ruleStatus}>{meta.status}</span>
               </div>
               <div className={styles.ruleInfo}>
                 <span className={styles.ruleTitle}>{meta.title}</span>
