@@ -54,6 +54,14 @@ resource webApp 'Microsoft.Web/sites@2021-02-01' = {
           value: '1'
         }
         {
+          name: 'ZAPLIE_CONFIG_FILE'
+          value: 'D:/home/data/zaplie/admin-config.json'
+        }
+        {
+          name: 'REWARDS_MAX_AMOUNT_SATS'
+          value: '10000'
+        }
+        {
           name: 'RUNNING_ON_AZURE'
           value: '1'
         }
@@ -68,6 +76,8 @@ resource webAppSettings 'Microsoft.Web/sites/config@2021-02-01' = {
   properties: {
     WEBSITE_NODE_DEFAULT_VERSION: '~24'
     WEBSITE_RUN_FROM_PACKAGE: '1'
+    ZAPLIE_CONFIG_FILE: 'D:/home/data/zaplie/admin-config.json'
+    REWARDS_MAX_AMOUNT_SATS: '10000'
     BOT_ID: botAadAppClientId
     BOT_PASSWORD: botAadAppClientSecret
     BOT_DOMAIN: webApp.properties.defaultHostName

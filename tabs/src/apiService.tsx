@@ -21,12 +21,25 @@ const bearerHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 });
 
+export const sanitizeApiError = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    return {
+      message: error.message,
+      status: error.response?.status,
+      code: error.code,
+    };
+  }
+  return {
+    message: error instanceof Error ? error.message : 'Unknown API error',
+  };
+};
+
 export const getRewardName = async () => {
   try {
     const response = await axios.get(`${API_URL}/reward-name`);
     return response.data;
   } catch (error) {
-    console.error('Error fetching reward name:', error);
+    console.error('Error fetching reward name:', sanitizeApiError(error));
     throw error;
   }
 };
@@ -38,7 +51,7 @@ export const getAdminConfig = async (accessToken: string): Promise<AdminConfigRe
     });
     return response.data;
   } catch (error) {
-    console.error('Error fetching admin config:', error);
+    console.error('Error fetching admin config:', sanitizeApiError(error));
     throw error;
   }
 };
@@ -55,7 +68,7 @@ export const updateAdminConfig = async (
     );
     return response.data;
   } catch (error) {
-    console.error('Error updating admin config:', error);
+    console.error('Error updating admin config:', sanitizeApiError(error));
     throw error;
   }
 };

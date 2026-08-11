@@ -1,5 +1,6 @@
 process.env.AAD_APP_TENANT_ID = 'test-tenant';
 process.env.AAD_APP_CLIENT_ID = 'test-client';
+process.env.REWARDS_MAX_AMOUNT_SATS = '10000';
 
 const fs = require('fs');
 const http = require('http');
@@ -130,7 +131,7 @@ describe('admin config access and atomic persistence', () => {
     });
   });
 
-  test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+  test.each([0, -1, 1.5, 10001, Number.MAX_SAFE_INTEGER + 1])(
     'rejects invalid reward amount %p without changing any setting',
     async (githubPrMergedSats) => {
       const before = fs.readFileSync(testDataFile, 'utf8');

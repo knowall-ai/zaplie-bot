@@ -23,8 +23,7 @@
 
 == Prerequisites
 
-- Node.js 18 (App Service is pinned to `~18`; CI builds with Node 20 — see the
-  MSAL override note in README.md)
+- Node.js 24 (App Service and CI are pinned to Node 24)
 - Teams Toolkit VS Code extension ≥ 5.0.0 or the TeamsFx CLI (`teamsapp`)
 - An M365 tenant with permission to upload custom Teams apps
 - An LNbits 0.12+ instance with the User Manager extension
@@ -157,6 +156,17 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
   tokens
 | Tabs backend
 
+| `ZAPLIE_CONFIG_FILE`
+| Absolute path to the writable, persistent administrator configuration file.
+  Required in production; the provisioned Windows App Service uses
+  `D:/home/data/zaplie/admin-config.json`
+| Tabs backend
+
+| `REWARDS_MAX_AMOUNT_SATS`
+| Maximum positive safe-integer reward amount accepted from the Admin form
+  (default: `10000`)
+| Tabs backend
+
 | `WEBSITE_URL`, `CONTENT_URL`
 | Public URLs substituted into the Teams manifest by `build.js`
 | Manifest
@@ -171,6 +181,21 @@ the users or groups allowed to change organization settings. The Settings
 page requests an access token for `REACT_APP_ADMIN_API_SCOPE`; the backend
 verifies its signature, issuer, audience, delegated `access_as_user` scope,
 and `Zaplie.Admin` role before accepting the atomic configuration write.
+
+`REACT_APP_ADMIN_API_SCOPE` is build-time configuration, not a runtime App
+Service setting. Configure it for the GitHub `Test` and production builds as
+`api://botid-<BOT_ID>/access_as_user`; both deployment workflows fail before
+building when it is absent. The App Service must also expose
+`AAD_APP_CLIENT_ID` and `AAD_APP_TENANT_ID` to the backend. Teams Toolkit
+derives the local SPA and backend values into `tabs/.env.development.local`.
+
+Production must never write configuration inside the run-from-package content
+tree. `ZAPLIE_CONFIG_FILE` therefore has no production fallback. On first
+startup the backend creates the parent directory and a mode-restricted seed
+file only when the target does not already exist; malformed or unwritable
+state fails loudly. `tabs/backend/data.json` remains a development/test seed
+only. Provisioning the exposed API scope and assigning `Zaplie.Admin` are
+external tenant operations required before authenticated smoke testing.
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.

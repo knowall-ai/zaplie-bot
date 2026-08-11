@@ -34,8 +34,9 @@
   },
   "scripts": {
     "preinstall": "npx npm-force-resolutions",
-    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "start": "concurrently \"npm run server:dev\" \"npm run client\"",
     "server": "node backend/server.js",
+    "server:dev": "node --env-file=.env.development.local backend/server.js",
     "client": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",

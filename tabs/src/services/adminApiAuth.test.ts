@@ -23,6 +23,20 @@ test('returns the API access token rather than the ID token', async () => {
   await expect(acquireAdminApiAccessToken(instance, account)).resolves.toBe('api-access-token');
 });
 
+test('fails before requesting a token when the API scope is absent', async () => {
+  delete process.env.REACT_APP_ADMIN_API_SCOPE;
+  const acquireTokenSilent = jest.fn();
+  const instance = {
+    acquireTokenSilent,
+    acquireTokenPopup: jest.fn(),
+  } as never;
+
+  await expect(acquireAdminApiAccessToken(instance, account)).rejects.toThrow(
+    'REACT_APP_ADMIN_API_SCOPE is required',
+  );
+  expect(acquireTokenSilent).not.toHaveBeenCalled();
+});
+
 test('uses an interactive API-scope request only when MSAL requires it', async () => {
   const acquireTokenPopup = jest.fn().mockResolvedValue({
     accessToken: 'interactive-access-token',

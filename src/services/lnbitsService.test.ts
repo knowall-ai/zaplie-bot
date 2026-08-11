@@ -162,8 +162,7 @@ describe('createInvoice', () => {
     });
   });
 
-  // Bug: the catch returns the Error, so callers receive it as the resolved value.
-  test.failing('rejects on a non-2xx response', async () => {
+  test('rejects on a non-2xx response', async () => {
     fetchMock.mockImplementationOnce(async () => jsonResponse({}, { status: 500 }));
 
     await expect(service.createInvoice('in-key', 'wallet-1', 21, 'memo', {})).rejects.toThrow(
