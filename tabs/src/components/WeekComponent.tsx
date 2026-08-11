@@ -23,7 +23,7 @@ const initialsOf = (label: string): string => {
 
 const renderAvatar = (name: string, matchedUser: User | null) =>
   matchedUser?.profileImg ? (
-    <img className={styles.avatar} src={matchedUser.profileImg} alt="" />
+    <img className={styles.avatar} src={matchedUser.profileImg} alt={`${name}'s profile`} />
   ) : (
     <div className={styles.avatarFallback}>{initialsOf(name)}</div>
   );
@@ -162,14 +162,33 @@ const WeekComponent: React.FC = () => {
     setReloadCount(count => count + 1);
   };
 
+  const pageHeader = (
+    <header className={styles.header}>
+      <span className={styles.eyebrow}>Weekly pulse</span>
+      <h1 id="week-title" className={styles.title}>Your week</h1>
+      <p className={styles.subtitle}>Recent meetings and the teammates worth recognising.</p>
+    </header>
+  );
+
   if (loading) {
-    return <div className={styles.weekcomponent}><p className={styles.subtitle}>Loading your week...</p></div>;
+    return (
+      <section className={styles.weekcomponent} aria-labelledby="week-title" aria-busy="true">
+        {pageHeader}
+        <span className={styles.srOnly} role="status">Loading your week</span>
+        <div className={styles.skeletonStats} aria-hidden="true">
+          {[0, 1, 2].map(item => <div key={item} className={styles.skeletonStat} />)}
+        </div>
+        <div className={styles.skeletonList} aria-hidden="true">
+          {[0, 1, 2].map(item => <div key={item} className={styles.skeletonRow} />)}
+        </div>
+      </section>
+    );
   }
 
   if (needsConsent) {
     return (
-      <div className={styles.weekcomponent}>
-        <h2 className={styles.title}>Your week</h2>
+      <section className={styles.weekcomponent} aria-labelledby="week-title">
+        {pageHeader}
         <div className={styles.consentBox}>
           <p className={styles.subtitle}>
             Zaplie needs permission to read your calendar and relevant contacts to show recent meetings and the people you work with.
@@ -178,12 +197,25 @@ const WeekComponent: React.FC = () => {
             Grant calendar access
           </button>
         </div>
-      </div>
+      </section>
     );
   }
 
   if (error) {
-    return <div className={styles.weekcomponent}><p className={styles.errorText}>{error}</p></div>;
+    return (
+      <section className={styles.weekcomponent} aria-labelledby="week-title">
+        {pageHeader}
+        <div className={styles.errorBox} role="alert">
+          <div>
+            <strong>We couldn't load your week.</strong>
+            <p className={styles.errorText}>{error}</p>
+          </div>
+          <button className={styles.secondaryButton} onClick={() => setReloadCount(count => count + 1)}>
+            Try again
+          </button>
+        </div>
+      </section>
+    );
   }
 
   const attendeesToZap = metAttendees.filter(a => a.matchedUser && !a.alreadyZapped);
@@ -218,11 +250,10 @@ const WeekComponent: React.FC = () => {
   );
 
   return (
-    <div className={styles.weekcomponent}>
-      <h2 className={styles.title}>Your week</h2>
-      <p className={styles.subtitle}>Meetings from the last {DAYS_BACK} days, and teammates worth recognising.</p>
+    <section className={styles.weekcomponent} aria-labelledby="week-title">
+      {pageHeader}
 
-      <div className={styles.stats}>
+      <div className={styles.stats} aria-label={`Summary for the last ${DAYS_BACK} days`}>
         <div className={styles.stat}>
           <span className={styles.statNum}>{meetings.length}</span>
           <span className={styles.statLabel}>meetings</span>
@@ -250,9 +281,12 @@ const WeekComponent: React.FC = () => {
         </div>
       )}
 
-      <h3 className={styles.sectionHeading}>Recent meetings ({meetings.length})</h3>
-      {meetings.length === 0 && <p className={styles.emptyText}>No meetings found in this period.</p>}
+      <div className={styles.sectionHeader}>
+        <h2 className={styles.sectionHeading}>Recent meetings</h2>
+        <span className={styles.count}>{meetings.length}</span>
+      </div>
       <div className={styles.section}>
+        {meetings.length === 0 && <p className={styles.emptyText}>No meetings found in the last {DAYS_BACK} days.</p>}
         {meetings.map(event => {
           const start = asUtc(event.start.dateTime);
           return (
@@ -272,9 +306,12 @@ const WeekComponent: React.FC = () => {
         })}
       </div>
 
-      <h3 className={styles.sectionHeading}>People you met ({metAttendees.length})</h3>
-      {metAttendees.length === 0 && <p className={styles.emptyText}>No other attendees in this period.</p>}
+      <div className={styles.sectionHeader}>
+        <h2 className={styles.sectionHeading}>People you met</h2>
+        <span className={styles.count}>{metAttendees.length}</span>
+      </div>
       <div className={styles.section}>
+        {metAttendees.length === 0 && <p className={styles.emptyText}>No other attendees in this period.</p>}
         {metAttendees.map(attendee =>
           renderPerson(
             attendee.email,
@@ -294,7 +331,10 @@ const WeekComponent: React.FC = () => {
 
       {collaborators.length > 0 && (
         <>
-          <h3 className={styles.sectionHeading}>People you work with most</h3>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionHeading}>People you work with most</h2>
+            <span className={styles.count}>{collaborators.length}</span>
+          </div>
           <div className={styles.section}>
             {collaborators.map(person =>
               renderPerson(person.email, person.name, person.email, person.matchedUser, person.alreadyZapped),
@@ -306,7 +346,7 @@ const WeekComponent: React.FC = () => {
       {zapTarget && (
         <SendZapsPopup initialUserId={zapTarget.id} onClose={() => setZapTarget(null)} />
       )}
-    </div>
+    </section>
   );
 };
 

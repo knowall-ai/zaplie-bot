@@ -46,12 +46,10 @@ msalInstance.initialize().then(async () => {
       <CacheProvider>
       <Router>
         <ThemeProvider theme={theme}>
-          <CacheProvider>
           <App pca={msalInstance} />
-          </CacheProvider>
         </ThemeProvider>
       </Router>
-    </CacheProvider>,
+    </CacheProvider>
     </MsalProvider>
 
   );

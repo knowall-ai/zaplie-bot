@@ -1,14 +1,15 @@
 import React from 'react';
 import WeekComponent from './components/WeekComponent';
 import './App.css';
+import styles from './Week.module.css';
 
 const Week: React.FC = () => {
   return (
-    <div style={{ background: '#1F1F1F', marginTop: 20, marginBottom: 40, alignSelf: 'stretch', width: '100%', boxSizing: 'border-box' }}>
-      <div style={{ paddingLeft: 20, paddingRight: 20, paddingBottom: 20, paddingTop: 0 }}>
+    <main className={styles.page}>
+      <div className={styles.content}>
         <WeekComponent />
       </div>
-    </div>
+    </main>
   );
 };
 
