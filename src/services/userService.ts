@@ -12,7 +12,6 @@ import {
   getUsers,
   createUser,
   createWallet,
-  updateUser,
   getUser,
   getUserWallets,
   topUpWallet,
@@ -30,6 +29,19 @@ interface CancellationToken {
 
 function sanitizeString(str: string): string {
   return str.replace(/[^a-zA-Z0-9]/g, '');
+}
+
+async function applyInitialAllowance(walletId: string): Promise<void> {
+  const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
+  if (!initialAllowanceStr) {
+    return;
+  }
+  const initialAllowance = Number.parseInt(initialAllowanceStr, 10);
+  if (!Number.isInteger(initialAllowance) || initialAllowance <= 0) {
+    console.error('Invalid initial allowance value:', initialAllowanceStr);
+    return;
+  }
+  await topUpWallet(walletId, initialAllowance);
 }
 
 export class UserService {
@@ -71,129 +83,64 @@ export class UserService {
     }
 
     if (!lnbitsUsers || lnbitsUsers.length < 1) {
-      // Create LNbits user (they don't exist yet)
       user = await createUser(
         adminKey,
         teamsChannelAccount.name,
         'Private',
         teamsChannelAccount.email,
-        '', // The password is a legacy field and ignored anyway.
+        '',
         {
           aadObjectId: aadObjectId,
           userType: 'teammate',
-          profileImg: `https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName='${teamsChannelAccount.userPrincipalName}`, // TODO: Get the user's profile image from Teams
-          //profileImg: teamsChannelAccount.properties
-        }, // We'll check and update this when when they have both wallets anyway.
+          profileImg: `https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName='${teamsChannelAccount.userPrincipalName}`,
+        },
       );
 
-      // Create their allowance wallet
-      const allowanceWallet = await createWallet(
-        adminKey,
-        user.id,
-        'Allowance',
-      );
-      // TODO: Put this into a function (re-use below)
-      const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
-      if (initialAllowanceStr) {
-        const initialAllowance = parseInt(initialAllowanceStr); // Parse as a floating-point number
-        if (!isNaN(initialAllowance)) {
-          await topUpWallet(allowanceWallet.id, initialAllowance);
-        } else {
-          console.error(
-            'Invalid initial allowance value:',
-            initialAllowanceStr,
-          );
-        }
-      }
-      user = await updateUser(adminKey, user.id, {
-        allowanceWalletId: allowanceWallet.id,
-      }); // Update the user with the allowance wallet id
+      const allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
+      await applyInitialAllowance(allowanceWallet.id);
+      user = { ...user, allowanceWallet };
+    } else {
+      user = lnbitsUsers[0];
     }
 
-    // OK, so the user exists in LNbits
-    // Now let's ensure they have both wallets
-
-    user = lnbitsUsers[0];
-
-    let allowanceWallet = null;
-
-    if (user.allowanceWallet) {
-      console.log('Setting  allowance wallet');
-      allowanceWallet = await getWalletById(user.id, user.allowanceWallet.id);
-      if (allowanceWallet.deleted) {
-        throw new Error(
-          'Mmm ... it looks like your allowance wallet has been deleted?!',
-        );
-      }
+    let allowanceWallet = user.allowanceWallet
+      ? await getWalletById(user.id, user.allowanceWallet.id)
+      : null;
+    if (allowanceWallet?.deleted) {
+      throw new Error(
+        'Mmm ... it looks like your allowance wallet has been deleted?!',
+      );
     }
     if (!allowanceWallet) {
-      // No matching allowance wallet found, create their allowance wallet
-      // But first, we should check if they have a wallet by that name already
-      let userWallets = await getUserWallets(adminKey, user.id);
-      let allowanceWallet = userWallets.find(w => w.name === 'Allowance');
-      if (allowanceWallet.balance_msat < 1) {
-        // If the orphaned wallet we found is empty, let's top them up so they can zap!
-        // TODO: Separate this out into a function
-        const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
-        if (initialAllowanceStr) {
-          const initialAllowance = parseInt(initialAllowanceStr); // Parse as a floating-point number
-          if (!isNaN(initialAllowance)) {
-            await topUpWallet(allowanceWallet.id, initialAllowance);
-          } else {
-            console.error(
-              'Invalid initial allowance value:',
-              initialAllowanceStr,
-            );
-          }
-        }
-      }
+      const userWallets = await getUserWallets(adminKey, user.id);
+      // Only fund a wallet we just created: existing users pass through here
+      // every turn, and re-funding on balance would let anyone who spends to
+      // zero get topped back up on their next message.
+      allowanceWallet = userWallets.find(w => w.name === 'Allowance') ?? null;
       if (!allowanceWallet) {
         allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
-        // TODO: Put this into a function (re-use below)
-        const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
-        if (initialAllowanceStr) {
-          const initialAllowance = parseInt(initialAllowanceStr); // Parse as a floating-point number
-          if (!isNaN(initialAllowance)) {
-            await topUpWallet(allowanceWallet.id, initialAllowance);
-          } else {
-            console.error(
-              'Invalid initial allowance value:',
-              initialAllowanceStr,
-            );
-          }
-        }
+        await applyInitialAllowance(allowanceWallet.id);
       }
-      user = await updateUser(adminKey, user.id, {
-        allowanceWalletId: allowanceWallet.id,
-      }); // Update the user with the allowance wallet id
+      user = { ...user, allowanceWallet };
     }
 
-    let privateWallet = null;
-
-    if (user.privateWallet) {
-      privateWallet = await getWalletById(user.id, user.privateWallet.id);
-      if (privateWallet.deleted) {
-        throw new Error(
-          'Mmm ... it looks like your private wallet has been deleted?!',
-        );
-      }
+    let privateWallet = user.privateWallet
+      ? await getWalletById(user.id, user.privateWallet.id)
+      : null;
+    if (privateWallet?.deleted) {
+      throw new Error(
+        'Mmm ... it looks like your private wallet has been deleted?!',
+      );
     }
     if (!privateWallet) {
-      // No matching private wallet found, create their private wallet
-      // But first, we should check if they have a wallet by that name already
-      let userWallets = await getUserWallets(adminKey, user.id);
-      let privateWallet = userWallets.find(w => w.name === 'Private');
-      if (!privateWallet) {
-        privateWallet = await createWallet(adminKey, user.id, 'Private');
-      }
-      user = await updateUser(adminKey, user.id, {
-        privateWalletId: privateWallet.id,
-      }); // Update the user with the private wallet id
+      const userWallets = await getUserWallets(adminKey, user.id);
+      privateWallet =
+        userWallets.find(w => w.name === 'Private') ??
+        (await createWallet(adminKey, user.id, 'Private'));
+      user = { ...user, privateWallet };
     }
 
-    // OK, now let's set the current user
     this.setCurrentUser(user);
-    console.log('ensureUserSetup completed.');
     return user;
   }
 }
