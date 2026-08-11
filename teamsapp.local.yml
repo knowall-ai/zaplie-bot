@@ -69,6 +69,16 @@ provision:
       appPackagePath: ./appPackage/build/appPackage.${{TEAMSFX_ENV}}.zip
 
 deploy:
+  # The Teams webview rejects HTTP and untrusted certs, so the tab at
+  # https://localhost:3000 needs the toolkit's OS-trusted dev certificate.
+  - uses: devTool/install
+    with:
+      devCert:
+        trust: true
+    writeToEnvironmentFile:
+      sslCertFile: SSL_CRT_FILE
+      sslKeyFile: SSL_KEY_FILE
+
   - uses: cli/runNpmCommand
     with:
       args: install --no-audit
@@ -83,3 +93,10 @@ deploy:
         AAD_APP_CLIENT_SECRET: ${{SECRET_AAD_APP_CLIENT_SECRET}}
         AAD_APP_TENANT_ID: ${{AAD_APP_TENANT_ID}}
         AAD_APP_OAUTH_AUTHORITY_HOST: ${{AAD_APP_OAUTH_AUTHORITY_HOST}}
+  - uses: file/createOrUpdateEnvironmentFile
+    with:
+      target: ./tabs/.env.development.local
+      envs:
+        HTTPS: 'true'
+        SSL_CRT_FILE: ${{SSL_CRT_FILE}}
+        SSL_KEY_FILE: ${{SSL_KEY_FILE}}
