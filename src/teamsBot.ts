@@ -30,14 +30,12 @@ import {
 
 //Reward Name Constants
 
-import { getRewardName } from './services/fetchRewardsName';
-
-let globalRewardName: string;
-
-(async () => {
-  globalRewardName = await getRewardName();
-  console.log(`Reward Name is `, JSON.stringify(globalRewardName));
-})();
+const globalRewardName: string = process.env.LNBITS_POINTS_LABEL as string;
+if (!globalRewardName) {
+  throw new Error(
+    'LNBITS_POINTS_LABEL is not set. Configure it in env/.env.dev (propagated to the bot by scripts/writeEnv.js).',
+  );
+}
 
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
