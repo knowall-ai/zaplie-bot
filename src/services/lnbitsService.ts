@@ -840,7 +840,7 @@ async function scheduledTopup() {
   const hostWalletId = process.env.LNBITS_HOST_WALLET_ID as string;
   const hostUserId = process.env.LNBITS_HOST_USER_ID as string;
 
-  const host = getWalletById(hostUserId, hostWalletId);
+  const host = await getWalletById(hostUserId, hostWalletId);
 
   if (allowancewallets) {
     allowancewallets.forEach(async wallet => {
