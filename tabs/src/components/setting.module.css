@@ -1,44 +1,26 @@
 /* filepath: /c:/projects/ZapVibes/tabs/src/components/setting.module.css */
 .mainContainer {
-  width: 90%; /* Use percentage for fluid width */
-  max-width: 1052px; /* Set a maximum width */
-  height: auto; /* Allow height to adjust based on content */
+  width: 90%;
+  max-width: 1052px;
   position: relative;
-  margin: 0 auto; /* Center the container */
-  border: 20px solid rgba(31, 31, 31, 1);
-  border-top: 0px;
-  box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
+  margin: 0 auto;
+  border: 20px solid #1f1f1f;
+  border-top: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 1px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
   background-color: #2d2b2c;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
   padding: 20px;
   box-sizing: border-box;
-  gap: 20px;
-  text-align: left;
-  font-size: 12px;
-  color: #d6d6d6;
-  font-family: Inter;
-  -webkit-user-select: none;
-  user-select: none;
+  color: #f3f4f6;
+  font-family: Inter, sans-serif;
 }
 
 .title {
-  width: 100%; /* Make title width responsive */
-  height: auto; /* Allow height to adjust based on content */
-  font-family: 'Inter';
-  font-style: normal;
+  width: 100%;
   font-weight: 700;
   font-size: 14px;
   line-height: 17px;
   color: #ffffff;
-  flex: none;
-  order: 0;
-  align-self: stretch;
-  flex-grow: 0;
-  z-index: 0;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -48,97 +30,158 @@
   right: 20px;
   top: 5px;
   font-size: 10px;
-  color: #84cc16;
-  font-weight: 400;
+  color: #a3e635;
+  font-weight: 500;
 }
 
-.currencySetting {
-  width: 100%; /* Make currency setting take full width */
+.adminForm {
+  width: 100%;
+  max-width: 48rem;
   display: flex;
-  flex-direction: column; /* Stack elements vertically */
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.sectionHeading p {
+  margin: 4px 0 0;
+  color: #d6d6d6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  margin: 20px 0;
-}
-
-.inputGroup {
-  width: 100%; /* Make input group take full width */
-  display: flex;
-  align-items: center; /* Align items horizontally */
-  gap: 10px; /* Add space between elements */
+  gap: 6px;
 }
 
 .label {
+  color: #f3f4f6;
   font-size: 12px;
-  font-weight: 300;
-  color: #d6d6d6;
-  margin-bottom: 5px; /* Add space between label and input group */
+  font-weight: 600;
 }
 
-.textBox {
-  flex: 1; /* Allow text box to take available space */
-  padding: 8px;
-  border: 1px solid #ccc;
+.textBox,
+.textArea {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #9ca3af;
   border-radius: 4px;
-  color: white; /* Default text color */
+  background-color: #ffffff;
+  color: #1f1f1f;
+  font: inherit;
+  font-size: 13px;
 }
 
-.textBox.editing {
-  color: black; /* Text color when editing */
+.textBox:focus,
+.textArea:focus {
+  border-color: #a3e635;
+  outline: 2px solid #a3e635;
+  outline-offset: 2px;
 }
 
 .compactInput {
-  flex: 0 1 12rem;
-  max-width: 100%;
+  width: 12rem;
+}
+
+.amountInput {
+  width: 9rem;
 }
 
 .textArea {
   width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  color: white;
-  font-family: Inter;
+  min-height: 8rem;
   resize: vertical;
+  line-height: 1.5;
 }
 
-.textArea.editing {
-  color: black;
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
 }
 
-.textAreaGroup {
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.textAreaGroup .textArea {
-  flex: 1 1 100%;
-}
-
-.textAreaGroup .editButton,
-.textAreaGroup .saveButton {
-  margin-left: auto;
-}
-
-.editButton,
 .saveButton {
-  width: 100px; /* Set button width to 100px */
-  padding: 8px 16px;
-  border: none;
+  min-width: 100px;
+  padding: 9px 18px;
+  border: 1px solid transparent;
   border-radius: 4px;
   background-color: #84cc16;
-  color: #1f1f1f;
+  color: #17210b;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.editButton:hover,
-.saveButton:hover {
-  background-color: #6ba513;
+.saveButton:hover:not(:disabled) {
+  background-color: #a3e635;
 }
 
-.editButton:focus-visible,
 .saveButton:focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: 2px;
+}
+
+.saveButton:disabled {
+  background-color: #4b5563;
+  color: #e5e7eb;
+  cursor: not-allowed;
+}
+
+.statusMessage,
+.errorMessage,
+.validationMessage {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.statusMessage {
+  margin: 28px 0 0;
+  color: #d6d6d6;
+}
+
+.errorMessage {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid #fda4af;
+  background: rgba(190, 18, 60, 0.2);
+  color: #ffe4e6;
+}
+
+.validationMessage {
+  color: #fecdd3;
+}
+
+@media (max-width: 600px) {
+  .mainContainer {
+    width: 100%;
+    border-width: 12px;
+    border-top-width: 0;
+    padding: 16px;
+  }
+
+  .providedBy {
+    position: static;
+    display: block;
+    margin-top: 4px;
+  }
+
+  .compactInput,
+  .amountInput {
+    width: 100%;
+  }
+
+  .formActions,
+  .saveButton {
+    width: 100%;
+  }
 }

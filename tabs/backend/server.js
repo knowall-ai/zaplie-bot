@@ -1,108 +1,167 @@
 // filepath: /c:/projects/ZapVibes/tabs/backend/server.js
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
-const authMiddleware = require('./authMiddleware'); // Import the authentication middleware
+const { randomUUID } = require('crypto');
+const { requireAdmin } = require('./adminAuth');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-const dataFilePath = path.join(__dirname, 'data.json');
-
-// Function to read data from the JSON file
-const readData = () => {
-  try {
-    const data = fs.readFileSync(dataFilePath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading data file:', error);
-    return { rewardName: 'sats' }; // Default reward name
-  }
-};
-
+const dataFilePath = process.env.ZAPLIE_CONFIG_FILE || path.join(__dirname, 'data.json');
 const defaultRewardAmounts = { githubPrMergedSats: 1000 };
 
-// Function to write data to the JSON file
-const writeData = (data) => {
+const readData = () => {
+  const serialized = fs.readFileSync(dataFilePath, 'utf8');
+  const data = JSON.parse(serialized);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Config data must be a JSON object');
+  }
+  return data;
+};
+
+const readAdminConfig = (data) => {
+  if (typeof data.rewardName !== 'string' || data.rewardName.trim().length === 0) {
+    throw new Error('Stored reward name is invalid');
+  }
+  if (data.botPersona !== undefined && typeof data.botPersona !== 'string') {
+    throw new Error('Stored bot persona is invalid');
+  }
+
+  const storedAmount = data.rewardAmounts?.githubPrMergedSats;
+  const githubPrMergedSats = storedAmount === undefined
+    ? defaultRewardAmounts.githubPrMergedSats
+    : storedAmount;
+  if (!Number.isSafeInteger(githubPrMergedSats) || githubPrMergedSats <= 0) {
+    throw new Error('Stored GitHub reward amount is invalid');
+  }
+
+  return {
+    rewardName: data.rewardName,
+    botPersona: data.botPersona || '',
+    rewardAmounts: { githubPrMergedSats },
+  };
+};
+
+const validateAdminConfig = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+
+  const { rewardName, botPersona, rewardAmounts } = body;
+  if (
+    typeof rewardName !== 'string'
+    || rewardName.trim().length === 0
+    || rewardName.trim().length > 40
+    || typeof botPersona !== 'string'
+    || botPersona.trim().length > 4000
+    || !rewardAmounts
+    || typeof rewardAmounts !== 'object'
+    || Array.isArray(rewardAmounts)
+    || Object.keys(rewardAmounts).length !== 1
+    || !Object.prototype.hasOwnProperty.call(rewardAmounts, 'githubPrMergedSats')
+    || !Number.isSafeInteger(rewardAmounts.githubPrMergedSats)
+    || rewardAmounts.githubPrMergedSats <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    rewardName: rewardName.trim(),
+    botPersona: botPersona.trim(),
+    rewardAmounts: { githubPrMergedSats: rewardAmounts.githubPrMergedSats },
+  };
+};
+
+const writeDataAtomic = (data) => {
+  const temporaryPath = `${dataFilePath}.${process.pid}.${randomUUID()}.tmp`;
+  let descriptor;
+
   try {
-    fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2));
+    descriptor = fs.openSync(temporaryPath, 'wx', 0o600);
+    fs.writeFileSync(descriptor, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporaryPath, dataFilePath);
   } catch (error) {
-    console.error('Error writing data file:', error);
+    if (descriptor !== undefined) {
+      try {
+        fs.closeSync(descriptor);
+      } catch {
+        // Preserve the original write failure.
+      }
+    }
+    try {
+      fs.unlinkSync(temporaryPath);
+    } catch {
+      // The temporary file may not have been created or may already be gone.
+    }
+    throw error;
   }
 };
 
-// Use the authentication middleware for API routes
-app.use('/api', authMiddleware);
-
-// Endpoint to get the reward name
+// The reward label is needed before the portal completes sign-in. It contains
+// no administrative policy; every configuration write remains protected.
 app.get('/api/reward-name', (req, res) => {
-  const data = readData();
-  res.send({ rewardName: data.rewardName });
-});
-
-// Endpoint to update the reward name
-app.post('/api/reward-name', (req, res) => {
-  const { newRewardName } = req.body;
-  if (newRewardName) {
-    const data = readData();
-    data.rewardName = newRewardName;
-    writeData(data);
-    res.send({ message: 'Reward name updated successfully', rewardName: data.rewardName });
-  } else {
-    res.status(400).send({ message: 'Invalid reward name' });
+  try {
+    const { rewardName } = readAdminConfig(readData());
+    res.send({ rewardName });
+  } catch (error) {
+    console.error('Unable to read reward name:', error.message);
+    res.status(500).send({ message: 'Unable to read reward name' });
   }
 });
 
-// Endpoint to get the bot persona
-app.get('/api/bot-persona', (req, res) => {
-  const data = readData();
-  res.send({ botPersona: data.botPersona || '' });
-});
-
-// Endpoint to update the bot persona
-app.post('/api/bot-persona', (req, res) => {
-  const { botPersona } = req.body;
-  if (typeof botPersona === 'string') {
-    const data = readData();
-    data.botPersona = botPersona;
-    writeData(data);
-    res.send({ message: 'Bot persona updated successfully', botPersona: data.botPersona });
-  } else {
-    res.status(400).send({ message: 'Invalid bot persona' });
+app.get('/api/admin-config', requireAdmin, (req, res) => {
+  try {
+    res.send({ config: readAdminConfig(readData()) });
+  } catch (error) {
+    console.error('Unable to read admin config:', error.message);
+    res.status(500).send({ message: 'Unable to read admin config' });
   }
 });
 
-// Endpoint to get automation reward amounts
-app.get('/api/reward-amounts', (req, res) => {
-  const data = readData();
-  res.send({ rewardAmounts: { ...defaultRewardAmounts, ...data.rewardAmounts } });
-});
+app.put('/api/admin-config', requireAdmin, (req, res) => {
+  const config = validateAdminConfig(req.body);
+  if (!config) {
+    res.status(400).send({ message: 'Invalid admin config' });
+    return;
+  }
 
-// Endpoint to update automation reward amounts
-app.post('/api/reward-amounts', (req, res) => {
-  const { rewardAmounts } = req.body;
-  if (rewardAmounts && typeof rewardAmounts === 'object' && !Array.isArray(rewardAmounts)) {
-    const data = readData();
-    data.rewardAmounts = { ...defaultRewardAmounts, ...data.rewardAmounts, ...rewardAmounts };
-    writeData(data);
-    res.send({ message: 'Reward amounts updated successfully', rewardAmounts: data.rewardAmounts });
-  } else {
-    res.status(400).send({ message: 'Invalid reward amounts' });
+  try {
+    const currentData = readData();
+    const nextData = {
+      ...currentData,
+      rewardName: config.rewardName,
+      botPersona: config.botPersona,
+      rewardAmounts: {
+        ...currentData.rewardAmounts,
+        ...config.rewardAmounts,
+      },
+    };
+    writeDataAtomic(nextData);
+    res.send({ config: readAdminConfig(nextData) });
+  } catch (error) {
+    console.error('Unable to save admin config:', error.message);
+    res.status(500).send({ message: 'Unable to save admin config' });
   }
 });
 
-// Serve the React app
 app.use(express.static(path.join(__dirname, '../build')));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../build', 'index.html'));
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+  });
+}
+
+module.exports = app;

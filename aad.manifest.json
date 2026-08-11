@@ -4,6 +4,18 @@
     "name": "Zaplie v2",
     "accessTokenAcceptedVersion": 2,
     "signInAudience": "AzureADMyOrg",
+    "appRoles": [
+        {
+            "allowedMemberTypes": [
+                "User"
+            ],
+            "description": "Allows an administrator to update Zaplie organization settings.",
+            "displayName": "Zaplie Administrator",
+            "id": "0181017c-49c3-4e38-969d-323bc0e6ac11",
+            "isEnabled": true,
+            "value": "Zaplie.Admin"
+        }
+    ],
     "optionalClaims": {
         "idToken": [],
         "accessToken": [

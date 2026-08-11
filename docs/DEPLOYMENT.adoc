@@ -147,6 +147,16 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | MSAL configuration for the tabs SPA
 | Tabs
 
+| `REACT_APP_ADMIN_API_SCOPE`
+| Delegated scope exposed by the Zaplie API (for example,
+  `api://botid-<BOT_ID>/access_as_user`)
+| Tabs build
+
+| `AAD_APP_CLIENT_ID`, `AAD_APP_TENANT_ID`
+| Expected audience and tenant used by the tabs backend to validate v2 access
+  tokens
+| Tabs backend
+
 | `WEBSITE_URL`, `CONTENT_URL`
 | Public URLs substituted into the Teams manifest by `build.js`
 | Manifest
@@ -155,6 +165,12 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Reward-name API base URL used by the bot
 | Bot
 |===
+
+The Entra manifest defines the `Zaplie.Admin` app role. Assign that role to
+the users or groups allowed to change organization settings. The Settings
+page requests an access token for `REACT_APP_ADMIN_API_SCOPE`; the backend
+verifies its signature, issuer, audience, delegated `access_as_user` scope,
+and `Zaplie.Admin` role before accepting the atomic configuration write.
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.
