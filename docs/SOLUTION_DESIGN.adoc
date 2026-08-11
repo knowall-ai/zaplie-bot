@@ -1,0 +1,261 @@
+= Solution Design
+:toc:
+:sectnums:
+
+== Overview
+
+Zaplie (formerly Zapp.ie) is a Microsoft Teams application that lets teams send
+each other Bitcoin micro-payments ("Zaps" of Sats) as recognition and reward.
+It combines a conversational Teams bot, a set of React web tabs, and serverless
+HTTP endpoints, all backed by an https://lnbits.com/[LNbits] Lightning wallet
+and account system. Every Teams user is automatically provisioned with two
+LNbits wallets: an *Allowance* wallet (a spending budget, periodically topped
+up) and a *Private* wallet (where received Zaps accumulate).
+
+== Architecture
+
+[mermaid]
+....
+flowchart TB
+    subgraph Teams["Microsoft Teams"]
+        User[Teams User]
+    end
+    subgraph Bot["Teams Bot (App Service)"]
+        Restify[restify :3978 /api/messages]
+        TB[TeamsBot - TeamsActivityHandler]
+        MW[FetchUserMiddleware]
+        LNS[lnbitsService]
+    end
+    subgraph Tabs["Web App (tabs/)"]
+        CRA[React SPA - MSAL auth]
+        BE[Express backend :5000 reward-name API]
+    end
+    subgraph Func["Azure Functions"]
+        F1[getUsers]
+        F2[showUsers]
+        F3[sendZap]
+    end
+    LN[(LNbits instance)]
+    AAD[Microsoft Entra ID]
+
+    User -->|messages, adaptive cards| Restify --> TB
+    TB --> MW --> LNS
+    User -->|static tabs| CRA
+    CRA -->|X-Api-Key / Bearer| LN
+    CRA --> BE
+    LNS -->|REST API| LN
+    F1 --> LN
+    F2 --> LN
+    F3 --> LN
+    CRA -->|OAuth 2.0| AAD
+    TB -->|SSO| AAD
+....
+
+== Technology Stack
+
+[cols="1,2"]
+|===
+| Component | Technology
+
+| Teams bot (repo root)
+| Node.js 18, TypeScript, Bot Framework SDK (`botbuilder` 4.x), restify, `@microsoft/teamsfx`
+
+| Web tabs (`tabs/`)
+| React 18, Create React App (react-scripts 5), React Router 6, MSAL (`@azure/msal-browser`/`@azure/msal-react`), Fluent UI 8, `@microsoft/teams-js`
+
+| Tabs backend (`tabs/backend/`)
+| Express 4 — reward-name settings API persisted to a JSON file, serves the production SPA bundle
+
+| Azure Functions (`functions/`)
+| Azure Functions v3 programming model (function.json), TypeScript, extension bundle 4.x
+
+| Wallet layer
+| LNbits 0.12+ (User Manager extension) on the Bitcoin Lightning Network
+
+| Identity
+| Microsoft Entra ID (AAD) — multi-tenant bot registration, SSO, MSAL in the tabs
+
+| Hosting
+| Azure App Service (Windows/iisnode via `web.config`), Azure Bot Service (F0), provisioned by Teams Toolkit + Bicep (`infra/azure.bicep`)
+|===
+
+== Component Design
+
+=== Teams Bot
+
+`src/index.ts` starts a restify server (default port 3978) and wires a
+`CloudAdapter` with multi-tenant credentials. All turns pass through
+`FetchUserMiddleware`, which resolves the Teams member and calls
+`UserService.ensureUserSetup()` — creating the LNbits user (keyed by the AAD
+object id stored in an LNbits extra field) and ensuring the Allowance and
+Private wallets exist.
+
+`src/teamsBot.ts` extends `TeamsActivityHandler`. Text commands are registered
+in a static `SSOCommandMap` keyed by lower-case message text:
+
+[cols="1,2,2"]
+|===
+| Command | File | Behaviour
+
+| `send zap`
+| `src/commands/sendZapCommand.ts`
+| Presents an Adaptive Card (schema 1.5) with a multi-select recipient picker, message, and amount (1–10,000); on submit, pays each recipient and updates the card in place with results and remaining balance
+
+| `show my balance`
+| `src/commands/showMyBalanceCommand.ts`
+| Lists the user's LNbits wallets with balances (msat/1000)
+
+| `show leaderboard`
+| `src/commands/showLeaderboardCommand.ts`
+| Ranks users by Private wallet balance in an Adaptive Card
+
+| `withdraw my zaps`
+| `src/commands/withdrawFundsCommand.ts`
+| Stub — "coming soon"
+|===
+
+The bot also implements Teams SSO handlers (`handleTeamsSigninVerifyState`,
+`handleTeamsSigninTokenExchange`). Conversation and user state use in-memory
+`MemoryStorage`.
+
+=== Zap Payment Flow
+
+[mermaid]
+....
+sequenceDiagram
+    participant S as Sender (Teams)
+    participant B as Bot
+    participant L as LNbits
+
+    S->>B: Submit "Send Zap" card
+    B->>L: createInvoice (receiver Private wallet)
+    L-->>B: bolt11 invoice
+    B->>L: payInvoice (sender Allowance wallet, admin key)
+    L-->>B: payment confirmed
+    B->>S: Update card with result + remaining balance
+    B->>B: Notify recipient (mention entity)
+....
+
+=== LNbits Integration
+
+Three parallel clients speak to the LNbits REST API:
+
+- `src/services/lnbitsService.ts` — bot-side (~20 exported helpers). Auth is
+  either an `X-Api-Key` header (admin or wallet invoice key) or a Bearer token
+  obtained from `POST /api/v1/auth` (cached at module level with concurrent
+  request de-duplication). Uses the core API (`/api/v1/wallet`, `/payments`,
+  `/wallets/{id}`) and the User Manager extension
+  (`/usermanager/api/v1/users|wallets`). Includes a `scheduledTopup()` routine
+  (node-cron) that replenishes all Allowance wallets to
+  `LNBITS_INITIAL_ALLOWANCE`.
+- `tabs/src/services/lnbitsServiceLocal.ts` — browser-side equivalent used by
+  the tabs (transactions, balances, allowance, payments).
+- `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
+  base URL and credentials arrive with each HTTP request.
+
+=== Web Tabs
+
+Routes (`tabs/src/App.tsx`): `/feed`, `/users`, `/rewards`, `/wallet`,
+`/settings` — all wrapped in `RequireAuth` (MSAL `acquireTokenSilent`, redirect
+to `/login` on failure) — plus `/login`, `/auth-start`, `/auth-end`. Providers:
+`MsalProvider` → `RewardNameProvider` → `PageLayout`.
+
+[cols="1,3"]
+|===
+| Page | Purpose
+
+| Feed
+| Zap activity feed, activity chart, and total-Zaps statistics
+
+| Users
+| Directory of users with wallet information
+
+| Rewards
+| Rewards carousel / redemption view
+
+| Wallet
+| Private and Allowance wallet tabs: balance card, transaction history, allowance status
+
+| Settings
+| Administrator setting to rename "Sats" (the reward label)
+|===
+
+The reward label is persisted by the Express backend
+(`GET/POST /api/reward-name` → `tabs/backend/data.json`) and consumed by both
+the tabs (`RewardNameContext`) and the bot (`src/services/fetchRewardsName.ts`).
+
+=== Azure Functions
+
+Three anonymous HTTP triggers under `functions/` (compiled to `dist/`):
+`getUsers`, `showUsers`, and `sendZap` (invoice-and-pay between two users'
+wallets — the automation/Copilot entry point). LNbits credentials are supplied
+per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
+
+== Data and State
+
+[cols="1,2,2"]
+|===
+| Data | Where it lives | Notes
+
+| Users and wallets
+| LNbits (User Manager extension)
+| Keyed by AAD object id in an extra field; one Allowance + one Private wallet per user
+
+| Transactions / Zaps
+| LNbits payments ledger
+| Queried per wallet for feed, history, and leaderboard
+
+| Reward label ("Sats")
+| `tabs/backend/data.json`
+| JSON file on the web server; no database
+
+| Bot conversation state
+| `MemoryStorage` (in-process)
+| Ephemeral — lost on restart, not multi-instance safe
+|===
+
+== Design Decisions
+
+=== LNbits as the wallet backend
+
+*Context:* The system needs per-user custodial Lightning wallets with an
+admin API.
+
+*Decision:* Use LNbits with the User Manager extension rather than building a
+ledger.
+
+*Rationale:* Open source, self-hostable, proven Lightning integration, and a
+REST API that supports programmatic user/wallet creation and payments.
+
+=== Two wallets per user (Allowance vs Private)
+
+*Context:* Users need both a budget to give from and a balance they have earned.
+
+*Decision:* Provision each user an Allowance wallet (topped up to
+`LNBITS_INITIAL_ALLOWANCE` on a schedule) and a Private wallet (receives Zaps).
+
+*Rationale:* Cleanly separates "money to give" from "money earned", enabling
+leaderboards on Private balances and periodic replenishment without touching
+earnings.
+
+=== Teams Toolkit for provisioning
+
+*Context:* The app spans an AAD app registration, a bot registration, an App
+Service, and a Teams app manifest.
+
+*Decision:* Drive provisioning and deployment through TeamsFx
+(`teamsapp.yml` + `infra/azure.bicep`).
+
+*Rationale:* Single declarative lifecycle for AAD, Bot Service, ARM resources,
+and manifest packaging across local/dev environments.
+
+== Known Limitations
+
+- Bot state is in-memory; a restart clears conversation/user state.
+- The reward-name API is guarded by a placeholder shared secret and a JSON
+  file rather than a real datastore.
+- The Azure Functions are anonymous at the platform level and receive LNbits
+  credentials per request.
+- The tabs app currently ships LNbits credentials (including an admin key) to
+  the browser via `REACT_APP_*` variables — acceptable only for trusted
+  internal deployments; see `SECURITY.md`.
