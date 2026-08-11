@@ -16,7 +16,7 @@ describe('RewardsComponent', () => {
       </RewardNameContext.Provider>,
     );
 
-    expect(markup).toContain('>Rewards</div>');
+    expect(markup).toMatch(/>\s*Rewards\s*<\/div>/);
     expect(markup).not.toContain('Provided By');
   });
 });
