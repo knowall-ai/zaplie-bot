@@ -44,14 +44,6 @@
     user-select: none;
 }
 
-.providedByImage {
-    position: absolute;
-    right: 0;
-    top: 5px;
-    right: 20px;
-    height: 40px;
-}
-
 .carousel {
     display: flex;
     overflow-x: auto;

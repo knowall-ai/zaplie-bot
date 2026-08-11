@@ -5,7 +5,6 @@ import {
   getUserWallets,
 } from '../services/lnbitsServiceLocal';
 import PurchasePopup from './PurchasePopup';
-import ProvidedBy from '../images/ProvidedBy.svg';
 import imagePlaceholder from '../images/imagePlaceholderNew.svg';
 import { RewardNameContext } from './RewardNameContext';
 
@@ -112,7 +111,7 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
   // Only render rewards if they exist
   return (
     <div className={styles.mainContainer}>
-      <div className={styles.title}>Rewards <img src={ProvidedBy} alt="Provided By" className={styles.providedByImage} /></div>
+      <div className={styles.title}>Rewards</div>
       <div
         className={styles.carousel}
         ref={carouselRef}
