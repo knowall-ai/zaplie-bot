@@ -26,10 +26,18 @@ import {
 
 // Create adapter.
 // See https://aka.ms/about-bot-adapter to learn more about adapters.
+const tenantId = config.tenantId;
+if (!tenantId) {
+  throw new Error(
+    'AAD_APP_TENANT_ID is not set. A SingleTenant bot registration cannot authenticate without it.',
+  );
+}
+
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
   MicrosoftAppId: config.botId,
   MicrosoftAppPassword: config.botPassword,
-  MicrosoftAppType: 'MultiTenant',
+  MicrosoftAppType: 'SingleTenant',
+  MicrosoftAppTenantId: tenantId,
 });
 
 const botFrameworkAuthentication = new ConfigurationBotFrameworkAuthentication(

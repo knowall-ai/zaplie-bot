@@ -1,0 +1,83 @@
+= Test Strategy
+:toc:
+:sectnums:
+
+== Overview
+
+Testing is currently unit-test only, using Jest in both the bot and the tabs
+app. There is no end-to-end or integration test suite yet; the Azure Functions
+have no tests. This document records the current state and the strategy for
+closing the gaps.
+
+== Test Types
+
+=== Unit Tests — Bot (repo root)
+
+- Framework: Jest 29 (`jest.config.ts` — note: only `clearMocks` is configured;
+  the ts-jest transform is not yet wired, and the root `npm test` script is
+  intentionally unwired)
+- Test files: `src/services/lnbitsService.test.ts`
+- Run directly:
+
+[source,bash]
+----
+npx jest src/services/lnbitsService.test.ts
+----
+
+=== Unit Tests — Web Tabs (`tabs/`)
+
+- Framework: Jest via react-scripts, with React Testing Library and jest-dom
+- Test files: `tabs/src/services/lnbitsServiceLocal.test.ts` (mocks global
+  `fetch` and localStorage; covers `getAccessToken`, `getWallets`,
+  `getWalletBalance`, `getUserWallets`, `createInvoice`, `payInvoice`) and
+  `tabs/src/setupTests.test.tsx` (environment smoke test)
+- Run:
+
+[source,bash]
+----
+cd tabs
+CI=true npm test -- --watchAll=false   # one-shot
+npm test                               # watch mode
+----
+
+=== Azure Functions (`functions/`)
+
+No automated tests yet (`npm test` prints "No tests yet"). The Postman
+collection in `Postman/` supports manual API testing of `getUsers`,
+`showUsers`, and `sendZap`.
+
+=== End-to-End Tests
+
+Not yet implemented. The intended approach is Playwright scripts driven by the
+scenarios in `docs/requirements.yaml`, which catalogues the features
+(feed statistics, leaderboard, SSO auth, rewards carousel, allowance,
+transaction history, send/receive payment, Zap notifications, user list) as
+Given/When/Then acceptance scenarios.
+
+== Requirements Traceability
+
+`docs/requirements.yaml` is the requirements catalogue for the Copilot MVP:
+each feature lists deliverables, user stories, and Given/When/Then scenarios.
+New E2E tests should reference the feature `id` (e.g. `total-zaps`,
+`leaderboard`, `sso-auth`) so coverage can be traced back to requirements.
+
+== Manual Testing
+
+- *Bot:* sideload the app via Teams Toolkit (`teamsapp preview --env local`)
+  with a dev tunnel on port 3978; exercise `send zap`, `show my balance`,
+  `show leaderboard`.
+- *Tabs:* `cd tabs && npm start` (Express backend on 5000, CRA dev server on
+  3000) and verify Feed, Users, Rewards, Wallet, and Settings against a dev
+  LNbits instance.
+- *Functions:* `cd functions && npm start` with the Postman collection.
+
+== Gaps and Next Steps
+
+. Wire ts-jest into the root `jest.config.ts` and point the root `npm test`
+  script at Jest.
+. Replace the self-mocking pattern in `src/services/lnbitsService.test.ts`
+  with tests that mock `fetch` and exercise the real service logic.
+. Add Playwright E2E coverage for the scenarios in `docs/requirements.yaml`.
+. Add tests for the three Azure Functions.
+. Run tests in CI — the current GitHub Actions workflows build the tabs app
+  but run no tests.

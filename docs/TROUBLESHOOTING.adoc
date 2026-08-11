@@ -1,0 +1,36 @@
+= Troubleshooting Guide
+
+[cols="2,3"]
+|===
+| Problem | Solution
+
+| Bot does not respond in Teams (local)
+| Check the dev tunnel is running on port 3978 and that `BOT_ENDPOINT`/`BOT_DOMAIN` in `env/.env.local` match the tunnel URL; re-run `teamsapp provision --env local`
+
+| `412` errors logged by the bot
+| Normal during the Teams SSO consent flow — the adapter deliberately swallows these; only investigate if sign-in never completes
+
+| MSAL / `@azure/msal-node` errors on Node 20
+| Add `"overrides": { "@azure/msal-node": "^2.6.0" }` to `package.json` (see README.md), or use Node 18
+
+| Users have no wallets / "Failed Receivers" when sending a Zap
+| The recipient has not interacted with the app yet, so `ensureUserSetup` never ran. Ask them to message the bot once; verify the LNbits User Manager extension is enabled
+
+| `send zap` card submits but payment fails
+| Check `LNBITS_ADMINKEY` and `LNBITS_NODE_URL`; confirm the sender's Allowance wallet has sufficient balance and the LNbits instance is reachable from the bot
+
+| Tabs show a blank page or bounce to `/login`
+| `acquireTokenSilent` failed — verify `REACT_APP_AAD_CLIENT_ID` / `REACT_APP_TENANT_ID` and that the redirect URI `<origin>/auth-end` is registered on the AAD app
+
+| Reward name does not load / defaults to "Sats"
+| The Express backend (`tabs/backend/server.js`, port 5000) is not running, or `WEBSITE_API_URL` (bot side) points to the wrong host
+
+| Jest fails at the repo root
+| Expected — the root `test` script is unwired and `jest.config.ts` has no ts-jest transform; run `npx jest src/services/lnbitsService.test.ts` directly
+
+| PDF docs fail to build
+| Install the toolchain: `gem install asciidoctor-pdf asciidoctor-diagram` and `npm i -g @mermaid-js/mermaid-cli`; then run `bash docs/generate-docs.sh`
+
+| Mermaid diagrams fail rendering in the PDF on Ubuntu 23.10+
+| The build script passes `docs/puppeteer-config.json` (`--no-sandbox`); ensure it is present and Chromium is installed for puppeteer
+|===

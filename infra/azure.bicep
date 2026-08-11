@@ -47,7 +47,7 @@ resource webApp 'Microsoft.Web/sites@2021-02-01' = {
       appSettings: [
         {
           name: 'WEBSITE_NODE_DEFAULT_VERSION'
-          value: '~18' // Set NodeJS version to 18.x for your site
+          value: '~24' // Set NodeJS version to 24.x for your site
         }
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
@@ -66,7 +66,7 @@ resource webApp 'Microsoft.Web/sites@2021-02-01' = {
 resource webAppSettings 'Microsoft.Web/sites/config@2021-02-01' = {
   name: '${webAppName}/appsettings'
   properties: {
-    WEBSITE_NODE_DEFAULT_VERSION: '~18'
+    WEBSITE_NODE_DEFAULT_VERSION: '~24'
     WEBSITE_RUN_FROM_PACKAGE: '1'
     BOT_ID: botAadAppClientId
     BOT_PASSWORD: botAadAppClientSecret
