@@ -28,11 +28,10 @@
     "web-vitals": "^2.1.4",
     "webrtc-adapter": "^9.0.1"
   },
-  "resolutions": {
+  "overrides": {
     "chroma-js": "2.4.2"
   },
   "scripts": {
-    "preinstall": "npx npm-force-resolutions",
     "start": "concurrently \"npm run server\" \"npm run client\"",
     "server": "node backend/server.js",
     "client": "react-scripts start",
