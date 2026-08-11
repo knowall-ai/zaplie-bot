@@ -1,0 +1,19 @@
+== Legal Notice
+
+This document is the property of **KnowAll AI Ltd** (Company Registration: 12039444).
+
+The information contained within this document is provided for informational purposes to prospective clients, technology partners, and other interested parties. It describes the technical architecture of Zaplie, a Microsoft Teams application enabling Bitcoin Lightning micro-payments for team recognition.
+
+=== Intellectual Property
+
+All intellectual property rights in this document and the solutions described herein remain the property of KnowAll AI Ltd. No part of this document may be reproduced, modified, or used to create derivative works without prior written consent from KnowAll AI Ltd.
+
+=== Disclaimer
+
+While every effort has been made to ensure the accuracy of this document, KnowAll AI Ltd makes no warranties, express or implied, regarding the completeness or accuracy of the information contained herein. Product names, pricing, and technical specifications are subject to change without notice.
+
+=== Contact
+
+**KnowAll AI Ltd** +
+46 Hullbridge Road, South Woodham Ferrers, Chelmsford, Essex, CM3 5NG, United Kingdom +
+support@knowall.ai | https://knowall.ai
