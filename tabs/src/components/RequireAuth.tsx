@@ -8,7 +8,7 @@ const RequireAuth = ({ children }: { children: JSX.Element }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (accounts.length === 0 && inProgress === "none") {
+    if (accounts.length === 0 && inProgress === 'none') {
       instance.acquireTokenSilent(loginRequest).catch(() => {
         navigate('/login', { replace: true });
       });

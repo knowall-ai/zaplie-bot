@@ -13,12 +13,10 @@ interface BatteryImageDisplayProps {
 const BatteryImageDisplay: React.FC<BatteryImageDisplayProps> = ({ value }) => {
   let imageSrc = '';
 
-if (value < 1) {
-
+  if (value < 1) {
     imageSrc = Image0;
-}
-    else if (value >= 1 && value <= 20) {
-        imageSrc = Image1;
+  } else if (value >= 1 && value <= 20) {
+    imageSrc = Image1;
   } else if (value > 20 && value <= 40) {
     imageSrc = Image2;
   } else if (value > 40 && value <= 60) {
@@ -35,7 +33,7 @@ if (value < 1) {
         src={imageSrc}
         alt="Battery Level"
         style={{
-          filter: 'hue-rotate(45deg) saturate(1.2) brightness(1.1)'
+          filter: 'hue-rotate(45deg) saturate(1.2) brightness(1.1)',
         }}
       />
     </div>

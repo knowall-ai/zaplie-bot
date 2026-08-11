@@ -32,7 +32,7 @@ export const updateRewardName = async (newRewardName: string) => {
         headers: {
           Authorization: getAuthToken(),
         },
-      }
+      },
     );
     return response.data;
   } catch (error) {

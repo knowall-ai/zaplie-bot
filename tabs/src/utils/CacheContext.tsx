@@ -7,7 +7,9 @@ interface CacheContextType {
 
 const CacheContext = createContext<CacheContextType | undefined>(undefined);
 
-export const CacheProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const CacheProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [cache, setCacheState] = useState<Record<string, any>>({});
 
   const setCache = (key: string, value: any) => {

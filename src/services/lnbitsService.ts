@@ -1,12 +1,8 @@
 // lnbitsService.ts
 
-/// <reference path="../../src/types/global.d.ts" />
-
 import dotenvFlow from 'dotenv-flow';
 
 dotenvFlow.config({ path: './env' });
-let globalWalletId: string | null = null;
-
 
 //import dotenv from 'dotenv';
 //dotenv.config();
@@ -155,12 +151,10 @@ const getWallets = async (
         user: filteredData.user,
         inkey: filteredData.inkey,
         // See: https://github.com/lnbits/lnbits/issues/2690
-        deleted: (
-          await getWalletById(filteredData.user, filteredData.id)
-        )?.deleted,
-        balance_msat: (
-          await getWalletById(filteredData.user, filteredData.id)
-        )?.balance_msat,
+        deleted: (await getWalletById(filteredData.user, filteredData.id))
+          ?.deleted,
+        balance_msat: (await getWalletById(filteredData.user, filteredData.id))
+          ?.balance_msat,
       })),
     );
 
@@ -205,7 +199,7 @@ const getUserWallets = async (
     const data: Wallet[] = await response.json();
 
     // Map the wallets to match the Wallet interface
-    let walletData: Wallet[] = data.map((wallet: any) => ({
+    const walletData: Wallet[] = data.map((wallet: any) => ({
       id: wallet.id,
       admin: null, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
       name: wallet.name,
@@ -747,33 +741,29 @@ const payInvoice = async (
     )})`,
   );
 
-  try {
-    //const encodedExtra = JSON.stringify(extra);
+  //const encodedExtra = JSON.stringify(extra);
 
-    const response = await fetch(`${lnbiturl}/api/v1/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': adminKey,
-      },
-      body: JSON.stringify({
-        out: true,
-        bolt11: paymentRequest,
-        extra: extra, //encodedExtra,
-      }),
-    });
+  const response = await fetch(`${lnbiturl}/api/v1/payments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': adminKey,
+    },
+    body: JSON.stringify({
+      out: true,
+      bolt11: paymentRequest,
+      extra: extra, //encodedExtra,
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Error paying invoice (status: ${response.status})`);
-    }
-
-    const data = await response.json();
-    //console.log('payInvoice: data:', data);
-
-    return data;
-  } catch (error) {
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Error paying invoice (status: ${response.status})`);
   }
+
+  const data = await response.json();
+  //console.log('payInvoice: data:', data);
+
+  return data;
 };
 
 // TODO: This method needs checking!
@@ -842,36 +832,43 @@ async function topUpWallet(walletId: string, amount: number): Promise<void> {
 }
 
 async function scheduledTopup() {
-  const allowancewallets = await getWallets(process.env.LNBITS_ADMINKEY as string, 'Allowance',);
+  const allowancewallets = await getWallets(
+    process.env.LNBITS_ADMINKEY as string,
+    'Allowance',
+  );
   const allowanceValue = process.env.LNBITS_INITIAL_ALLOWANCE as string;
   const hostWalletId = process.env.LNBITS_HOST_WALLET_ID as string;
-  const hostUserId =process.env.LNBITS_HOST_USER_ID as string;
+  const hostUserId = process.env.LNBITS_HOST_USER_ID as string;
 
   const host = getWalletById(hostUserId, hostWalletId);
 
-  console.log('Wallets' , allowancewallets)
-
+  console.log('Wallets', allowancewallets);
 
   if (allowancewallets) {
     allowancewallets.forEach(async wallet => {
-     const User = await getUser(process.env.LNBITS_ADMINKEY as string, wallet.user);
-  
-     const extra = {
-      from: wallet,
-      to: host,
-      tag: 'zap',
-    }
+      const User = await getUser(
+        process.env.LNBITS_ADMINKEY as string,
+        wallet.user,
+      );
 
-    console.log('Extra:', extra);
-    if(wallet.balance_msat >0){
+      const extra = {
+        from: wallet,
+        to: host,
+        tag: 'zap',
+      };
 
-     const paymentRequest = await createInvoice(
-      process.env.LNBITS_INKEY as string,
-       hostWalletId, wallet.balance_msat/1000,
-        `${User.displayName} Weekly Allowance cleared`,
-        extra ); 
-      await payInvoice(wallet.adminkey , paymentRequest, extra)}
-     topUpWallet(wallet.id, parseInt(allowanceValue));
+      console.log('Extra:', extra);
+      if (wallet.balance_msat > 0) {
+        const paymentRequest = await createInvoice(
+          process.env.LNBITS_INKEY as string,
+          hostWalletId,
+          wallet.balance_msat / 1000,
+          `${User.displayName} Weekly Allowance cleared`,
+          extra,
+        );
+        await payInvoice(wallet.adminkey, paymentRequest, extra);
+      }
+      topUpWallet(wallet.id, parseInt(allowanceValue));
     });
   }
 }

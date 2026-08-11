@@ -12,9 +12,9 @@ export const getRewardName = async () => {
     const response = await fetch(`${API_URL}/reward-name`, {
       method: 'GET',
       headers: {
-        'Authorization': getAuthToken(),
-        'Content-Type': 'application/json'
-      }
+        Authorization: getAuthToken(),
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!response.ok) {

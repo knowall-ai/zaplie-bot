@@ -8,7 +8,12 @@ import {
   ConversationParameters,
 } from 'botbuilder';
 import { ConnectorClient } from 'botframework-connector';
-import { getUsers, payInvoice, createInvoice, getWalletBalance } from '../services/lnbitsService';
+import {
+  getUsers,
+  payInvoice,
+  createInvoice,
+  getWalletBalance,
+} from '../services/lnbitsService';
 import { UserService } from '../services/userService';
 import { getRewardName } from '../services/fetchRewardsName';
 
@@ -18,10 +23,9 @@ const lnbitsLabel = process.env.REACT_APP_LNBITS_POINTS_LABEL as string;
 export class SendZapCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
     try {
-
       console.log("Running SendZapCommand's execute method.");
 
-     // Fetch the latest reward name
+      // Fetch the latest reward name
       const globalRewardName = await getRewardName();
       console.log('Fetched Reward Name:', globalRewardName);
 
@@ -52,7 +56,7 @@ export async function SendZap(
   zapAmount: number,
   context: TurnContext,
   updateCard: boolean = true,
-  globalRewardName: string
+  globalRewardName: string,
 ): Promise<void> {
   try {
     console.log('Sending zap ...');
@@ -94,9 +98,11 @@ export async function SendZap(
     if (result && result.payment_hash && updateCard) {
       // Updated adaptive card (read-only)
       //fetch remainingBalance
-      const remainingBalance = await getWalletBalance(sender.allowanceWallet.inkey);
+      const remainingBalance = await getWalletBalance(
+        sender.allowanceWallet.inkey,
+      );
       console.log('Remaining Balance:', remainingBalance);
-      
+
       const updatedCard = {
         type: 'AdaptiveCard',
         body: [
@@ -117,7 +123,7 @@ export async function SendZap(
                   {
                     type: 'TextBlock',
                     text: `Receiver:`,
-                    weight: 'Bolder', 
+                    weight: 'Bolder',
                   },
                 ],
               },
@@ -127,7 +133,7 @@ export async function SendZap(
                 items: [
                   {
                     type: 'TextBlock',
-                    text: `${receiver.displayName}`, 
+                    text: `${receiver.displayName}`,
                   },
                 ],
               },
@@ -208,7 +214,7 @@ export async function SendZap(
                     ],
                   },
                 ],
-              }
+              },
             ],
           },
         ],
@@ -327,7 +333,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       }
     });
   }*/
-  
+
   return {
     type: 'AdaptiveCard',
     body: cardBody,
@@ -400,7 +406,7 @@ async function messageRecipient(
       botAppId,
       process.env.SECRET_AAD_APP_CLIENT_SECRET, // Is this password encrypted?
     );*/
-    
+
     console.log('Bot App ID:', botAppId);
     console.log('Bot Name:', botName);
 
@@ -453,6 +459,7 @@ async function messageRecipient(
     }
 
     // Create a conversation with the recipient
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out createConversation call below
     const conversationParameters: ConversationParameters = {
       isGroup: false,
       bot: {
@@ -482,6 +489,7 @@ async function messageRecipient(
     );
     */
     // Create the message
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out sendToConversation call below
     const message = MessageFactory.text(
       `You have received ${zapAmount} ${lnbitsLabel} from ${sender.displayName} with a message: "${zapMessage}"`,
     );
