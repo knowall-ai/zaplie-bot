@@ -11,7 +11,6 @@ import { msalConfig } from './services/authConfig';
 import { CacheProvider } from './utils/CacheContext';
 import { queryClient } from './query/queryClient';
 
-
 export const msalInstance = new PublicClientApplication(msalConfig);
 
 msalInstance.initialize().then(async () => {
@@ -49,14 +48,11 @@ msalInstance.initialize().then(async () => {
         <CacheProvider>
           <Router>
             <ThemeProvider theme={theme}>
-              <CacheProvider>
-                <App pca={msalInstance} />
-              </CacheProvider>
+              <App pca={msalInstance} />
             </ThemeProvider>
           </Router>
-        </CacheProvider>,
+        </CacheProvider>
       </MsalProvider>
     </QueryClientProvider>
-
   );
 });
