@@ -15,10 +15,12 @@ const router = express.Router();
 const STORE_PATH = path.join(__dirname, 'webhook-keys.json');
 
 const readStore = () => {
-  if (!fs.existsSync(STORE_PATH)) {
+  try {
+    return JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
+  } catch (error) {
+    console.error('Unable to read webhook keys store, serving empty store:', error.message);
     return { keys: [] };
   }
-  return JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
 };
 
 const writeStore = (store) => {
