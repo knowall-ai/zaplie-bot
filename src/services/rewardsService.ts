@@ -1,4 +1,9 @@
-import { getUserWallets, getUsers, createInvoice, payInvoice } from './lnbitsService';
+import {
+  getUserWallets,
+  getUsers,
+  createInvoice,
+  payInvoice,
+} from './lnbitsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
 import { resolvePersonAadByGithubId } from './identityService';
 import { createPendingReward } from './pendingRewardsService';
@@ -151,7 +156,10 @@ async function resolveRecipientUserId(
   reward: ResolvedRewardRequest,
 ): Promise<string | null> {
   if (!reward.recipientId) {
-    throw new RewardError('recipientId is required to resolve the recipient', 400);
+    throw new RewardError(
+      'recipientId is required to resolve the recipient',
+      400,
+    );
   }
   const personAad = await resolvePersonAadByGithubId(reward.recipientId);
   if (!personAad) {
@@ -224,9 +232,7 @@ export async function payReward(
 
   const result = await payInvoice(treasuryAdminKey, paymentRequest, extra);
   if (!result || !result.payment_hash) {
-    throw new Error(
-      `paying reward invoice failed: ${JSON.stringify(result)}`,
-    );
+    throw new Error(`paying reward invoice failed: ${JSON.stringify(result)}`);
   }
   return { paymentHash: result.payment_hash };
 }

@@ -119,7 +119,9 @@ server.post('/api/messages', async (req, res) => {
 server.post('/api/v1/rewards', async (req, res) => {
   const expectedKey = process.env.REWARDS_API_KEY;
   if (!expectedKey) {
-    res.send(503, { error: 'rewards endpoint disabled: REWARDS_API_KEY is not set' });
+    res.send(503, {
+      error: 'rewards endpoint disabled: REWARDS_API_KEY is not set',
+    });
     return;
   }
   // Buffers, not strings: timingSafeEqual throws on byte-length mismatch.

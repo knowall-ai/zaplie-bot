@@ -1,4 +1,8 @@
-import { parseRewardRequest, resolveAmountSats, RewardError } from './rewardsService';
+import {
+  parseRewardRequest,
+  resolveAmountSats,
+  RewardError,
+} from './rewardsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 
@@ -44,12 +48,14 @@ describe('parseRewardRequest', () => {
 
 describe('parseRewardRequest cap', () => {
   test('accepts amounts up to the default cap and honours REWARDS_MAX_AMOUNT_SATS', () => {
-    expect(parseRewardRequest({ ...validReward, amountSats: 10000 }).amountSats).toBe(10000);
+    expect(
+      parseRewardRequest({ ...validReward, amountSats: 10000 }).amountSats,
+    ).toBe(10000);
 
     process.env.REWARDS_MAX_AMOUNT_SATS = '500';
-    expect(() => parseRewardRequest({ ...validReward, amountSats: 501 })).toThrow(
-      'per-reward cap of 500',
-    );
+    expect(() =>
+      parseRewardRequest({ ...validReward, amountSats: 501 }),
+    ).toThrow('per-reward cap of 500');
     delete process.env.REWARDS_MAX_AMOUNT_SATS;
   });
 });
