@@ -1,20 +1,8 @@
-import { SSOCommand, SSOCommandMap } from './SSOCommandMap';
-import {
-  TeamsActivityHandler,
-  TurnContext,
-  SigninStateVerificationQuery,
-  MemoryStorage,
-  ConversationState,
-  UserState,
-  CardFactory,
-  Middleware,
-  MessageFactory,
-} from 'botbuilder';
+import { SSOCommand } from './SSOCommandMap';
+import { TurnContext, CardFactory } from 'botbuilder';
 import { getWallets, getUser } from '../services/lnbitsService';
-import { getRewardName } from '../services/fetchRewardsName';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
-
 
 // New command for showing leaderboard
 export class ShowLeaderboardCommand extends SSOCommand {
@@ -23,9 +11,7 @@ export class ShowLeaderboardCommand extends SSOCommand {
       //await context.sendActivity('Showing leaderboard...');
       console.log('Showing leaderboard...');
 
-        // Fetch the latest reward name
-      const globalRewardName = await getRewardName();
-      console.log('Fetched Reward Name:', globalRewardName);
+      const globalRewardName = process.env.LNBITS_POINTS_LABEL as string;
 
       // Call the getWallets function
       const wallets = await getWallets(adminKey, 'Private');
@@ -36,17 +22,15 @@ export class ShowLeaderboardCommand extends SSOCommand {
         );
         console.log('Filtered Wallets:', filteredWallets);
 
-        // Sort wallets by balance_msat in descending order
-        const sortedWallets = filteredWallets.sort(
-          (a, b) => b.balance_msat - a.balance_msat,
-        );
+        // Sort wallets by balance_msat in descending order (sorts in place)
+        filteredWallets.sort((a, b) => b.balance_msat - a.balance_msat);
 
         // Format the sorted wallets into an actionable card response
         const cardResponse = {
           type: 'AdaptiveCard',
           body: await Promise.all(
             filteredWallets.map(async wallet => {
-              let user = await getUser(adminKey, wallet.user);
+              const user = await getUser(adminKey, wallet.user);
               return {
                 type: 'TextBlock',
                 text: `${user.displayName}\n: ${

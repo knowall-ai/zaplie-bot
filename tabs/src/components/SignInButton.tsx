@@ -10,14 +10,18 @@ export const SignInButton = () => {
   const handleLogin = async () => {
     // Prevent login if an interaction is already in progress
     if (inProgress !== InteractionStatus.None) {
-      console.log(`Authentication already in progress: ${inProgress}, please wait...`);
+      console.log(
+        `Authentication already in progress: ${inProgress}, please wait...`,
+      );
       return;
     }
 
     // Check if there's a stale interaction flag in storage and clear it
     const interactionKey = 'msal.interaction.status';
     try {
-      const storedStatus = sessionStorage.getItem(interactionKey) || localStorage.getItem(interactionKey);
+      const storedStatus =
+        sessionStorage.getItem(interactionKey) ||
+        localStorage.getItem(interactionKey);
       if (storedStatus && storedStatus !== 'none') {
         console.log('Clearing stale interaction status:', storedStatus);
         sessionStorage.removeItem(interactionKey);
@@ -32,9 +36,10 @@ export const SignInButton = () => {
     const redirectUrl = window.location.href;
 
     // Check if running in Teams by looking at the URL or user agent
-    const isInTeams = window.name === 'embedded-page-container' ||
-                      window.navigator.userAgent.includes('Teams/') ||
-                      new URLSearchParams(window.location.search).has('inTeams');
+    const isInTeams =
+      window.name === 'embedded-page-container' ||
+      window.navigator.userAgent.includes('Teams/') ||
+      new URLSearchParams(window.location.search).has('inTeams');
 
     if (isInTeams) {
       console.log('Detected Teams environment');
@@ -100,7 +105,9 @@ export const SignInButton = () => {
   return (
     <div>
       <DefaultButton
-        text={inProgress !== InteractionStatus.None ? "Signing In..." : "Sign In"}
+        text={
+          inProgress !== InteractionStatus.None ? 'Signing In...' : 'Sign In'
+        }
         onClick={handleLogin}
         disabled={inProgress !== InteractionStatus.None}
         styles={{

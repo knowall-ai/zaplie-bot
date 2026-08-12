@@ -21,9 +21,9 @@ const TOKEN_TIMESTAMP_KEY = 'accessTokenTimestamp';
 // TTLs optimized for data change frequency:
 // - Users: 60 seconds (new users should appear within a minute)
 // - Wallets: 15 seconds (balance updates need to be reasonably fresh)
-const CACHE_DURATION_USERS_MS = 60000;   // 1 minute for user list
+const CACHE_DURATION_USERS_MS = 60000; // 1 minute for user list
 const CACHE_DURATION_WALLETS_MS = 15000; // 15 seconds for wallet data
-const MAX_WALLET_CACHE_SIZE = 100;       // Limit cache size to prevent memory growth
+const MAX_WALLET_CACHE_SIZE = 100; // Limit cache size to prevent memory growth
 
 interface CacheEntry<T> {
   data: T;
@@ -48,7 +48,10 @@ const apiCache: {
 };
 
 // Helper to check if cache is valid with configurable duration
-const isCacheValid = <T>(entry: CacheEntry<T> | undefined, durationMs: number): entry is CacheEntry<T> => {
+const isCacheValid = <T>(
+  entry: CacheEntry<T> | undefined,
+  durationMs: number,
+): entry is CacheEntry<T> => {
   if (!entry) return false;
   return Date.now() - entry.timestamp < durationMs;
 };
@@ -158,9 +161,15 @@ export async function getAccessToken(
       if (accessToken) {
         sessionStorage.setItem(TOKEN_KEY, accessToken);
         sessionStorage.setItem(TOKEN_TIMESTAMP_KEY, Date.now().toString());
-        logger.info('Access token fetched and stored (expires in ' + TOKEN_EXPIRY_HOURS + ' hours)');
+        logger.info(
+          'Access token fetched and stored (expires in ' +
+            TOKEN_EXPIRY_HOURS +
+            ' hours)',
+        );
       } else {
-        throw new Error('Access token is null, cannot store in sessionStorage.');
+        throw new Error(
+          'Access token is null, cannot store in sessionStorage.',
+        );
       }
 
       // Return the access token
@@ -183,7 +192,6 @@ const getWallets = async (
   filterByName?: string,
   filterById?: string,
 ): Promise<Wallet[] | null> => {
-
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
     const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
@@ -222,7 +230,6 @@ const getWallets = async (
 };
 
 const getWalletDetails = async (inKey: string, walletId: string) => {
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallets/${walletId}`, {
       method: 'GET',
@@ -286,7 +293,9 @@ const getUserWallets = async (
   // Check if there's already a pending request for this user
   const pendingRequest = pendingWalletRequests.get(userId);
   if (pendingRequest) {
-    logger.debug(`[Dedup] Reusing pending getUserWallets request for user ${userId}`);
+    logger.debug(
+      `[Dedup] Reusing pending getUserWallets request for user ${userId}`,
+    );
     return pendingRequest;
   }
 
@@ -398,9 +407,10 @@ const getUsers = async (
       if (displayName.includes('@')) {
         displayName = displayName.split('@')[0].replace('.', ' ');
         // Capitalize first letter of each word
-        displayName = displayName.split(' ').map((word: string) =>
-          word.charAt(0).toUpperCase() + word.slice(1)
-        ).join(' ');
+        displayName = displayName
+          .split(' ')
+          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
       }
 
       return {
@@ -409,7 +419,7 @@ const getUsers = async (
         profileImg: user.extra?.profileImg || '', // Get from extra metadata if available
         aadObjectId: user.external_id || user.extra?.aadObjectId || '', // Get from external_id or extra metadata
         email: user.email || user.extra?.email || user.username || '', // Get from user object or extra metadata
-        type: (user.extra?.type as UserType) || 'Teammate' as UserType, // Default type
+        type: (user.extra?.type as UserType) || ('Teammate' as UserType), // Default type
         privateWallet: null, // Wallets should be fetched separately when needed
         allowanceWallet: null, // Wallets should be fetched separately when needed
       };
@@ -421,18 +431,25 @@ const getUsers = async (
 
       // Check if filtering by aadObjectId (which is stored in external_id field)
       if (filterByExtra.aadObjectId) {
-        logger.debug('Filtering by aadObjectId (external_id):', filterByExtra.aadObjectId);
+        logger.debug(
+          'Filtering by aadObjectId (external_id):',
+          filterByExtra.aadObjectId,
+        );
 
         const filteredUsers = users.filter(user => {
           const userRaw = rawUsers.find((u: any) => u.id === user.id);
           if (!userRaw) return false;
 
           const matches = userRaw.external_id === filterByExtra.aadObjectId;
-          logger.debug(`User ${user.displayName}: external_id=${userRaw.external_id}, matches=${matches}`);
+          logger.debug(
+            `User ${user.displayName}: external_id=${userRaw.external_id}, matches=${matches}`,
+          );
           return matches;
         });
 
-        logger.debug(`Filtered to ${filteredUsers.length} users by external_id`);
+        logger.debug(
+          `Filtered to ${filteredUsers.length} users by external_id`,
+        );
         logger.debug('====================');
         return filteredUsers;
       }
@@ -458,11 +475,13 @@ const getUsers = async (
         }
 
         return Object.keys(filterByExtra).every(
-          key => extraData[key] === filterByExtra[key]
+          key => extraData[key] === filterByExtra[key],
         );
       });
 
-      logger.debug(`Filtered to ${filteredUsers.length} users by extra metadata`);
+      logger.debug(
+        `Filtered to ${filteredUsers.length} users by extra metadata`,
+      );
       logger.debug('====================');
       return filteredUsers;
     }
@@ -481,7 +500,6 @@ const getUser = async (
   adminKey: string,
   userId: string,
 ): Promise<User | null> => {
-
   if (!userId || userId === '' || userId === 'undefined') {
     return null;
   }
@@ -495,13 +513,11 @@ const getUser = async (
     }
 
     // Find private and allowance wallets
-    const privateWallet = userWallets.find(w =>
-      w.name.toLowerCase().includes('private')
-    ) || null;
+    const privateWallet =
+      userWallets.find(w => w.name.toLowerCase().includes('private')) || null;
 
-    const allowanceWallet = userWallets.find(w =>
-      w.name.toLowerCase().includes('allowance')
-    ) || null;
+    const allowanceWallet =
+      userWallets.find(w => w.name.toLowerCase().includes('allowance')) || null;
 
     // Extract display name from wallet name
     let displayName = userId;
@@ -536,7 +552,6 @@ const getUser = async (
 };
 
 const getWalletName = async (inKey: string) => {
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallet`, {
       method: 'GET',
@@ -560,7 +575,6 @@ const getWalletName = async (inKey: string) => {
 };
 
 const getWalletPayments = async (inKey: string) => {
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments?limit=100`, {
       method: 'GET',
@@ -583,7 +597,6 @@ const getWalletPayments = async (inKey: string) => {
 };
 
 const getWalletPayLinks = async (inKey: string, walletId: string) => {
-
   try {
     const response = await fetch(
       `${nodeUrl}/lnurlp/api/v1/links?all_wallets=false&wallet=${walletId}`,
@@ -614,7 +627,6 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
 
 // May need fixing!
 const getWalletId = async (inKey: string) => {
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
       method: 'GET',
@@ -648,7 +660,6 @@ const getWalletId = async (inKey: string) => {
 };
 
 const getInvoicePayment = async (lnKey: string, invoice: string) => {
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments/${invoice}`, {
       method: 'GET',
@@ -675,7 +686,6 @@ const getInvoicePayment = async (lnKey: string, invoice: string) => {
 
 //Akash Performance Test - Migrated to use core API
 const getAllWallets = async (lnKey: string) => {
-
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
@@ -690,9 +700,7 @@ const getAllWallets = async (lnKey: string) => {
     if (!response.ok) {
       logger.error('Response status:', response.status);
       logger.error('Response statusText:', response.statusText);
-      throw new Error(
-        `Error getting wallets (status: ${response.status})`,
-      );
+      throw new Error(`Error getting wallets (status: ${response.status})`);
     }
 
     const data: Wallet[] = await response.json();
@@ -730,7 +738,6 @@ const getWalletTransactionsSince = async (
   timestamp: number,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<Transaction[]> => {
-
   // Note that the timestamp is in seconds, not milliseconds.
   try {
     // Get walletId using the provided apiKey
@@ -757,7 +764,7 @@ const getWalletTransactionsSince = async (
 
     const data = await response.json();
 
-    logger.debug("DATA",data);
+    logger.debug('DATA', data);
 
     // Show all payments (timestamp filter removed)
     const paymentsSince = data;
@@ -773,12 +780,13 @@ const getWalletTransactionsSince = async (
         })
       : paymentsSince;
 
-      logger.debug("DATA2",filteredPayments);
+    logger.debug('DATA2', filteredPayments);
 
     // Map the payments to match the Zap interface
     const transactionData: Transaction[] = filteredPayments.map(
       (transaction: any) => ({
-        checking_id: transaction.checking_id || transaction.payment_hash || transaction.id,
+        checking_id:
+          transaction.checking_id || transaction.payment_hash || transaction.id,
         bolt11: transaction.bolt11,
         //from: transaction.extra?.from?.id || null, // This should be in "extra" field
         //to: transaction.extra?.to?.id || null, // This should be in "extra" field
@@ -841,7 +849,6 @@ const createInvoice = async (
 };
 
 const payInvoice = async (adminKey: string, paymentRequest: string) => {
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments`, {
       method: 'POST',
@@ -872,7 +879,6 @@ const createWallet = async (
   objectID: string,
   displayName: string,
 ) => {
-
   try {
     const url = `${nodeUrl}/api/v1/wallet`;
     const response = await fetch(url, {
@@ -902,7 +908,6 @@ const createWallet = async (
 
 // TODO: This method needs checking!
 const getWalletIdByUserId = async (adminKey: string, userId: string) => {
-
   try {
     const response = await fetch(
       `${nodeUrl}/api/v1/wallets?user_id=${userId}`,
@@ -934,7 +939,6 @@ const getNostrRewards = async (
   adminKey: string,
   stallId: string,
 ): Promise<Reward[]> => {
-
   try {
     const response = await fetch(
       `${nodeUrl}/nostrmarket/api/v1/stall/product/${stallId}`,
@@ -976,7 +980,6 @@ const getUserWalletTransactions = async (
   apiKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
 ): Promise<Transaction[]> => {
-
   try {
     // Use core API /api/v1/payments with wallet filter instead of deprecated /usermanager/api/v1/transactions
     const response = await fetch(
@@ -1024,7 +1027,6 @@ const getAllowance = async (
   adminKey: string,
   userId: string,
 ): Promise<Allowance | null> => {
-
   try {
     // TODO: Implement the actual API call to fetch the allowance
     const today = new Date();
@@ -1064,9 +1066,8 @@ const getAllPayments = async (
   limit: number = 1000,
   offset: number = 0,
   sortby: string = 'time',
-  direction: string = 'desc'
+  direction: string = 'desc',
 ): Promise<Transaction[]> => {
-
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
@@ -1155,7 +1156,9 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
       });
 
       if (!response.ok) {
-        logger.error(`getAllUsersFromAPI failed with status: ${response.status}`);
+        logger.error(
+          `getAllUsersFromAPI failed with status: ${response.status}`,
+        );
         throw new Error('Failed to fetch users');
       }
 
@@ -1187,9 +1190,8 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
 const getWalletsPaginated = async (
   userId: string,
   limit: number = 100,
-  offset: number = 0
+  offset: number = 0,
 ): Promise<Wallet[]> => {
-
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
@@ -1226,7 +1228,9 @@ const getWalletsPaginated = async (
     // DEBUG: Show the wallet.user field for each wallet to verify they match the requested userId
     logger.debug(`>>> WALLET USER IDs FOR REQUESTED USER ${userId}:`);
     wallets.forEach((wallet: any, index: number) => {
-      logger.debug(`  Wallet ${index + 1}: ID=${wallet.id}, Name="${wallet.name}", User ID=${wallet.user}, Matches=${wallet.user === userId ? '✓' : '✗'}`);
+      logger.debug(
+        `  Wallet ${index + 1}: ID=${wallet.id}, Name="${wallet.name}", User ID=${wallet.user}, Matches=${wallet.user === userId ? '✓' : '✗'}`,
+      );
     });
 
     // Map ALL fields from the API response to match the Wallet interface
@@ -1250,8 +1254,13 @@ const getWalletsPaginated = async (
       wallet => wallet.deleted !== true,
     );
 
-    logger.debug(`>>> Filtered wallets count for user ${userId}:`, filteredWallets.length);
-    logger.debug(`>>> Wallet IDs: [${filteredWallets.map(w => w.id).join(', ')}]`);
+    logger.debug(
+      `>>> Filtered wallets count for user ${userId}:`,
+      filteredWallets.length,
+    );
+    logger.debug(
+      `>>> Wallet IDs: [${filteredWallets.map(w => w.id).join(', ')}]`,
+    );
     logger.debug('===========================');
 
     return filteredWallets;
