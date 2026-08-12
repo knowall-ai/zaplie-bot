@@ -3,10 +3,7 @@
     "node": true,
     "es2021": true
   },
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
-  ],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": "latest",
@@ -14,12 +11,28 @@
   },
   "plugins": ["@typescript-eslint"],
   "rules": {
-    "@typescript-eslint/no-unused-vars": [
-      "error",
-      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
-    ],
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/no-explicit-any": "warn",
-    "no-console": "off"
+    "no-console": "off",
+    "max-lines": [
+      "error",
+      { "max": 1000, "skipBlankLines": true, "skipComments": true }
+    ]
   },
+  "overrides": [
+    {
+      // GRANDFATHERED: tabs/src/services/lnbitsServiceLocal.ts is 1297 lines today.
+      // It is relaxed to a warning capped at 1400 so it does not block CI while it
+      // awaits a split into smaller modules. REMOVE this override once that file is
+      // broken up so the 1000-line hard limit applies to it too.
+      "files": ["tabs/src/services/lnbitsServiceLocal.ts"],
+      "rules": {
+        "max-lines": [
+          "warn",
+          { "max": 1400, "skipBlankLines": true, "skipComments": true }
+        ]
+      }
+    }
+  ],
   "ignorePatterns": ["lib/", "node_modules/", "tabs/", "functions/"]
 }

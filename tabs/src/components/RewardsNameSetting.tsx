@@ -7,18 +7,14 @@ import React, {
 } from 'react';
 import styles from './setting.module.css';
 import { getRewardName, updateRewardName } from '../apiService';
-import { toast } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { RewardNameContext } from './RewardNameContext';
-import { useMsal } from '@azure/msal-react';
-import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 
 const CurrencySetting: FunctionComponent = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currency, setCurrency] = useState(''); // Default value
   const { setRewardName } = useContext(RewardNameContext);
-  const { instance, accounts } = useMsal();
-  const isAdmin = isZaplieAdmin(accounts[0]);
 
   useEffect(() => {
     const fetchRewardName = async () => {
@@ -40,14 +36,7 @@ const CurrencySetting: FunctionComponent = () => {
   const handleSaveClick = async () => {
     setIsEditing(false);
     try {
-      const account = accounts[0];
-      if (!account) {
-        throw new Error('You need to be signed in to change the reward name.');
-      }
-      const data = await updateRewardName(
-        await acquireIdToken(instance, account),
-        currency,
-      );
+      const data = await updateRewardName(currency);
       console.log('Reward name saved:', data.rewardName);
       setRewardName(data.rewardName); // Update the context
       toast.success('Reward name has been updated successfully!');
@@ -70,17 +59,17 @@ const CurrencySetting: FunctionComponent = () => {
           title="Reward name"
           placeholder="Enter currency"
         />
-        {isAdmin &&
-          (!isEditing ? (
-            <button onClick={handleEditClick} className={styles.editButton}>
-              Edit
-            </button>
-          ) : (
-            <button onClick={handleSaveClick} className={styles.saveButton}>
-              Save
-            </button>
-          ))}
+        {!isEditing ? (
+          <button onClick={handleEditClick} className={styles.editButton}>
+            Edit
+          </button>
+        ) : (
+          <button onClick={handleSaveClick} className={styles.saveButton}>
+            Save
+          </button>
+        )}
       </div>
+      <ToastContainer />
     </div>
   );
 };

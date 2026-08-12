@@ -21,8 +21,6 @@ import Feed from './Feed';
 import Users from './Users';
 import './App.css';
 import Rewards from './Rewards';
-import Automations from './Automations';
-import Reports from './Reports';
 import Wallet from './Wallet';
 import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
@@ -95,22 +93,6 @@ function App({ pca }: AppProps) {
                 element={
                   <RequireAuth>
                     <Rewards />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/automations"
-                element={
-                  <RequireAuth>
-                    <Automations />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/reports"
-                element={
-                  <RequireAuth>
-                    <Reports />
                   </RequireAuth>
                 }
               />
