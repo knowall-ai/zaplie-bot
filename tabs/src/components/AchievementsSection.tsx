@@ -50,7 +50,10 @@ const AchievementsSection: FunctionComponent = () => {
       </div>
       <div className={styles.grid}>
         {achievements.map(achievement => {
-          const progress = Math.min(achievement.current / achievement.target, 1);
+          const progress = Math.min(
+            achievement.current / achievement.target,
+            1,
+          );
           return (
             <div
               key={achievement.id}
@@ -63,11 +66,15 @@ const AchievementsSection: FunctionComponent = () => {
               </div>
               <div className={styles.cardBody}>
                 <span className={styles.cardName}>{achievement.name}</span>
-                <span className={styles.cardDescription}>{achievement.description}</span>
+                <span className={styles.cardDescription}>
+                  {achievement.description}
+                </span>
                 {achievement.earned ? (
                   <span className={styles.earnedDate}>
                     Earned{' '}
-                    {new Date(achievement.earnedAt as string).toLocaleDateString('en-GB', {
+                    {new Date(
+                      achievement.earnedAt as string,
+                    ).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
                     })}

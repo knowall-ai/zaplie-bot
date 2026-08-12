@@ -17,6 +17,7 @@
 .env.local
 .env.Test
 .env.Prod
+# REACT_APP_* values are bundled into the client — keep local (use .env.development.example)
 .env.development
 .env.development.local
 .env.test.local

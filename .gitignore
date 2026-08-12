@@ -3,6 +3,8 @@ env/.env.*.user
 env/.env.dev
 env/.env.local
 env/.env.test
+# Contains real LNbits/host config — keep local, never commit (use env/.env.dev.example)
+env/.env.dev
 .localConfigs
 appPackage/build
 
@@ -18,6 +20,9 @@ node_modules/
 lib/
 build/
 
+# test coverage
+coverage/
+
 .fake
 /build
 
@@ -26,3 +31,7 @@ appPackage/manifest.json
 # Identity foundation: local JSON stores, never real data in git
 tabs/backend/identities.json
 tabs/backend/pending-rewards.json
+
+# Generated documentation PDF
+docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
+docs/.asciidoctor/

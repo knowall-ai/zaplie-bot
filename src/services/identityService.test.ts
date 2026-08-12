@@ -1,6 +1,11 @@
 import { resolvePersonAadByGithubId } from './identityService';
 import { payReward } from './rewardsService';
-import { getUserWallets, getUsers, createInvoice, payInvoice } from './lnbitsService';
+import {
+  getUserWallets,
+  getUsers,
+  createInvoice,
+  payInvoice,
+} from './lnbitsService';
 import { createPendingReward } from './pendingRewardsService';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 
@@ -195,7 +200,10 @@ describe('payReward recipientId resolution', () => {
   test('rejects a reward with no recipientId with a 400', async () => {
     const { recipientId: _omit, ...withoutId } = rewardWithRecipientId;
 
-    await expect(payReward(withoutId)).rejects.toHaveProperty('statusCode', 400);
+    await expect(payReward(withoutId)).rejects.toHaveProperty(
+      'statusCode',
+      400,
+    );
     expect(mockedGetUsers).not.toHaveBeenCalled();
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });

@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import styles from './Leaderboard.module.css';
-import {
-  getUsers,
-  getUserWallets,
-} from '../services/lnbitsServiceLocal';
+import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
 import { fetchAllowanceWalletTransactions } from '../utils/walletUtilities';
 import ZapIcon from '../images/ZapIcon.svg';
 import circleFirstPlace from '../images/circleFirstPlace.svg';
@@ -58,8 +55,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
         // Fetch all transactions using the same method as Feed
         console.log('[Leaderboard] Fetching all transactions...');
-        const allTransactions = await fetchAllowanceWalletTransactions(adminKey);
-        console.log(`[Leaderboard] Found ${allTransactions.length} total transactions`);
+        const allTransactions =
+          await fetchAllowanceWalletTransactions(adminKey);
+        console.log(
+          `[Leaderboard] Found ${allTransactions.length} total transactions`,
+        );
 
         // Create a map of wallet_id to user for quick lookup
         const walletToUserMap: { [walletId: string]: User } = {};
@@ -72,30 +72,38 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
                 walletToUserMap[wallet.id] = user;
               });
             }
-          })
+          }),
         );
 
-        console.log(`[Leaderboard] Created wallet map with ${Object.keys(walletToUserMap).length} wallets`);
+        console.log(
+          `[Leaderboard] Created wallet map with ${Object.keys(walletToUserMap).length} wallets`,
+        );
 
         // Filter transactions based on timestamp if provided
-        const filteredTransactions = paymentsSinceTimestamp && paymentsSinceTimestamp > 0
-          ? allTransactions.filter(transaction => {
-              const transactionTime = typeof transaction.time === 'number'
-                ? transaction.time
-                : new Date(transaction.time).getTime() / 1000;
-              return transactionTime >= paymentsSinceTimestamp;
-            })
-          : allTransactions;
+        const filteredTransactions =
+          paymentsSinceTimestamp && paymentsSinceTimestamp > 0
+            ? allTransactions.filter(transaction => {
+                const transactionTime =
+                  typeof transaction.time === 'number'
+                    ? transaction.time
+                    : new Date(transaction.time).getTime() / 1000;
+                return transactionTime >= paymentsSinceTimestamp;
+              })
+            : allTransactions;
 
-        console.log(`[Leaderboard] After timestamp filter: ${filteredTransactions.length} transactions`);
+        console.log(
+          `[Leaderboard] After timestamp filter: ${filteredTransactions.length} transactions`,
+        );
 
         // Group and sum amounts by users
-        const transactionSummary: { [key: string]: UserTransactionSummary } = {};
+        const transactionSummary: { [key: string]: UserTransactionSummary } =
+          {};
 
         filteredTransactions.forEach(transaction => {
           const user = walletToUserMap[transaction.wallet_id];
 
-          if (user && transaction.amount < 0) {  // Only count outgoing payments (sent zaps)
+          if (user && transaction.amount < 0) {
+            // Only count outgoing payments (sent zaps)
             const userId = user.id;
             const amountInSats = Math.abs(transaction.amount) / 1000; // Convert msats to sats
 
@@ -113,7 +121,9 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
           }
         });
 
-        console.log(`[Leaderboard] Grouped into ${Object.keys(transactionSummary).length} users`);
+        console.log(
+          `[Leaderboard] Grouped into ${Object.keys(transactionSummary).length} users`,
+        );
 
         // Convert the summary object to an array and assign ranks
         const summaryArray = Object.values(transactionSummary);

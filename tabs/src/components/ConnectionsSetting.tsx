@@ -54,7 +54,11 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
     const load = async () => {
       try {
-        const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account, forceRefresh: true });
+        const tokenResponse = await instance.acquireTokenSilent({
+          ...loginRequest,
+          account,
+          forceRefresh: true,
+        });
         const mine = await getMyIdentities(tokenResponse.idToken);
         setIdentities(mine);
       } catch (error) {
@@ -73,7 +77,11 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
     setConnecting(true);
     try {
-      const tokenResponse = await instance.acquireTokenSilent({ ...loginRequest, account, forceRefresh: true });
+      const tokenResponse = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account,
+        forceRefresh: true,
+      });
       const authorizeUrl = await getGithubAuthorizeUrl(tokenResponse.idToken);
       window.location.href = authorizeUrl;
     } catch (error) {
@@ -83,7 +91,9 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
   };
 
-  const githubIdentity = identities.find(identity => identity.provider === 'github');
+  const githubIdentity = identities.find(
+    identity => identity.provider === 'github',
+  );
 
   return (
     <div className={styles.currencySetting}>

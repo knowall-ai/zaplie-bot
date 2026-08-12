@@ -5,7 +5,8 @@ export const ADMIN_ROLE = 'Zaplie.Admin';
 
 // App roles arrive in the idToken's roles claim; assigned per user in Entra.
 export const isZaplieAdmin = (account: AccountInfo | undefined): boolean => {
-  const roles = (account?.idTokenClaims as { roles?: string[] } | undefined)?.roles;
+  const roles = (account?.idTokenClaims as { roles?: string[] } | undefined)
+    ?.roles;
   return Array.isArray(roles) && roles.includes(ADMIN_ROLE);
 };
 

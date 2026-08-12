@@ -25,7 +25,10 @@ export const getRewardName = async () => {
 
 // Config writes authenticate with the caller's MSAL idToken; the backend
 // requires the Zaplie.Admin app role carried in its roles claim.
-export const updateRewardName = async (idToken: string, newRewardName: string) => {
+export const updateRewardName = async (
+  idToken: string,
+  newRewardName: string,
+) => {
   try {
     const response = await axios.post(
       `${API_URL}/reward-name`,
@@ -34,7 +37,7 @@ export const updateRewardName = async (idToken: string, newRewardName: string) =
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
-      }
+      },
     );
     return response.data;
   } catch (error) {

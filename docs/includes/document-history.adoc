@@ -1,0 +1,6 @@
+[cols="1,2,2,4",options="header"]
+|===
+|Version |Date |Author |Changes
+
+|1.0 |11-08-2026 |KnowAll AI Ltd |Initial technical documentation
+|===

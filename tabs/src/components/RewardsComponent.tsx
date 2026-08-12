@@ -1,4 +1,10 @@
-import React, { FunctionComponent, useState, useEffect, useRef, useContext } from 'react';
+import React, {
+  FunctionComponent,
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+} from 'react';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 import styles from './RewardsComponent.module.css';
@@ -7,7 +13,6 @@ import {
   getUserWallets,
 } from '../services/lnbitsServiceLocal';
 import PurchasePopup from './PurchasePopup';
-import ProvidedBy from '../images/ProvidedBy.svg';
 import imagePlaceholder from '../images/imagePlaceholderNew.svg';
 import { RewardNameContext } from './RewardNameContext';
 import { loginRequest } from '../services/authConfig';
@@ -36,8 +41,10 @@ const TEAM_REWARD_IMAGES: Record<string, string> = {
   'recharge-day': RewardRecharge,
 };
 
-const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> = ({ adminKey, userId }) => {
-
+const RewardsComponent: FunctionComponent<{
+  adminKey: string;
+  userId: string;
+}> = ({ adminKey, userId }) => {
   const [rewards, setRewards] = useState<Reward[]>([]); // Initialize as an empty array
   const [isDragging, setIsDragging] = useState(false);
   const [startPosition, setStartPosition] = useState(0);
@@ -97,7 +104,9 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
       );
     } catch (error) {
       console.error('Error redeeming team reward:', error);
-      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const status = axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined;
       if (status === 402) {
         toast.error('Not enough sats in your Private wallet for this reward.');
       } else if (status === 409) {
@@ -192,14 +201,12 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
   };
 
   const rewardNameContext = useContext(RewardNameContext);
-  const  rewardName  = rewardNameContext.rewardName;
-
-
+  const rewardName = rewardNameContext.rewardName;
 
   // Only render rewards if they exist
   return (
     <div className={styles.mainContainer}>
-      <div className={styles.title}>Rewards <img src={ProvidedBy} alt="Provided By" className={styles.providedByImage} /></div>
+      <div className={styles.title}>Rewards</div>
       <div
         className={styles.carousel}
         ref={carouselRef}
@@ -213,7 +220,11 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
           rewards.map(reward => (
             <div key={reward.id} className={styles.card}>
               <img
-                src={reward.image && reward.image.length > 0 ? reward.image : imagePlaceholder}
+                src={
+                  reward.image && reward.image.length > 0
+                    ? reward.image
+                    : imagePlaceholder
+                }
                 alt={reward.name}
                 className={styles.rewardImage}
                 style={{ height: '160px' }} // Fixed height
@@ -229,7 +240,8 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
                   className={styles.productDetails}
                   onClick={() => handleProductDetailsClick(reward.link)}
                 >
-                  Product details</p>
+                  Product details
+                </p>
               )}
 
               <div className={styles.priceContainer}>
@@ -245,15 +257,16 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
             </div>
           ))
         ) : (
-          <p className={styles.noPointer}>No marketplace products available yet.</p>
+          <p className={styles.noPointer}>
+            No marketplace products available yet.
+          </p>
         )}
       </div>
-
       <div className={styles.teamSection}>
         <h3 className={styles.teamTitle}>Team rewards</h3>
         <p className={styles.teamSubtitle}>
-          Curated by your organisation. Redeeming pays from your Private wallet and files a
-          request your admin fulfils.
+          Curated by your organisation. Redeeming pays from your Private wallet
+          and files a request your admin fulfils.
         </p>
         <div className={styles.teamGrid}>
           {teamRewards.map(reward => (
@@ -270,7 +283,8 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
               <p className={styles.teamCardDescription}>{reward.description}</p>
               <div className={styles.teamCardFooter}>
                 <span className={styles.teamPrice}>
-                  {new Intl.NumberFormat('en-US').format(reward.priceSats)} {rewardName}
+                  {new Intl.NumberFormat('en-US').format(reward.priceSats)}{' '}
+                  {rewardName}
                 </span>
                 {requestedIds.has(reward.id) ? (
                   <span className={styles.requestedBadge}>Requested</span>
@@ -288,7 +302,6 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
           ))}
         </div>
       </div>
-
       {history.length > 0 && (
         <div className={styles.teamSection}>
           <h3 className={styles.teamTitle}>History</h3>
@@ -296,19 +309,24 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
             {history.map(entry => (
               <div key={entry.id} className={styles.historyRow}>
                 <div className={styles.historyInfo}>
-                  <span className={styles.historyReward}>{entry.rewardName}</span>
+                  <span className={styles.historyReward}>
+                    {entry.rewardName}
+                  </span>
                   <span className={styles.historyMeta}>
                     {new Date(entry.requestedAt).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
                     })}{' '}
                     · to {entry.personName} ·{' '}
-                    {new Intl.NumberFormat('en-US').format(entry.priceSats)} {rewardName}
+                    {new Intl.NumberFormat('en-US').format(entry.priceSats)}{' '}
+                    {rewardName}
                   </span>
                 </div>
                 <span
                   className={
-                    entry.status === 'fulfilled' ? styles.fulfilledBadge : styles.pendingBadge
+                    entry.status === 'fulfilled'
+                      ? styles.fulfilledBadge
+                      : styles.pendingBadge
                   }
                 >
                   {entry.status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
@@ -318,16 +336,25 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
                     className={styles.fulfillButton}
                     onClick={async () => {
                       try {
-                        await fulfillRedemption(await acquireIdToken(), entry.id);
+                        await fulfillRedemption(
+                          await acquireIdToken(),
+                          entry.id,
+                        );
                         setHistory(previous =>
                           previous.map(h =>
-                            h.id === entry.id ? { ...h, status: 'fulfilled' as const } : h,
+                            h.id === entry.id
+                              ? { ...h, status: 'fulfilled' as const }
+                              : h,
                           ),
                         );
-                        toast.success(`Marked "${entry.rewardName}" as fulfilled.`);
+                        toast.success(
+                          `Marked "${entry.rewardName}" as fulfilled.`,
+                        );
                       } catch (error) {
                         console.error('Error fulfilling redemption:', error);
-                        toast.error('Could not mark the redemption as fulfilled.');
+                        toast.error(
+                          'Could not mark the redemption as fulfilled.',
+                        );
                       }
                     }}
                   >

@@ -37,7 +37,9 @@ export interface Bounty {
 
 // idToken (not the Graph access token): its audience is this app's own AAD
 // client id, which is what the tab backend validates against the Entra JWKS.
-const auth = (idToken: string) => ({ headers: { Authorization: `Bearer ${idToken}` } });
+const auth = (idToken: string) => ({
+  headers: { Authorization: `Bearer ${idToken}` },
+});
 
 export const getBounties = async (idToken: string): Promise<Bounty[]> => {
   const response = await axios.get(API_URL, auth(idToken));
@@ -64,12 +66,23 @@ export const submitToBounty = async (
   id: string,
   note: string,
 ): Promise<Bounty> => {
-  const response = await axios.post(`${API_URL}/${id}/submissions`, { note }, auth(idToken));
+  const response = await axios.post(
+    `${API_URL}/${id}/submissions`,
+    { note },
+    auth(idToken),
+  );
   return response.data;
 };
 
-export const toggleBountyObjective = async (idToken: string, id: string): Promise<Bounty> => {
-  const response = await axios.post(`${API_URL}/${id}/objective`, null, auth(idToken));
+export const toggleBountyObjective = async (
+  idToken: string,
+  id: string,
+): Promise<Bounty> => {
+  const response = await axios.post(
+    `${API_URL}/${id}/objective`,
+    null,
+    auth(idToken),
+  );
   return response.data;
 };
 
@@ -86,7 +99,14 @@ export const payBounty = async (
   return response.data;
 };
 
-export const cancelBounty = async (idToken: string, id: string): Promise<Bounty> => {
-  const response = await axios.post(`${API_URL}/${id}/cancel`, null, auth(idToken));
+export const cancelBounty = async (
+  idToken: string,
+  id: string,
+): Promise<Bounty> => {
+  const response = await axios.post(
+    `${API_URL}/${id}/cancel`,
+    null,
+    auth(idToken),
+  );
   return response.data;
 };

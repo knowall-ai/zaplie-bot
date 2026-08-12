@@ -35,7 +35,9 @@ const BountiesComponent: FunctionComponent = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [difficulty, setDifficulty] = useState<'easy' | 'intermediate' | 'high'>('intermediate');
+  const [difficulty, setDifficulty] = useState<
+    'easy' | 'intermediate' | 'high'
+  >('intermediate');
   const [category, setCategory] = useState('Task');
   const [deadlineDays, setDeadlineDays] = useState('');
   const [creating, setCreating] = useState(false);
@@ -66,12 +68,21 @@ const BountiesComponent: FunctionComponent = () => {
   }, [accounts, instance]);
 
   const replaceBounty = (updated: Bounty) =>
-    setBounties(previous => previous.map(b => (b.id === updated.id ? updated : b)));
+    setBounties(previous =>
+      previous.map(b => (b.id === updated.id ? updated : b)),
+    );
 
   const handleCreate = async () => {
     const amountSats = Number(amount);
-    if (!title.trim() || !description.trim() || !Number.isInteger(amountSats) || amountSats <= 0) {
-      toast.error('A bounty needs a title, a description and a whole amount of sats.');
+    if (
+      !title.trim() ||
+      !description.trim() ||
+      !Number.isInteger(amountSats) ||
+      amountSats <= 0
+    ) {
+      toast.error(
+        'A bounty needs a title, a description and a whole amount of sats.',
+      );
       return;
     }
     const days = Number(deadlineDays);
@@ -103,18 +114,26 @@ const BountiesComponent: FunctionComponent = () => {
     }
   };
 
-  const run = async (id: string, action: (token: string) => Promise<Bounty>, okMessage: string) => {
+  const run = async (
+    id: string,
+    action: (token: string) => Promise<Bounty>,
+    okMessage: string,
+  ) => {
     setBusyId(id);
     try {
       replaceBounty(await action(await idToken()));
       toast.success(okMessage);
     } catch (error) {
       console.error('Bounty action failed:', error);
-      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const status = axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined;
       if (status === 402) {
         toast.error('The treasury balance is not enough for this bounty.');
       } else if (status === 409) {
-        toast.error('Someone got there first. Refresh to see the latest state.');
+        toast.error(
+          'Someone got there first. Refresh to see the latest state.',
+        );
       } else {
         toast.error('The action failed. Please try again.');
       }
@@ -142,7 +161,8 @@ const BountiesComponent: FunctionComponent = () => {
         <div className={styles.bannerText}>
           <h2 className={styles.title}>Bounties</h2>
           <p className={styles.subtitle}>
-            Open tasks with a sat prize. Claim one, ship it, and the treasury pays you directly.
+            Open tasks with a sat prize. Claim one, ship it, and the treasury
+            pays you directly.
           </p>
         </div>
       </div>
@@ -189,7 +209,11 @@ const BountiesComponent: FunctionComponent = () => {
             </select>
             <select
               value={difficulty}
-              onChange={e => setDifficulty(e.target.value as 'easy' | 'intermediate' | 'high')}
+              onChange={e =>
+                setDifficulty(
+                  e.target.value as 'easy' | 'intermediate' | 'high',
+                )
+              }
               className={styles.select}
               disabled={creating}
             >
@@ -206,7 +230,11 @@ const BountiesComponent: FunctionComponent = () => {
               disabled={creating}
             />
           </div>
-          <button className={styles.primaryButton} onClick={handleCreate} disabled={creating}>
+          <button
+            className={styles.primaryButton}
+            onClick={handleCreate}
+            disabled={creating}
+          >
             {creating ? 'Publishing...' : 'Publish bounty'}
           </button>
         </div>
@@ -214,7 +242,8 @@ const BountiesComponent: FunctionComponent = () => {
 
       {visible.length === 0 ? (
         <p className={styles.emptyText}>
-          No bounties yet.{isAdmin ? ' Publish the first one above.' : ' Check back soon.'}
+          No bounties yet.
+          {isAdmin ? ' Publish the first one above.' : ' Check back soon.'}
         </p>
       ) : (
         <div className={styles.list}>
@@ -223,13 +252,18 @@ const BountiesComponent: FunctionComponent = () => {
               <div className={styles.rowInfo}>
                 <div className={styles.rowTitleLine}>
                   <span className={styles.rowTitle}>{bounty.title}</span>
-                  <span className={`${styles.statusBadge} ${styles[`status_${bounty.status}`]}`}>
+                  <span
+                    className={`${styles.statusBadge} ${styles[`status_${bounty.status}`]}`}
+                  >
                     {STATUS_LABELS[bounty.status]}
                   </span>
                 </div>
-                <span className={styles.rowDescription}>{bounty.description}</span>
+                <span className={styles.rowDescription}>
+                  {bounty.description}
+                </span>
                 <span className={styles.rowMeta}>
-                  {bounty.category || 'Task'} · {bounty.difficulty || 'intermediate'} difficulty
+                  {bounty.category || 'Task'} ·{' '}
+                  {bounty.difficulty || 'intermediate'} difficulty
                   {bounty.deadlineAt &&
                     (() => {
                       const daysLeft = Math.ceil(
@@ -241,11 +275,14 @@ const BountiesComponent: FunctionComponent = () => {
                     })()}
                   {' · '}
                   {bounty.submissions.length}{' '}
-                  {bounty.submissions.length === 1 ? 'submission' : 'submissions'}
+                  {bounty.submissions.length === 1
+                    ? 'submission'
+                    : 'submissions'}
                 </span>
                 {bounty.claimantName && (
                   <span className={styles.rowMeta}>
-                    {bounty.status === 'paid' ? 'Completed by' : 'Claimed by'} {bounty.claimantName}
+                    {bounty.status === 'paid' ? 'Completed by' : 'Claimed by'}{' '}
+                    {bounty.claimantName}
                   </span>
                 )}
                 {bounty.submissions.length > 0 && bounty.status !== 'paid' && (
@@ -255,7 +292,9 @@ const BountiesComponent: FunctionComponent = () => {
                       setExpandedId(expandedId === bounty.id ? null : bounty.id)
                     }
                   >
-                    {expandedId === bounty.id ? 'Hide submissions' : 'View submissions'}
+                    {expandedId === bounty.id
+                      ? 'Hide submissions'
+                      : 'View submissions'}
                   </button>
                 )}
                 {expandedId === bounty.id && bounty.status !== 'paid' && (
@@ -263,8 +302,12 @@ const BountiesComponent: FunctionComponent = () => {
                     {bounty.submissions.map(submission => (
                       <div key={submission.id} className={styles.submissionRow}>
                         <div className={styles.submissionInfo}>
-                          <span className={styles.submissionName}>{submission.name}</span>
-                          <span className={styles.submissionNote}>{submission.note}</span>
+                          <span className={styles.submissionName}>
+                            {submission.name}
+                          </span>
+                          <span className={styles.submissionNote}>
+                            {submission.note}
+                          </span>
                         </div>
                         {isAdmin && bounty.status === 'open' && (
                           <button
@@ -278,7 +321,9 @@ const BountiesComponent: FunctionComponent = () => {
                               )
                             }
                           >
-                            {busyId === bounty.id ? 'Paying...' : 'Pay this one'}
+                            {busyId === bounty.id
+                              ? 'Paying...'
+                              : 'Pay this one'}
                           </button>
                         )}
                       </div>
@@ -302,7 +347,8 @@ const BountiesComponent: FunctionComponent = () => {
                         onClick={async () => {
                           await run(
                             bounty.id,
-                            t => submitToBounty(t, bounty.id, submitNote.trim()),
+                            t =>
+                              submitToBounty(t, bounty.id, submitNote.trim()),
                             'Submission sent. Good luck!',
                           );
                           setSubmitFor(null);
@@ -371,7 +417,11 @@ const BountiesComponent: FunctionComponent = () => {
                     className={styles.primaryButton}
                     disabled={busyId === bounty.id}
                     onClick={() =>
-                      run(bounty.id, t => payBounty(t, bounty.id), `Paid ${bounty.amountSats} sats to ${bounty.claimantName}.`)
+                      run(
+                        bounty.id,
+                        t => payBounty(t, bounty.id),
+                        `Paid ${bounty.amountSats} sats to ${bounty.claimantName}.`,
+                      )
                     }
                   >
                     {busyId === bounty.id ? 'Paying...' : 'Pay'}
@@ -381,7 +431,13 @@ const BountiesComponent: FunctionComponent = () => {
                   <button
                     className={styles.secondaryButton}
                     disabled={busyId === bounty.id}
-                    onClick={() => run(bounty.id, t => cancelBounty(t, bounty.id), 'Bounty cancelled.')}
+                    onClick={() =>
+                      run(
+                        bounty.id,
+                        t => cancelBounty(t, bounty.id),
+                        'Bounty cancelled.',
+                      )
+                    }
                   >
                     Cancel
                   </button>

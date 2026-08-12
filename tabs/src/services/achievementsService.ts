@@ -19,7 +19,9 @@ export interface AchievementsResult {
 
 // idToken (not the Graph access token): its audience is this app's own AAD
 // client id, which is what the tab backend validates against the Entra JWKS.
-export const getMyAchievements = async (idToken: string): Promise<AchievementsResult> => {
+export const getMyAchievements = async (
+  idToken: string,
+): Promise<AchievementsResult> => {
   const response = await axios.get(`${API_URL}/me`, {
     headers: { Authorization: `Bearer ${idToken}` },
   });

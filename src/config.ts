@@ -9,6 +9,12 @@ const config = {
   timeout: process.env.TIMEOUT || 30000,
 };
 
-console.log('Configuration:', config);
+const redact = (value?: string) => (value ? '[REDACTED]' : value);
+
+console.log('Configuration:', {
+  ...config,
+  botPassword: redact(config.botPassword),
+  clientSecret: redact(config.clientSecret),
+});
 
 export default config;
