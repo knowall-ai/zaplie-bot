@@ -32,7 +32,10 @@ const pickTargetWallet = (wallets: Wallet[] | null): Wallet | null =>
   wallets?.[0] ??
   null;
 
-const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId }) => {
+const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
+  onClose,
+  initialUserId,
+}) => {
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [memo, setMemo] = useState<string>('');
@@ -115,13 +118,20 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
         setUsers(usersWithoutWallets);
 
         // Preselect a recipient (e.g. from the "Your week" page) and fetch their wallet up front
-        if (initialUserId && usersWithoutWallets.some(u => u.id === initialUserId)) {
+        if (
+          initialUserId &&
+          usersWithoutWallets.some(u => u.id === initialUserId)
+        ) {
           setSelectedUser(initialUserId);
           const wallets = await getUserWallets(adminKey, initialUserId);
           const targetWallet = pickTargetWallet(wallets);
-          setUsers(prev => prev.map(u =>
-            u.id === initialUserId ? { ...u, privateWallet: targetWallet } : u
-          ));
+          setUsers(prev =>
+            prev.map(u =>
+              u.id === initialUserId
+                ? { ...u, privateWallet: targetWallet }
+                : u,
+            ),
+          );
         }
       } catch (err) {
         setError('Failed to load users');
@@ -146,9 +156,11 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
     try {
       const wallets = await getUserWallets(adminKey, userId);
       const targetWallet = pickTargetWallet(wallets);
-      setUsers(prev => prev.map(u =>
-        u.id === userId ? { ...u, privateWallet: targetWallet } : u
-      ));
+      setUsers(prev =>
+        prev.map(u =>
+          u.id === userId ? { ...u, privateWallet: targetWallet } : u,
+        ),
+      );
     } catch {
       // Silently fail - error will show when trying to send
     }
