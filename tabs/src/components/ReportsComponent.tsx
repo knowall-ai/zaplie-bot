@@ -10,44 +10,65 @@ const fmt = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
 const BarChart: FunctionComponent<{ series: number[] }> = ({ series }) => {
   const max = Math.max(...series, 1);
-  const barWidth = 40;
-  const gap = 12;
+  const barWidth = 18;
+  const gap = 14;
   const width = series.length * (barWidth + gap);
+  const baseline = 104;
+  const plot = 76;
   return (
-    <svg viewBox={`0 0 ${width} 120`} className={styles.chart} role="img">
+    <svg viewBox={`0 0 ${width} 124`} className={styles.chart} role="img">
       <line
         x1="0"
-        y1="119"
+        y1={baseline}
         x2={width}
-        y2="119"
+        y2={baseline}
         stroke="#3a383a"
-        strokeWidth="1.5"
+        strokeWidth="1"
       />
       {series.map((sats, i) => {
-        const height = Math.max(sats > 0 ? 6 : 2, (sats / max) * 100);
+        const height = sats > 0 ? Math.max(4, (sats / max) * plot) : 0;
         const x = i * (barWidth + gap) + gap / 2;
+        const week = series.length - i;
         return (
           <g key={i}>
             <rect
               x={x}
-              y={117 - height}
+              y={baseline - plot}
               width={barWidth}
-              height={height}
-              rx={3}
-              fill={sats > 0 ? '#84cc16' : '#3a383a'}
-            >
-              <title>{`${fmt(sats)} sats`}</title>
-            </rect>
+              height={plot}
+              rx={2}
+              fill="#262425"
+            />
+            {sats > 0 && (
+              <rect
+                x={x}
+                y={baseline - height}
+                width={barWidth}
+                height={height}
+                rx={2}
+                fill="#84cc16"
+              >
+                <title>{`${fmt(sats)} sats`}</title>
+              </rect>
+            )}
             {sats > 0 && (
               <text
                 x={x + barWidth / 2}
-                y={117 - height - 5}
+                y={baseline - height - 6}
                 textAnchor="middle"
                 className={styles.barLabel}
               >
                 {fmt(sats)}
               </text>
             )}
+            <text
+              x={x + barWidth / 2}
+              y={baseline + 14}
+              textAnchor="middle"
+              className={styles.axisLabel}
+            >
+              {week === 1 ? 'now' : `-${week - 1}w`}
+            </text>
           </g>
         );
       })}

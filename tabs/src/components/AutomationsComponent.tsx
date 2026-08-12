@@ -779,7 +779,7 @@ const AutomationsComponent: FunctionComponent = () => {
                         alt=""
                       />
                       <strong>
-                        {stats.runsByEventType[meta.eventType] ?? 0}
+                        {stats.runsByEventType?.[meta.eventType] ?? 0}
                       </strong>
                       <span>runs this month</span>
                     </li>

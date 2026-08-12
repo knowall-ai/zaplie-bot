@@ -47,7 +47,7 @@
 }
 
 .summaryValue {
-  color: #9ed929;
+  color: #84cc16;
   font-size: 32px;
   font-weight: 700;
   line-height: 1.1;
@@ -99,5 +99,11 @@
 .barLabel {
   fill: #a19f9d;
   font-size: 9px;
+  font-family: Inter;
+}
+
+.axisLabel {
+  fill: #7a7876;
+  font-size: 8px;
   font-family: Inter;
 }
