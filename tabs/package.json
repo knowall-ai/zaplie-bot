@@ -6,7 +6,7 @@
     "node": "24"
   },
   "dependencies": {
-    "@azure/msal-browser": "^3.24.0",
+    "@azure/msal-browser": "^5.18.0",
     "@azure/msal-react": "^2.1.0",
     "@fluentui/react": "^8.120.6",
     "@microsoft/teams-js": "^2.34.0",
