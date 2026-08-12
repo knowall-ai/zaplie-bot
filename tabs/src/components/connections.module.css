@@ -136,8 +136,8 @@
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
-  transition-property: background-color, border-color, color, box-shadow,
-    transform;
+  transition-property:
+    background-color, border-color, color, box-shadow, transform;
   transition-duration: 180ms;
   transition-timing-function: ease;
 }

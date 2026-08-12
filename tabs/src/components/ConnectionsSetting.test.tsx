@@ -55,6 +55,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 async function renderConnections(): Promise<void> {
+  // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(<ConnectionsSetting />);
   });
@@ -130,9 +131,13 @@ describe('ConnectionsSetting', () => {
     mockGetMyIdentities.mockResolvedValue([]);
 
     await renderConnections();
-    await eventually(() => expect(getButton('Connect GitHub').disabled).toBe(false));
+    await eventually(() =>
+      expect(getButton('Connect GitHub').disabled).toBe(false),
+    );
 
-    expect(container.textContent).toContain('receive rewards from pull requests');
+    expect(container.textContent).toContain(
+      'receive rewards from pull requests',
+    );
     expect(container.textContent).toContain('stable GitHub account ID');
   });
 
@@ -176,7 +181,9 @@ describe('ConnectionsSetting', () => {
     );
 
     await renderConnections();
-    await eventually(() => expect(getButton('Connect GitHub').disabled).toBe(false));
+    await eventually(() =>
+      expect(getButton('Connect GitHub').disabled).toBe(false),
+    );
 
     await act(async () => {
       getButton('Connect GitHub').click();
@@ -190,7 +197,11 @@ describe('ConnectionsSetting', () => {
   });
 
   test('announces a successful OAuth return once and removes its query flag', async () => {
-    window.history.replaceState({}, '', '/settings?github=connected&view=profile');
+    window.history.replaceState(
+      {},
+      '',
+      '/settings?github=connected&view=profile',
+    );
     mockGetMyIdentities.mockResolvedValue([githubIdentity]);
 
     await renderConnections();

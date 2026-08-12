@@ -11,14 +11,18 @@ export interface LinkedIdentity {
 
 // idToken (not the Graph access token): its audience is this app's own AAD
 // client id, which is what the tab backend validates against the Entra JWKS.
-export const getMyIdentities = async (idToken: string): Promise<LinkedIdentity[]> => {
+export const getMyIdentities = async (
+  idToken: string,
+): Promise<LinkedIdentity[]> => {
   const response = await axios.get(`${API_URL}/mine`, {
     headers: { Authorization: `Bearer ${idToken}` },
   });
   return response.data.identities;
 };
 
-export const getGithubAuthorizeUrl = async (idToken: string): Promise<string> => {
+export const getGithubAuthorizeUrl = async (
+  idToken: string,
+): Promise<string> => {
   const response = await axios.post(
     `${API_URL}/github/authorize-url`,
     {},
