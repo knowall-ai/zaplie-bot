@@ -35,36 +35,41 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
-// Per-event rule metadata for the list; the amounts themselves come from /api/reward-amounts.
+// Per-event rule metadata for the list; the amounts themselves come from /api/reward-amounts
+// and the run counts from /api/automations-stats. Nothing here is a metric.
 const RULE_META: Record<
   string,
   {
+    audience: AutomationAudience;
+    eventType: string;
     title: string;
     icon: string;
     status: string;
-    sentence: (sats: number) => string;
+    note?: string;
   }
 > = {
   githubPrMergedSats: {
-    title: 'Pull request merged',
+    audience: 'teammates',
+    eventType: 'githubPrMerged',
+    title: 'For every pull request merged in a connected repository',
     icon: GithubIcon,
     status: 'Draft flow',
-    sentence: sats =>
-      `When a pull request is merged in a connected repository, the author gets ${sats} sats.`,
   },
   githubIssueClosedSats: {
-    title: 'Issue closed',
+    audience: 'teammates',
+    eventType: 'githubIssueClosed',
+    title: 'For every issue closed in a connected repository',
     icon: GithubIcon,
     status: 'Flow required',
-    sentence: sats =>
-      `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
+    note: 'Amount is reserved. This event still needs its own verified GitHub flow.',
   },
   githubReviewSubmittedSats: {
-    title: 'Review submitted',
+    audience: 'teammates',
+    eventType: 'githubReviewSubmitted',
+    title: 'For every review submitted on a pull request',
     icon: GithubIcon,
     status: 'Flow required',
-    sentence: sats =>
-      `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
+    note: 'Amount is reserved. This event still needs its own verified GitHub flow.',
   },
 };
 const RULE_ORDER = [
@@ -149,6 +154,8 @@ const AutomationsComponent: FunctionComponent = () => {
   const [newKeyLabel, setNewKeyLabel] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [ruleAudience, setRuleAudience] =
+    useState<AutomationAudience>('teammates');
 
   useEffect(() => {
     const load = async () => {
@@ -336,6 +343,9 @@ const AutomationsComponent: FunctionComponent = () => {
   const activeWebhookKeyCount = webhookKeys.filter(
     key => !key.revokedAt,
   ).length;
+  const visibleRuleKeys = RULE_ORDER.filter(
+    key => key in amounts && RULE_META[key].audience === ruleAudience,
+  );
 
   return (
     <div className={styles.automationscomponent}>
@@ -708,81 +718,141 @@ const AutomationsComponent: FunctionComponent = () => {
           paid.
         </p>
       </div>
-      <div className={styles.ruleGrid}>
-        {RULE_ORDER.filter(key => key in amounts).map(key => {
-          const meta = RULE_META[key];
-          const isEditing = editingKey === key;
+      <div
+        className={styles.tabs}
+        role="tablist"
+        aria-label="Reward rules by audience"
+      >
+        {AUDIENCES.map(audience => {
+          const selected = ruleAudience === audience.key;
           return (
-            <article key={key} className={styles.ruleCard}>
-              <div className={styles.ruleCardHeader}>
-                <span className={styles.cardBadge}>
-                  <img src={meta.icon} alt="" />
-                </span>
-                <span className={styles.ruleStatus}>{meta.status}</span>
-              </div>
-              <div className={styles.ruleInfo}>
-                <span className={styles.ruleTitle}>{meta.title}</span>
-                <span className={styles.ruleSentence}>
-                  {meta.sentence(amounts[key])}
-                </span>
-              </div>
-              <div className={styles.ruleFooter}>
-                {isEditing ? (
-                  <label className={styles.amountEditor}>
-                    <span>Sats</span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={editingValue}
-                      onChange={e => setEditingValue(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          handleSaveAmount(key);
-                        }
-                        if (e.key === 'Escape') {
-                          setEditingKey(null);
-                        }
-                      }}
-                      className={styles.satsInput}
-                      autoFocus
-                    />
-                  </label>
-                ) : (
-                  <span className={styles.satsChip}>
-                    <img src={ZapIcon} alt="" />
-                    {NUMBER_FORMATTER.format(amounts[key])} sats
-                  </span>
-                )}
-                {isAdmin &&
-                  (isEditing ? (
-                    <div className={styles.ruleActions}>
-                      <button
-                        className={styles.cardEditButton}
-                        onClick={() => setEditingKey(null)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className={styles.cardSaveButton}
-                        onClick={() => handleSaveAmount(key)}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className={styles.cardEditButton}
-                      onClick={() => handleStartEdit(key)}
-                    >
-                      Edit amount
-                    </button>
-                  ))}
-              </div>
-            </article>
+            <button
+              key={audience.key}
+              type="button"
+              role="tab"
+              id={`rule-tab-${audience.key}`}
+              aria-selected={selected}
+              aria-controls="rule-panel"
+              className={`${styles.tab} ${selected ? styles.tabActive : ''}`}
+              onClick={() => setRuleAudience(audience.key)}
+            >
+              For {audience.label}
+            </button>
           );
         })}
       </div>
+      {visibleRuleKeys.length === 0 ? (
+        <p
+          id="rule-panel"
+          role="tabpanel"
+          aria-labelledby={`rule-tab-${ruleAudience}`}
+          className={styles.emptyState}
+        >
+          No reward rules pay {ruleAudience} yet. The GitHub pilot rewards the
+          teammate behind the event.
+        </p>
+      ) : (
+        <div
+          id="rule-panel"
+          role="tabpanel"
+          aria-labelledby={`rule-tab-${ruleAudience}`}
+          className={styles.ruleGrid}
+        >
+          {visibleRuleKeys.map(key => {
+            const meta = RULE_META[key];
+            const isEditing = editingKey === key;
+            return (
+              <article key={key} className={styles.ruleCard}>
+                <div className={styles.ruleCardHeader}>
+                  <span className={styles.cardBadge}>
+                    <img src={meta.icon} alt="" />
+                  </span>
+                  <span className={styles.ruleStatus}>{meta.status}</span>
+                </div>
+                <h4 className={styles.ruleTitle}>{meta.title}</h4>
+                <ul className={styles.ruleMeta}>
+                  {stats && (
+                    <li className={styles.ruleMetaRow}>
+                      <img
+                        className={styles.ruleMetaIcon}
+                        src={FlowArrowIcon}
+                        alt=""
+                      />
+                      <strong>
+                        {stats.runsByEventType[meta.eventType] ?? 0}
+                      </strong>
+                      <span>runs this month</span>
+                    </li>
+                  )}
+                  {meta.note && (
+                    <li className={styles.ruleMetaNote}>{meta.note}</li>
+                  )}
+                </ul>
+                <div className={styles.ruleFooter}>
+                  {isEditing ? (
+                    <label className={styles.amountEditor}>
+                      <span>Sats</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={editingValue}
+                        onChange={e => setEditingValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleSaveAmount(key);
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingKey(null);
+                          }
+                        }}
+                        className={styles.satsInput}
+                        autoFocus
+                      />
+                    </label>
+                  ) : (
+                    <span className={styles.ruleAmount}>
+                      <img
+                        className={styles.ruleAmountIcon}
+                        src={ZapIcon}
+                        alt=""
+                      />
+                      <span className={styles.ruleAmountValue}>
+                        {NUMBER_FORMATTER.format(amounts[key])}
+                      </span>
+                      <span className={styles.ruleAmountUnit}>Sats</span>
+                    </span>
+                  )}
+                  {isAdmin &&
+                    (isEditing ? (
+                      <div className={styles.ruleActions}>
+                        <button
+                          className={styles.cardEditButton}
+                          onClick={() => setEditingKey(null)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className={styles.cardSaveButton}
+                          onClick={() => handleSaveAmount(key)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className={styles.cardEditButton}
+                        onClick={() => handleStartEdit(key)}
+                      >
+                        Edit amount
+                      </button>
+                    ))}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
       <ToastContainer />
     </div>
