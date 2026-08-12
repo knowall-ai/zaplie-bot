@@ -1,5 +1,5 @@
-import { OnBehalfOfCredentialAuthConfig } from "@microsoft/teamsfx";
-import config from "./config";
+import { OnBehalfOfCredentialAuthConfig } from '@microsoft/teamsfx';
+import config from './config';
 
 const oboAuthConfig: OnBehalfOfCredentialAuthConfig = {
   authorityHost: config.authorityHost,

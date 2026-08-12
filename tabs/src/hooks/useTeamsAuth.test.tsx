@@ -1,7 +1,14 @@
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, afterEach, describe, expect, jest, test } from '@jest/globals';
+import {
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 import { useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
 import * as microsoftTeams from '@microsoft/teams-js';
@@ -38,7 +45,9 @@ const mockUseMsal = jest.mocked(useMsal);
 const mockLogoutPopup = jest.fn(async () => undefined);
 const mockClearApiCache = jest.mocked(clearApiCache);
 const mockToastError = jest.mocked(toast.error);
-const mockTeamsContext = {} as Awaited<ReturnType<typeof microsoftTeams.app.getContext>>;
+const mockTeamsContext = {} as Awaited<
+  ReturnType<typeof microsoftTeams.app.getContext>
+>;
 
 const AuthState = ({ id }: { id: string }) => {
   const { isInTeams, isTeamsInitializing, handleLogout } = useTeamsAuth();
@@ -55,8 +64,9 @@ describe('useTeamsAuth', () => {
   let root: Root;
 
   beforeEach(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
-      .IS_REACT_ACT_ENVIRONMENT = true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -82,6 +92,8 @@ describe('useTeamsAuth', () => {
   });
 
   const renderConsumers = async (client: QueryClient, count = 3) => {
+    // root.render is the react-dom client API, not a Testing Library util, so act is required here.
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(
         <QueryClientProvider client={client}>
@@ -108,8 +120,11 @@ describe('useTeamsAuth', () => {
     expect(mockInitialize).toHaveBeenCalledTimes(1);
     expect(mockGetContext).toHaveBeenCalledTimes(1);
     expect(client.getQueryData(teamsContextQueryKey)).toBe(true);
-    expect(Array.from(container.querySelectorAll('button')).map(button => button.textContent))
-      .toEqual(['teams', 'teams', 'teams']);
+    expect(
+      Array.from(container.querySelectorAll('button')).map(
+        button => button.textContent,
+      ),
+    ).toEqual(['teams', 'teams', 'teams']);
   });
 
   test('caches the browser fallback without retries or remount work', async () => {
@@ -120,6 +135,7 @@ describe('useTeamsAuth', () => {
     await renderConsumers(client);
     expect(client.getQueryData(teamsContextQueryKey)).toBe(false);
 
+    // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(<QueryClientProvider client={client} />);
     });

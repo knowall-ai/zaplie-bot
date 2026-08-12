@@ -91,8 +91,18 @@ const Home: React.FC = () => {
             display: 'flex',
           }}
         >
-          <TotalZapsComponent isLoading={loading} allZaps={zaps} allUsers={users} />
-          <ZapActivityChartComponent lnKey={''} isLoading={loading} timestamp={timestamp} allZaps={zaps} allUsers={users} />
+          <TotalZapsComponent
+            isLoading={loading}
+            allZaps={zaps}
+            allUsers={users}
+          />
+          <ZapActivityChartComponent
+            lnKey={''}
+            isLoading={loading}
+            timestamp={timestamp}
+            allZaps={zaps}
+            allUsers={users}
+          />
         </div>
       </div>
       <div

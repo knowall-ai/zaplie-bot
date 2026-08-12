@@ -1,35 +1,16 @@
 // userService.ts
 
-/// <reference path="../../src/types/global.d.ts" />
-import {
-  ConsoleTranscriptLogger,
-  TeamsChannelAccount,
-  TurnContext,
-  TeamsInfo,
-} from 'botbuilder';
-import { TeamsActivityHandler } from 'botbuilder';
+import { TeamsChannelAccount } from 'botbuilder';
 import {
   getUsers,
   createUser,
   createWallet,
-  getUser,
   getUserWallets,
   topUpWallet,
   getWalletById,
-  getWalletName,
-  getWallets,
 } from './lnbitsService';
-import { syncBuiltinESMExports } from 'module';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
-
-interface CancellationToken {
-  isCancellationRequested: boolean;
-}
-
-function sanitizeString(str: string): string {
-  return str.replace(/[^a-zA-Z0-9]/g, '');
-}
 
 async function applyInitialAllowance(walletId: string): Promise<void> {
   const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
@@ -72,10 +53,10 @@ export class UserService {
   public async ensureUserSetup(
     teamsChannelAccount: TeamsChannelAccount,
   ): Promise<User> {
-    const aadObjectId = teamsChannelAccount.aadObjectId ;
+    const aadObjectId = teamsChannelAccount.aadObjectId;
 
     let user: User | null = null;
-    let lnbitsUsers = await getUsers(adminKey, {
+    const lnbitsUsers = await getUsers(adminKey, {
       aadObjectId: aadObjectId, // userProfile.aadObjectId,
     });
     if (lnbitsUsers.length > 1) {
@@ -96,7 +77,11 @@ export class UserService {
         },
       );
 
-      const allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
+      const allowanceWallet = await createWallet(
+        adminKey,
+        user.id,
+        'Allowance',
+      );
       await applyInitialAllowance(allowanceWallet.id);
       user = { ...user, allowanceWallet };
     } else {

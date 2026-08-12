@@ -19,10 +19,9 @@ interface UseTeamsAuthReturn {
  */
 export const useTeamsAuth = (): UseTeamsAuthReturn => {
   const { instance, accounts, inProgress } = useMsal();
-  const {
-    data: isInTeams = false,
-    isPending: isTeamsInitializing,
-  } = useQuery(teamsContextQueryOptions);
+  const { data: isInTeams = false, isPending: isTeamsInitializing } = useQuery(
+    teamsContextQueryOptions,
+  );
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
   // Ref to prevent race conditions in concurrent React mode
