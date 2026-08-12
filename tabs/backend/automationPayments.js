@@ -94,8 +94,14 @@ const summarizeAutomationPayments = (payments, rawUsers, sinceTs) => {
     ({ paidAtEpoch }) => paidAtEpoch !== null && paidAtEpoch >= sinceTs,
   );
   const engagement = new Map();
+  // Map, not a plain object: eventType is attacker-influenced payment metadata.
+  const runs = new Map();
   for (const { payment, paidAtEpoch } of monthly) {
     const recipient = buildRecipient(payment, usersById);
+    const eventType = parseObject(payment.extra).eventType;
+    if (typeof eventType === 'string' && eventType.length > 0) {
+      runs.set(eventType, (runs.get(eventType) || 0) + 1);
+    }
     const sats = Math.round(Math.abs(payment.amount) / 1000);
     const current = engagement.get(recipient.id) || {
       ...recipient,
@@ -143,6 +149,7 @@ const summarizeAutomationPayments = (payments, rawUsers, sinceTs) => {
       monthly.reduce((total, { payment }) => total + Math.abs(payment.amount) / 1000, 0),
     ),
     paymentsThisMonth: monthly.length,
+    runsByEventType: Object.fromEntries(runs),
     engagementByAudience,
     recentPayments,
   };

@@ -74,6 +74,57 @@ test('summarizes real treasury history and engagement by stored audience', () =>
   );
 });
 
+test('counts this month runs per event type and ignores unlabelled payments', () => {
+  const result = summarizeAutomationPayments(
+    [
+      {
+        payment_hash: 'merged-1',
+        amount: -1000000,
+        time: '2024-02-01T10:00:00.000Z',
+        extra: { automation: true, eventType: 'githubPrMerged', to: { user: 'alice-id' } },
+      },
+      {
+        payment_hash: 'merged-2',
+        amount: -1000000,
+        time: '2024-02-02T10:00:00.000Z',
+        extra: JSON.stringify({
+          automation: true,
+          eventType: 'githubPrMerged',
+          to: { user: 'alice-id' },
+        }),
+      },
+      {
+        payment_hash: 'merged-before-month',
+        amount: -1000000,
+        time: '2023-12-02T10:00:00.000Z',
+        extra: { automation: true, eventType: 'githubPrMerged', to: { user: 'alice-id' } },
+      },
+      {
+        payment_hash: 'unlabelled',
+        amount: -1000000,
+        time: '2024-02-03T10:00:00.000Z',
+        extra: { automation: true, to: { user: 'alice-id' } },
+      },
+      {
+        payment_hash: 'polluting',
+        amount: -1000000,
+        time: '2024-02-04T10:00:00.000Z',
+        extra: { automation: true, eventType: '__proto__', to: { user: 'alice-id' } },
+      },
+    ],
+    [{ id: 'alice-id', name: 'Alice' }],
+    sinceTs,
+  );
+
+  assert.equal(result.runsByEventType.githubPrMerged, 2);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(result.runsByEventType, 'githubIssueClosed'),
+    false,
+  );
+  assert.equal(Object.getPrototypeOf(result.runsByEventType), Object.prototype);
+  assert.equal(Object.getOwnPropertyDescriptor(result.runsByEventType, '__proto__').value, 1);
+});
+
 test('uses payment metadata when a recipient is not in the user directory', () => {
   const result = summarizeAutomationPayments(
     [

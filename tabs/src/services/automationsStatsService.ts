@@ -23,6 +23,7 @@ export interface AutomationHistoryItem {
 export interface AutomationsStats {
   paidSatsThisMonth: number;
   paymentsThisMonth: number;
+  runsByEventType: Record<string, number>;
   engagementByAudience: Record<AutomationAudience, AutomationRecipient[]>;
   recentPayments: AutomationHistoryItem[];
 }
