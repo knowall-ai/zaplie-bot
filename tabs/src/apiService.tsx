@@ -14,7 +14,10 @@ export const getRewardName = async () => {
   }
 };
 
-export const updateRewardName = async (idToken: string, newRewardName: string) => {
+export const updateRewardName = async (
+  idToken: string,
+  newRewardName: string,
+) => {
   try {
     const response = await axios.post(
       `${API_URL}/reward-name`,

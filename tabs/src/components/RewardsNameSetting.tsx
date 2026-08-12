@@ -44,7 +44,10 @@ const CurrencySetting: FunctionComponent = () => {
       if (!account) {
         throw new Error('You need to be signed in to change the reward name.');
       }
-      const data = await updateRewardName(await acquireIdToken(instance, account), currency);
+      const data = await updateRewardName(
+        await acquireIdToken(instance, account),
+        currency,
+      );
       console.log('Reward name saved:', data.rewardName);
       setRewardName(data.rewardName); // Update the context
       toast.success('Reward name has been updated successfully!');

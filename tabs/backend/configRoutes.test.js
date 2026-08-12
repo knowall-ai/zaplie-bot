@@ -6,17 +6,30 @@ process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
 process.env.AAD_TENANT_ID = 'test-tenant';
 process.env.AAD_CLIENT_ID = 'test-client';
 
+const assert = require('node:assert/strict');
+const { before, after, test } = require('node:test');
+const fs = require('fs');
+const http = require('http');
+const path = require('path');
+
 const ADMIN_TOKEN = 'admin-token';
 const USER_TOKEN = 'user-token';
 
-jest.mock('./msalValidator', () => {
-  const claimsFor = token => {
-    if (token !== 'admin-token' && token !== 'user-token') {
-      throw new Error('invalid token');
-    }
-    return { oid: 'oid-1', roles: token === 'admin-token' ? ['Zaplie.Admin'] : [] };
-  };
-  return {
+// Seeding require.cache stands in for a mocking framework: server.js pulls
+// msalValidator in transitively, and real verification would need live JWKS.
+const claimsFor = token => {
+  if (token !== ADMIN_TOKEN && token !== USER_TOKEN) {
+    throw new Error('invalid token');
+  }
+  return { oid: 'oid-1', roles: token === ADMIN_TOKEN ? ['Zaplie.Admin'] : [] };
+};
+
+const validatorPath = require.resolve('./msalValidator');
+require.cache[validatorPath] = {
+  id: validatorPath,
+  filename: validatorPath,
+  loaded: true,
+  exports: {
     verifyMsalPayload: async token => claimsFor(token),
     verifyMsalToken: async token => claimsFor(token).oid,
     verifyMsalClaims: async token => claimsFor(token),
@@ -24,15 +37,20 @@ jest.mock('./msalValidator', () => {
       const header = req.headers['authorization'] || '';
       return header.startsWith('Bearer ') ? header.slice(7) : null;
     },
-  };
-});
+  },
+};
+
+// The admin write hits the real data.json, so snapshot it and put it back.
+const DATA_FILE = path.join(__dirname, 'data.json');
+let dataBackup = null;
 
 const app = require('./server');
 
 let server;
 let base;
 
-beforeAll(async () => {
+before(async () => {
+  dataBackup = fs.existsSync(DATA_FILE) ? fs.readFileSync(DATA_FILE) : null;
   await new Promise(resolve => {
     server = app.listen(0, () => {
       base = `http://127.0.0.1:${server.address().port}`;
@@ -41,24 +59,27 @@ beforeAll(async () => {
   });
 });
 
-afterAll(async () => {
+after(async () => {
   await new Promise(resolve => server.close(resolve));
+  if (dataBackup !== null) {
+    fs.writeFileSync(DATA_FILE, dataBackup);
+  }
 });
 
-// Jest's node environment does not expose global fetch here, so use node:http.
-const http = require('http');
-
-const call = (method, path, auth, body) =>
+const call = (method, route, auth, body) =>
   new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
     const req = http.request(
-      `${base}${path}`,
+      `${base}${route}`,
       {
         method,
         headers: {
           ...(auth ? { Authorization: auth } : {}),
           ...(payload
-            ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+            ? {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+              }
             : {}),
         },
       },
@@ -72,51 +93,50 @@ const call = (method, path, auth, body) =>
     req.end();
   });
 
-const get = (path, auth) => call('GET', path, auth);
-const post = (path, auth, body) => call('POST', path, auth, body);
+const get = (route, auth) => call('GET', route, auth);
+const post = (route, auth, body) => call('POST', route, auth, body);
 
 const PROTECTED_READS = ['/api/automations', '/api/reward-amounts'];
 
-describe('config endpoint access matrix', () => {
-  test('reward-name is readable without credentials, since the portal reads it before sign-in', async () => {
-    expect((await get('/api/reward-name')).status).toBe(200);
+test('reward-name is readable without credentials, since the portal reads it before sign-in', async () => {
+  assert.equal((await get('/api/reward-name')).status, 200);
+});
+
+for (const route of PROTECTED_READS) {
+  test(`${route} rejects an anonymous read`, async () => {
+    assert.equal((await get(route)).status, 401);
   });
 
-  test.each(PROTECTED_READS)('%s rejects an anonymous read', async route => {
-    expect((await get(route)).status).toBe(401);
+  test(`${route} accepts a signed-in portal user`, async () => {
+    assert.equal((await get(route, `Bearer ${USER_TOKEN}`)).status, 200);
   });
 
-  test.each(PROTECTED_READS)('%s accepts a signed-in portal user', async route => {
-    expect((await get(route, `Bearer ${USER_TOKEN}`)).status).toBe(200);
+  test(`${route} accepts the bot shared token`, async () => {
+    assert.equal((await get(route, 'test-internal-token')).status, 200);
   });
 
-  test.each(PROTECTED_READS)('%s accepts the bot shared token', async route => {
-    expect((await get(route, 'test-internal-token')).status).toBe(200);
+  test(`${route} rejects a wrong-length token without crashing`, async () => {
+    assert.equal((await get(route, 'nope')).status, 401);
   });
+}
 
-  test.each(PROTECTED_READS)(
-    '%s rejects a wrong-length token without crashing',
-    async route => {
-      expect((await get(route, 'nope')).status).toBe(401);
-    },
-  );
-
-  test('a non-admin cannot write the reward name', async () => {
-    const res = await post('/api/reward-name', `Bearer ${USER_TOKEN}`, {
-      newRewardName: 'points',
-    });
-    expect(res.status).toBe(403);
+test('a non-admin cannot write the reward name', async () => {
+  const res = await post('/api/reward-name', `Bearer ${USER_TOKEN}`, {
+    newRewardName: 'points',
   });
+  assert.equal(res.status, 403);
+});
 
-  test('an admin can write the reward name', async () => {
-    const res = await post('/api/reward-name', `Bearer ${ADMIN_TOKEN}`, {
-      newRewardName: 'points',
-    });
-    expect(res.status).toBe(200);
+test('an admin can write the reward name', async () => {
+  const res = await post('/api/reward-name', `Bearer ${ADMIN_TOKEN}`, {
+    newRewardName: 'points',
   });
+  assert.equal(res.status, 200);
+});
 
-  test('an anonymous write is rejected', async () => {
-    const res = await post('/api/reward-name', null, { newRewardName: 'points' });
-    expect(res.status).toBe(401);
+test('an anonymous write is rejected', async () => {
+  const res = await post('/api/reward-name', null, {
+    newRewardName: 'points',
   });
+  assert.equal(res.status, 401);
 });
