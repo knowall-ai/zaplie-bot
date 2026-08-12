@@ -24,8 +24,9 @@ updates:
         patterns:
           - 'eslint'
           - '@typescript-eslint/*'
-      # One PR for all remaining minor/patch bumps to keep the noise down;
-      # majors still get individual PRs.
+      # One PR for all remaining minor/patch bumps to keep the noise down.
+      # Majors get individual PRs, except for the peer-linked groups above,
+      # which are deliberately grouped across every update type.
       minor-and-patch:
         update-types:
           - 'minor'
