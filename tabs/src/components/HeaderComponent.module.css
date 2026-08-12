@@ -2,7 +2,11 @@
   position: fixed;
   top: 0;
   width: 100%;
-  background: linear-gradient(180deg, rgba(45, 43, 44, 0.95) 0%, rgba(35, 33, 34, 0.98) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(45, 43, 44, 0.95) 0%,
+    rgba(35, 33, 34, 0.98) 100%
+  );
   backdrop-filter: blur(10px);
   color: white;
   z-index: 1000;
@@ -272,7 +276,12 @@
   width: 50px;
   height: 14px;
   border-radius: 4px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -291,7 +300,12 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -306,7 +320,12 @@
   width: 100px;
   height: 14px;
   border-radius: 4px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -315,7 +334,12 @@
   width: 140px;
   height: 11px;
   border-radius: 4px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   animation-delay: 0.1s;

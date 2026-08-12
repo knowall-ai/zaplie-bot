@@ -2,9 +2,13 @@ import { getAllPayments } from '../services/lnbitsServiceLocal';
 
 //import { Wallet, ZapTransaction } from 'path-to-types';
 
-export const fetchAllowanceWalletTransactions = async (adminKey: string): Promise<Transaction[]> => {
+export const fetchAllowanceWalletTransactions = async (
+  adminKey: string,
+): Promise<Transaction[]> => {
   console.log('=== fetchAllowanceWalletTransactions DEBUG ===');
-  console.log('Using getAllPayments endpoint to fetch ALL payments from ALL users');
+  console.log(
+    'Using getAllPayments endpoint to fetch ALL payments from ALL users',
+  );
 
   try {
     // Fetch ALL payments from ALL users using the new endpoint
@@ -14,8 +18,8 @@ export const fetchAllowanceWalletTransactions = async (adminKey: string): Promis
 
     // Filter to only exclude system transactions like "Weekly Allowance cleared"
     // Don't filter by extra.tag since that field doesn't exist in the payment data
-    const zapTransactions = allPayments.filter(payment =>
-      !payment.memo?.includes('Weekly Allowance cleared')
+    const zapTransactions = allPayments.filter(
+      payment => !payment.memo?.includes('Weekly Allowance cleared'),
     );
 
     console.log('Zap Transactions (filtered): ', zapTransactions.length);
@@ -30,7 +34,7 @@ export const fetchAllowanceWalletTransactions = async (adminKey: string): Promis
   }
 };
 
-export function getUserName(wallet: Wallet | null): string {    
+export function getUserName(wallet: Wallet | null): string {
   let userName = null;
   try {
     if (!wallet) {
