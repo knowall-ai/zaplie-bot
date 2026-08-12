@@ -22,7 +22,11 @@ interface TotalZapsComponentProps {
   isLoading: boolean;
 }
 
-const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZaps, allUsers, isLoading }) => {
+const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({
+  allZaps,
+  allUsers,
+  isLoading,
+}) => {
   const [totalZaps, setTotalZaps] = useState<number>(0);
 
   const [numberOfDays, setNumberOfDays] = useState<number>(0);
@@ -61,7 +65,7 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZap
     zapsFromCopilots: 0,
     zapsToCopilots: 0,
   };
-  
+
   useEffect(() => {
     setLoading(isLoading);
 
@@ -109,13 +113,10 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZap
       setBiggestZap(Math.floor(maxZap)); // Already positive
     }
   }, [allZaps, allUsers, isLoading]); // React to prop changes
-  
 
   if (error) {
     return <div className={styles.sentcomponent}>{error}</div>;
   }
-
-
 
   return (
     <div className={styles.sentcomponent}>
@@ -126,7 +127,10 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({ allZap
           <span className={styles.bigNumber}>
             {zapsSent.totalZaps.toLocaleString()}
           </span>
-          <span className={`${styles.sats} ${styles.satsBig}`}> {rewardsName}</span>
+          <span className={`${styles.sats} ${styles.satsBig}`}>
+            {' '}
+            {rewardsName}
+          </span>
         </div>
         <div className={styles.zapStats}>
           <table width="100%" className={`${styles.statsTable} `}>

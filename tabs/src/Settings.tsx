@@ -6,14 +6,15 @@ import { KNOWALL_CONSTANTS } from './constants/branding';
 const Settings: React.FC = () => {
   return (
     <div className={styles.mainContainer}>
-      <h1 className={styles.title}>
+      <div className={styles.title}>
         Settings{' '}
         <span className={styles.providedBy}>
           Built by {KNOWALL_CONSTANTS.name}
         </span>
-      </h1>
+      </div>
       <div style={{ width: '100%' }}>
-        <CurrencySetting />
+        {' '}
+        <CurrencySetting />{' '}
       </div>
       <div style={{ width: '100%' }}>
         <ConnectionsSetting />

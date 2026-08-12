@@ -52,9 +52,9 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
     return null; // or handle the case where the context is not available
   }
 
-const message = hasEnoughSats
-? `Please confirm you would like to purchase this reward.`
-: `D'oh! You do not have enough ${rewardsName} to redeem this reward yet.`;
+  const message = hasEnoughSats
+    ? `Please confirm you would like to purchase this reward.`
+    : `D'oh! You do not have enough ${rewardsName} to redeem this reward yet.`;
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>

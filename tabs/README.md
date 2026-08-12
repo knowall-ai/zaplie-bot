@@ -35,11 +35,14 @@ in the URL Redirect add http://localhost:{portnumber} in this instance it was 30
 In the `/tabs` directory, you can run:
 
 ```
-npm install
+npm ci
 npm start
 ```
 
-This runs the app in the development mode and will create necessary symbolic links (to lnbitsService.ts)
+This runs the React client together with the auto-reloading development backend.
+Use `npm run server` when starting the backend without file watching in a
+production-style environment, or `npm run server:dev` when developing the
+backend on its own. All commands require Node.js 24.
 
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 

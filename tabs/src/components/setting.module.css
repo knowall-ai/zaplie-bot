@@ -7,7 +7,9 @@
   margin: 0 auto; /* Center the container */
   border: 20px solid rgba(31, 31, 31, 1);
   border-top: 0px;
-  box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0px 1px 2px rgba(0, 0, 0, 0.14),
+    0px 0px 1px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
   background-color: #2d2b2c;
   display: flex;

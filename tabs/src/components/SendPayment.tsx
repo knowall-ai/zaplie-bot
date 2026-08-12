@@ -11,7 +11,6 @@ import { decode } from 'light-bolt11-decoder';
 import { payInvoice } from '../services/lnbitsServiceLocal';
 import { RewardNameContext } from './RewardNameContext';
 
-
 interface SendPopupProps {
   onClose: () => void;
   currentUserLNbitDetails: User;
@@ -180,10 +179,10 @@ const SendPayment: React.FC<SendPopupProps> = ({
     }
   });
 
-    const rewardNameContext = useContext(RewardNameContext);
-    if (!rewardNameContext) {
-      return null; // or handle the case where the context is not available
-    }
+  const rewardNameContext = useContext(RewardNameContext);
+  if (!rewardNameContext) {
+    return null; // or handle the case where the context is not available
+  }
   const rewardsName = rewardNameContext.rewardName;
 
   return (
