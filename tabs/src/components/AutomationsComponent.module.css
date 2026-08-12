@@ -1,1319 +1,1332 @@
 .automationscomponent {
-    width: 100%;
-    max-width: 1052px;
-    margin: 0 auto;
-    position: relative;
-    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
-    border-radius: 4px;
-    background-color: #2d2b2c;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-    padding: 20px;
-    box-sizing: border-box;
-    gap: 16px;
-    text-align: left;
-    font-size: 12px;
-    color: #d6d6d6;
-    font-family: Inter;
+  width: 100%;
+  max-width: 1052px;
+  margin: 0 auto;
+  position: relative;
+  box-shadow:
+    0px 1px 2px rgba(0, 0, 0, 0.14),
+    0px 0px 1px rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  background-color: #2d2b2c;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 20px;
+  box-sizing: border-box;
+  gap: 16px;
+  text-align: left;
+  font-size: 12px;
+  color: #d6d6d6;
+  font-family: Inter;
 }
 
 .title {
-    color: #fff;
-    font-size: 20px;
-    font-weight: bold;
-    margin: 0;
+  color: #fff;
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0;
 }
 
 .subtitle {
-    color: #a19f9d;
-    margin: 0;
+  color: #a19f9d;
+  margin: 0;
 }
 
 .sectionHeading {
-    color: #fff;
-    font-size: 14px;
-    font-weight: bold;
-    margin: 8px 0 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 8px 0 0;
 }
 
 .section {
-    display: flex;
-    flex-direction: column;
-    border-radius: 4px;
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .row {
-    background-color: #1f1f1f;
-    border-bottom: 1px solid #2d2b2c;
-    padding: 12px 16px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+  background-color: #1f1f1f;
+  border-bottom: 1px solid #2d2b2c;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .row:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .repoIcon {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .rowInfo {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .rowTitle {
-    color: #fff;
-    font-weight: 600;
-    overflow-wrap: anywhere;
+  color: #fff;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .removeButton {
-    background: none;
-    border: 1px solid #5a5856;
-    color: #d6d6d6;
-    border-radius: 4px;
-    padding: 6px 14px;
-    cursor: pointer;
-    white-space: nowrap;
+  background: none;
+  border: 1px solid #5a5856;
+  color: #d6d6d6;
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .removeButton:hover {
-    border-color: #ff6b6b;
-    color: #ff6b6b;
+  border-color: #ff6b6b;
+  color: #ff6b6b;
 }
 
 .addRow {
-    display: flex;
-    flex-direction: row;
-    gap: 12px;
-    align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
 }
 
 .addInput {
-    flex: 1;
-    background-color: #1f1f1f;
-    border: 1px solid #5a5856;
-    border-radius: 4px;
-    padding: 8px 12px;
-    color: #fff;
-    font-family: Inter;
-    font-size: 12px;
+  flex: 1;
+  background-color: #1f1f1f;
+  border: 1px solid #5a5856;
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: #fff;
+  font-family: Inter;
+  font-size: 12px;
 }
 
 .addInput:focus {
-    outline: none;
-    border-color: #84cc16;
+  outline: none;
+  border-color: #84cc16;
 }
 
 .addButton {
-    background-color: #84cc16;
-    color: #1f1f1f;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
+  background-color: #84cc16;
+  color: #1f1f1f;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .addButton:hover {
-    background-color: #6ba513;
+  background-color: #6ba513;
 }
 
 .addButton:disabled {
-    opacity: 0.6;
-    cursor: default;
+  opacity: 0.6;
+  cursor: default;
 }
 
 .steps {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .step {
-    flex: 1 1 220px;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    background-color: #1f1f1f;
-    border-radius: 4px;
-    padding: 12px 14px;
+  flex: 1 1 220px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  padding: 12px 14px;
 }
 
 .stepNum {
-    flex: none;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background-color: #84cc16;
-    color: #1f1f1f;
-    font-weight: 700;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #84cc16;
+  color: #1f1f1f;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .stepText {
-    color: #d6d6d6;
-    line-height: 1.5;
+  color: #d6d6d6;
+  line-height: 1.5;
 }
 
 .connectRow {
-    display: flex;
+  display: flex;
 }
 
 .installButton {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background-color: #84cc16;
-    color: #1f1f1f;
-    border: none;
-    border-radius: 4px;
-    padding: 10px 18px;
-    font-weight: 600;
-    font-size: 12px;
-    cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #84cc16;
+  color: #1f1f1f;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .installButton:hover {
-    background-color: #6ba513;
+  background-color: #6ba513;
 }
 
 .installButton:disabled {
-    opacity: 0.6;
-    cursor: default;
+  opacity: 0.6;
+  cursor: default;
 }
 
 .buttonIcon {
-    width: 16px;
-    height: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .manualAdd {
-    margin-top: -6px;
+  margin-top: -6px;
 }
 
 .manualAddSummary {
-    color: #a19f9d;
-    font-size: 12px;
-    cursor: pointer;
-    user-select: none;
+  color: #a19f9d;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .manualAddSummary:hover {
-    color: #d6d6d6;
+  color: #d6d6d6;
 }
 
 .manualAdd[open] .addRow {
-    margin-top: 10px;
+  margin-top: 10px;
 }
 
 .emptyText {
-    color: #a19f9d;
+  color: #a19f9d;
 }
 
 .errorText {
-    color: #ff6b6b;
+  color: #ff6b6b;
 }
 
 .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
 }
 
 .flowCard {
-    background-color: #1f1f1f;
-    border-radius: 4px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .cardHead {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .cardBadge {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background-color: #2d2b2c;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #2d2b2c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
 .cardBadge img {
-    width: 16px;
-    height: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .comingSoonCard {
-    border: 1px dashed #5a5856;
-    background-color: transparent;
+  border: 1px dashed #5a5856;
+  background-color: transparent;
 }
 
 .comingSoonBadge {
-    background-color: #2d2b2c;
-    color: #9ed929;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+  background-color: #2d2b2c;
+  color: #9ed929;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .cardBody {
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
 }
 
 .cardTitle {
-    color: #fff;
-    font-weight: 700;
-    font-size: 14px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
 }
 
 .cardSummary {
-    color: #a19f9d;
-    font-size: 12px;
-    flex: 1;
+  color: #a19f9d;
+  font-size: 12px;
+  flex: 1;
 }
 
 .cardFooter {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
 }
 
 .satsChip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background-color: #2d2b2c;
-    border-radius: 4px;
-    padding: 6px 10px;
-    color: #fff;
-    font-weight: 600;
-    white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #2d2b2c;
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .satsChip img {
-    width: 14px;
-    height: 14px;
+  width: 14px;
+  height: 14px;
 }
 
 .satsInput {
-    width: 72px;
-    background-color: #2d2b2c;
-    border: 1px solid #84cc16;
-    border-radius: 4px;
-    padding: 6px 8px;
-    color: #fff;
-    font-family: Inter;
-    font-size: 12px;
+  width: 72px;
+  background-color: #2d2b2c;
+  border: 1px solid #84cc16;
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: #fff;
+  font-family: Inter;
+  font-size: 12px;
 }
 
 .satsInput:focus {
-    outline: none;
+  outline: none;
 }
 
 .cardEditButton {
-    background: none;
-    border: 1px solid #5a5856;
-    color: #d6d6d6;
-    border-radius: 4px;
-    padding: 6px 14px;
-    cursor: pointer;
-    white-space: nowrap;
+  background: none;
+  border: 1px solid #5a5856;
+  color: #d6d6d6;
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .cardEditButton:hover {
-    border-color: #84cc16;
-    color: #fff;
+  border-color: #84cc16;
+  color: #fff;
 }
 
 .cardSaveButton {
-    background-color: #84cc16;
-    color: #1a1a1a;
-    border: none;
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
+  background-color: #84cc16;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .bonusBadgeText {
-    color: #7a7877;
-    font-size: 11px;
-    font-style: italic;
-    white-space: nowrap;
+  color: #7a7877;
+  font-size: 11px;
+  font-style: italic;
+  white-space: nowrap;
 }
 
 .connGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 .connCard {
-    background-color: #1f1f1f;
-    border-radius: 4px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .connCardHead {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .connCardTitle {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .connName {
-    color: #fff;
-    font-weight: 700;
-    font-size: 14px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
 }
 
 .connStatus {
-    color: #9ed929;
-    font-size: 11px;
-    font-weight: 600;
+  color: #9ed929;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .connDescription {
-    color: #a19f9d;
-    margin: 0;
-    line-height: 1.5;
-    flex: 1;
+  color: #a19f9d;
+  margin: 0;
+  line-height: 1.5;
+  flex: 1;
 }
 
 .repoChips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .repoChip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background-color: #2d2b2c;
-    color: #d6d6d6;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 11px;
-    font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #2d2b2c;
+  color: #d6d6d6;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .repoChipRemove {
-    background: none;
-    border: none;
-    color: #a19f9d;
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    padding: 0;
+  background: none;
+  border: none;
+  color: #a19f9d;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
 }
 
 .repoChipRemove:hover {
-    color: #ff6b6b;
+  color: #ff6b6b;
 }
 
 .connCardActions {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .keyList {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .keyRow {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background-color: #2d2b2c;
-    border-radius: 4px;
-    padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #2d2b2c;
+  border-radius: 4px;
+  padding: 6px 10px;
 }
 
 .keyLabel {
-    color: #fff;
-    font-weight: 600;
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
+  color: #fff;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .keyMeta {
-    color: #a19f9d;
-    font-family: monospace;
-    font-size: 11px;
+  color: #a19f9d;
+  font-family: monospace;
+  font-size: 11px;
 }
 
 .keyRevoke {
-    background: none;
-    border: 1px solid #5a5856;
-    color: #d6d6d6;
-    border-radius: 4px;
-    padding: 4px 10px;
-    cursor: pointer;
-    font-size: 11px;
-    width: auto;
-    flex: none;
+  background: none;
+  border: 1px solid #5a5856;
+  color: #d6d6d6;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  width: auto;
+  flex: none;
 }
 
 .keyRevoke:hover {
-    border-color: #ff6b6b;
-    color: #ff6b6b;
+  border-color: #ff6b6b;
+  color: #ff6b6b;
 }
 
 .createdKeyBox {
-    border: 1px solid #84cc16;
-    border-radius: 4px;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  border: 1px solid #84cc16;
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .createdKeyHint {
-    color: #9ed929;
-    font-size: 11px;
-    font-weight: 600;
+  color: #9ed929;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .createdKeyRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .createdKeyValue {
-    flex: 1;
-    min-width: 0;
-    color: #fff;
-    font-size: 11px;
-    overflow-wrap: anywhere;
+  flex: 1;
+  min-width: 0;
+  color: #fff;
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .createdKeyRow button {
-    width: auto;
-    flex: none;
+  width: auto;
+  flex: none;
 }
 
 .addRow button {
-    width: auto;
-    flex: none;
+  width: auto;
+  flex: none;
 }
 
 .ruleRow {
-    background-color: #1f1f1f;
-    border-bottom: 1px solid #2d2b2c;
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
+  background-color: #1f1f1f;
+  border-bottom: 1px solid #2d2b2c;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .ruleRow:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .ruleRowMuted {
-    opacity: 0.75;
+  opacity: 0.75;
 }
 
 .ruleInfo {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    flex: 1;
-    min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
 .ruleTitle {
-    color: #fff;
-    font-weight: 700;
-    font-size: 13px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .ruleSentence {
-    color: #a19f9d;
-    overflow-wrap: anywhere;
+  color: #a19f9d;
+  overflow-wrap: anywhere;
 }
 
 .ruleRow button {
-    width: auto;
-    flex: none;
+  width: auto;
+  flex: none;
 }
 
 .connHint {
-    color: #7a7877;
-    font-size: 11px;
-    line-height: 1.5;
+  color: #7a7877;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .statStrip {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
 }
 
 .statBlock {
-    background-color: #1f1f1f;
-    border-radius: 4px;
-    padding: 12px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .statValue {
-    color: #9ed929;
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1.2;
+  color: #9ed929;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .statUnit {
-    color: #a19f9d;
-    font-size: 12px;
-    font-weight: 600;
+  color: #a19f9d;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .statLabel {
-    color: #a19f9d;
-    font-size: 11px;
+  color: #a19f9d;
+  font-size: 11px;
 }
 
 .statPanel {
-    background-color: #1f1f1f;
-    border-radius: 4px;
-    padding: 18px 20px;
-    display: flex;
-    align-items: center;
-    gap: 40px;
-    flex-wrap: wrap;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
 }
 
 .statHero {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .statHeroLabel {
-    color: #fff;
-    font-weight: 700;
-    font-size: 13px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .statHeroValue {
-    color: #9ed929;
-    font-size: 40px;
-    font-weight: 700;
-    line-height: 1.1;
+  color: #9ed929;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .statHeroUnit {
-    color: #a19f9d;
-    font-size: 14px;
-    font-weight: 600;
+  color: #a19f9d;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .statHeroSub {
-    color: #a19f9d;
-    font-size: 11px;
+  color: #a19f9d;
+  font-size: 11px;
 }
 
 .statRows {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 260px;
-    flex: 1;
-    max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+  flex: 1;
+  max-width: 360px;
 }
 
 .statRow {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .statRowLabel {
-    color: #a19f9d;
+  color: #a19f9d;
 }
 
 .statRowValue {
-    color: #fff;
-    font-weight: 700;
+  color: #fff;
+  font-weight: 700;
 }
 
 .banner {
-    position: relative;
-    border-radius: 4px;
-    overflow: hidden;
-    min-height: 140px;
-    display: flex;
-    align-items: flex-end;
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 140px;
+  display: flex;
+  align-items: flex-end;
 }
 
 .bannerImage {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 35%;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 35%;
 }
 
 .bannerOverlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(31, 31, 31, 0.15) 20%, rgba(31, 31, 31, 0.92) 100%);
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(31, 31, 31, 0.15) 20%,
+    rgba(31, 31, 31, 0.92) 100%
+  );
 }
 
 .bannerText {
-    position: relative;
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  position: relative;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .bannerText .title {
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .bannerSubtitle {
-    color: #d6d6d6;
-    margin: 0;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-    max-width: 720px;
+  color: #d6d6d6;
+  margin: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  max-width: 720px;
 }
 
 .chartBlock {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    width: 200px;
-    flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 200px;
+  flex: none;
 }
 
 .chart {
-    width: 100%;
-    height: 64px;
+  width: 100%;
+  height: 64px;
 }
 
 .chartCaption {
-    color: #7a7877;
-    font-size: 10px;
+  color: #7a7877;
+  font-size: 10px;
 }
 
 .rulePhoto {
-    width: 72px;
-    height: 48px;
-    object-fit: cover;
-    border-radius: 4px;
-    flex: none;
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: none;
 }
 
 /* Review follow-up: align the working page with the dark, data-led Figma direction. */
 .automationscomponent {
-    max-width: 1160px;
-    border: 1px solid #3b393a;
-    border-radius: 12px;
-    background-color: #292728;
-    box-shadow: 0 18px 48px rgba(13, 20, 8, 0.18);
-    padding: 24px;
-    gap: 24px;
-    font-family: Inter, "Segoe UI", sans-serif;
+  max-width: 1160px;
+  border: 1px solid #3b393a;
+  border-radius: 12px;
+  background-color: #292728;
+  box-shadow: 0 18px 48px rgba(13, 20, 8, 0.18);
+  padding: 24px;
+  gap: 24px;
+  font-family: Inter, 'Segoe UI', sans-serif;
 }
 
 .title {
-    font-size: clamp(28px, 4vw, 40px);
-    line-height: 1;
-    letter-spacing: -0.035em;
-    text-wrap: balance;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
 
 .sectionHeading {
-    margin: 0;
-    font-size: 18px;
-    letter-spacing: -0.015em;
-    scroll-margin-top: 20px;
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+  scroll-margin-top: 20px;
 }
 
 .banner {
-    min-height: auto;
-    align-items: stretch;
-    justify-content: space-between;
-    gap: 28px;
-    padding: 28px;
-    border: 1px solid #4d6b37;
-    border-radius: 10px;
-    background: #1d2819;
+  min-height: auto;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 28px;
+  border: 1px solid #4d6b37;
+  border-radius: 10px;
+  background: #1d2819;
 }
 
 .banner::before {
-    content: "";
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 5px;
-    background: #9ed929;
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: #9ed929;
 }
 
 .bannerText {
-    padding: 0;
-    max-width: 700px;
-    gap: 10px;
+  padding: 0;
+  max-width: 700px;
+  gap: 10px;
 }
 
 .bannerText .title {
-    text-shadow: none;
+  text-shadow: none;
 }
 
 .eyebrow,
 .sectionKicker {
-    color: #b9e86a;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+  color: #b9e86a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .bannerSubtitle {
-    max-width: 64ch;
-    color: #d8dfd3;
-    font-size: 13px;
-    line-height: 1.6;
-    text-shadow: none;
-    text-wrap: pretty;
+  max-width: 64ch;
+  color: #d8dfd3;
+  font-size: 13px;
+  line-height: 1.6;
+  text-shadow: none;
+  text-wrap: pretty;
 }
 
 .sectionNav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .sectionNav a {
-    border: 1px solid #506244;
-    border-radius: 5px;
-    padding: 7px 10px;
-    color: #e8ece5;
-    text-decoration: none;
-    font-size: 11px;
-    font-weight: 600;
-    transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+  border: 1px solid #506244;
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: #e8ece5;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 600;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
 }
 
 .sectionNav a:hover {
-    border-color: #9ed929;
-    background-color: #26371e;
+  border-color: #9ed929;
+  background-color: #26371e;
 }
 
 .sectionNav a:active {
-    transform: translateY(1px);
+  transform: translateY(1px);
 }
 
 .bannerMetric {
-    min-width: 170px;
-    align-self: center;
-    border-left: 1px solid #506244;
-    padding-left: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  min-width: 170px;
+  align-self: center;
+  border-left: 1px solid #506244;
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .bannerMetricValue {
-    color: #b9e86a;
-    font-size: 42px;
-    font-weight: 700;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
+  color: #b9e86a;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .bannerMetricLabel {
-    max-width: 18ch;
-    color: #b7c0b2;
-    line-height: 1.45;
+  max-width: 18ch;
+  color: #b7c0b2;
+  line-height: 1.45;
 }
 
 .statPanel {
-    border: 1px solid #3b393a;
-    border-radius: 8px;
-    background-color: #211f20;
-    padding: 20px 22px;
+  border: 1px solid #3b393a;
+  border-radius: 8px;
+  background-color: #211f20;
+  padding: 20px 22px;
 }
 
 .statHeroValue,
 .statRowValue,
 .historyAmount,
 .engagementValue {
-    font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .activitySection {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    scroll-margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin-top: 20px;
 }
 
 .sectionHeader {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .sectionHeader > div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .sectionHeader > p {
-    max-width: 46ch;
-    margin: 0;
-    color: #a9a5a7;
-    line-height: 1.5;
-    text-align: right;
+  max-width: 46ch;
+  margin: 0;
+  color: #a9a5a7;
+  line-height: 1.5;
+  text-align: right;
 }
 
 .engagementScroller {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(300px, 1fr);
-    gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    scroll-snap-type: x proximity;
-    scrollbar-color: #5d634f #211f20;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(300px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+  scrollbar-color: #5d634f #211f20;
 }
 
 .engagementPanel {
-    min-height: 205px;
-    border: 1px solid #3b393a;
-    border-top-color: #718c45;
-    border-radius: 8px;
-    background-color: #211f20;
-    padding: 16px;
-    scroll-snap-align: start;
+  min-height: 205px;
+  border: 1px solid #3b393a;
+  border-top-color: #718c45;
+  border-radius: 8px;
+  background-color: #211f20;
+  padding: 16px;
+  scroll-snap-align: start;
 }
 
 .engagementTitle {
-    margin: 0 0 14px;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 700;
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .engagementList,
 .historyList {
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .engagementList {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .engagementItem {
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 9px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
 }
 
 .avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    display: grid;
-    place-items: center;
-    background-color: #354526;
-    color: #c8f37b;
-    font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background-color: #354526;
+  color: #c8f37b;
+  font-weight: 700;
 }
 
 .engagementDetails {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .engagementName {
-    overflow: hidden;
-    color: #efefef;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  overflow: hidden;
+  color: #efefef;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .engagementTrack {
-    height: 4px;
-    overflow: hidden;
-    border-radius: 2px;
-    background-color: #393637;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background-color: #393637;
 }
 
 .engagementFill {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background-color: #9ed929;
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background-color: #9ed929;
 }
 
 .engagementValue {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    color: #f2f2f2;
-    font-size: 11px;
-    font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #f2f2f2;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .engagementValue small {
-    color: #8e8a8c;
-    font-size: 9px;
-    font-weight: 500;
+  color: #8e8a8c;
+  font-size: 9px;
+  font-weight: 500;
 }
 
 .historyList {
-    overflow: hidden;
-    border: 1px solid #3b393a;
-    border-radius: 8px;
-    background-color: #211f20;
+  overflow: hidden;
+  border: 1px solid #3b393a;
+  border-radius: 8px;
+  background-color: #211f20;
 }
 
 .historyItem {
-    display: grid;
-    grid-template-columns: 84px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 14px;
-    padding: 13px 16px;
-    border-bottom: 1px solid #343132;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  border-bottom: 1px solid #343132;
 }
 
 .historyItem:last-child {
-    border-bottom: 0;
+  border-bottom: 0;
 }
 
 .historySource {
-    width: fit-content;
-    border-radius: 4px;
-    background-color: #314122;
-    padding: 4px 7px;
-    color: #b9e86a;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+  width: fit-content;
+  border-radius: 4px;
+  background-color: #314122;
+  padding: 4px 7px;
+  color: #b9e86a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .historyCopy {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .historyCopy strong {
-    overflow: hidden;
-    color: #f1f1f1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  overflow: hidden;
+  color: #f1f1f1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .historyCopy > span {
-    color: #9f9b9d;
+  color: #9f9b9d;
 }
 
 .historyAmount {
-    color: #b9e86a;
-    font-weight: 700;
-    white-space: nowrap;
+  color: #b9e86a;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .emptyState {
-    margin: 0;
-    border: 1px dashed #4a4648;
-    border-radius: 7px;
-    padding: 20px;
-    color: #9f9b9d;
-    line-height: 1.5;
+  margin: 0;
+  border: 1px dashed #4a4648;
+  border-radius: 7px;
+  padding: 20px;
+  color: #9f9b9d;
+  line-height: 1.5;
 }
 
 .steps {
-    gap: 0;
-    overflow: hidden;
-    border: 1px solid #3b393a;
-    border-radius: 8px;
-    background-color: #211f20;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #3b393a;
+  border-radius: 8px;
+  background-color: #211f20;
 }
 
 .step {
-    border-right: 1px solid #3b393a;
-    border-radius: 0;
-    background-color: transparent;
-    padding: 14px 16px;
+  border-right: 1px solid #3b393a;
+  border-radius: 0;
+  background-color: transparent;
+  padding: 14px 16px;
 }
 
 .step:last-child {
-    border-right: 0;
+  border-right: 0;
 }
 
 .ruleGrid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .ruleCard {
-    min-height: 190px;
-    border: 1px solid #3b393a;
-    border-radius: 8px;
-    background-color: #211f20;
-    padding: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    transition: border-color 180ms ease, transform 180ms ease;
+  min-height: 190px;
+  border: 1px solid #3b393a;
+  border-radius: 8px;
+  background-color: #211f20;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease;
 }
 
 .ruleCard:hover {
-    border-color: #647e3d;
-    transform: translateY(-1px);
+  border-color: #647e3d;
+  transform: translateY(-1px);
 }
 
 .ruleCardHeader,
 .ruleFooter,
 .ruleActions,
 .amountEditor {
-    display: flex;
-    align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .ruleCardHeader,
 .ruleFooter {
-    justify-content: space-between;
-    gap: 12px;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .ruleStatus {
-    color: #b9e86a;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+  color: #b9e86a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .ruleInfo {
-    gap: 7px;
+  gap: 7px;
 }
 
 .ruleTitle {
-    font-size: 16px;
-    letter-spacing: -0.01em;
+  font-size: 16px;
+  letter-spacing: -0.01em;
 }
 
 .ruleSentence {
-    max-width: 54ch;
-    line-height: 1.55;
+  max-width: 54ch;
+  line-height: 1.55;
 }
 
 .ruleFooter {
-    margin-top: auto;
+  margin-top: auto;
 }
 
 .ruleActions {
-    gap: 7px;
+  gap: 7px;
 }
 
 .amountEditor {
-    gap: 8px;
-    color: #a9a5a7;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+  gap: 8px;
+  color: #a9a5a7;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .satsInput {
-    width: 74px;
+  width: 74px;
 }
 
 .connCard,
 .section {
-    border: 1px solid #3b393a;
-    border-radius: 8px;
-    background-color: #211f20;
+  border: 1px solid #3b393a;
+  border-radius: 8px;
+  background-color: #211f20;
 }
 
 .cardBadge {
-    border-radius: 7px;
-    background-color: #343132;
+  border-radius: 7px;
+  background-color: #343132;
 }
 
 .addButton,
 .installButton,
 .cardSaveButton {
-    background-color: #9ed929;
-    transition: background-color 180ms ease, transform 180ms ease;
+  background-color: #9ed929;
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
 }
 
 .addButton:active,
 .installButton:active,
 .cardSaveButton:active {
-    transform: translateY(1px);
+  transform: translateY(1px);
 }
 
 .automationscomponent button:focus-visible,
 .automationscomponent input:focus-visible,
 .automationscomponent summary:focus-visible,
 .automationscomponent a:focus-visible {
-    outline: 2px solid #c8f37b;
-    outline-offset: 3px;
+  outline: 2px solid #c8f37b;
+  outline-offset: 3px;
 }
 
 @media (max-width: 760px) {
-    .automationscomponent {
-        padding: 16px;
-        gap: 20px;
-    }
+  .automationscomponent {
+    padding: 16px;
+    gap: 20px;
+  }
 
-    .banner {
-        flex-direction: column;
-        padding: 22px;
-    }
+  .banner {
+    flex-direction: column;
+    padding: 22px;
+  }
 
-    .bannerMetric {
-        width: 100%;
-        align-self: stretch;
-        border-top: 1px solid #506244;
-        border-left: 0;
-        padding-top: 16px;
-        padding-left: 0;
-    }
+  .bannerMetric {
+    width: 100%;
+    align-self: stretch;
+    border-top: 1px solid #506244;
+    border-left: 0;
+    padding-top: 16px;
+    padding-left: 0;
+  }
 
-    .bannerMetricLabel {
-        max-width: none;
-    }
+  .bannerMetricLabel {
+    max-width: none;
+  }
 
-    .sectionHeader {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 6px;
-    }
+  .sectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
 
-    .sectionHeader > p {
-        text-align: left;
-    }
+  .sectionHeader > p {
+    text-align: left;
+  }
 
-    .engagementScroller {
-        grid-auto-columns: minmax(270px, 88vw);
-    }
+  .engagementScroller {
+    grid-auto-columns: minmax(270px, 88vw);
+  }
 
-    .ruleGrid {
-        grid-template-columns: 1fr;
-    }
+  .ruleGrid {
+    grid-template-columns: 1fr;
+  }
 
-    .steps {
-        flex-direction: column;
-    }
+  .steps {
+    flex-direction: column;
+  }
 
-    .step {
-        border-right: 0;
-        border-bottom: 1px solid #3b393a;
-    }
+  .step {
+    border-right: 0;
+    border-bottom: 1px solid #3b393a;
+  }
 
-    .step:last-child {
-        border-bottom: 0;
-    }
+  .step:last-child {
+    border-bottom: 0;
+  }
 
-    .historyItem {
-        grid-template-columns: 1fr auto;
-    }
+  .historyItem {
+    grid-template-columns: 1fr auto;
+  }
 
-    .historySource {
-        grid-column: 1 / -1;
-    }
+  .historySource {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 480px) {
-    .connGrid {
-        grid-template-columns: minmax(0, 1fr);
-    }
+  .connGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-    .ruleFooter,
-    .createdKeyRow,
-    .addRow {
-        align-items: stretch;
-        flex-direction: column;
-    }
+  .ruleFooter,
+  .createdKeyRow,
+  .addRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
 
-    .ruleActions {
-        width: 100%;
-    }
+  .ruleActions {
+    width: 100%;
+  }
 
-    .ruleActions button {
-        flex: 1;
-    }
+  .ruleActions button {
+    flex: 1;
+  }
 
-    .historyItem {
-        grid-template-columns: 1fr;
-    }
+  .historyItem {
+    grid-template-columns: 1fr;
+  }
 
-    .historyAmount {
-        justify-self: start;
-    }
+  .historyAmount {
+    justify-self: start;
+  }
 }

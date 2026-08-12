@@ -131,46 +131,46 @@
 }
 
 .card {
-    width: 100%;
-    background-color: #1f1f1f;
-    border-radius: 4px;
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    box-sizing: border-box;
+  width: 100%;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
 }
 
 .cardText {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-    min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .cardTitle {
-    color: #fff;
-    font-weight: 700;
-    font-size: 13px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .cardHint {
-    color: #a19f9d;
-    font-size: 11px;
-    line-height: 1.5;
+  color: #a19f9d;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .footnote {
-    color: #7a7877;
-    font-size: 11px;
+  color: #7a7877;
+  font-size: 11px;
 }
 
 .footnoteLink {
-    color: #9ed929;
-    text-decoration: none;
+  color: #9ed929;
+  text-decoration: none;
 }
 
 .footnoteLink:hover {
-    text-decoration: underline;
+  text-decoration: underline;
 }

@@ -125,13 +125,19 @@ const isAuthorizedRewardKey = async (providedKey: string): Promise<boolean> => {
     // Buffers, not strings: timingSafeEqual throws on byte-length mismatch.
     const provided = Buffer.from(providedKey);
     const expected = Buffer.from(envKey);
-    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+    if (
+      provided.length === expected.length &&
+      timingSafeEqual(provided, expected)
+    ) {
       return true;
     }
   }
   const hashes = await getWebhookKeyHashes();
   if (!envKey && hashes.length === 0) {
-    throw new RewardError('rewards endpoint disabled: no API keys configured', 503);
+    throw new RewardError(
+      'rewards endpoint disabled: no API keys configured',
+      503,
+    );
   }
   const providedHash = createHash('sha256').update(providedKey).digest('hex');
   return hashes.includes(providedHash);

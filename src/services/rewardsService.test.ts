@@ -1,4 +1,8 @@
-import { parseRewardRequest, resolveAmountSats, RewardError } from './rewardsService';
+import {
+  parseRewardRequest,
+  resolveAmountSats,
+  RewardError,
+} from './rewardsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
@@ -20,9 +24,9 @@ const validReward = {
 describe('parseRewardRequest', () => {
   test('returns the normalized GitHub reward payload', () => {
     expect(parseRewardRequest(validReward)).toEqual(validReward);
-    expect(
-      parseRewardRequest({ ...validReward, recipientId: 583231 }),
-    ).toEqual(validReward);
+    expect(parseRewardRequest({ ...validReward, recipientId: 583231 })).toEqual(
+      validReward,
+    );
   });
 
   test.each([

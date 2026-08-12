@@ -99,18 +99,24 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
   };
 
-  const githubIdentity = identities.find(identity => identity.provider === 'github');
+  const githubIdentity = identities.find(
+    identity => identity.provider === 'github',
+  );
 
   return (
     <div className={styles.currencySetting}>
       <div className={connectionStyles.card}>
         <div className={connectionStyles.row}>
-          <img src={GithubIcon} alt="GitHub" className={connectionStyles.icon} />
+          <img
+            src={GithubIcon}
+            alt="GitHub"
+            className={connectionStyles.icon}
+          />
           <div className={connectionStyles.cardText}>
             <span className={connectionStyles.cardTitle}>GitHub</span>
             <span className={connectionStyles.cardHint}>
-              Link your account so eligible GitHub rewards can resolve to your wallet. The
-              pull-request flow is still a draft pilot.
+              Link your account so eligible GitHub rewards can resolve to your
+              wallet. The pull-request flow is still a draft pilot.
             </span>
           </div>
           {loading ? (

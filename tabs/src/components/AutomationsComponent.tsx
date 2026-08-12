@@ -1,10 +1,18 @@
 import React, { FunctionComponent, useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import styles from './AutomationsComponent.module.css';
-import { getAutomations, updateAutomations, getRewardAmounts, updateRewardAmounts } from '../apiService';
+import {
+  getAutomations,
+  updateAutomations,
+  getRewardAmounts,
+  updateRewardAmounts,
+} from '../apiService';
 import { loginRequest } from '../services/authConfig';
 import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
-import { getGithubInstallUrl, getGithubConnection } from '../services/connectionsService';
+import {
+  getGithubInstallUrl,
+  getGithubConnection,
+} from '../services/connectionsService';
 import {
   getAutomationsStats,
   AutomationsStats,
@@ -41,19 +49,22 @@ const RULE_META: Record<
     title: 'Pull request merged',
     icon: GithubIcon,
     status: 'Draft flow',
-    sentence: sats => `When a pull request is merged in a connected repository, the author gets ${sats} sats.`,
+    sentence: sats =>
+      `When a pull request is merged in a connected repository, the author gets ${sats} sats.`,
   },
   githubIssueClosedSats: {
     title: 'Issue closed',
     icon: GithubIcon,
     status: 'Flow required',
-    sentence: sats => `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
+    sentence: sats =>
+      `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
   },
   githubReviewSubmittedSats: {
     title: 'Review submitted',
     icon: GithubIcon,
     status: 'Flow required',
-    sentence: sats => `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
+    sentence: sats =>
+      `Reserved amount: ${sats} sats. This event needs its own verified GitHub flow.`,
   },
 };
 const RULE_ORDER = [
@@ -79,7 +90,10 @@ const EngagementPanel: FunctionComponent<{
   label: string;
   recipients: AutomationRecipient[];
 }> = ({ label, recipients }) => {
-  const maxSats = Math.max(...recipients.map(recipient => recipient.paidSats), 1);
+  const maxSats = Math.max(
+    ...recipients.map(recipient => recipient.paidSats),
+    1,
+  );
   return (
     <article className={styles.engagementPanel}>
       <h4 className={styles.engagementTitle}>Most engaged {label}</h4>
@@ -93,11 +107,15 @@ const EngagementPanel: FunctionComponent<{
                 {recipient.displayName.slice(0, 1).toUpperCase()}
               </span>
               <span className={styles.engagementDetails}>
-                <span className={styles.engagementName}>{recipient.displayName}</span>
+                <span className={styles.engagementName}>
+                  {recipient.displayName}
+                </span>
                 <span className={styles.engagementTrack} aria-hidden="true">
                   <span
                     className={styles.engagementFill}
-                    style={{ width: `${Math.max(8, (recipient.paidSats / maxSats) * 100)}%` }}
+                    style={{
+                      width: `${Math.max(8, (recipient.paidSats / maxSats) * 100)}%`,
+                    }}
                   />
                 </span>
               </span>
@@ -142,7 +160,9 @@ const AutomationsComponent: FunctionComponent = () => {
         setRepos(automations.repos || []);
         setAmounts(rewardAmounts.rewardAmounts || {});
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load automations');
+        setError(
+          err instanceof Error ? err.message : 'Failed to load automations',
+        );
       } finally {
         setLoading(false);
       }
@@ -279,7 +299,10 @@ const AutomationsComponent: FunctionComponent = () => {
     try {
       const idToken = await acquireIdToken(instance, accounts[0]);
       // `amounts` only changes on a successful save, so another card's unsaved edit can't bleed in here.
-      const data = await updateRewardAmounts(idToken, { ...amounts, [key]: nextAmount });
+      const data = await updateRewardAmounts(idToken, {
+        ...amounts,
+        [key]: nextAmount,
+      });
       setAmounts(data.rewardAmounts);
       setEditingKey(null);
       toast.success('Reward amount updated.');
@@ -289,14 +312,24 @@ const AutomationsComponent: FunctionComponent = () => {
   };
 
   if (loading) {
-    return <div className={styles.automationscomponent}><p className={styles.subtitle}>Loading automations...</p></div>;
+    return (
+      <div className={styles.automationscomponent}>
+        <p className={styles.subtitle}>Loading automations...</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className={styles.automationscomponent}><p className={styles.errorText}>{error}</p></div>;
+    return (
+      <div className={styles.automationscomponent}>
+        <p className={styles.errorText}>{error}</p>
+      </div>
+    );
   }
 
-  const activeWebhookKeyCount = webhookKeys.filter(key => !key.revokedAt).length;
+  const activeWebhookKeyCount = webhookKeys.filter(
+    key => !key.revokedAt,
+  ).length;
 
   return (
     <div className={styles.automationscomponent}>
@@ -305,8 +338,9 @@ const AutomationsComponent: FunctionComponent = () => {
           <span className={styles.eyebrow}>Workflow control centre</span>
           <h2 className={styles.title}>Automations</h2>
           <p className={styles.bannerSubtitle}>
-            Preview the GitHub rewards pilot, configure its rules and inspect recorded treasury
-            activity. Keep its treasury unfunded until the safety blockers are closed.
+            Preview the GitHub rewards pilot, configure its rules and inspect
+            recorded treasury activity. Keep its treasury unfunded until the
+            safety blockers are closed.
           </p>
           <nav className={styles.sectionNav} aria-label="Automations sections">
             <a href="#automation-engagement">Recipients</a>
@@ -319,7 +353,9 @@ const AutomationsComponent: FunctionComponent = () => {
           <span className={styles.bannerMetricValue}>
             {stats ? NUMBER_FORMATTER.format(stats.paymentsThisMonth) : '—'}
           </span>
-          <span className={styles.bannerMetricLabel}>payments automated this month</span>
+          <span className={styles.bannerMetricLabel}>
+            payments automated this month
+          </span>
         </div>
       </header>
 
@@ -336,7 +372,9 @@ const AutomationsComponent: FunctionComponent = () => {
           <div className={styles.statRows}>
             <div className={styles.statRow}>
               <span className={styles.statRowLabel}>Automated payments</span>
-              <span className={styles.statRowValue}>{stats.paymentsThisMonth}</span>
+              <span className={styles.statRowValue}>
+                {stats.paymentsThisMonth}
+              </span>
             </div>
             <div className={styles.statRow}>
               <span className={styles.statRowLabel}>Reward rules</span>
@@ -346,9 +384,7 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
             <div className={styles.statRow}>
               <span className={styles.statRowLabel}>Repositories watched</span>
-              <span className={styles.statRowValue}>
-                {repos.length}
-              </span>
+              <span className={styles.statRowValue}>{repos.length}</span>
             </div>
           </div>
         </div>
@@ -358,7 +394,9 @@ const AutomationsComponent: FunctionComponent = () => {
         <div className={styles.sectionHeader}>
           <div>
             <span className={styles.sectionKicker}>Live treasury data</span>
-            <h3 className={styles.sectionHeading}>Who automation is rewarding</h3>
+            <h3 className={styles.sectionHeading}>
+              Who automation is rewarding
+            </h3>
           </div>
           <p>Ranked by completed automated payments this month.</p>
         </div>
@@ -375,7 +413,9 @@ const AutomationsComponent: FunctionComponent = () => {
             ))}
           </div>
         ) : (
-          <p className={styles.emptyState}>Recipient activity is unavailable right now.</p>
+          <p className={styles.emptyState}>
+            Recipient activity is unavailable right now.
+          </p>
         )}
       </section>
 
@@ -416,7 +456,9 @@ const AutomationsComponent: FunctionComponent = () => {
           </ol>
         ) : (
           <p className={styles.emptyState}>
-            {stats ? 'No automated payouts have been recorded yet.' : 'Automation history is unavailable right now.'}
+            {stats
+              ? 'No automated payouts have been recorded yet.'
+              : 'Automation history is unavailable right now.'}
           </p>
         )}
       </section>
@@ -437,12 +479,15 @@ const AutomationsComponent: FunctionComponent = () => {
         <div className={styles.step}>
           <span className={styles.stepNum}>3</span>
           <span className={styles.stepText}>
-            Teammates link their accounts once in Settings, then rewards land in their wallet.
+            Teammates link their accounts once in Settings, then rewards land in
+            their wallet.
           </span>
         </div>
       </div>
 
-      <h3 id="automation-connections" className={styles.sectionHeading}>Connections</h3>
+      <h3 id="automation-connections" className={styles.sectionHeading}>
+        Connections
+      </h3>
       <div className={styles.connGrid}>
         <div className={styles.connCard}>
           <div className={styles.connCardHead}>
@@ -461,13 +506,14 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
           </div>
           <p className={styles.connDescription}>
-            Install the Zaplie GitHub App and pick repositories for the draft pull-request flow.
-            Issue and review rewards require separate verified flows.
+            Install the Zaplie GitHub App and pick repositories for the draft
+            pull-request flow. Issue and review rewards require separate
+            verified flows.
           </p>
           {appInstalled && repos.length === 0 && (
             <span className={styles.connHint}>
-              Installed on GitHub. Syncing the repository list needs the App private key on the
-              server; add repositories manually meanwhile.
+              Installed on GitHub. Syncing the repository list needs the App
+              private key on the server; add repositories manually meanwhile.
             </span>
           )}
           {repos.length > 0 && (
@@ -491,7 +537,11 @@ const AutomationsComponent: FunctionComponent = () => {
           )}
           {isAdmin && (
             <div className={styles.connCardActions}>
-              <button className={styles.installButton} onClick={handleInstallApp} disabled={installing}>
+              <button
+                className={styles.installButton}
+                onClick={handleInstallApp}
+                disabled={installing}
+              >
                 {installing
                   ? 'Redirecting to GitHub...'
                   : repos.length > 0
@@ -499,7 +549,9 @@ const AutomationsComponent: FunctionComponent = () => {
                     : 'Connect repositories'}
               </button>
               <details className={styles.manualAdd}>
-                <summary className={styles.manualAddSummary}>Add manually</summary>
+                <summary className={styles.manualAddSummary}>
+                  Add manually
+                </summary>
                 <div className={styles.addRow}>
                   <input
                     type="text"
@@ -510,7 +562,11 @@ const AutomationsComponent: FunctionComponent = () => {
                     className={styles.addInput}
                     disabled={saving}
                   />
-                  <button className={styles.addButton} onClick={handleAddRepo} disabled={saving}>
+                  <button
+                    className={styles.addButton}
+                    onClick={handleAddRepo}
+                    disabled={saving}
+                  >
                     Add
                   </button>
                 </div>
@@ -526,12 +582,15 @@ const AutomationsComponent: FunctionComponent = () => {
             </span>
             <div className={styles.connCardTitle}>
               <span className={styles.connName}>GitHub Logic Apps pilot</span>
-              <span className={styles.connStatus}>Draft — not production ready</span>
+              <span className={styles.connStatus}>
+                Draft — not production ready
+              </span>
             </div>
           </div>
           <p className={styles.connDescription}>
-            Create a key for the GitHub pull-request sample flow. Production use remains
-            blocked until durable idempotency and aggregate budget controls land.
+            Create a key for the GitHub pull-request sample flow. Production use
+            remains blocked until durable idempotency and aggregate budget
+            controls land.
           </p>
           {isAdmin && (
             <>
@@ -569,7 +628,10 @@ const AutomationsComponent: FunctionComponent = () => {
                     >
                       Copy
                     </button>
-                    <button className={styles.cardEditButton} onClick={() => setCreatedKey(null)}>
+                    <button
+                      className={styles.cardEditButton}
+                      onClick={() => setCreatedKey(null)}
+                    >
                       Done
                     </button>
                   </div>
@@ -585,7 +647,11 @@ const AutomationsComponent: FunctionComponent = () => {
                   className={styles.addInput}
                   disabled={creatingKey}
                 />
-                <button className={styles.addButton} onClick={handleCreateKey} disabled={creatingKey}>
+                <button
+                  className={styles.addButton}
+                  onClick={handleCreateKey}
+                  disabled={creatingKey}
+                >
                   {creatingKey ? 'Creating...' : 'Create key'}
                 </button>
               </div>
@@ -604,8 +670,8 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
           </div>
           <p className={styles.connDescription}>
-            Calendar and people signals from Microsoft Graph already power Your week and the
-            assistant's suggestions. Shared inbox digests are next.
+            Calendar and people signals from Microsoft Graph already power Your
+            week and the assistant's suggestions. Shared inbox digests are next.
           </p>
         </div>
 
@@ -620,7 +686,8 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
           </div>
           <p className={styles.connDescription}>
-            A Slack agent with the same recognition model, for teams outside Microsoft Teams.
+            A Slack agent with the same recognition model, for teams outside
+            Microsoft Teams.
           </p>
         </div>
       </div>
@@ -630,7 +697,10 @@ const AutomationsComponent: FunctionComponent = () => {
           <span className={styles.sectionKicker}>Admin controlled</span>
           <h3 className={styles.sectionHeading}>Reward rules</h3>
         </div>
-        <p>Every amount is enforced again by the server before it is saved or paid.</p>
+        <p>
+          Every amount is enforced again by the server before it is saved or
+          paid.
+        </p>
       </div>
       <div className={styles.ruleGrid}>
         {RULE_ORDER.filter(key => key in amounts).map(key => {
@@ -646,7 +716,9 @@ const AutomationsComponent: FunctionComponent = () => {
               </div>
               <div className={styles.ruleInfo}>
                 <span className={styles.ruleTitle}>{meta.title}</span>
-                <span className={styles.ruleSentence}>{meta.sentence(amounts[key])}</span>
+                <span className={styles.ruleSentence}>
+                  {meta.sentence(amounts[key])}
+                </span>
               </div>
               <div className={styles.ruleFooter}>
                 {isEditing ? (
@@ -679,15 +751,24 @@ const AutomationsComponent: FunctionComponent = () => {
                 {isAdmin &&
                   (isEditing ? (
                     <div className={styles.ruleActions}>
-                      <button className={styles.cardEditButton} onClick={() => setEditingKey(null)}>
+                      <button
+                        className={styles.cardEditButton}
+                        onClick={() => setEditingKey(null)}
+                      >
                         Cancel
                       </button>
-                      <button className={styles.cardSaveButton} onClick={() => handleSaveAmount(key)}>
+                      <button
+                        className={styles.cardSaveButton}
+                        onClick={() => handleSaveAmount(key)}
+                      >
                         Save
                       </button>
                     </div>
                   ) : (
-                    <button className={styles.cardEditButton} onClick={() => handleStartEdit(key)}>
+                    <button
+                      className={styles.cardEditButton}
+                      onClick={() => handleStartEdit(key)}
+                    >
                       Edit amount
                     </button>
                   ))}

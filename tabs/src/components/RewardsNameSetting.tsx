@@ -1,5 +1,10 @@
 // filepath: /c:/projects/ZapVibes/tabs/src/components/RewardsNameSetting.tsx
-import React, { FunctionComponent, useState, useEffect, useContext } from 'react';
+import React, {
+  FunctionComponent,
+  useState,
+  useEffect,
+  useContext,
+} from 'react';
 import styles from './setting.module.css';
 import { getRewardName, updateRewardName } from '../apiService';
 import { ToastContainer, toast } from 'react-toastify';
@@ -48,7 +53,7 @@ const CurrencySetting: FunctionComponent = () => {
         <input
           type="text"
           value={currency}
-          onChange={(e) => setCurrency(e.target.value)}
+          onChange={e => setCurrency(e.target.value)}
           disabled={!isEditing}
           className={`${styles.textBox} ${isEditing ? styles.editing : ''}`}
           title="Reward name"

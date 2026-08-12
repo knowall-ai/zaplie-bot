@@ -1,8 +1,19 @@
 import { resolveRewardRecipientByGithubId } from './identityService';
 import { payReward } from './rewardsService';
-import { getUserWalletsByUserId, createInvoice, payInvoice } from './lnbitsService';
+import {
+  getUserWalletsByUserId,
+  createInvoice,
+  payInvoice,
+} from './lnbitsService';
 import { createPendingReward } from './pendingRewardsService';
-import { expect, describe, test, beforeEach, afterAll, jest } from '@jest/globals';
+import {
+  expect,
+  describe,
+  test,
+  beforeEach,
+  afterAll,
+  jest,
+} from '@jest/globals';
 
 jest.mock('./lnbitsService');
 jest.mock('./pendingRewardsService');
@@ -55,10 +66,12 @@ describe('resolveRewardRecipientByGithubId', () => {
       json: async () => ({ personAad: 'aad-1', lnbitsUserId: 'lnbits-user-1' }),
     } as Response);
 
-    await expect(resolveRewardRecipientByGithubId('12345678')).resolves.toEqual({
-      personAad: 'aad-1',
-      lnbitsUserId: 'lnbits-user-1',
-    });
+    await expect(resolveRewardRecipientByGithubId('12345678')).resolves.toEqual(
+      {
+        personAad: 'aad-1',
+        lnbitsUserId: 'lnbits-user-1',
+      },
+    );
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining(
         '/identities/resolve?provider=github&providerId=12345678',
@@ -76,7 +89,9 @@ describe('resolveRewardRecipientByGithubId', () => {
       json: async () => ({ error: 'no identity linked' }),
     } as Response);
 
-    await expect(resolveRewardRecipientByGithubId('99999999')).resolves.toBeNull();
+    await expect(
+      resolveRewardRecipientByGithubId('99999999'),
+    ).resolves.toBeNull();
   });
 
   test('throws on an unexpected non-404 error status', async () => {
@@ -213,7 +228,10 @@ describe('payReward recipientId resolution', () => {
   test('rejects a reward with no recipientId with a 400', async () => {
     const { recipientId: _omit, ...withoutId } = rewardWithRecipientId;
 
-    await expect(payReward(withoutId)).rejects.toHaveProperty('statusCode', 400);
+    await expect(payReward(withoutId)).rejects.toHaveProperty(
+      'statusCode',
+      400,
+    );
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });

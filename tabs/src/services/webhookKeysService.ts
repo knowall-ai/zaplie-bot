@@ -12,7 +12,9 @@ export interface WebhookKey {
 
 // idToken (not the Graph access token): its audience is this app's own AAD
 // client id, which is what the tab backend validates against the Entra JWKS.
-export const getWebhookKeys = async (idToken: string): Promise<WebhookKey[]> => {
+export const getWebhookKeys = async (
+  idToken: string,
+): Promise<WebhookKey[]> => {
   const response = await axios.get(API_URL, {
     headers: { Authorization: `Bearer ${idToken}` },
   });
@@ -31,7 +33,10 @@ export const createWebhookKey = async (
   return response.data;
 };
 
-export const revokeWebhookKey = async (idToken: string, id: string): Promise<void> => {
+export const revokeWebhookKey = async (
+  idToken: string,
+  id: string,
+): Promise<void> => {
   await axios.post(`${API_URL}/${id}/revoke`, null, {
     headers: { Authorization: `Bearer ${idToken}` },
   });

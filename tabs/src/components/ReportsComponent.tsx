@@ -15,7 +15,14 @@ const BarChart: FunctionComponent<{ series: number[] }> = ({ series }) => {
   const width = series.length * (barWidth + gap);
   return (
     <svg viewBox={`0 0 ${width} 120`} className={styles.chart} role="img">
-      <line x1="0" y1="119" x2={width} y2="119" stroke="#3a383a" strokeWidth="1.5" />
+      <line
+        x1="0"
+        y1="119"
+        x2={width}
+        y2="119"
+        stroke="#3a383a"
+        strokeWidth="1.5"
+      />
       {series.map((sats, i) => {
         const height = Math.max(sats > 0 ? 6 : 2, (sats / max) * 100);
         const x = i * (barWidth + gap) + gap / 2;
@@ -94,7 +101,8 @@ const ReportsComponent: FunctionComponent = () => {
     <div className={styles.reportscomponent}>
       <h2 className={styles.title}>Reports</h2>
       <p className={styles.subtitle}>
-        How recognition flows through the team, from peer zaps to automated rewards.
+        How recognition flows through the team, from peer zaps to automated
+        rewards.
       </p>
 
       <div className={styles.summaryRow}>

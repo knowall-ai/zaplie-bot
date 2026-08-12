@@ -23,7 +23,9 @@ export const getGithubInstallUrl = async (idToken: string): Promise<string> => {
   return response.data.installUrl;
 };
 
-export const getGithubConnection = async (idToken: string): Promise<{ connected: boolean }> => {
+export const getGithubConnection = async (
+  idToken: string,
+): Promise<{ connected: boolean }> => {
   const response = await axios.get(`${API_URL}/github`, {
     headers: { Authorization: `Bearer ${idToken}` },
   });

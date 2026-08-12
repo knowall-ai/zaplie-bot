@@ -34,7 +34,9 @@ const lastRequest = () => {
 const requestTo = (url: string) => {
   const call = fetchMock.mock.calls.find(c => String(c[0]) === url);
   if (!call) {
-    throw new Error(`No fetch call to ${url}, saw: ${fetchMock.mock.calls.map(c => c[0])}`);
+    throw new Error(
+      `No fetch call to ${url}, saw: ${fetchMock.mock.calls.map(c => c[0])}`,
+    );
   }
   return { url: String(call[0]), init: call[1] };
 };
@@ -73,7 +75,9 @@ afterEach(() => {
 });
 
 const stubAuth = (token = 'tok-1') => {
-  fetchMock.mockImplementationOnce(async () => jsonResponse({ access_token: token }));
+  fetchMock.mockImplementationOnce(async () =>
+    jsonResponse({ access_token: token }),
+  );
 };
 
 describe('getAccessToken', () => {
@@ -108,7 +112,10 @@ describe('getAccessToken', () => {
 
   test('rejects on a non-2xx response', async () => {
     fetchMock.mockImplementationOnce(async () =>
-      jsonResponse({ detail: 'bad login' }, { status: 401, statusText: 'Unauthorized' }),
+      jsonResponse(
+        { detail: 'bad login' },
+        { status: 401, statusText: 'Unauthorized' },
+      ),
     );
 
     // The catch rethrows a generic error; the status code is only logged, not propagated.
@@ -119,7 +126,8 @@ describe('getAccessToken', () => {
 
   test('rejects when the response is not JSON', async () => {
     fetchMock.mockImplementationOnce(
-      async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }),
+      async () =>
+        new Response('<html>', { headers: { 'content-type': 'text/html' } }),
     );
 
     await expect(service.getAccessToken('user-a', 'pass-a')).rejects.toThrow(
@@ -144,9 +152,15 @@ describe('createInvoice', () => {
       jsonResponse({ payment_request: 'lnbc1invoice' }),
     );
 
-    const result = await service.createInvoice('in-key', 'wallet-1', 21, 'memo text', {
-      tag: 'zap',
-    });
+    const result = await service.createInvoice(
+      'in-key',
+      'wallet-1',
+      21,
+      'memo text',
+      {
+        tag: 'zap',
+      },
+    );
 
     expect(result).toBe('lnbc1invoice');
     expect(lastRequest()).toEqual({
@@ -157,17 +171,24 @@ describe('createInvoice', () => {
           'Content-Type': 'application/json',
           'X-Api-Key': 'in-key',
         },
-        body: JSON.stringify({ out: false, amount: 21, memo: 'memo text', extra: { tag: 'zap' } }),
+        body: JSON.stringify({
+          out: false,
+          amount: 21,
+          memo: 'memo text',
+          extra: { tag: 'zap' },
+        }),
       },
     });
   });
 
   test('rejects on a non-2xx response', async () => {
-    fetchMock.mockImplementationOnce(async () => jsonResponse({}, { status: 500 }));
-
-    await expect(service.createInvoice('in-key', 'wallet-1', 21, 'memo', {})).rejects.toThrow(
-      'Error creating an invoice (status: 500)',
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({}, { status: 500 }),
     );
+
+    await expect(
+      service.createInvoice('in-key', 'wallet-1', 21, 'memo', {}),
+    ).rejects.toThrow('Error creating an invoice (status: 500)');
   });
 });
 
@@ -191,13 +212,18 @@ describe('getWallets', () => {
     deleted: false,
   };
 
-  const stubWalletRoutes = (wallets: object[], userWallets: Record<string, object[]>) => {
+  const stubWalletRoutes = (
+    wallets: object[],
+    userWallets: Record<string, object[]>,
+  ) => {
     fetchMock.mockImplementation(async input => {
       const url = String(input);
-      if (url === `${BASE}/api/v1/auth`) return jsonResponse({ access_token: 'tok-1' });
+      if (url === `${BASE}/api/v1/auth`)
+        return jsonResponse({ access_token: 'tok-1' });
       if (url === `${BASE}/api/v1/wallets`) return jsonResponse(wallets);
       for (const [userId, entries] of Object.entries(userWallets)) {
-        if (url === `${BASE}/users/api/v1/user/${userId}/wallet`) return jsonResponse(entries);
+        if (url === `${BASE}/users/api/v1/user/${userId}/wallet`)
+          return jsonResponse(entries);
       }
       throw new Error(`Unexpected fetch call: ${url}`);
     });
@@ -236,7 +262,12 @@ describe('getWallets', () => {
   });
 
   test('filters wallets by name', async () => {
-    const otherWallet = { ...rawWallet, id: 'w-2', name: 'Bob - Private', user: 'u-2' };
+    const otherWallet = {
+      ...rawWallet,
+      id: 'w-2',
+      name: 'Bob - Private',
+      user: 'u-2',
+    };
     stubWalletRoutes([rawWallet, otherWallet], {
       'u-1': [userWalletEntry],
       'u-2': [{ ...userWalletEntry, id: 'w-2', user: 'u-2' }],
@@ -250,7 +281,12 @@ describe('getWallets', () => {
   // Bug: getWalletById pre-filters deleted entries and returns null, so the wallet
   // maps to deleted: undefined and survives the `!= true` filter.
   test.failing('excludes a wallet deleted on the per-user route', async () => {
-    const deletedWallet = { ...rawWallet, id: 'w-3', name: 'Carol - Allowance', user: 'u-3' };
+    const deletedWallet = {
+      ...rawWallet,
+      id: 'w-3',
+      name: 'Carol - Allowance',
+      user: 'u-3',
+    };
     stubWalletRoutes([rawWallet, deletedWallet], {
       'u-1': [userWalletEntry],
       'u-3': [{ ...userWalletEntry, id: 'w-3', user: 'u-3', deleted: true }],
@@ -264,7 +300,9 @@ describe('getWallets', () => {
   // Bug: the catch returns the Error, so callers receive it as the resolved value.
   test.failing('rejects on a non-2xx response', async () => {
     stubAuth();
-    fetchMock.mockImplementationOnce(async () => jsonResponse({}, { status: 500 }));
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({}, { status: 500 }),
+    );
 
     await expect(service.getWallets('admin-key')).rejects.toThrow(
       'Error getting wallets response (status: 500)',
@@ -326,7 +364,9 @@ describe('getUserWallets', () => {
 
   test('rejects on a non-2xx response', async () => {
     stubAuth();
-    fetchMock.mockImplementationOnce(async () => jsonResponse({}, { status: 404 }));
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({}, { status: 404 }),
+    );
 
     await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
       'Error getting users wallets response (status: 404)',
@@ -339,7 +379,9 @@ describe('payInvoice', () => {
     const payment = { payment_hash: 'hash-1', checking_id: 'chk-1' };
     fetchMock.mockImplementationOnce(async () => jsonResponse(payment));
 
-    const result = await service.payInvoice('admin-key', 'lnbc1invoice', { tag: 'zap' });
+    const result = await service.payInvoice('admin-key', 'lnbc1invoice', {
+      tag: 'zap',
+    });
 
     expect(result).toEqual(payment);
     expect(lastRequest()).toEqual({
@@ -350,17 +392,23 @@ describe('payInvoice', () => {
           'Content-Type': 'application/json',
           'X-Api-Key': 'admin-key',
         },
-        body: JSON.stringify({ out: true, bolt11: 'lnbc1invoice', extra: { tag: 'zap' } }),
+        body: JSON.stringify({
+          out: true,
+          bolt11: 'lnbc1invoice',
+          extra: { tag: 'zap' },
+        }),
       },
     });
   });
 
   test('rejects on a non-2xx response', async () => {
-    fetchMock.mockImplementationOnce(async () => jsonResponse({}, { status: 520 }));
-
-    await expect(service.payInvoice('admin-key', 'lnbc1invoice', {})).rejects.toThrow(
-      'Error paying invoice (status: 520)',
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({}, { status: 520 }),
     );
+
+    await expect(
+      service.payInvoice('admin-key', 'lnbc1invoice', {}),
+    ).rejects.toThrow('Error paying invoice (status: 520)');
   });
 
   test('rejects on a network error', async () => {
@@ -368,8 +416,8 @@ describe('payInvoice', () => {
       throw new TypeError('fetch failed');
     });
 
-    await expect(service.payInvoice('admin-key', 'lnbc1invoice', {})).rejects.toThrow(
-      'fetch failed',
-    );
+    await expect(
+      service.payInvoice('admin-key', 'lnbc1invoice', {}),
+    ).rejects.toThrow('fetch failed');
   });
 });

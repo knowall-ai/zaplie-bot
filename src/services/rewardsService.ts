@@ -1,4 +1,8 @@
-import { getUserWalletsByUserId, createInvoice, payInvoice } from './lnbitsService';
+import {
+  getUserWalletsByUserId,
+  createInvoice,
+  payInvoice,
+} from './lnbitsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
 import { getAutomations } from './fetchAutomations';
 import { resolveRewardRecipientByGithubId } from './identityService';
@@ -51,8 +55,15 @@ export interface ResolvedRewardRequest {
 }
 
 export function parseRewardRequest(body: unknown): RewardRequest {
-  const { recipient, recipientId, amountSats, eventType, repo, reason, source } =
-    (body ?? {}) as Record<string, unknown>;
+  const {
+    recipient,
+    recipientId,
+    amountSats,
+    eventType,
+    repo,
+    reason,
+    source,
+  } = (body ?? {}) as Record<string, unknown>;
   if (typeof recipient !== 'string' || recipient.trim().length === 0) {
     throw new RewardError('recipient must be a non-empty string', 400);
   }
@@ -63,10 +74,7 @@ export function parseRewardRequest(body: unknown): RewardRequest {
       400,
     );
   }
-  if (
-    typeof repo !== 'string' ||
-    !/^[^/\s]+\/[^/\s]+$/.test(repo)
-  ) {
+  if (typeof repo !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
     throw new RewardError('repo must use the owner/repository format', 400);
   }
   if (amountSats !== undefined) {
@@ -179,9 +187,14 @@ async function resolveRecipientUserId(
   reward: ResolvedRewardRequest,
 ): Promise<string | null> {
   if (!reward.recipientId) {
-    throw new RewardError('recipientId is required to resolve the recipient', 400);
+    throw new RewardError(
+      'recipientId is required to resolve the recipient',
+      400,
+    );
   }
-  const resolvedRecipient = await resolveRewardRecipientByGithubId(reward.recipientId);
+  const resolvedRecipient = await resolveRewardRecipientByGithubId(
+    reward.recipientId,
+  );
   if (!resolvedRecipient) {
     return null;
   }
@@ -246,9 +259,7 @@ export async function payReward(
 
   const result = await payInvoice(treasuryAdminKey, paymentRequest, extra);
   if (!result || !result.payment_hash) {
-    throw new Error(
-      `paying reward invoice failed: ${JSON.stringify(result)}`,
-    );
+    throw new Error(`paying reward invoice failed: ${JSON.stringify(result)}`);
   }
   return { paymentHash: result.payment_hash };
 }
