@@ -25,7 +25,7 @@
     "react-activity-calendar": "^3.0.1",
     "react-dom": "^18.3.1",
     "react-qr-code": "^2.0.15",
-    "react-router-dom": "^6.26.1",
+    "react-router-dom": "^7.18.2",
     "react-scripts": "5.0.1",
     "react-toastify": "^11.0.5",
     "web-vitals": "^2.1.4",
@@ -35,7 +35,6 @@
     "chroma-js": "2.4.2"
   },
   "scripts": {
-    "preinstall": "npx npm-force-resolutions",
     "prestart": "npm run tailwind:build",
     "start": "concurrently --kill-others-on-fail \"npm run server:dev\" \"npm run tailwind:watch\" \"react-scripts start\"",
     "server": "node backend/server.js",
@@ -86,8 +85,5 @@
     "tailwindcss": "4.3.3",
     "ts-loader": "^9.5.1",
     "typescript": "^4.9.5"
-  },
-  "resolutions": {
-    "chroma-js": "2.4.2"
   }
 }

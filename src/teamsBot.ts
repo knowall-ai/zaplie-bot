@@ -310,9 +310,6 @@ export class TeamsBot extends TeamsActivityHandler {
 
       await next();
     });
-
-    //this.onMembersAdded(async (context, next) => {
-    this.onCommand(async (_context, _next) => {});
   }
 
   async run(context: TurnContext) {

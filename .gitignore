@@ -3,6 +3,8 @@ env/.env.*.user
 env/.env.dev
 env/.env.local
 env/.env.test
+# Contains real LNbits/host config — keep local, never commit (use env/.env.dev.example)
+env/.env.dev
 .localConfigs
 appPackage/build
 
@@ -18,6 +20,9 @@ node_modules/
 lib/
 build/
 tabs/public/tailwind.css
+
+# test coverage
+coverage/
 
 .fake
 /build
