@@ -21,12 +21,15 @@ jest.mock('@azure/identity', () => ({
 jest.mock('../config', () => ({
   __esModule: true,
   default: {
-    foundryProjectEndpoint: 'https://test-resource.services.ai.azure.com/api/projects/test-project',
+    foundryProjectEndpoint:
+      'https://test-resource.services.ai.azure.com/api/projects/test-project',
     foundryModel: 'test-model',
   },
 }));
 
-const mockAgentsUpdate = jest.fn<() => Promise<any>>().mockResolvedValue(undefined);
+const mockAgentsUpdate = jest
+  .fn<() => Promise<any>>()
+  .mockResolvedValue(undefined);
 const mockConversationsCreate = jest.fn<() => Promise<any>>();
 const mockResponsesCreate = jest.fn<(...args: any[]) => Promise<any>>();
 
@@ -43,7 +46,7 @@ jest.mock('@azure/ai-projects', () => ({
 
 import { runConversationalTurn, ToolDefinition } from './foundryAgentService';
 
-const makeTurnContext = (): TurnContext => ({} as TurnContext);
+const makeTurnContext = (): TurnContext => ({}) as TurnContext;
 
 const noopTool: ToolDefinition = {
   name: 'noop_tool',
@@ -58,9 +61,17 @@ describe('foundryAgentService.runConversationalTurn', () => {
   });
 
   test('returns output_text directly when the model needs no tools', async () => {
-    mockResponsesCreate.mockResolvedValueOnce({ output: [], output_text: 'Hi there!' });
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'Hi there!',
+    });
 
-    const result = await runConversationalTurn('hello', undefined, [noopTool], makeTurnContext());
+    const result = await runConversationalTurn(
+      'hello',
+      undefined,
+      [noopTool],
+      makeTurnContext(),
+    );
 
     expect(result.replyText).toBe('Hi there!');
     expect(result.foundryConversationId).toBe('conv_new');
@@ -78,7 +89,10 @@ describe('foundryAgentService.runConversationalTurn', () => {
 
   test('reuses an existing conversation id instead of creating a new one', async () => {
     mockConversationsCreate.mockClear();
-    mockResponsesCreate.mockResolvedValueOnce({ output: [], output_text: 'ok' });
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
 
     const result = await runConversationalTurn(
       'hello again',
@@ -122,7 +136,8 @@ describe('foundryAgentService.runConversationalTurn', () => {
 
     expect(result.replyText).toBe('You said hi');
     // Second call must feed back a function_call_output referencing the same call_id.
-    const secondCallArgs = mockResponsesCreate.mock.calls[mockResponsesCreate.mock.calls.length - 1];
+    const secondCallArgs =
+      mockResponsesCreate.mock.calls[mockResponsesCreate.mock.calls.length - 1];
     expect(secondCallArgs[0].input).toEqual([
       {
         type: 'function_call_output',
@@ -140,34 +155,63 @@ describe('foundryAgentService.runConversationalTurn', () => {
   test('names the unregistered tool and the registered ones when the agent drifts', async () => {
     mockResponsesCreate.mockResolvedValueOnce({
       output: [
-        { type: 'function_call', name: 'not_a_real_tool', call_id: 'call_x', arguments: '{}' },
+        {
+          type: 'function_call',
+          name: 'not_a_real_tool',
+          call_id: 'call_x',
+          arguments: '{}',
+        },
       ],
       output_text: '',
     });
 
     await expect(
-      runConversationalTurn('do something', 'conv_existing', [noopTool], makeTurnContext()),
-    ).rejects.toThrow(/unregistered tool "not_a_real_tool"[\s\S]*Registered tools: /);
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [noopTool],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(
+      /unregistered tool "not_a_real_tool"[\s\S]*Registered tools: /,
+    );
   });
 
   test('names the tool and the payload when its arguments are not valid JSON', async () => {
     mockResponsesCreate.mockResolvedValueOnce({
       output: [
-        { type: 'function_call', name: noopTool.name, call_id: 'call_y', arguments: '{not json' },
+        {
+          type: 'function_call',
+          name: noopTool.name,
+          call_id: 'call_y',
+          arguments: '{not json',
+        },
       ],
       output_text: '',
     });
 
     await expect(
-      runConversationalTurn('do something', 'conv_existing', [noopTool], makeTurnContext()),
-    ).rejects.toThrow(/could not parse the arguments for tool "noop_tool"[\s\S]*\{not json/);
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [noopTool],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(
+      /could not parse the arguments for tool "noop_tool"[\s\S]*\{not json/,
+    );
   });
 
   test('rejects a handler that returns undefined instead of sending a non-string output', async () => {
     const undefinedTool = { ...noopTool, handler: async () => undefined };
     mockResponsesCreate.mockResolvedValueOnce({
       output: [
-        { type: 'function_call', name: noopTool.name, call_id: 'call_z', arguments: '{}' },
+        {
+          type: 'function_call',
+          name: noopTool.name,
+          call_id: 'call_z',
+          arguments: '{}',
+        },
       ],
       output_text: '',
     });
@@ -185,12 +229,24 @@ describe('foundryAgentService.runConversationalTurn', () => {
   test('throws instead of looping forever if the model never stops calling tools', async () => {
     mockResponsesCreate.mockReset();
     mockResponsesCreate.mockResolvedValue({
-      output: [{ type: 'function_call', name: 'noop_tool', call_id: 'call_loop', arguments: '{}' }],
+      output: [
+        {
+          type: 'function_call',
+          name: 'noop_tool',
+          call_id: 'call_loop',
+          arguments: '{}',
+        },
+      ],
       output_text: '',
     });
 
     await expect(
-      runConversationalTurn('loop forever', 'conv_existing', [noopTool], makeTurnContext()),
+      runConversationalTurn(
+        'loop forever',
+        'conv_existing',
+        [noopTool],
+        makeTurnContext(),
+      ),
     ).rejects.toThrow(/exceeded/i);
   });
 });

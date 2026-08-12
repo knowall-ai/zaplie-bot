@@ -106,7 +106,9 @@ export async function getRecentZaps(
   );
 
   // tsconfig targets es2017, so flatten without Array.prototype.flat (es2019).
-  const allPayments: Transaction[] = ([] as Transaction[]).concat(...paymentsPerWallet);
+  const allPayments: Transaction[] = ([] as Transaction[]).concat(
+    ...paymentsPerWallet,
+  );
 
   // Internal transfers write both the debit and credit side under the same
   // checking_id (one side prefixed with "internal_") — index both so either
@@ -120,7 +122,9 @@ export async function getRecentZaps(
     paymentsByCheckingId.set(cleanId, existing);
   }
 
-  const findReceivingPayment = (payment: Transaction): Transaction | undefined => {
+  const findReceivingPayment = (
+    payment: Transaction,
+  ): Transaction | undefined => {
     const cleanId = cleanCheckingId(payment.checking_id);
     const matches = paymentsByCheckingId.get(cleanId) || [];
     return matches.find(p => p.wallet_id !== payment.wallet_id && p.amount > 0);
@@ -132,7 +136,9 @@ export async function getRecentZaps(
     if (payment.memo?.includes('Weekly Allowance cleared')) return false; // exclude scheduled top-up sweeps
 
     const receivingPayment = findReceivingPayment(payment);
-    return !!receivingPayment && privateWalletIds.has(receivingPayment.wallet_id);
+    return (
+      !!receivingPayment && privateWalletIds.has(receivingPayment.wallet_id)
+    );
   });
 
   // Both sides of an internal transfer can surface once per wallet fetched,
@@ -151,7 +157,9 @@ export async function getRecentZaps(
     const time = parseTransactionTime(payment.time) ?? new Date(0);
     return {
       from: walletToUser.get(payment.wallet_id) ?? null,
-      to: receivingPayment ? walletToUser.get(receivingPayment.wallet_id) ?? null : null,
+      to: receivingPayment
+        ? (walletToUser.get(receivingPayment.wallet_id) ?? null)
+        : null,
       amountSats: Math.abs(Math.floor(payment.amount / 1000)),
       memo: payment.memo ?? '',
       time,

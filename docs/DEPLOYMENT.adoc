@@ -1,0 +1,168 @@
+= Deployment Guide
+:toc:
+:sectnums:
+
+== Environments
+
+[cols="1,2,3"]
+|===
+| Environment | Config | Purpose
+
+| local
+| `env/.env.local` (untracked) + `teamsapp.local.yml`
+| Developer machine with a dev tunnel; bot registered via `botFramework/create`
+
+| dev
+| `env/.env.dev` (tracked, non-secret values) + `teamsapp.yml`
+| Shared development deployment in Azure
+
+| test / prod (CI)
+| GitHub environments `Test` and `Prod`
+| GitHub Actions deploys the tabs app to App Service `zappie-dev` (resource group `rg-Zappie-dev`) slots
+|===
+
+== Prerequisites
+
+- Node.js 18 (App Service is pinned to `~18`; CI builds with Node 20 — see the
+  MSAL override note in README.md)
+- Teams Toolkit VS Code extension ≥ 5.0.0 or the TeamsFx CLI (`teamsapp`)
+- An M365 tenant with permission to upload custom Teams apps
+- An LNbits 0.12+ instance with the User Manager extension
+- Azure subscription (for dev/prod provisioning)
+
+== Provisioning (Teams Toolkit)
+
+`teamsapp.yml` defines the lifecycle. `teamsapp provision --env dev` performs:
+
+. `aadApp/create` — AAD app registration ("Zapp.ie", single-tenant sign-in
+  audience, generates a client secret)
+. `cli/runNpmCommand` — `npm run write-env` (copies LNBITS_*/URL values into
+  the env file) and `npm run build-manifest` (renders
+  `manifest.template.json` → `appPackage/manifest.json` via `build.js`)
+. `teamsApp/create` and `botAadApp/create`
+. `arm/deploy` — `infra/azure.bicep` with `infra/azure.parameters.json`:
+  App Service plan (B1), Windows web app (httpsOnly, alwaysOn,
+  `WEBSITE_RUN_FROM_PACKAGE=1`, Node `~18`), app settings (BOT_*, AAD_APP_*),
+  and `infra/botRegistration/azurebot.bicep` — Azure Bot Service (F0) with the
+  MS Teams channel
+. `aadApp/update`, manifest validation, `zipAppPackage`, `teamsApp/update`
+
+== Deploying
+
+=== Bot (Teams Toolkit)
+
+[source,bash]
+----
+teamsapp auth login azure
+teamsapp provision --env dev
+teamsapp deploy --env dev      # npm install + build, then zipDeploy to the App Service
+teamsapp preview --env dev
+----
+
+The bot runs under iisnode on Windows App Service; `web.config` rewrites
+static content to `public/` and everything else to `lib/src/index.js`.
+
+=== Local development
+
+[source,bash]
+----
+devtunnel host -p 3978 --protocol http --allow-anonymous
+# set BOT_DOMAIN and BOT_ENDPOINT in env/.env.local, then:
+teamsapp provision --env local
+teamsapp deploy --env local
+teamsapp preview --env local
+----
+
+Or press F5 in VS Code ("Debug in Teams (Edge/Chrome)"). The bot itself runs
+with `npm run dev` (nodemon + ts-node, inspector on 9239), reading
+`.localConfigs` via `npm run dev:teamsfx`.
+
+=== Web tabs (GitHub Actions)
+
+`.github/workflows/Azure_App_Service_zappie-test.yml` and
+`Azure_App_Service_zappie-prod.yml` trigger on push to `main` (and manually):
+
+. Build job (windows-latest, Node 20): `cd tabs && npm install && npm run build`
+  (`CI: false`), upload the `tabs` artifact
+. Deploy job (ubuntu-latest): OIDC `azure/login`, ensure a deployment slot
+  exists (`pr-<number>` for PRs, else `testing`) on app `zappie-dev`, then
+  `azure/webapps-deploy@v3`
+
+Required repository secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+`AZURE_SUBSCRIPTION_ID` (federated OIDC — no publish profiles).
+
+Note: CI deploys only the tabs app; the bot deploys via `teamsapp deploy`.
+
+=== Azure Functions
+
+[source,bash]
+----
+cd functions
+npm run build      # tsc → ../dist
+npm start          # local Functions runtime (func start)
+----
+
+Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
+(no dedicated CI workflow yet).
+
+== Environment Variables
+
+[cols="2,3,1"]
+|===
+| Variable | Description | Component
+
+| `BOT_ID`, `BOT_PASSWORD`, `BOT_DOMAIN`
+| Bot Framework registration credentials and public domain
+| Bot
+
+| `AAD_APP_CLIENT_ID`, `AAD_APP_CLIENT_SECRET`, `AAD_APP_TENANT_ID`, `AAD_APP_OAUTH_AUTHORITY_HOST`
+| Entra ID app registration for SSO
+| Bot
+
+| `LNBITS_NODE_URL`
+| Base URL of the LNbits instance
+| Bot, Tabs (`REACT_APP_` prefix)
+
+| `LNBITS_USERNAME`, `LNBITS_PASSWORD`
+| LNbits service-account credentials (`POST /api/v1/auth`)
+| Bot, Tabs
+
+| `LNBITS_ADMINKEY`
+| LNbits admin API key for wallet operations
+| Bot, Tabs
+
+| `LNBITS_INITIAL_ALLOWANCE`
+| Sats granted/topped-up to each user's Allowance wallet
+| Bot
+
+| `LNBITS_HOST_WALLET_ID`, `LNBITS_HOST_USER_ID`, `LNBITS_INKEY`
+| Source wallet for the scheduled allowance top-up
+| Bot
+
+| `LNBITS_POINTS_LABEL`
+| Default reward-unit label (renamable in Settings)
+| Bot, Tabs
+
+| `REACT_APP_AAD_CLIENT_ID`, `REACT_APP_TENANT_ID`
+| MSAL configuration for the tabs SPA
+| Tabs
+
+| `WEBSITE_URL`, `CONTENT_URL`
+| Public URLs substituted into the Teams manifest by `build.js`
+| Manifest
+
+| `WEBSITE_API_URL`
+| Reward-name API base URL used by the bot
+| Bot
+|===
+
+Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
+never in tracked files.
+
+== Manifest and App Package
+
+`build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
+into `manifest.template.json`, auto-increments the patch version for Test/Prod,
+and writes `appPackage/manifest.json` (gitignored). The manifest declares the
+bot (personal/team/groupchat scopes with the four commands) and five static
+tabs (Feed, Users, Rewards, Wallet, Settings).

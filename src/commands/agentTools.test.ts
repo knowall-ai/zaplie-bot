@@ -4,7 +4,11 @@
 // agentTools itself.
 
 import { createReadOnlyTools } from './agentTools';
-import { getUserWallets, getWallets, getUsers } from '../services/lnbitsService';
+import {
+  getUserWallets,
+  getWallets,
+  getUsers,
+} from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
@@ -12,10 +16,14 @@ import { TurnContext } from 'botbuilder';
 jest.mock('../services/lnbitsService');
 jest.mock('../services/zapHistoryService');
 
-const mockGetUserWallets = getUserWallets as jest.MockedFunction<typeof getUserWallets>;
+const mockGetUserWallets = getUserWallets as jest.MockedFunction<
+  typeof getUserWallets
+>;
 const mockGetWallets = getWallets as jest.MockedFunction<typeof getWallets>;
 const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
-const mockGetRecentZaps = getRecentZaps as jest.MockedFunction<typeof getRecentZaps>;
+const mockGetRecentZaps = getRecentZaps as jest.MockedFunction<
+  typeof getRecentZaps
+>;
 
 const currentUser: User = {
   id: 'user-1',
@@ -57,7 +65,9 @@ describe('agentTools', () => {
         wallet({ name: 'Private', balance_msat: 50000 }),
       ]);
 
-      const tool = createReadOnlyTools().find(t => t.name === 'get_my_balance')!;
+      const tool = createReadOnlyTools().find(
+        t => t.name === 'get_my_balance',
+      )!;
       const result: any = await tool.handler({}, makeTurnContext(currentUser));
 
       expect(result.wallets).toEqual([
@@ -65,21 +75,32 @@ describe('agentTools', () => {
         { name: 'Private', balanceSats: 50 },
       ]);
     });
-
   });
 
   describe('get_leaderboard', () => {
     test('ranks teammates by Private wallet balance, descending', async () => {
       mockGetWallets.mockResolvedValue([
-        wallet({ id: 'w-bob', name: 'Private', user: 'user-bob', balance_msat: 500000 }),
-        wallet({ id: 'w-alice', name: 'Private', user: 'user-alice', balance_msat: 1500000 }),
+        wallet({
+          id: 'w-bob',
+          name: 'Private',
+          user: 'user-bob',
+          balance_msat: 500000,
+        }),
+        wallet({
+          id: 'w-alice',
+          name: 'Private',
+          user: 'user-alice',
+          balance_msat: 1500000,
+        }),
       ]);
       mockGetUsers.mockResolvedValue([
         { ...currentUser, id: 'user-bob', displayName: 'Bob' },
         { ...currentUser, id: 'user-alice', displayName: 'Alice' },
       ]);
 
-      const tool = createReadOnlyTools().find(t => t.name === 'get_leaderboard')!;
+      const tool = createReadOnlyTools().find(
+        t => t.name === 'get_leaderboard',
+      )!;
       const result: any = await tool.handler({}, makeTurnContext(currentUser));
 
       expect(result.leaderboard).toEqual([
@@ -101,7 +122,9 @@ describe('agentTools', () => {
         },
       ]);
 
-      const tool = createReadOnlyTools().find(t => t.name === 'get_recent_activity')!;
+      const tool = createReadOnlyTools().find(
+        t => t.name === 'get_recent_activity',
+      )!;
       const result: any = await tool.handler(
         { limit: 10, onlyInvolvingMe: true },
         makeTurnContext(currentUser),
@@ -125,7 +148,9 @@ describe('agentTools', () => {
     test('clamps limit to [1, 50] and defaults to 20', async () => {
       mockGetRecentZaps.mockResolvedValue([]);
 
-      const tool = createReadOnlyTools().find(t => t.name === 'get_recent_activity')!;
+      const tool = createReadOnlyTools().find(
+        t => t.name === 'get_recent_activity',
+      )!;
 
       await tool.handler({ limit: 500 }, makeTurnContext(currentUser));
       expect(mockGetRecentZaps).toHaveBeenLastCalledWith({

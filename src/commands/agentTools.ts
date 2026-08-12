@@ -5,7 +5,11 @@
 
 import { TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
-import { getUserWallets, getWallets, getUsers } from '../services/lnbitsService';
+import {
+  getUserWallets,
+  getWallets,
+  getUsers,
+} from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
@@ -32,14 +36,17 @@ const getMyBalanceTool: ToolDefinition = {
 
 const getLeaderboardTool: ToolDefinition = {
   name: 'get_leaderboard',
-  description: "Get the team leaderboard, ranked by each teammate's Private wallet balance.",
+  description:
+    "Get the team leaderboard, ranked by each teammate's Private wallet balance.",
   parameters: { type: 'object', properties: {}, required: [] },
   handler: async () => {
     const [privateWallets, users] = await Promise.all([
       getWallets(adminKey, 'Private'),
       getUsers(adminKey, null),
     ]);
-    const displayNameByUserId = new Map(users.map(user => [user.id, user.displayName]));
+    const displayNameByUserId = new Map(
+      users.map(user => [user.id, user.displayName]),
+    );
     const leaderboard = privateWallets
       .map(wallet => ({
         displayName: displayNameByUserId.get(wallet.user) ?? 'Unknown',
@@ -60,7 +67,8 @@ const getRecentActivityTool: ToolDefinition = {
     properties: {
       limit: {
         type: 'number',
-        description: 'Max number of recent zaps to return. Defaults to 20, capped at 50.',
+        description:
+          'Max number of recent zaps to return. Defaults to 20, capped at 50.',
       },
       onlyInvolvingMe: {
         type: 'boolean',
@@ -70,10 +78,15 @@ const getRecentActivityTool: ToolDefinition = {
     },
     required: [],
   },
-  handler: async (args: { limit?: number; onlyInvolvingMe?: boolean }, turnContext: TurnContext) => {
+  handler: async (
+    args: { limit?: number; onlyInvolvingMe?: boolean },
+    turnContext: TurnContext,
+  ) => {
     const user = turnContext.turnState.get('user') as User;
     const limit =
-      typeof args.limit === 'number' ? Math.min(Math.max(args.limit, 1), 50) : 20;
+      typeof args.limit === 'number'
+        ? Math.min(Math.max(args.limit, 1), 50)
+        : 20;
     const activity = await getRecentZaps({
       limit,
       userAadObjectId: args.onlyInvolvingMe ? user.aadObjectId : undefined,

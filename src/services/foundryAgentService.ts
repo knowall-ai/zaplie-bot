@@ -91,7 +91,8 @@ function ensureAgent(tools: ToolDefinition[]): Promise<void> {
         await project.agents.update(AGENT_NAME, definition as any);
       } catch (error: any) {
         const notFound =
-          error?.statusCode === 404 || /does not exist/i.test(error?.message ?? '');
+          error?.statusCode === 404 ||
+          /does not exist/i.test(error?.message ?? '');
         if (!notFound) throw error;
         await project.agents.create(AGENT_NAME, definition as any);
       }
@@ -126,7 +127,10 @@ export async function runConversationalTurn(
 
   const toolsByName = new Map(tools.map(tool => [tool.name, tool]));
 
-  const runToolCall = async (call: any, context: TurnContext): Promise<string> => {
+  const runToolCall = async (
+    call: any,
+    context: TurnContext,
+  ): Promise<string> => {
     const tool = toolsByName.get(call.name);
     if (!tool) {
       throw new Error(
@@ -159,7 +163,11 @@ export async function runConversationalTurn(
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response: any = await (openai as any).responses.create(
       { input: nextInput, conversation: conversationId },
-      { body: { agent_reference: { name: AGENT_NAME, type: 'agent_reference' } } },
+      {
+        body: {
+          agent_reference: { name: AGENT_NAME, type: 'agent_reference' },
+        },
+      },
     );
 
     const functionCalls = (response.output || []).filter(

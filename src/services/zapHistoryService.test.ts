@@ -11,7 +11,9 @@ import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 jest.mock('./lnbitsService');
 
 const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
-const mockGetUserWallets = getUserWallets as jest.MockedFunction<typeof getUserWallets>;
+const mockGetUserWallets = getUserWallets as jest.MockedFunction<
+  typeof getUserWallets
+>;
 const mockGetPayments = getPayments as jest.MockedFunction<typeof getPayments>;
 
 const alice: User = {
@@ -87,8 +89,8 @@ const setupUsersAndWallets = () => {
     if (userId === bob.id) return [bobAllowance, bobPrivate];
     return [];
   });
-  mockGetPayments.mockImplementation(async (inKey: string) =>
-    (walletsByInkey[inKey] || []) as any,
+  mockGetPayments.mockImplementation(
+    async (inKey: string) => (walletsByInkey[inKey] || []) as any,
   );
 };
 
@@ -297,14 +299,50 @@ describe('zapHistoryService', () => {
 
   test('sorts newest first and respects limit', async () => {
     walletsByInkey[aliceAllowance.inkey] = [
-      tx({ checking_id: 'z1', amount: -1000, memo: 'first', time: 100, wallet_id: aliceAllowance.id }),
-      tx({ checking_id: 'z2', amount: -1000, memo: 'second', time: 200, wallet_id: aliceAllowance.id }),
-      tx({ checking_id: 'z3', amount: -1000, memo: 'third', time: 300, wallet_id: aliceAllowance.id }),
+      tx({
+        checking_id: 'z1',
+        amount: -1000,
+        memo: 'first',
+        time: 100,
+        wallet_id: aliceAllowance.id,
+      }),
+      tx({
+        checking_id: 'z2',
+        amount: -1000,
+        memo: 'second',
+        time: 200,
+        wallet_id: aliceAllowance.id,
+      }),
+      tx({
+        checking_id: 'z3',
+        amount: -1000,
+        memo: 'third',
+        time: 300,
+        wallet_id: aliceAllowance.id,
+      }),
     ];
     walletsByInkey[bobPrivate.inkey] = [
-      tx({ checking_id: 'internal_z1', amount: 1000, memo: 'first', time: 100, wallet_id: bobPrivate.id }),
-      tx({ checking_id: 'internal_z2', amount: 1000, memo: 'second', time: 200, wallet_id: bobPrivate.id }),
-      tx({ checking_id: 'internal_z3', amount: 1000, memo: 'third', time: 300, wallet_id: bobPrivate.id }),
+      tx({
+        checking_id: 'internal_z1',
+        amount: 1000,
+        memo: 'first',
+        time: 100,
+        wallet_id: bobPrivate.id,
+      }),
+      tx({
+        checking_id: 'internal_z2',
+        amount: 1000,
+        memo: 'second',
+        time: 200,
+        wallet_id: bobPrivate.id,
+      }),
+      tx({
+        checking_id: 'internal_z3',
+        amount: 1000,
+        memo: 'third',
+        time: 300,
+        wallet_id: bobPrivate.id,
+      }),
     ];
 
     const result = await getRecentZaps({ limit: 2 });

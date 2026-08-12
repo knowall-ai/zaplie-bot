@@ -12,15 +12,17 @@ export const RewardNameContext = createContext<RewardNameContextProps>({
   setRewardName: () => {},
 });
 
-export const RewardNameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const RewardNameProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [rewardName, setRewardName] = useState<string>('');
 
   useEffect(() => {
     const fetchRewardName = async () => {
       try {
         const data = await getRewardName();
-        console.log("Fetched Reward Name:", data); // Debugging log
-        setRewardName(data?.rewardName || 'sats' ); // Fallback in case of missing data
+        console.log('Fetched Reward Name:', data); // Debugging log
+        setRewardName(data?.rewardName || 'sats'); // Fallback in case of missing data
       } catch (error) {
         console.error('Error fetching reward name:', error);
       }

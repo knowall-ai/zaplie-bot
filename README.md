@@ -42,18 +42,10 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 
 ## Prerequisite to starting development
 
-- [Node.js](https://nodejs.org/), supported versions: 18
+- [Node.js](https://nodejs.org/), supported versions: 24
 - A Microsoft 365 tenant in which you have permission to upload Teams apps (where other developers have not been deploying the same bot with a matching ID). You may be able to get a free Microsoft 365 developer tenant by joining the [Microsoft 365 developer program](https://developer.microsoft.com/en-us/microsoft-365/dev-program). However, it seems recently Microsoft have removed this offering other than to users who have a Visual Studio Enterprise subscription, (see [Creating a Free Microsoft 365 Dev Tenant is Not Possible](https://o365reports.com/2024/03/14/creating-a-free-microsoft-365-e5-developer-tenant-is-no-longer-possible/)) and now advise creating a "single-license development tenant" (see steps in `Wiki` > `Setup` > `Microsoft development tenant`).
 - [Teams Toolkit Visual Studio Code Extension](https://aka.ms/teams-toolkit) version 5.0.0 and higher or [TeamsFx CLI](https://aka.ms/teams-toolkit-cli). You should be prompted to install this when you open the solution in VS Code.
 - [LNbits](https://www.lnbits.com) version 0.12 or higher. NB For development you can use the developer instance specified in `.env.dev`, or create your own instance, as specified in `Wiki` > `Setup` > `LNbits`.
-
-> Note: If you are using node 20, you can add following snippet in package.json to remove the warning of incompatibility. (Related discussion: https://github.com/microsoft/botbuilder-js/issues/4550)
-
-```
-"overrides": {
-  "@azure/msal-node": "^2.6.0"
-}
-```
 
 ## Running Zaplie bot
 
@@ -97,6 +89,38 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 1. Navigate to tabs folder using `cd tabs`
 2. Install the packages using `npm install`
 3. Run the application using `npm start`
+
+## Code Quality
+
+This project uses ESLint and Prettier to maintain code quality and consistent formatting. Quality checks run automatically on all pull requests to the `main` branch.
+
+### Available Scripts
+
+**Bot/Backend (root directory):**
+```bash
+npm run lint          # Run ESLint
+npm run lint:fix      # Auto-fix lint issues
+npm run format        # Format code with Prettier
+npm run format:check  # Check formatting without changes
+npm run typecheck     # Run TypeScript type checking
+```
+
+**Frontend/Tabs (`tabs/` directory):**
+```bash
+npm run lint          # Run ESLint
+npm run lint:fix      # Auto-fix lint issues
+npm run format        # Format code with Prettier
+npm run format:check  # Check formatting without changes
+npm run typecheck     # Run TypeScript type checking
+```
+
+### CI Pipeline
+
+The CI workflow (`.github/workflows/ci-quality-checks.yml`) runs on every push and PR to `main`:
+1. **Linting** - ESLint checks for both bot and tabs
+2. **Formatting** - Prettier validation
+3. **Type Checking** - TypeScript compilation checks for both bot and tabs
+4. **Build Verification** - Ensures both projects build successfully
 
 # Get in touch
 

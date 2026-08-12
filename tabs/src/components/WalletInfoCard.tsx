@@ -9,9 +9,7 @@ import { RewardNameContext } from './RewardNameContext';
 
 const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
 
-
 const WalletYourWalletInfoCard: React.FC = () => {
-
   const [balance, setBalance] = useState<number>();
 
   const [isReceivePopupOpen, setIsReceivePopupOpen] = useState(false);
@@ -36,7 +34,7 @@ const WalletYourWalletInfoCard: React.FC = () => {
       if (userWallets && userWallets.length > 0) {
         // Find the Private wallet
         const privateWallet = userWallets.find(w =>
-          w.name.toLowerCase().includes('private')
+          w.name.toLowerCase().includes('private'),
         );
 
         if (privateWallet) {
@@ -75,7 +73,7 @@ const WalletYourWalletInfoCard: React.FC = () => {
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
   }
-const rewardsName = rewardNameContext.rewardName;
+  const rewardsName = rewardNameContext.rewardName;
 
   // Buttons should be disabled if balance is undefined (still loading)
   const isLoading = false; // balance === undefined;

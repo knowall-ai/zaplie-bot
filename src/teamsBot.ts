@@ -1,4 +1,3 @@
-/// <reference path="./types/global.d.ts" />
 import {
   TeamsActivityHandler,
   TurnContext,
@@ -8,48 +7,47 @@ import {
   UserState,
   StatePropertyAccessor,
   CardFactory,
-  MessageFactory
+  MessageFactory,
 } from 'botbuilder';
-import {  SSOCommandMap } from './commands/SSOCommandMap';
+import { SSOCommandMap } from './commands/SSOCommandMap';
 import { SendZapCommand, SendZap } from './commands/sendZapCommand';
+import { ZapLedger, zapKey } from './services/zapLedger';
+import {
+  getPendingRecipientIds,
+  hasUnknownRecipientOutcome,
+  normalizeRecipientIds,
+  processZapRecipient,
+  validateSelfZap,
+} from './commands/zapRecipient';
 import { validateZapSubmit } from './commands/zapBudget';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createReadOnlyTools } from './commands/agentTools';
-import {
-  getUser,
-  getWalletBalance,
-} from './services/lnbitsService';
+import { getUser, getWalletBalance } from './services/lnbitsService';
 
 const UNRECOGNIZED_COMMAND_MESSAGE =
   "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
 
 //Reward Name Constants
 
-import { getRewardName } from './services/fetchRewardsName';
-
-let globalRewardName: string;
-
-(async () => {
-  globalRewardName = await getRewardName();
-  console.log(`Reward Name is `, JSON.stringify(globalRewardName));
-})();
-
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
-
-interface CancellationToken {
-  isCancellationRequested: boolean;
+const globalRewardName: string = process.env.LNBITS_POINTS_LABEL as string;
+if (!globalRewardName) {
+  throw new Error(
+    'LNBITS_POINTS_LABEL is not set. Configure it in env/.env.dev (propagated to the bot by scripts/writeEnv.js).',
+  );
 }
 
-let userSetupFlag = false;
+const adminKey = process.env.LNBITS_ADMINKEY as string;
 
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
   userState: UserState;
   foundryConversationIdAccessor: StatePropertyAccessor<string | undefined>;
+  // Best-effort, single-process protection against paying a recipient twice
+  // from the same card. Not durable: see the note in zapLedger.ts.
+  private zapLedger = new ZapLedger();
 
   constructor() {
     super();
@@ -84,11 +82,13 @@ export class TeamsBot extends TeamsActivityHandler {
       try {
         let textMessage = context.activity.text || '';
         const mentions = TurnContext.getMentions(context.activity);
-    
+
         // Check if the bot is mentioned
-        const botMentioned = mentions.some(mention => mention.mentioned.id === botId);
-    
-        let failedRecipients: string[] = [];
+        const botMentioned = mentions.some(
+          mention => mention.mentioned.id === botId,
+        );
+
+        const failedRecipients: string[] = [];
 
         if (botMentioned) {
           // Remove the mention from the text
@@ -98,69 +98,144 @@ export class TeamsBot extends TeamsActivityHandler {
             }
           });
         }
-    
+
         if (
           context.activity.value &&
           context.activity.value.action === 'submitZaps'
         ) {
-          const currentUser = context.turnState.get('user');
-    
-          let receiverIds = context.activity.value.zapReceiverId;
-          if (typeof receiverIds === 'string' && receiverIds.indexOf(',') > -1) {
-            receiverIds = receiverIds.split(',').map((id: string) => id.trim());
-          } else if (typeof receiverIds === 'string') {
-            receiverIds = [receiverIds];
+          const cardId = context.activity.replyToId;
+          // Without a card id there is nothing to key the ledger on, so a
+          // double submit could not be told apart from a legitimate one.
+          if (!cardId) {
+            await context.sendActivity(
+              'That zap card cannot be identified, so it was not submitted. Please start a new zap.',
+            );
+            return;
           }
-    
+          const keyFor = (recipientId: string) =>
+            zapKey({
+              tenantId: context.activity.conversation.tenantId,
+              conversationId: context.activity.conversation.id,
+              cardId,
+              recipientId,
+            });
+
+          const currentUser: User | undefined = context.turnState.get('user');
+          const receiverIds = normalizeRecipientIds(
+            context.activity.value.zapReceiverId,
+          );
+
           const zapMessage = context.activity.value.zapMessage;
           const zapAmount = context.activity.value.zapAmount;
-    
-          if (!currentUser.allowanceWallet.id) {
+
+          const sendingWallet = currentUser?.allowanceWallet;
+          if (!currentUser || (!currentUser.id && !currentUser.aadObjectId)) {
+            throw new Error(
+              'Could not verify your sender identity, so no zaps were sent.',
+            );
+          }
+          if (
+            !sendingWallet?.id ||
+            !sendingWallet.inkey ||
+            !sendingWallet.adminkey
+          ) {
             throw new Error('No sending wallet found.');
           }
 
-          const liveBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
+          if (receiverIds.length === 0) {
+            throw new Error(
+              'No valid recipients were selected, so no zaps were sent.',
+            );
+          }
+
+          if (currentUser.id && receiverIds.includes(currentUser.id)) {
+            throw new Error('You cannot zap yourself, so no zaps were sent.');
+          }
+
+          const pendingReceiverIds = getPendingRecipientIds(
+            this.zapLedger,
+            receiverIds,
+            keyFor,
+          );
+          const handledSubmitMessage = () =>
+            hasUnknownRecipientOutcome(this.zapLedger, receiverIds, keyFor)
+              ? 'One or more payments from this zap still need checking, so nothing was retried.'
+              : 'That zap card was already submitted, so nothing was sent again.';
+          if (pendingReceiverIds.length === 0) {
+            await context.sendActivity(handledSubmitMessage());
+            return;
+          }
+
+          const liveBalance = await getWalletBalance(sendingWallet.inkey);
           const amount = validateZapSubmit(
             zapAmount,
-            receiverIds.length,
+            pendingReceiverIds.length,
             liveBalance,
             globalRewardName,
           );
 
-          let successfulRecipients: string[] = [];
-    
-          for (const recId of receiverIds) {
-            const receiver = await getUser(adminKey, recId);
-    
-            if (!receiver.privateWallet) {
-              //throw new Error('Receiver wallet not found.');
-              failedRecipients.push(receiver.displayName || `User ID: ${recId}`);
-              continue;
+          const successfulRecipients: string[] = [];
+          const alreadyHandled: string[] = [];
+
+          for (const recId of pendingReceiverIds) {
+            const outcome = await processZapRecipient({
+              ledger: this.zapLedger,
+              entryKey: keyFor(recId),
+              recipientId: recId,
+              getReceiver: () => getUser(adminKey, recId),
+              validateReceiver: receiver =>
+                validateSelfZap(currentUser, receiver),
+              pay: receiver =>
+                SendZap(
+                  currentUser,
+                  receiver as User,
+                  zapMessage,
+                  amount,
+                  context,
+                  false,
+                  globalRewardName,
+                ),
+            });
+
+            if (outcome.status === 'skipped') {
+              alreadyHandled.push(recId);
+            } else if (outcome.status === 'paid') {
+              successfulRecipients.push(outcome.label);
+            } else if (outcome.status === 'needs-checking') {
+              failedRecipients.push(`${outcome.label} (needs checking)`);
+            } else {
+              failedRecipients.push(outcome.label);
             }
-    
-            await SendZap(
-              currentUser,
-              receiver,
-              zapMessage,
-              amount,
-              context,
-              false,
-              globalRewardName
+          }
+
+          // Every recipient was skipped, so this is a duplicate submit and
+          // there is nothing new to report.
+          if (alreadyHandled.length === pendingReceiverIds.length) {
+            await context.sendActivity(handledSubmitMessage());
+            return;
+          }
+
+          // Nothing was paid this time: the card must not turn green.
+          if (successfulRecipients.length === 0) {
+            await context.sendActivity(
+              `No zaps were sent. Could not complete: ${failedRecipients.join(', ')}`,
             );
-    
-            successfulRecipients.push(receiver.displayName);
+            return;
           }
           const bulletReceivers = successfulRecipients
-            .map((name) => `- ${name}`)
+            .map(name => `- ${name}`)
             .join('\n');
 
-            const bulletFailed = failedRecipients.length ? failedRecipients.map((name) => `- ${name}`).join('\n') : 'None';
+          const bulletFailed = failedRecipients.length
+            ? failedRecipients.map(name => `- ${name}`).join('\n')
+            : 'None';
 
           //fetch remainingBalance
-          const remainingBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
+          const remainingBalance = await getWalletBalance(
+            currentUser.allowanceWallet.inkey,
+          );
           console.log('Remaining Balance:', remainingBalance);
-          
-          // Assuming zapAmount is the amount sent to each receiver
+
           const totalAmountSent = successfulRecipients.length * amount;
 
           // Update adaptive card to read-only with list of recipients
@@ -177,7 +252,7 @@ export class TeamsBot extends TeamsActivityHandler {
               {
                 type: 'TextBlock',
                 text: `**Successful Receivers:**\n${bulletReceivers}`,
-                wrap: true
+                wrap: true,
               },
               ...(failedRecipients.length > 0
                 ? [
@@ -192,14 +267,14 @@ export class TeamsBot extends TeamsActivityHandler {
               {
                 type: 'TextBlock',
                 text: `**Message:** ${zapMessage}`,
-                wrap: true
+                wrap: true,
               },
               {
                 type: 'TextBlock',
-                text: `**Amount (${globalRewardName}):** ${zapAmount}`,
-                wrap: true
+                text: `**Amount (${globalRewardName}):** ${amount}`,
+                wrap: true,
               },
-              
+
               {
                 type: 'TextBlock',
                 text: `Total Amount (Sats): ${totalAmountSent}`,
@@ -216,46 +291,46 @@ export class TeamsBot extends TeamsActivityHandler {
             $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
             version: '1.2',
           };
-    
-          const updatedMessage = MessageFactory.attachment(CardFactory.adaptiveCard(updatedCard));
-          updatedMessage.id = context.activity.replyToId;
-          await context.updateActivity(updatedMessage); 
-          await context.sendActivity(
-            `Awesome! You sent ${context.activity.value.zapAmount} ${globalRewardName} to your colleague with a zap!`,
-          );
 
+          const updatedMessage = MessageFactory.attachment(
+            CardFactory.adaptiveCard(updatedCard),
+          );
+          updatedMessage.id = context.activity.replyToId;
+          await context.updateActivity(updatedMessage);
+          await context.sendActivity(
+            `Awesome! You sent ${amount} ${globalRewardName} to your colleague with a zap!`,
+          );
         }
-    
+
         // Trigger command by IM text
         if (textMessage) {
           const command = SSOCommandMap.get(textMessage.toLowerCase());
           if (command) {
             await command.execute(context);
-          } else if (context.activity.conversation.conversationType === 'personal') {
+          } else if (
+            context.activity.conversation.conversationType === 'personal'
+          ) {
             // Free text with no exact command match falls back to the
-            // conversational agent, but only in 1:1 chats — ConversationState
+            // conversational agent, but only in 1:1 chats: ConversationState
             // (and therefore the Foundry conversation) is keyed per
-            // conversation, so a team/groupchat would otherwise share one
+            // conversation, so a team or groupchat would otherwise share one
             // agent thread across unrelated teammates.
             await this.replyConversationally(context, textMessage);
           } else {
             await context.sendActivity(UNRECOGNIZED_COMMAND_MESSAGE);
           }
         }
-        } catch (error) {
-          console.error('Error in onMessage handler:', error.message);
-          await context.sendActivity(
-            `${error.message}`,
-          );
-        }  
+      } catch (error) {
+        console.error('Error in onMessage handler:', error.message);
+        await context.sendActivity(`${error.message}`);
+      }
 
-        await next();
-        });
+      await next();
+    });
 
     //this.onMembersAdded(async (context, next) => {
-    this.onCommand(async (context, next) => {
-    ;
-  })}
+    this.onCommand(async (_context, _next) => {});
+  }
 
   async run(context: TurnContext) {
     try {
@@ -285,8 +360,13 @@ export class TeamsBot extends TeamsActivityHandler {
         createReadOnlyTools(),
         context,
       );
-      await this.foundryConversationIdAccessor.set(context, result.foundryConversationId);
-      await context.sendActivity(result.replyText || UNRECOGNIZED_COMMAND_MESSAGE);
+      await this.foundryConversationIdAccessor.set(
+        context,
+        result.foundryConversationId,
+      );
+      await context.sendActivity(
+        result.replyText || UNRECOGNIZED_COMMAND_MESSAGE,
+      );
     } catch (error) {
       // A failed turn can leave a dangling/invalid Foundry conversation id; clear
       // it so the next message starts fresh. Then rethrow — a broken agent must
@@ -297,8 +377,8 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   async handleTeamsSigninVerifyState(
-    context: TurnContext,
-    query: SigninStateVerificationQuery,
+    _context: TurnContext,
+    _query: SigninStateVerificationQuery,
   ) {
     try {
       console.log(
@@ -311,8 +391,8 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   async handleTeamsSigninTokenExchange(
-    context: TurnContext,
-    query: SigninStateVerificationQuery,
+    _context: TurnContext,
+    _query: SigninStateVerificationQuery,
   ) {
     try {
       // Your logic here for handling token exchange
