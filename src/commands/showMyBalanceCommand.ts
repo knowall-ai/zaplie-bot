@@ -1,21 +1,6 @@
-import { SSOCommand, SSOCommandMap } from './SSOCommandMap';
-import {
-  TeamsActivityHandler,
-  TurnContext,
-  SigninStateVerificationQuery,
-  MemoryStorage,
-  ConversationState,
-  UserState,
-  CardFactory,
-  Middleware,
-  MessageFactory,
-} from 'botbuilder';
-import {
-  payInvoice,
-  getWalletIdByUserId,
-  createInvoice,
-  getUserWallets,
-} from '../services/lnbitsService';
+import { SSOCommand } from './SSOCommandMap';
+import { TurnContext } from 'botbuilder';
+import { getUserWallets } from '../services/lnbitsService';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 

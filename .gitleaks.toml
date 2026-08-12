@@ -1,0 +1,40 @@
+title = "zaplie-bot gitleaks configuration"
+
+# Start from gitleaks' built-in default ruleset (AWS keys, GitHub tokens,
+# private keys, generic secrets, etc.) and extend it with LNbits-specific rules.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Custom rules — LNbits-shaped secrets
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "lnbits-admin-key-assignment"
+description = "LNbits admin/invoice key assigned to a 32-char lowercase hex value"
+# Matches e.g.  LNBITS_ADMINKEY=1d5658a73ecf426d9039b6c5f30a3de5
+#               lnbits_admin_key: "1d5658a73ecf426d9039b6c5f30a3de5"
+regex = '''(?i)(lnbits[_-]?(admin|invoice|in)?[_-]?key|LNBITS_ADMINKEY)\s*[:=]\s*['"]?[a-f0-9]{32}['"]?'''
+keywords = ["lnbits"]
+
+[[rules]]
+id = "lnbits-hex-api-key-near-key-field"
+description = "32-char lowercase hex API key next to an adminkey/inkey/X-Api-Key field"
+# Matches e.g.  "adminkey": "1d5658a73ecf426d9039b6c5f30a3de5"
+#               X-Api-Key: 1d5658a73ecf426d9039b6c5f30a3de5
+regex = '''(?i)(adminkey|inkey|x-api-key)['"]?\s*[:=]\s*['"]?[a-f0-9]{32}['"]?'''
+keywords = ["adminkey", "inkey", "x-api-key"]
+
+# ---------------------------------------------------------------------------
+# Allowlist
+# ---------------------------------------------------------------------------
+[allowlist]
+description = "Ignore placeholder example env files and this config's own regex literals"
+# Placeholder/committed-by-design example env files carry only empty or dummy
+# values, so exempt them from scanning to avoid false positives.
+paths = [
+  '''(^|/)\.env\..*\.example$''',
+  '''(^|/)\.env\.example$''',
+  '''(^|/)\.env\.sample$''',
+  '''(^|/)\.gitleaks\.toml$''',
+]

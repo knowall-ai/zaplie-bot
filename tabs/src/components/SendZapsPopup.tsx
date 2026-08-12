@@ -2,7 +2,12 @@ import React, { useState, useEffect, useContext } from 'react';
 import styles from './SendZapsPopup.module.css';
 import { RewardNameContext } from './RewardNameContext';
 import { useCache } from '../utils/CacheContext';
-import { getUserWallets, createInvoice, payInvoice, getUsers } from '../services/lnbitsServiceLocal';
+import {
+  getUserWallets,
+  createInvoice,
+  payInvoice,
+  getUsers,
+} from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
 import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';
@@ -36,7 +41,10 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [users, setUsers] = useState<UserWithWallet[]>([]);
-  const [currentUserWallets, setCurrentUserWallets] = useState<{ allowance: Wallet | null; balance: number }>({
+  const [currentUserWallets, setCurrentUserWallets] = useState<{
+    allowance: Wallet | null;
+    balance: number;
+  }>({
     allowance: null,
     balance: 0,
   });
@@ -73,13 +81,19 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
         }
 
         // Fetch current user's wallet
-        const currentUserData = allUsers.find(u => u.aadObjectId === account.localAccountId);
+        const currentUserData = allUsers.find(
+          u => u.aadObjectId === account.localAccountId,
+        );
 
         if (currentUserData) {
           // Always fetch fresh wallet data to get accurate balance
           const wallets = await getUserWallets(adminKey, currentUserData.id);
-          const allowanceWallet = wallets?.find(w => w.name.toLowerCase().includes('allowance'));
-          const currentBalance = allowanceWallet ? allowanceWallet.balance_msat / 1000 : 0;
+          const allowanceWallet = wallets?.find(w =>
+            w.name.toLowerCase().includes('allowance'),
+          );
+          const currentBalance = allowanceWallet
+            ? allowanceWallet.balance_msat / 1000
+            : 0;
 
           setCurrentUserWallets({
             allowance: allowanceWallet || null,
@@ -88,7 +102,9 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
         }
 
         // Filter out current user - wallet fetching happens on user selection
-        const otherUsers = allUsers.filter(u => u.aadObjectId !== account.localAccountId);
+        const otherUsers = allUsers.filter(
+          u => u.aadObjectId !== account.localAccountId,
+        );
 
         // Initialize users without wallet data - will fetch on selection
         const usersWithoutWallets: UserWithWallet[] = otherUsers.map(user => ({
@@ -168,7 +184,9 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
 
     // Balance validation
     if (zapAmount > currentUserWallets.balance) {
-      setError(`Insufficient balance. You have ${currentUserWallets.balance} ${rewardsName} available.`);
+      setError(
+        `Insufficient balance. You have ${currentUserWallets.balance} ${rewardsName} available.`,
+      );
       return;
     }
 
@@ -201,7 +219,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
         recipient.privateWallet.inkey,
         recipient.privateWallet.id,
         zapAmount,
-        paymentMemo
+        paymentMemo,
       );
 
       if (!paymentRequest) {
@@ -211,7 +229,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
       // Pay the invoice from sender's allowance wallet
       const result = await payInvoice(
         currentUserWallets.allowance.adminkey,
-        paymentRequest
+        paymentRequest,
       );
 
       if (result && result.payment_hash) {
@@ -274,7 +292,8 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
           <div className={styles.popupContent}>
             <h2 className={styles.title}>Send some zaps</h2>
             <p className={styles.text}>
-              Show gratitude, thanks and recognising awesomeness to others in your team
+              Show gratitude, thanks and recognising awesomeness to others in
+              your team
             </p>
 
             {/* Two Column Layout */}
@@ -284,40 +303,48 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
                 <div className={styles.formGroup}>
                   <select
                     value={selectedUser}
-                    onChange={(e) => handleUserSelect(e.target.value)}
+                    onChange={e => handleUserSelect(e.target.value)}
                     className={styles.select}
                     disabled={isLoadingUsers}
                   >
                     <option value="">
                       {isLoadingUsers ? 'Loading users...' : 'Send zaps to'}
                     </option>
-                    {!isLoadingUsers && users
-                      .filter((user) => {
-                        // Check if displayName exists and is not a GUID (32 hex chars)
-                        const isGuid = /^[a-f0-9]{32}$/i.test(user.displayName || '');
-                        const hasValidName = user.displayName && !isGuid;
-                        const hasEmail = user.email && user.email.includes('@');
-                        return hasValidName || hasEmail;
-                      })
-                      .map((user) => {
-                        // Check if displayName looks like a GUID
-                        const isGuid = /^[a-f0-9]{32}$/i.test(user.displayName || '');
-                        const displayText = (!user.displayName || isGuid)
-                          ? user.email
-                          : user.displayName;
-                        return (
-                          <option key={user.id} value={user.id}>
-                            {displayText || 'Unknown'}
-                          </option>
-                        );
-                      })}
+                    {!isLoadingUsers &&
+                      users
+                        .filter(user => {
+                          // Check if displayName exists and is not a GUID (32 hex chars)
+                          const isGuid = /^[a-f0-9]{32}$/i.test(
+                            user.displayName || '',
+                          );
+                          const hasValidName = user.displayName && !isGuid;
+                          const hasEmail =
+                            user.email && user.email.includes('@');
+                          return hasValidName || hasEmail;
+                        })
+                        .map(user => {
+                          // Check if displayName looks like a GUID
+                          const isGuid = /^[a-f0-9]{32}$/i.test(
+                            user.displayName || '',
+                          );
+                          const displayText =
+                            !user.displayName || isGuid
+                              ? user.email
+                              : user.displayName;
+                          return (
+                            <option key={user.id} value={user.id}>
+                              {displayText || 'Unknown'}
+                            </option>
+                          );
+                        })}
                   </select>
                 </div>
 
                 {/* User count info */}
                 {!isLoadingUsers && users.length > 0 && (
                   <p className={styles.balanceText}>
-                    {users.length} team member{users.length !== 1 ? 's' : ''} available
+                    {users.length} team member{users.length !== 1 ? 's' : ''}{' '}
+                    available
                   </p>
                 )}
               </div>
@@ -329,7 +356,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
                     <input
                       type="number"
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      onChange={e => setAmount(e.target.value)}
                       placeholder="Specify amount"
                       min="1"
                       className={styles.amountInput}
@@ -340,7 +367,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
 
                 {/* Preset Amount Buttons */}
                 <div className={styles.presetAmounts}>
-                  {PRESET_AMOUNTS.map((preset) => (
+                  {PRESET_AMOUNTS.map(preset => (
                     <button
                       key={preset}
                       type="button"
@@ -360,7 +387,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
                 <div className={styles.formGroup}>
                   <select
                     value={selectedValue}
-                    onChange={(e) => setSelectedValue(e.target.value)}
+                    onChange={e => setSelectedValue(e.target.value)}
                     className={styles.valueSelect}
                   >
                     <option value="">Value</option>
@@ -377,7 +404,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
             <div className={styles.formGroup}>
               <textarea
                 value={memo}
-                onChange={(e) => setMemo(e.target.value)}
+                onChange={e => setMemo(e.target.value)}
                 placeholder="Description"
                 className={styles.textarea}
                 rows={3}
@@ -386,7 +413,8 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
 
             {/* Balance Info */}
             <p className={styles.balanceText}>
-              Available balance: {currentUserWallets.balance.toLocaleString()} {rewardsName}
+              Available balance: {currentUserWallets.balance.toLocaleString()}{' '}
+              {rewardsName}
             </p>
 
             {/* Action Row */}
@@ -402,7 +430,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
                   <input
                     type="checkbox"
                     checked={sendAnonymously}
-                    onChange={(e) => setSendAnonymously(e.target.checked)}
+                    onChange={e => setSendAnonymously(e.target.checked)}
                     className={styles.checkbox}
                   />
                   Send anonymously
@@ -410,7 +438,11 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
 
                 <button
                   onClick={handleSendZap}
-                  className={isSendDisabled ? styles.sendButtonDisabled : styles.sendButton}
+                  className={
+                    isSendDisabled
+                      ? styles.sendButtonDisabled
+                      : styles.sendButton
+                  }
                   disabled={isSendDisabled}
                 >
                   Send
@@ -442,7 +474,9 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
             {paymentHash && (
               <div className={styles.transactionId}>
                 <span className={styles.transactionLabel}>Transaction ID:</span>
-                <span className={styles.transactionHash}>{paymentHash.substring(0, 16)}...</span>
+                <span className={styles.transactionHash}>
+                  {paymentHash.substring(0, 16)}...
+                </span>
               </div>
             )}
             <button className={styles.closeButton} onClick={handleClose}>
@@ -464,7 +498,10 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose, initialUserId })
               <div className={styles.popupText}>Failed to send zap</div>
             </div>
             <div className={styles.errorMessage}>{error}</div>
-            <button className={styles.closeButton} onClick={() => setError(null)}>
+            <button
+              className={styles.closeButton}
+              onClick={() => setError(null)}
+            >
               Try Again
             </button>
           </div>

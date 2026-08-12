@@ -1,4 +1,4 @@
-import { Middleware, TurnContext, TeamsInfo } from 'botbuilder';
+import { TurnContext, TeamsInfo } from 'botbuilder';
 import { UserService } from './userService';
 
 export class FetchUserMiddleware {
