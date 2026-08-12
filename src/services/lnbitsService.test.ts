@@ -181,6 +181,7 @@ describe('createInvoice', () => {
     });
   });
 
+  // createInvoice re-throws on a non-2xx response so callers can handle failures.
   test('rejects on a non-2xx response', async () => {
     fetchMock.mockImplementationOnce(async () =>
       jsonResponse({}, { status: 500 }),

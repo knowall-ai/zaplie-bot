@@ -2,68 +2,92 @@
 import {
   getAccessToken,
   getWallets,
-  getWalletBalance,
   getUserWallets,
   createInvoice,
   payInvoice,
 } from './lnbitsServiceLocal'; // Adjust the path if necessary
-import { expect, describe, test, beforeEach, jest } from '@jest/globals';
+import {
+  expect,
+  describe,
+  test,
+  beforeAll,
+  beforeEach,
+  jest,
+} from '@jest/globals';
 
+// Install a jest mock in place of the global fetch so tests can stub responses.
+global.fetch = jest.fn() as unknown as jest.MockedFunction<typeof fetch>;
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
+// Build a minimal Response-like object for a successful JSON reply.
+const jsonResponse = (body: unknown): Response =>
+  ({
+    ok: true,
+    headers: { get: () => 'application/json' },
+    json: async () => body,
+  }) as unknown as Response;
+
 describe('lnbitsServiceLocal Tests', () => {
-  const mockAccessToken: string = 'mockedAccessToken'; // Explicit type
-  const mockInKey: string = 'mockedInKey';
-  const mockAdminKey: string = 'mockedAdminKey';
-  const mockPaymentRequest: string = 'lnbc1...'; // Explicit type
+  const mockAccessToken = 'mockedAccessToken';
+  const mockInKey = 'mockedInKey';
+  const mockAdminKey = 'mockedAdminKey';
+  const mockPaymentRequest = 'lnbc1...';
   const mockPaymentResult: { payment_hash: string } = {
     payment_hash: '123abc',
-  }; // Explicit type
+  };
   const mockWallets: { id: string; name: string }[] = [
     { id: 'wallet1', name: 'testWallet' },
-  ]; // Explicit type
+  ];
   const mockUserWallets: { id: string; name: string }[] = [
     { id: 'wallet1', name: 'userWallet' },
-  ]; // Explicit type
+  ];
+
+  // Prime the in-memory access-token cache once. getAccessToken caches the token
+  // after the first successful request, so the remaining tests can focus on their
+  // own endpoint calls without each having to stub the auth round-trip.
+  beforeAll(async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ access_token: mockAccessToken }),
+    );
+    await getAccessToken('user', 'password');
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
-    localStorage.setItem('accessToken', mockAccessToken);
   });
 
-  test('getAccessToken should return the access token from localStorage', async () => {
+  test('getAccessToken returns the cached token without calling the API', async () => {
     const token = await getAccessToken('user', 'password');
     expect(token).toBe(mockAccessToken);
-    expect(fetch).not.toHaveBeenCalled(); // Should not make an API call if token is cached
+    expect(mockFetch).not.toHaveBeenCalled(); // Cached token, so no API call
   });
 
   test('getWallets should return a filtered list of wallets', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockWallets,
-    } as Response);
+    mockFetch.mockResolvedValueOnce(jsonResponse(mockWallets));
 
     const result = await getWallets();
     expect(result).toEqual(mockWallets);
-    expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+    );
   });
 
   test('getUserWallets should return user wallets', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockUserWallets,
-    } as Response);
+    mockFetch.mockResolvedValueOnce(jsonResponse(mockUserWallets));
 
     const result = await getUserWallets(mockAdminKey, 'userId');
-    expect(result).toEqual(mockUserWallets);
-    expect(fetch).toHaveBeenCalled();
+    // getUserWallets maps the raw response onto the Wallet interface, so assert
+    // on the identifying fields rather than a strict deep-equality match.
+    expect(result?.[0].id).toBe('wallet1');
+    expect(result?.[0].name).toBe('userWallet');
+    expect(mockFetch).toHaveBeenCalled();
   });
 
   test('createInvoice should create an invoice and return the payment request', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ payment_request: mockPaymentRequest }),
-    } as Response);
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ payment_request: mockPaymentRequest }),
+    );
 
     const paymentRequest = await createInvoice(
       mockInKey,
@@ -72,17 +96,14 @@ describe('lnbitsServiceLocal Tests', () => {
       'test memo',
     );
     expect(paymentRequest).toBe(mockPaymentRequest);
-    expect(fetch).toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalled();
   });
 
   test('payInvoice should resolve the payment successfully', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockPaymentResult,
-    } as Response);
+    mockFetch.mockResolvedValueOnce(jsonResponse(mockPaymentResult));
 
     const result = await payInvoice(mockAdminKey, 'paymentRequest');
     expect(result).toEqual(mockPaymentResult);
-    expect(fetch).toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalled();
   });
 });
