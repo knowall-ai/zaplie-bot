@@ -1,0 +1,53 @@
+name: Secret Scan (gitleaks)
+
+# Scans the commits introduced by a pull request for leaked secrets using the
+# gitleaks CLI and the repo's .gitleaks.toml (default rules + LNbits rules).
+#
+# Note: we invoke the gitleaks CLI directly rather than gitleaks/gitleaks-action@v2
+# because that action requires a paid GITLEAKS_LICENSE for GitHub organizations.
+# The CLI is license-free and keeps this a required, always-runnable check.
+# Only the PR's own commits are scanned (base..head) so pre-existing findings on
+# main are handled separately and don't block unrelated PRs.
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION=8.21.2
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan pull request commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
+          gitleaks detect \
+            --config .gitleaks.toml \
+            --source . \
+            --log-opts="${BASE_SHA}..${HEAD_SHA}" \
+            --redact \
+            --no-banner \
+            --verbose
