@@ -15,38 +15,48 @@ const router = express.Router();
 const STORE_PATH = path.join(__dirname, 'webhook-keys.json');
 
 const readStore = () => {
+  let raw;
   try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
+    raw = fs.readFileSync(STORE_PATH, 'utf8');
   } catch (error) {
-    console.error('Unable to read webhook keys store, serving empty store:', error.message);
-    return { keys: [] };
+    if (error.code === 'ENOENT') {
+      return { keys: [] };
+    }
+    throw error;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`webhook-keys.json is malformed: ${error.message}`);
   }
 };
 
-const writeStore = (store) => {
+const writeStore = store => {
   writeJsonSecure(STORE_PATH, store);
 };
 
-const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 
 // GET /api/webhook-keys/hashes — internal, called by the bot to validate
 // presented keys (same placeholder-token pattern as /api/automations, #171).
 router.get('/hashes', authMiddleware, (req, res) => {
   const hashes = readStore()
-    .keys.filter((key) => !key.revokedAt)
-    .map((key) => key.hash);
+    .keys.filter(key => !key.revokedAt)
+    .map(key => key.hash);
   res.json({ hashes });
 });
 
 // GET /api/webhook-keys — admin: key metadata, never the secret.
 router.get('/', requireAdmin, (req, res) => {
-  const keys = readStore().keys.map(({ id, label, last4, createdAt, revokedAt }) => ({
-    id,
-    label,
-    last4,
-    createdAt,
-    revokedAt,
-  }));
+  const keys = readStore().keys.map(
+    ({ id, label, last4, createdAt, revokedAt }) => ({
+      id,
+      label,
+      last4,
+      createdAt,
+      revokedAt,
+    }),
+  );
   res.json({ keys });
 });
 
@@ -81,7 +91,7 @@ router.post('/', requireAdmin, (req, res) => {
 // POST /api/webhook-keys/:id/revoke — admin: revoked keys stop working at once.
 router.post('/:id/revoke', requireAdmin, (req, res) => {
   const store = readStore();
-  const entry = store.keys.find((key) => key.id === req.params.id);
+  const entry = store.keys.find(key => key.id === req.params.id);
   if (!entry) {
     res.status(404).json({ error: 'unknown key' });
     return;
