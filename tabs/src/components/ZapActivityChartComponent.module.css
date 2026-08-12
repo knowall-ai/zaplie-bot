@@ -1,33 +1,33 @@
 .zapactivitychartbox {
-    display: flex;
-    flex: 1 1 400px;
-    max-width: 688px;
-    min-width: 0;
-    box-sizing: border-box;
-    padding: 20px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-    align-self: stretch;
+  display: flex;
+  flex: 6 1 0;
+  min-width: 380px;
+  box-sizing: border-box;
+  padding: 20px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  align-self: stretch;
 
-    border-radius: 4px;
-    background: var(--primary-background, #2D2B2C);
-    box-shadow: 0px 1px 2px 0px rgba(0, 0, 0, 0.14), 0px 0px 2px 0px rgba(0, 0, 0, 0.12);
-    height: 240px;
+  border-radius: 4px;
+  background: var(--primary-background, #2d2b2c);
+  box-shadow:
+    0px 1px 2px 0px rgba(0, 0, 0, 0.14),
+    0px 0px 2px 0px rgba(0, 0, 0, 0.12);
+  height: 240px;
 }
 
 .zapactivitycharttitle {
-    align-self: stretch;
-    text-align: left;
+  align-self: stretch;
+  text-align: left;
 
-    color: var(--primary-text, #FFF);
-    font-family: Inter;
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 700;
-    line-height: normal;
+  color: var(--primary-text, #fff);
+  font-family: Inter;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
 
-    padding: 0px;
-    margin: 0px 0px 10px 0px;
+  padding: 0px;
+  margin: 0px 0px 10px 0px;
 }
-
