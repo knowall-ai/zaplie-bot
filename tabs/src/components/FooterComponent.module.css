@@ -2,7 +2,11 @@
   position: fixed;
   bottom: 0;
   width: 100%;
-  background: linear-gradient(180deg, rgba(45, 43, 44, 0.95) 0%, rgba(35, 33, 34, 0.98) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(45, 43, 44, 0.95) 0%,
+    rgba(35, 33, 34, 0.98) 100%
+  );
   backdrop-filter: blur(10px);
   color: white;
   font-size: 12px;

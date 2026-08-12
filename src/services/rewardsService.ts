@@ -128,9 +128,7 @@ export async function payReward(
 
   const result = await payInvoice(treasuryAdminKey, paymentRequest, extra);
   if (!result || !result.payment_hash) {
-    throw new Error(
-      `paying reward invoice failed: ${JSON.stringify(result)}`,
-    );
+    throw new Error(`paying reward invoice failed: ${JSON.stringify(result)}`);
   }
   return { paymentHash: result.payment_hash };
 }

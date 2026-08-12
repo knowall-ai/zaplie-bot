@@ -1,0 +1,56 @@
+= Technical Solution Document
+Zaplie - Bitcoin Micro-Payments for Microsoft Teams
+:doctype: book
+:toc: left
+:toclevels: 2
+:sectlinks:
+:sectanchors:
+:sectnums!:
+:chapter-signifier:
+:source-highlighter: highlight.js
+:icons: font
+:imagesdir: images
+:pdf-theme: knowall
+:pdf-themesdir: ../themes
+
+include::includes/confidentiality.adoc[]
+
+<<<
+== Document Information
+
+[cols="1,2",options="header"]
+|===
+|Attribute |Value
+
+|Document Title |Technical Solution Document - Zaplie
+|Version |1.0
+|Status |Draft
+|Author |KnowAll AI Ltd
+|Project |zaplie-bot
+|===
+
+<<<
+== Document History
+
+include::includes/document-history.adoc[]
+
+<<<
+include::TERMS.adoc[]
+
+:sectnums:
+
+<<<
+include::SOLUTION_DESIGN.adoc[]
+
+<<<
+include::TESTING.adoc[]
+
+<<<
+include::DEPLOYMENT.adoc[]
+
+<<<
+[appendix]
+include::TROUBLESHOOTING.adoc[]
+
+[appendix]
+include::FAQS.adoc[]

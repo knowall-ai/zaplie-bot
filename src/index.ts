@@ -25,10 +25,18 @@ import {
 
 // Create adapter.
 // See https://aka.ms/about-bot-adapter to learn more about adapters.
+const tenantId = config.tenantId;
+if (!tenantId) {
+  throw new Error(
+    'AAD_APP_TENANT_ID is not set. A SingleTenant bot registration cannot authenticate without it.',
+  );
+}
+
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
   MicrosoftAppId: config.botId,
   MicrosoftAppPassword: config.botPassword,
-  MicrosoftAppType: 'MultiTenant',
+  MicrosoftAppType: 'SingleTenant',
+  MicrosoftAppTenantId: tenantId,
 });
 
 const botFrameworkAuthentication = new ConfigurationBotFrameworkAuthentication(
@@ -110,7 +118,9 @@ server.post('/api/messages', async (req, res) => {
 server.post('/api/v1/rewards', async (req, res) => {
   const expectedKey = process.env.REWARDS_API_KEY;
   if (!expectedKey) {
-    res.send(503, { error: 'rewards endpoint disabled: REWARDS_API_KEY is not set' });
+    res.send(503, {
+      error: 'rewards endpoint disabled: REWARDS_API_KEY is not set',
+    });
     return;
   }
   // Buffers, not strings: timingSafeEqual throws on byte-length mismatch.

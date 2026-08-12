@@ -1,0 +1,60 @@
+= Frequently Asked Questions
+:toc:
+
+== General
+
+=== What is a Zap?
+
+A Zap is a micro-payment of Sats (satoshis — the smallest unit of Bitcoin)
+sent to a colleague as recognition. Zaps move between LNbits wallets over the
+Bitcoin Lightning Network.
+
+=== Is this real money?
+
+Yes. Sats are real Bitcoin. Deployments typically fund wallets with small
+allowances, but LNbits keys must always be treated as production credentials.
+
+=== Can we call the reward something other than "Sats"?
+
+Yes — an administrator can rename the reward label on the Settings tab. The
+name is used by both the web tabs and the bot's replies.
+
+== Usage
+
+=== How do I send a Zap?
+
+Message the bot `send zap` in Teams, pick one or more recipients, add a
+message and an amount (1–10,000), and submit. The card updates in place with
+the result and your remaining balance.
+
+=== Why did sending to a colleague fail?
+
+Recipients must have interacted with the app at least once so their wallets
+exist. Failed recipients are listed on the result card — ask them to message
+the bot, then try again.
+
+=== Where do received Zaps go?
+
+Into your *Private* wallet (visible on the Wallet tab). Zaps you send are drawn
+from your *Allowance* wallet, which is periodically topped up.
+
+=== Can I withdraw my Sats?
+
+`withdraw my zaps` is not yet implemented — it is on the roadmap.
+
+== Technical
+
+=== Which LNbits version is required?
+
+LNbits 0.12 or higher, with the User Manager extension enabled.
+
+=== How are Teams users mapped to wallets?
+
+By the Entra ID (AAD) object id, stored as an extra field on the LNbits user.
+`FetchUserMiddleware` ensures the user and both wallets exist on every bot
+interaction.
+
+=== How do I report a security issue?
+
+Privately — see `SECURITY.md` (support@knowall.ai or Nostr DM). Do not open a
+public GitHub issue.

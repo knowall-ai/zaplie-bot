@@ -1,4 +1,4 @@
-import { TurnContext } from "botbuilder";
+import { TurnContext } from 'botbuilder';
 
 export abstract class SSOCommand {
   // Define abstract methods that need to be implemented by subclasses

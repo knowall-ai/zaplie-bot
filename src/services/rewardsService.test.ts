@@ -1,13 +1,5 @@
-import {
-  parseRewardRequest,
-  payReward,
-  RewardError,
-} from './rewardsService';
-import {
-  getUserWallets,
-  createInvoice,
-  payInvoice,
-} from './lnbitsService';
+import { parseRewardRequest, payReward, RewardError } from './rewardsService';
+import { getUserWallets, createInvoice, payInvoice } from './lnbitsService';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 
 jest.mock('./lnbitsService');
@@ -67,12 +59,14 @@ describe('parseRewardRequest', () => {
 
 describe('parseRewardRequest cap', () => {
   test('accepts amounts up to the default cap and honours REWARDS_MAX_AMOUNT_SATS', () => {
-    expect(parseRewardRequest({ ...validReward, amountSats: 10000 }).amountSats).toBe(10000);
+    expect(
+      parseRewardRequest({ ...validReward, amountSats: 10000 }).amountSats,
+    ).toBe(10000);
 
     process.env.REWARDS_MAX_AMOUNT_SATS = '500';
-    expect(() => parseRewardRequest({ ...validReward, amountSats: 501 })).toThrow(
-      'per-reward cap of 500',
-    );
+    expect(() =>
+      parseRewardRequest({ ...validReward, amountSats: 501 }),
+    ).toThrow('per-reward cap of 500');
     delete process.env.REWARDS_MAX_AMOUNT_SATS;
   });
 });
@@ -127,10 +121,9 @@ describe('payReward', () => {
 
   test('rejects Object.prototype key names as recipients with a 404', async () => {
     for (const recipient of ['constructor', 'toString', 'hasOwnProperty']) {
-      await expect(payReward({ ...validReward, recipient })).rejects.toHaveProperty(
-        'statusCode',
-        404,
-      );
+      await expect(
+        payReward({ ...validReward, recipient }),
+      ).rejects.toHaveProperty('statusCode', 404);
     }
     expect(mockedGetUserWallets).not.toHaveBeenCalled();
     expect(mockedPayInvoice).not.toHaveBeenCalled();

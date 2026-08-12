@@ -1,19 +1,27 @@
 // lnbitsService.ts
 
-/// <reference path="../../src/types/global.d.ts" />
-
 import dotenvFlow from 'dotenv-flow';
 
 dotenvFlow.config({ path: './env' });
-let globalWalletId: string | null = null;
-
 
 //import dotenv from 'dotenv';
 //dotenv.config();
 
-const lnbiturl = process.env.LNBITS_NODE_URL as string;
-const userName = process.env.LNBITS_USERNAME as string;
-const password = process.env.LNBITS_PASSWORD as string;
+// Resolved per call, not at import: test suites import this module before the
+// LNbits env is set, and a value captured at import would stay undefined.
+const requireEnv = (name: string): string => {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is not set`);
+  }
+  return value;
+};
+
+const lnbitsUrl = () => requireEnv('LNBITS_NODE_URL');
+const lnbitsCredentials = () => ({
+  userName: requireEnv('LNBITS_USERNAME'),
+  password: requireEnv('LNBITS_PASSWORD'),
+});
 //const adminkey = process.env.LNBITS_ADMINKEY as string; // This changes per wallet!
 
 // Store token in localStorage (persists between page reloads)
@@ -43,11 +51,14 @@ export async function getAccessToken(
 
   // No access token and no request in progress, create a new one
   console.log('No cached access token found, requesting a new one');
+  // Resolve required configuration before the request catch so a missing
+  // variable keeps its actionable name instead of becoming a generic error.
+  const nodeUrl = lnbitsUrl();
 
   // Store the promise of the request
   accessTokenPromise = (async (): Promise<string> => {
     try {
-      const response = await fetch(`${lnbiturl}/api/v1/auth`, {
+      const response = await fetch(`${nodeUrl}/api/v1/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,12 +119,13 @@ const getWallets = async (
   filterById?: string,
 ): Promise<Wallet[] | null> => {
   console.log(
-    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById})`,
+    `getWallets starting ... (filterByName: ${filterByName}, filterById: ${filterById}))`,
   );
 
   try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
+    const { userName, password } = lnbitsCredentials();
+    const accessToken = await getAccessToken(userName, password);
+    const response = await fetch(`${lnbitsUrl()}/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -151,12 +163,10 @@ const getWallets = async (
         user: filteredData.user,
         inkey: filteredData.inkey,
         // See: https://github.com/lnbits/lnbits/issues/2690
-        deleted: (
-          await getWalletById(filteredData.user, filteredData.id)
-        )?.deleted,
-        balance_msat: (
-          await getWalletById(filteredData.user, filteredData.id)
-        )?.balance_msat,
+        deleted: (await getWalletById(filteredData.user, filteredData.id))
+          ?.deleted,
+        balance_msat: (await getWalletById(filteredData.user, filteredData.id))
+          ?.balance_msat,
       })),
     );
 
@@ -173,15 +183,14 @@ const getWallets = async (
 const getUserWallets = async (
   adminKey: string,
   userId: string,
-): Promise<Wallet[] | null> => {
-  console.log(
-    `getUserWallets starting ... (userId: ${userId})`,
-  );
+): Promise<Wallet[]> => {
+  console.log(`getUserWallets starting ... (userId: ${userId})`);
 
   try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    const { userName, password } = lnbitsCredentials();
+    const accessToken = await getAccessToken(userName, password);
     const response = await fetch(
-      `${lnbiturl}/users/api/v1/user/${userId}/wallet`,
+      `${lnbitsUrl()}/users/api/v1/user/${userId}/wallet`,
       {
         method: 'GET',
         headers: {
@@ -201,7 +210,7 @@ const getUserWallets = async (
     const data: Wallet[] = await response.json();
 
     // Map the wallets to match the Wallet interface
-    let walletData: Wallet[] = data.map((wallet: any) => ({
+    const walletData: Wallet[] = data.map((wallet: any) => ({
       id: wallet.id,
       admin: null, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
       name: wallet.name,
@@ -224,153 +233,162 @@ const getUserWallets = async (
   }
 };
 
-// Note: LNbits v1+ core API doesn't provide user listing/filtering with custom metadata.
-// User management with custom metadata must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
+const adminFetch = async (
+  path: string,
+  init?: RequestInit,
+): Promise<Response> => {
+  const { userName, password } = lnbitsCredentials();
+  const accessToken = await getAccessToken(userName, password);
+  return fetch(`${lnbitsUrl()}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      ...init?.headers,
+    },
+  });
+};
+
+// The Azure AD object id is stored in the account's `external_id` (LNbits `extra`
+// is a fixed profile schema); the Allowance/Private wallets are matched by name.
+interface RawLnbitsUser {
+  id: string;
+  username?: string;
+  email?: string;
+  external_id?: string;
+  extra?: { display_name?: string; picture?: string } | null;
+}
+
+// The user list omits display_name, so derive a readable name from the email
+// local-part (e.g. "john.doe@acme.com" -> "John Doe").
+const prettifyName = (email: string): string =>
+  email
+    .split('@')[0]
+    .split('.')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const toUser = (
+  raw: RawLnbitsUser,
+  wallets: { allowanceWallet: Wallet | null; privateWallet: Wallet | null } = {
+    allowanceWallet: null,
+    privateWallet: null,
+  },
+): User => {
+  const extra = raw.extra || {};
+  return {
+    id: raw.id,
+    displayName:
+      extra.display_name ||
+      raw.username ||
+      (raw.email ? prettifyName(raw.email) : '') ||
+      raw.id,
+    profileImg: extra.picture || '',
+    aadObjectId: raw.external_id || '',
+    email: raw.email || raw.username || '',
+    allowanceWallet: wallets.allowanceWallet,
+    privateWallet: wallets.privateWallet,
+  };
+};
+
 const getUsers = async (
-  adminKey: string,
-  filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
-): Promise<User[] | null> => {
-  console.log(
-    `getUsers starting ... (filterByExtra: ${JSON.stringify(
-      filterByExtra,
-    )})`,
-  );
-
-  // LNbits v1+ core API doesn't support user listing with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'getUsers is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
+  filterByExtra: { [key: string]: string } | null,
+): Promise<User[]> => {
+  const aadObjectId = filterByExtra?.aadObjectId;
+  const query = aadObjectId
+    ? `?external_id=${encodeURIComponent(aadObjectId)}`
+    : '';
+  const response = await adminFetch(`/users/api/v1/user${query}`);
+  if (!response.ok) {
+    throw new Error(`Error getting users (status: ${response.status})`);
+  }
+  const body = await response.json();
+  const rawUsers: RawLnbitsUser[] = body.data;
+  return rawUsers.map(raw => toUser(raw));
 };
 
-// Note: LNbits v1+ core API doesn't provide user creation with custom metadata.
-// User creation must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
 const createUser = async (
-  adminKey: string,
-  userName: string,
-  walletName: string,
+  _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
+  displayName: string,
+  _walletName: string, // Unused: wallets are created separately via createWallet
   email: string,
-  password: string,
-  extra: { [key: string]: string }, // Ensure extra is an object, not a string
-): Promise<User | null> => {
-  console.log(
-    `createUser starting ... (userName: ${userName}, email: ${email}, extra: ${JSON.stringify(
-      extra,
-    )})`,
-  );
-
-  // LNbits v1+ core API doesn't support user creation with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'createUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  _legacyPassword: string, // Unused: passwords are not part of the v1.x Users API
+  extra: { [key: string]: string },
+): Promise<User> => {
+  const response = await adminFetch('/users/api/v1/user', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: email || undefined,
+      external_id: extra.aadObjectId,
+      extra: { display_name: displayName, picture: extra.profileImg },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Error creating user (status: ${response.status})`);
+  }
+  return toUser(await response.json());
 };
 
-// Note: LNbits v1+ core API doesn't provide user details with custom metadata.
-// User details must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
 const getUser = async (
   adminKey: string,
   userId: string,
 ): Promise<User | null> => {
-  console.log(
-    `getUser starting ... (userId: ${userId})`,
-  );
-
-  // LNbits v1+ core API doesn't support user details with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'getUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
+  if (!userId) {
+    return null;
+  }
+  const response = await adminFetch(`/users/api/v1/user/${userId}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Error getting user (status: ${response.status})`);
+  }
+  const raw: RawLnbitsUser = await response.json();
+  const wallets = await getUserWallets(adminKey, userId);
+  const byName = (name: string) =>
+    wallets.find(wallet => wallet.name === name) ?? null;
+  return toUser(raw, {
+    allowanceWallet: byName('Allowance'),
+    privateWallet: byName('Private'),
+  });
 };
 
-// Note: LNbits v1+ core API doesn't provide user updates with custom metadata.
-// User updates must be handled at the application layer.
-// This function is deprecated and should be replaced with application-level user management.
-const updateUser = async (
-  adminKey: string,
-  userId: string,
-  extra: { [key: string]: string }, // Ensure extra is an object, not a string
-): Promise<User | null> => {
-  console.log(
-    `updateUser starting ... (userId: ${userId}, extra: ${JSON.stringify(
-      extra,
-    )}))`,
-  );
-
-  // LNbits v1+ core API doesn't support user updates with custom metadata
-  // This functionality must be implemented at the application layer
-  throw new Error(
-    'updateUser is not supported by LNbits v1+ core API. Implement user management at application layer.',
-  );
-};
-
-// Note: LNbits v1+ core API uses /api/v1/wallet endpoint for wallet creation
-// Wallet creation is now done through the core API, not UserManager
 const createWallet = async (
-  adminKey: string,
+  _adminKey: string,
   userId: string,
   walletName: string,
-): Promise<Wallet | null> => {
-  console.log(
-    `createWallet starting ... (userId: ${userId}, walletName: ${walletName})`,
-  );
-
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-
-    // Prepare the request body
-    const requestBody = {
-      user_id: userId,
-      wallet_name: walletName,
-    };
-
-    const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error creating wallet (status: ${response.status})`);
-    }
-
-    const data = await response.json();
-
-    // Await the wallet promises
-    const walletWithBalance = await getWalletById(data.user, data.id);
-
-    // Map the wallet to match the Wallet interface
-    let walletData: Wallet = {
-      id: data.id,
-      admin: data.admin,
-      name: data.name,
-      adminkey: data.adminkey,
-      user: data.user,
-      inkey: data.inkey,
-      balance_msat: walletWithBalance?.balance_msat,
-      deleted: walletWithBalance?.deleted,
-    };
-
-
-    return walletData;
-  } catch (error) {
-    console.error(error);
-    return error;
+): Promise<Wallet> => {
+  // Admin creates the wallet under the target user. POST /api/v1/wallet ignores
+  // user_id and creates under the caller, so the per-user route is required.
+  const response = await adminFetch(`/users/api/v1/user/${userId}/wallet`, {
+    method: 'POST',
+    body: JSON.stringify({ name: walletName }),
+  });
+  if (!response.ok) {
+    throw new Error(`Error creating wallet (status: ${response.status})`);
   }
+  const data = await response.json();
+  const walletWithBalance = await getWalletById(data.user, data.id);
+  return {
+    id: data.id,
+    admin: data.admin,
+    name: data.name,
+    adminkey: data.adminkey,
+    user: data.user,
+    inkey: data.inkey,
+    // A freshly created wallet is empty and live; fall back to that if the
+    // balance lookup can't resolve it yet (eventual consistency).
+    balance_msat: walletWithBalance?.balance_msat ?? 0,
+    deleted: walletWithBalance?.deleted ?? false,
+  };
 };
 
 const getWalletDetails = async (inKey: string, walletId: string) => {
-  console.log(
-    `getWalletDetails starting ... (walletId: ${walletId})`,
-  );
+  console.log(`getWalletDetails starting ... (walletId: ${walletId}))`);
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/wallets/${walletId}`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/wallets/${walletId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -394,9 +412,9 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
 };
 
 const getWalletBalance = async (inKey: string) => {
-  console.log(`getWalletBalance starting ... (no key logged)`);
+  console.log('getWalletBalance starting ...');
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/wallet`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -422,10 +440,10 @@ const getWalletBalance = async (inKey: string) => {
 };
 
 const getWalletName = async (inKey: string) => {
-  console.log(`getWalletName starting ... (no key logged)`);
+  console.log('getWalletName starting ...');
 
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/wallet`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/wallet`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -447,10 +465,10 @@ const getWalletName = async (inKey: string) => {
 };
 
 const getPayments = async (inKey: string) => {
-  console.log(`getPayments starting ... (no key logged)`);
+  console.log('getPayments starting ...');
 
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/payments?limit=100`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/payments?limit=100`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -471,13 +489,11 @@ const getPayments = async (inKey: string) => {
 };
 
 const getWalletPayLinks = async (inKey: string, walletId: string) => {
-  console.log(
-    `getWalletPayLinks starting ... (walletId: ${walletId})`,
-  );
+  console.log(`getWalletPayLinks starting ... (walletId: ${walletId})`);
 
   try {
     const response = await fetch(
-      `${lnbiturl}/lnurlp/api/v1/links?all_wallets=false&wallet=${walletId}`,
+      `${lnbitsUrl()}/lnurlp/api/v1/links?all_wallets=false&wallet=${walletId}`,
       {
         method: 'GET',
         headers: {
@@ -512,9 +528,10 @@ const getWalletById = async (
   console.log(`getWalletById starting ... (userId: ${userId}, id: ${id})`);
 
   try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
+    const { userName, password } = lnbitsCredentials();
+    const accessToken = await getAccessToken(userName, password);
     const response = await fetch(
-      `${lnbiturl}/users/api/v1/user/${userId}/wallet`,
+      `${lnbitsUrl()}/users/api/v1/user/${userId}/wallet`,
       {
         method: 'GET',
         headers: {
@@ -570,10 +587,10 @@ const getWalletById = async (
 
 // May need fixing!
 const getWalletIdFromKey = async (inKey: string) => {
-  console.log(`getWalletIdFromKey starting ... (no key logged)`);
+  console.log('getWalletIdFromKey starting ...');
 
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/wallets`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/wallets`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -610,7 +627,7 @@ const getWalletIdFromKey = async (inKey: string) => {
 const getInvoicePayment = async (inKey: string, invoice: string) => {
   console.log('getInvoicePayment: Starting ...');
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/payments/${invoice}`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/payments/${invoice}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -634,9 +651,7 @@ const getInvoicePayment = async (inKey: string, invoice: string) => {
 };
 
 const getPaymentsSince = async (lnKey: string, timestamp: number) => {
-  console.log(
-    `getPaymentsSince starting ... (timestamp: ${timestamp})`,
-  );
+  console.log(`getPaymentsSince starting ... (timestamp: ${timestamp})`);
 
   // Note that the timestamp is in seconds, not milliseconds.
   try {
@@ -644,7 +659,7 @@ const getPaymentsSince = async (lnKey: string, timestamp: number) => {
     const walletId = await getWalletIdFromKey(lnKey);
 
     const response = await fetch(
-      `${lnbiturl}/api/v1/payments?wallet=${walletId}&limit=1`,
+      `${lnbitsUrl()}/api/v1/payments?wallet=${walletId}&limit=1`,
       {
         method: 'GET',
         headers: {
@@ -691,7 +706,7 @@ const createInvoice = async (
   );
 
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/payments`, {
+    const response = await fetch(`${lnbitsUrl()}/api/v1/payments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -716,8 +731,8 @@ const createInvoice = async (
 
     return data.payment_request;
   } catch (error) {
-    console.error(error);
-    return error;
+    console.error('createInvoice failed.', error);
+    throw error;
   }
 };
 
@@ -726,48 +741,40 @@ const payInvoice = async (
   paymentRequest: string,
   extra: object,
 ) => {
-  console.log(
-    'payInvoice starting ...',
-  );
+  console.log('payInvoice starting ...');
 
-  try {
-    //const encodedExtra = JSON.stringify(extra);
+  //const encodedExtra = JSON.stringify(extra);
 
-    const response = await fetch(`${lnbiturl}/api/v1/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': adminKey,
-      },
-      body: JSON.stringify({
-        out: true,
-        bolt11: paymentRequest,
-        extra: extra, //encodedExtra,
-      }),
-    });
+  const response = await fetch(`${lnbitsUrl()}/api/v1/payments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': adminKey,
+    },
+    body: JSON.stringify({
+      out: true,
+      bolt11: paymentRequest,
+      extra: extra, //encodedExtra,
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Error paying invoice (status: ${response.status})`);
-    }
-
-    const data = await response.json();
-    //console.log('payInvoice: data:', data);
-
-    return data;
-  } catch (error) {
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Error paying invoice (status: ${response.status})`);
   }
+
+  const data = await response.json();
+  //console.log('payInvoice: data:', data);
+
+  return data;
 };
 
 // TODO: This method needs checking!
 const getWalletIdByUserId = async (adminKey: string, userId: string) => {
-  console.log(
-    `getWalletIdByUserId starting ... (userId: ${userId})`,
-  );
+  console.log(`getWalletIdByUserId starting ... (userId: ${userId})`);
 
   try {
     const response = await fetch(
-      `${lnbiturl}/api/v1/wallets?user_id=${userId}`,
+      `${lnbitsUrl()}/api/v1/wallets?user_id=${userId}`,
       {
         method: 'GET',
         headers: {
@@ -793,12 +800,14 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
 };
 
 async function topUpWallet(walletId: string, amount: number): Promise<void> {
-  const accessToken = await getAccessToken(`${userName}`, `${password}`);
+  const { userName, password } = lnbitsCredentials();
+  const accessToken = await getAccessToken(userName, password);
 
-  const url = `${lnbiturl}/users/api/v1/topup`;
+  // /topup was removed by LNbits >= 1.0.0; balance top-ups now go through /balance.
+  const url = `${lnbitsUrl()}/users/api/v1/balance`;
   const body = {
-    amount: amount.toString(),
     id: walletId,
+    amount,
   };
 
   try {
@@ -823,34 +832,40 @@ async function topUpWallet(walletId: string, amount: number): Promise<void> {
 }
 
 async function scheduledTopup() {
-  const allowancewallets = await getWallets(process.env.LNBITS_ADMINKEY as string, 'Allowance',);
+  const allowancewallets = await getWallets(
+    process.env.LNBITS_ADMINKEY as string,
+    'Allowance',
+  );
   const allowanceValue = process.env.LNBITS_INITIAL_ALLOWANCE as string;
   const hostWalletId = process.env.LNBITS_HOST_WALLET_ID as string;
-  const hostUserId =process.env.LNBITS_HOST_USER_ID as string;
+  const hostUserId = process.env.LNBITS_HOST_USER_ID as string;
 
-  const host = getWalletById(hostUserId, hostWalletId);
-
-
+  const host = await getWalletById(hostUserId, hostWalletId);
 
   if (allowancewallets) {
     allowancewallets.forEach(async wallet => {
-     const User = await getUser(process.env.LNBITS_ADMINKEY as string, wallet.user);
-  
-     const extra = {
-      from: wallet,
-      to: host,
-      tag: 'zap',
-    }
+      const User = await getUser(
+        process.env.LNBITS_ADMINKEY as string,
+        wallet.user,
+      );
 
-    if(wallet.balance_msat >0){
+      const extra = {
+        from: wallet,
+        to: host,
+        tag: 'zap',
+      };
 
-     const paymentRequest = await createInvoice(
-      process.env.LNBITS_INKEY as string,
-       hostWalletId, wallet.balance_msat/1000,
-        `${User.displayName} Weekly Allowance cleared`,
-        extra ); 
-      await payInvoice(wallet.adminkey , paymentRequest, extra)}
-     topUpWallet(wallet.id, parseInt(allowanceValue));
+      if (wallet.balance_msat > 0) {
+        const paymentRequest = await createInvoice(
+          process.env.LNBITS_INKEY as string,
+          hostWalletId,
+          wallet.balance_msat / 1000,
+          `${User.displayName} Weekly Allowance cleared`,
+          extra,
+        );
+        await payInvoice(wallet.adminkey, paymentRequest, extra);
+      }
+      topUpWallet(wallet.id, parseInt(allowanceValue));
     });
   }
 }
@@ -859,7 +874,6 @@ export {
   getWallets,
   createUser,
   getUser,
-  updateUser,
   getUsers,
   getWalletName,
   getWalletById,
