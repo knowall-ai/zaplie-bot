@@ -31,6 +31,7 @@ app.use('/api/connections', require('./connectionsRoutes'));
 app.use('/api/webhook-keys', require('./webhookKeysRoutes'));
 app.use('/api/automations-stats', require('./automationsStatsRoutes'));
 app.use('/api/reports', require('./reportsRoutes'));
+app.use('/api/setup', require('./setupRoutes'));
 
 const { requireAdmin } = require('./adminAuth');
 const { requireSignedInOrBot } = require('./readAuth');

@@ -2,28 +2,25 @@
 // GitHub App auth: mint the App JWT, exchange it for an installation token, and
 // list the repos the installer selected. RS256 signing uses Node's built-in
 // crypto (the private key GitHub issues is PKCS1, which crypto signs directly).
-const fs = require('fs');
 const crypto = require('crypto');
+const { getCredentials } = require('./githubAppCredentials');
 
 const base64url = (input) => Buffer.from(input).toString('base64url');
 
+const NOT_CREATED_MESSAGE =
+  'GitHub app not created yet: an admin can create it from Automations';
+
+// The manifest flow is the only way to configure GitHub; there is no env path.
+const requireAppCredentials = () => {
+  const stored = getCredentials();
+  if (!stored) {
+    throw new Error(NOT_CREATED_MESSAGE);
+  }
+  return stored;
+};
+
 const createAppJwt = () => {
-  const appId = process.env.GITHUB_APP_ID;
-  if (!appId) {
-    throw new Error('GITHUB_APP_ID is not set');
-  }
-  const keyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH;
-  if (!keyPath) {
-    throw new Error('GITHUB_APP_PRIVATE_KEY_PATH is not set');
-  }
-  let privateKeyPem;
-  try {
-    privateKeyPem = fs.readFileSync(keyPath, 'utf8');
-  } catch (error) {
-    throw new Error(
-      `failed to read GitHub App private key at ${keyPath}: ${error.message}`,
-    );
-  }
+  const { appId, pem: privateKeyPem } = requireAppCredentials();
 
   const nowSeconds = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
@@ -92,4 +89,10 @@ const listInstallationRepos = async (installationId) => {
   return repos;
 };
 
-module.exports = { createAppJwt, getInstallationToken, listInstallationRepos };
+module.exports = {
+  createAppJwt,
+  getInstallationToken,
+  listInstallationRepos,
+  requireAppCredentials,
+  NOT_CREATED_MESSAGE,
+};

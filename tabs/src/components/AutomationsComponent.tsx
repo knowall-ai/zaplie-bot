@@ -14,6 +14,11 @@ import {
   getGithubConnection,
 } from '../services/connectionsService';
 import {
+  getGithubSetupStatus,
+  startGithubAppCreation,
+  GithubSetupStatus,
+} from '../services/setupService';
+import {
   getAutomationsStats,
   AutomationsStats,
   AutomationAudience,
@@ -149,6 +154,10 @@ const AutomationsComponent: FunctionComponent = () => {
   const [newKeyLabel, setNewKeyLabel] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [setupStatus, setSetupStatus] = useState<GithubSetupStatus | null>(
+    null,
+  );
+  const [creatingApp, setCreatingApp] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -187,14 +196,16 @@ const AutomationsComponent: FunctionComponent = () => {
     const loadConnections = async () => {
       try {
         const idToken = await acquireIdToken(instance, accounts[0]);
-        const [connection, statsData, keys] = await Promise.all([
+        const [connection, statsData, keys, setup] = await Promise.all([
           getGithubConnection(idToken),
           getAutomationsStats(idToken),
           isAdmin ? getWebhookKeys(idToken) : Promise.resolve([]),
+          getGithubSetupStatus(idToken),
         ]);
         setAppInstalled(connection.connected);
         setStats(statsData);
         setWebhookKeys(keys);
+        setSetupStatus(setup);
       } catch (err) {
         console.error('Error fetching connections state:', err);
         toast.error('Could not load connection status.');
@@ -268,6 +279,21 @@ const AutomationsComponent: FunctionComponent = () => {
 
   const handleRemoveRepo = (repo: string) => {
     persistRepos(repos.filter(existing => existing !== repo));
+  };
+
+  const handleCreateApp = async () => {
+    if (!accounts[0]) {
+      return;
+    }
+    setCreatingApp(true);
+    try {
+      const idToken = await acquireIdToken(instance, accounts[0]);
+      await startGithubAppCreation(idToken);
+    } catch (err) {
+      console.error('Error starting GitHub App creation:', err);
+      toast.error('Could not start the GitHub App creation.');
+      setCreatingApp(false);
+    }
   };
 
   const handleInstallApp = async () => {
@@ -516,7 +542,13 @@ const AutomationsComponent: FunctionComponent = () => {
             pull-request flow. Issue and review rewards require separate
             verified flows.
           </p>
-          {appInstalled && repos.length === 0 && (
+          {setupStatus?.created && (
+            <span className={styles.connHint}>
+              App created as {setupStatus.slug} via the manifest flow. All
+              credentials were exchanged server to server.
+            </span>
+          )}
+          {!setupStatus?.created && appInstalled && repos.length === 0 && (
             <span className={styles.connHint}>
               Installed on GitHub. Syncing the repository list needs the App
               private key on the server; add repositories manually meanwhile.
@@ -543,6 +575,17 @@ const AutomationsComponent: FunctionComponent = () => {
           )}
           {isAdmin && (
             <div className={styles.connCardActions}>
+              {!setupStatus?.created && (
+                <button
+                  className={styles.installButton}
+                  onClick={handleCreateApp}
+                  disabled={creatingApp}
+                >
+                  {creatingApp
+                    ? 'Redirecting to GitHub...'
+                    : 'Create the Zaplie GitHub App'}
+                </button>
+              )}
               <button
                 className={styles.installButton}
                 onClick={handleInstallApp}
