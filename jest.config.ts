@@ -3,7 +3,7 @@
  * https://jestjs.io/docs/configuration
  */
 
-import type {Config} from 'jest';
+import type { Config } from 'jest';
 
 const config: Config = {
   // All imported modules in your tests should be mocked automatically
@@ -19,13 +19,20 @@ const config: Config = {
   clearMocks: true,
 
   // Indicates whether the coverage information should be collected while executing the test
-  // collectCoverage: false,
+  collectCoverage: true,
 
-  // An array of glob patterns indicating a set of files for which coverage information should be collected
-  // collectCoverageFrom: undefined,
+  // An array of glob patterns indicating a set of files for which coverage
+  // information should be collected. Test files and the process entry point are
+  // excluded so the ratchet reflects meaningful, testable source.
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.test.{ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/index.ts',
+  ],
 
   // The directory where Jest should output its coverage files
-  // coverageDirectory: undefined,
+  coverageDirectory: 'coverage',
 
   // An array of regexp pattern strings used to skip coverage collection
   // coveragePathIgnorePatterns: [
@@ -35,16 +42,22 @@ const config: Config = {
   // Indicates which provider should be used to instrument code for coverage
   // coverageProvider: "babel",
 
-  // A list of reporter names that Jest uses when writing coverage reports
-  // coverageReporters: [
-  //   "json",
-  //   "text",
-  //   "lcov",
-  //   "clover"
-  // ],
+  // A list of reporter names that Jest uses when writing coverage reports.
+  // json-summary is required by scripts/check-coverage-ratchet.js.
+  coverageReporters: ['text', 'lcov', 'json-summary'],
 
-  // An object that configures minimum threshold enforcement for coverage results
-  // coverageThreshold: undefined,
+  // An object that configures minimum threshold enforcement for coverage results.
+  // These are hard floors seeded (rounded down) from the first real coverage run.
+  // The finer-grained "trends up" ratchet lives in scripts/check-coverage-ratchet.js
+  // and compares against .coverage-baseline.json.
+  coverageThreshold: {
+    global: {
+      statements: 34,
+      branches: 30,
+      functions: 35,
+      lines: 33,
+    },
+  },
 
   // A path to a custom dependency extractor
   // dependencyExtractor: undefined,

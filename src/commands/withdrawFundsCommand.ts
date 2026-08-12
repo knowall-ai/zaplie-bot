@@ -1,15 +1,5 @@
-import { SSOCommand, SSOCommandMap } from './SSOCommandMap';
-import {
-  TeamsActivityHandler,
-  TurnContext,
-  SigninStateVerificationQuery,
-  MemoryStorage,
-  ConversationState,
-  UserState,
-  CardFactory,
-  Middleware,
-  MessageFactory,
-} from 'botbuilder';
+import { SSOCommand } from './SSOCommandMap';
+import { TurnContext } from 'botbuilder';
 
 export class WithdrawFundsCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {

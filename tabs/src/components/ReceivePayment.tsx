@@ -172,8 +172,8 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
                   {!invoice
                     ? 'Loading...'
                     : invoice.length > 140
-                    ? `${invoice.substring(0, 140)}...`
-                    : invoice}
+                      ? `${invoice.substring(0, 140)}...`
+                      : invoice}
                 </div>
                 {invoice && (
                   <div className={styles.receiveButtonContainer}>
