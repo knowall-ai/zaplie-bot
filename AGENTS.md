@@ -49,8 +49,8 @@ Full details: `docs/SOLUTION_DESIGN.adoc`. Requirements catalogue:
 
 ## Build, Run, Test
 
-Use **npm** (not pnpm/yarn). Node 18 is the supported runtime (CI builds on 20;
-if you hit MSAL issues on Node 20 see the override note in README.md).
+Use **npm** (not pnpm/yarn). Node 24 is the supported runtime (declared in
+`package.json` `engines`; CI builds on Node 24).
 
 ### Bot (repo root)
 
