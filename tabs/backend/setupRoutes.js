@@ -69,7 +69,15 @@ router.get('/github/manifest', requireAdmin, async (req, res) => {
 // one-shot code; the conversion response carries every credential we need.
 router.get('/github/callback', async (req, res) => {
   const { code, state } = req.query;
-  if (typeof code !== 'string' || typeof state !== 'string' || !verifyState(state)) {
+  // Bind this callback to the manifest flow: /github/manifest mints
+  // signState('admin'), and only that sentinel is accepted here. Identity- and
+  // installation-flow states carry a real Entra oid, so they can't be replayed
+  // to persist GitHub App credentials (cross-flow state confusion).
+  if (
+    typeof code !== 'string' ||
+    typeof state !== 'string' ||
+    verifyState(state) !== 'admin'
+  ) {
     res.redirect(`${PORTAL_URL}?setup=github_error`);
     return;
   }
