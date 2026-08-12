@@ -1,27 +1,20 @@
 .page {
   align-self: stretch;
   width: 100%;
-  min-height: calc(100dvh - 7rem);
-  margin: 0 0 2.5rem;
+  margin: 1.25rem 0 2.5rem;
   box-sizing: border-box;
-  background:
-    radial-gradient(
-      circle at 12% 0%,
-      rgba(132, 204, 22, 0.08),
-      transparent 26rem
-    ),
-    #1f1f1f;
+  background: #1f1f1f;
 }
 
 .content {
   width: min(100%, 1120px);
   margin: 0 auto;
-  padding: 2rem 1.5rem 3.5rem;
+  padding: 1.25rem;
   box-sizing: border-box;
 }
 
 @media (max-width: 640px) {
   .content {
-    padding: 1.25rem 1rem 2.5rem;
+    padding: 1rem;
   }
 }
