@@ -2,6 +2,9 @@
   "name": "tabs",
   "version": "0.2.0",
   "private": true,
+  "engines": {
+    "node": "24"
+  },
   "dependencies": {
     "@azure/msal-browser": "^3.24.0",
     "@azure/msal-react": "^2.1.0",
@@ -32,8 +35,9 @@
     "chroma-js": "2.4.2"
   },
   "scripts": {
-    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "start": "concurrently \"npm run server:dev\" \"npm run client\"",
     "server": "node backend/server.js",
+    "server:dev": "node --watch backend/server.js",
     "client": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
