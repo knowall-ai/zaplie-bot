@@ -1,5 +1,12 @@
 // teamsBot.test.ts
-import { expect, describe, test, beforeEach, afterAll, jest } from '@jest/globals';
+import {
+  expect,
+  describe,
+  test,
+  beforeEach,
+  afterAll,
+  jest,
+} from '@jest/globals';
 
 const originalPointsLabel = process.env.LNBITS_POINTS_LABEL;
 const originalAdminKey = process.env.LNBITS_ADMINKEY;
@@ -20,10 +27,14 @@ jest.mock('./commands/sendZapCommand', () => {
 import { getUsers } from './services/lnbitsService';
 import { createZapCard } from './commands/sendZapCommand';
 
+// require, not import: imports hoist above the jest.mock calls above.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { TeamsBot } = require('./teamsBot') as typeof import('./teamsBot');
 
 const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
-const mockCreateZapCard = createZapCard as jest.MockedFunction<typeof createZapCard>;
+const mockCreateZapCard = createZapCard as jest.MockedFunction<
+  typeof createZapCard
+>;
 
 const currentUser = {
   id: 'currentUserId',
@@ -56,7 +67,10 @@ function buildContext(user: User | undefined) {
   } as unknown as import('botbuilder').TurnContext;
 }
 
-function buildAction(authorAadId: string | undefined, content = '<p>Great work!</p>') {
+function buildAction(
+  authorAadId: string | undefined,
+  content = '<p>Great work!</p>',
+) {
   return {
     messagePayload: {
       from: {
@@ -102,7 +116,10 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     expect(mockCreateZapCard).toHaveBeenCalledWith(
       currentUser,
       'Sats',
-      expect.objectContaining({ receiverId: authorUser.id, message: 'Great work!' }),
+      expect.objectContaining({
+        receiverId: authorUser.id,
+        message: 'Great work!',
+      }),
     );
     expect(mockGetUsers).toHaveBeenCalledWith('admin-key', {
       aadObjectId: authorUser.aadObjectId,
@@ -149,7 +166,9 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
 
   test('returns a friendly guard when the author lookup fails', async () => {
     mockGetUsers.mockRejectedValue(new Error('LNbits unavailable'));
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
 
     const context = buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(
@@ -169,7 +188,9 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     process.env.ZAP_MESSAGE_DEFAULT_SATS = 'not-a-positive-integer';
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
 
     const context = buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(

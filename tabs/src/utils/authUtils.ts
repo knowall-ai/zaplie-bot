@@ -6,9 +6,16 @@ export function generateState(): string {
   });
 }
 
-export async function pkceChallengeFromVerifier(verifier: string): Promise<string> {
-  const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(hashed))))
+export async function pkceChallengeFromVerifier(
+  verifier: string,
+): Promise<string> {
+  const hashed = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(verifier),
+  );
+  return btoa(
+    String.fromCharCode.apply(null, Array.from(new Uint8Array(hashed))),
+  )
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');

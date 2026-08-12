@@ -4,7 +4,7 @@ import ZapIcon from '../images/ZapIcon.svg';
 import {
   getUsers,
   getUserWallets,
-  getWalletTransactionsSince
+  getWalletTransactionsSince,
 } from '../services/lnbitsServiceLocal';
 
 interface FeedListProps {
@@ -15,7 +15,6 @@ interface ZapTransaction {
   to: User | null;
   transaction: Transaction;
 }
-
 
 const ITEMS_PER_PAGE = 10; // Items per page
 const MAX_RECORDS = 100; // Maximum records to display
@@ -58,7 +57,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   const initialRender = useRef(true);
 
   // State for sorting (excluding the Memo field)
-  const [sortField, setSortField] = useState<'time' | 'from' | 'to' | 'amount'>('time');
+  const [sortField, setSortField] = useState<'time' | 'from' | 'to' | 'amount'>(
+    'time',
+  );
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Get admin key from environment
@@ -85,13 +86,15 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
         // Step 1: Get all users
         const fetchedUsers = await getUsers(adminKey, {});
         if (!fetchedUsers || fetchedUsers.length === 0) {
-          setError('Unable to load users. Please check your connection and try again.');
+          setError(
+            'Unable to load users. Please check your connection and try again.',
+          );
           setLoading(false);
           return;
         }
 
         // Step 2: Parallelize wallet fetches for all users
-        const walletPromises = fetchedUsers.map(async (user) => {
+        const walletPromises = fetchedUsers.map(async user => {
           try {
             const userWallets = await getUserWallets(adminKey, user.id);
             return { userId: user.id, wallets: userWallets || [] };
@@ -111,8 +114,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
 
         for (const userData of allWalletsData) {
           // Filter to Allowance and Private wallets using exact match
-          const relevantWallets = userData.wallets.filter(wallet =>
-            isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name)
+          const relevantWallets = userData.wallets.filter(
+            wallet =>
+              isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name),
           );
 
           // Track wallet IDs by type
@@ -130,12 +134,18 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
 
         // Fetch all wallet transactions in parallel for better performance
         const paymentPromises = allRelevantWallets.map(wallet =>
-          getWalletTransactionsSince(wallet.inkey, paymentsSinceTimestamp, null)
-            .catch(err => {
-              console.error(`Error fetching payments for wallet ${wallet.id}:`, err);
-              failedWalletCount++;
-              return [] as Transaction[]; // Return empty array on error
-            })
+          getWalletTransactionsSince(
+            wallet.inkey,
+            paymentsSinceTimestamp,
+            null,
+          ).catch(err => {
+            console.error(
+              `Error fetching payments for wallet ${wallet.id}:`,
+              err,
+            );
+            failedWalletCount++;
+            return [] as Transaction[]; // Return empty array on error
+          }),
         );
 
         const paymentResults = await Promise.all(paymentPromises);
@@ -143,7 +153,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
 
         // Log warning if some wallets failed to load
         if (failedWalletCount > 0) {
-          console.warn(`${failedWalletCount} wallet(s) failed to load transactions`);
+          console.warn(
+            `${failedWalletCount} wallet(s) failed to load transactions`,
+          );
         }
 
         // Create wallet ID to user mapping
@@ -155,7 +167,9 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
               walletToUserMap.set(wallet.id, user);
             });
           } else {
-            console.warn(`User not found for userId: ${userData.userId} - wallet transactions may show as Unknown`);
+            console.warn(
+              `User not found for userId: ${userData.userId} - wallet transactions may show as Unknown`,
+            );
           }
         });
 
@@ -176,8 +190,8 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
           if (!cleanId) return null;
 
           const matchingPayments = paymentsByCheckingId.get(cleanId) || [];
-          const receivingPayment = matchingPayments.find(p =>
-            p.wallet_id !== payment.wallet_id && p.amount > 0
+          const receivingPayment = matchingPayments.find(
+            p => p.wallet_id !== payment.wallet_id && p.amount > 0,
           );
           return receivingPayment?.wallet_id || null;
         };
@@ -202,63 +216,76 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
 
         // Deduplicate internal transfers by checking_id
         const seenCheckingIds = new Set<string>();
-        const deduplicatedTransactions = allowanceTransactions.filter(payment => {
-          const cleanId = payment.checking_id?.replace('internal_', '') || '';
+        const deduplicatedTransactions = allowanceTransactions.filter(
+          payment => {
+            const cleanId = payment.checking_id?.replace('internal_', '') || '';
 
-          if (cleanId) {
-            if (seenCheckingIds.has(cleanId)) {
-              return false; // Skip duplicate
+            if (cleanId) {
+              if (seenCheckingIds.has(cleanId)) {
+                return false; // Skip duplicate
+              }
+              seenCheckingIds.add(cleanId);
             }
-            seenCheckingIds.add(cleanId);
-          }
 
-          return true;
-        });
+            return true;
+          },
+        );
 
-        const allowanceZaps = deduplicatedTransactions.map((transaction, index) => {
-          // FROM = owner of the Allowance wallet (sender)
-          const fromUser = walletToUserMap.get(transaction.wallet_id) || null;
+        const allowanceZaps = deduplicatedTransactions.map(
+          (transaction, index) => {
+            // FROM = owner of the Allowance wallet (sender)
+            const fromUser = walletToUserMap.get(transaction.wallet_id) || null;
 
-          // TO = recipient (owner of the Private wallet that received the payment)
-          let toUser: User | null = null;
+            // TO = recipient (owner of the Private wallet that received the payment)
+            let toUser: User | null = null;
 
-          // Try to find matching internal payment (the receiving side)
-          const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
-          const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
-          const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
+            // Try to find matching internal payment (the receiving side)
+            const cleanCheckingId =
+              transaction.checking_id?.replace('internal_', '') || '';
+            const matchingPayments =
+              paymentsByCheckingId.get(cleanCheckingId) || [];
+            const matchingPayment = matchingPayments.find(
+              p => p.wallet_id !== transaction.wallet_id,
+            );
 
-          if (matchingPayment) {
-            toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+            if (matchingPayment) {
+              toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+              if (!toUser) {
+                console.warn(
+                  `Receiver wallet ${matchingPayment.wallet_id} found but user mapping missing`,
+                );
+              }
+            }
+
+            // Fallback: Try extra.to.user field
+            if (!toUser && transaction.extra?.to?.user) {
+              const toUserId = transaction.extra.to.user;
+              toUser = fetchedUsers.find(f => f.id === toUserId) || null;
+            }
+
             if (!toUser) {
-              console.warn(`Receiver wallet ${matchingPayment.wallet_id} found but user mapping missing`);
+              console.warn(
+                `Could not determine receiver for transaction ${transaction.checking_id}`,
+              );
             }
-          }
 
-          // Fallback: Try extra.to.user field
-          if (!toUser && transaction.extra?.to?.user) {
-            const toUserId = transaction.extra.to.user;
-            toUser = fetchedUsers.find(f => f.id === toUserId) || null;
-          }
-
-          if (!toUser) {
-            console.warn(`Could not determine receiver for transaction ${transaction.checking_id}`);
-          }
-
-          return {
-            from: fromUser,
-            to: toUser,
-            transaction: transaction,
-          };
-        });
+            return {
+              from: fromUser,
+              to: toUser,
+              transaction: transaction,
+            };
+          },
+        );
 
         // Limit to MAX_RECORDS (100 records)
         const limitedZaps = allowanceZaps.slice(0, MAX_RECORDS);
 
         setZaps(limitedZaps);
       } catch (error) {
-        const errorMessage = error instanceof Error
-          ? `Failed to load activity feed: ${error.message}`
-          : 'Unable to load activity feed. Please refresh and try again.';
+        const errorMessage =
+          error instanceof Error
+            ? `Failed to load activity feed: ${error.message}`
+            : 'Unable to load activity feed. Please refresh and try again.';
         setError(errorMessage);
         console.error('Error in fetchZapsStepByStep:', error);
       } finally {
@@ -317,19 +344,23 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   // Apply timestamp filter (7/30/60 days) - filter transactions by time
   // timestamp prop is in Unix seconds (e.g., 7 days ago)
   // transaction.time can be either a number (Unix seconds) or an ISO date string
-  const filteredZaps = timestamp && timestamp > 0
-    ? sortedZaps.filter(zap => {
-        const parsedDate = parseTransactionTime(zap.transaction.time);
-        if (!parsedDate) {
-          return false; // Exclude transactions with invalid/unknown time format
-        }
-        const txTimeSeconds = Math.floor(parsedDate.getTime() / 1000);
-        return txTimeSeconds >= timestamp;
-      })
-    : sortedZaps;
+  const filteredZaps =
+    timestamp && timestamp > 0
+      ? sortedZaps.filter(zap => {
+          const parsedDate = parseTransactionTime(zap.transaction.time);
+          if (!parsedDate) {
+            return false; // Exclude transactions with invalid/unknown time format
+          }
+          const txTimeSeconds = Math.floor(parsedDate.getTime() / 1000);
+          return txTimeSeconds >= timestamp;
+        })
+      : sortedZaps;
 
   // Calculate pagination variables
-  const totalPages = Math.max(1, Math.ceil(filteredZaps.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredZaps.length / ITEMS_PER_PAGE),
+  );
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentItems = filteredZaps.slice(indexOfFirstItem, indexOfLastItem);
@@ -375,7 +406,8 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
             onClick={() => handleSort('amount')}
           >
             <b className={styles.string3}>
-              Amount {sortField === 'amount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+              Amount{' '}
+              {sortField === 'amount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
             </b>
           </div>
         </div>
@@ -396,11 +428,14 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                         return `Invalid: ${zap.transaction.time}`;
                       }
                       // UK format: DD/MM/YYYY HH:MM (24-hour)
-                      return `${date.toLocaleDateString('en-GB')} ${date.toLocaleTimeString('en-GB', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false,
-                      })}`;
+                      return `${date.toLocaleDateString('en-GB')} ${date.toLocaleTimeString(
+                        'en-GB',
+                        {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false,
+                        },
+                      )}`;
                     })()}
                   </div>
                 </div>
@@ -412,9 +447,13 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                     style={{ display: 'none' }}
                   />
                   <div className={styles.userName}>
-                    {zap.transaction.memo?.startsWith('[Anonymous]') ? 'Anonymous' :
-                     (zap.from?.displayName || zap.from?.email ||
-                     (zap.transaction.extra?.from?.user ? `User ${zap.transaction.extra.from.user.substring(0, 8)}` : 'Unknown'))}
+                    {zap.transaction.memo?.startsWith('[Anonymous]')
+                      ? 'Anonymous'
+                      : zap.from?.displayName ||
+                        zap.from?.email ||
+                        (zap.transaction.extra?.from?.user
+                          ? `User ${zap.transaction.extra.from.user.substring(0, 8)}`
+                          : 'Unknown')}
                   </div>
                 </div>
                 <div className={styles.personDetails}>
@@ -425,11 +464,17 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                     style={{ display: 'none' }}
                   />
                   <div className={styles.userName}>
-                    {zap.to?.displayName || zap.to?.email ||
-                     (zap.transaction.extra?.to?.user ? `User ${zap.transaction.extra.to.user.substring(0, 8)}` : 'Unknown')}
+                    {zap.to?.displayName ||
+                      zap.to?.email ||
+                      (zap.transaction.extra?.to?.user
+                        ? `User ${zap.transaction.extra.to.user.substring(0, 8)}`
+                        : 'Unknown')}
                   </div>
                 </div>
-                <div className={styles.userName} title={zap.transaction.memo?.replace('[Anonymous] ', '')}>
+                <div
+                  className={styles.userName}
+                  title={zap.transaction.memo?.replace('[Anonymous] ', '')}
+                >
                   {zap.transaction.memo?.replace('[Anonymous] ', '')}
                 </div>
               </div>
@@ -441,46 +486,46 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                 </b>
                 <img className={styles.icon} alt="" src={ZapIcon} />
               </div>
-              </div>
             </div>
-          ))
+          </div>
+        ))
       ) : (
         <div>No data available</div>
       )}
       {filteredZaps.length > ITEMS_PER_PAGE && (
-       <div className={styles.pagination}>
-       <button
-         onClick={firstPage}
-         disabled={currentPage === 1}
-         className={styles.doubleArrow}
-       >
-         &#171; {/* Double left arrow */}
-       </button>
-       <button
-         onClick={prevPage}
-         disabled={currentPage === 1}
-         className={styles.singleArrow}
-       >
-         &#11164; {/* Single left arrow */}
-       </button>
-       <span>
-         {currentPage} / {totalPages}
-       </span>
-       <button
-         onClick={nextPage}
-         disabled={currentPage === totalPages}
-         className={styles.singleArrow}
-       >
-         &#11166; {/* Single right arrow */}
-       </button>
-       <button
-         onClick={lastPage}
-         disabled={currentPage === totalPages}
-         className={styles.doubleArrow}
-       >
-         &#187; {/* Double right arrow */}
-       </button>
-     </div>
+        <div className={styles.pagination}>
+          <button
+            onClick={firstPage}
+            disabled={currentPage === 1}
+            className={styles.doubleArrow}
+          >
+            &#171; {/* Double left arrow */}
+          </button>
+          <button
+            onClick={prevPage}
+            disabled={currentPage === 1}
+            className={styles.singleArrow}
+          >
+            &#11164; {/* Single left arrow */}
+          </button>
+          <span>
+            {currentPage} / {totalPages}
+          </span>
+          <button
+            onClick={nextPage}
+            disabled={currentPage === totalPages}
+            className={styles.singleArrow}
+          >
+            &#11166; {/* Single right arrow */}
+          </button>
+          <button
+            onClick={lastPage}
+            disabled={currentPage === totalPages}
+            className={styles.doubleArrow}
+          >
+            &#187; {/* Double right arrow */}
+          </button>
+        </div>
       )}
     </div>
   );

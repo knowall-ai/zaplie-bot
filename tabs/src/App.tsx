@@ -1,4 +1,4 @@
-import { Route, Routes, Navigate, useLocation  } from 'react-router-dom';
+import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 // Fluent UI imports
 import { Stack } from '@fluentui/react';
@@ -15,7 +15,6 @@ import RequireAuth from './components/RequireAuth';
 import { PageLayout } from './components/PageLayout';
 import { RewardNameProvider } from './components/RewardNameContext';
 
-
 // Import the pages
 import Login from './Login';
 import Feed from './Feed';
@@ -27,7 +26,6 @@ import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
 import Settings from './Settings';
 
-
 type AppProps = {
   pca: IPublicClientApplication;
 };
@@ -38,60 +36,91 @@ function TitleUpdater() {
 
   useEffect(() => {
     const titles: { [key: string]: string } = {
-      "/feed": "Feed - Zaplie",
-      "/users": "Users - Zaplie",
-      "/rewards": "Rewards - Zaplie",
-      "/wallet": "Wallet - Zaplie",
-      "/login": "Login - Zaplie",
-      "/auth-start": "Authenticating...",
-      "/auth-end": "Authentication Complete",
-      "/settings": "Settings - Zaplie",
-
+      '/feed': 'Feed - Zaplie',
+      '/users': 'Users - Zaplie',
+      '/rewards': 'Rewards - Zaplie',
+      '/wallet': 'Wallet - Zaplie',
+      '/login': 'Login - Zaplie',
+      '/auth-start': 'Authenticating...',
+      '/auth-end': 'Authentication Complete',
+      '/settings': 'Settings - Zaplie',
     };
 
-    document.title = titles[location.pathname] || "Zaplie"; 
+    document.title = titles[location.pathname] || 'Zaplie';
   }, [location]);
 
   return null;
 }
 
-
-
 function App({ pca }: AppProps) {
   return (
     <MsalProvider instance={pca}>
-
-    <RewardNameProvider>
-    <TitleUpdater />
-    <ToastContainer
-      position="top-right"
-      autoClose={5000}
-      hideProgressBar={false}
-      newestOnTop
-      closeOnClick
-      rtl={false}
-      pauseOnFocusLoss
-      draggable
-      pauseOnHover
-      theme="dark"
-    />
-     <PageLayout> 
-     <Stack horizontalAlign="center">    
-        <Routes>
-          <Route path="/feed" element={<RequireAuth><Feed /></RequireAuth>} />
-          <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
-          <Route path="/rewards" element={<RequireAuth><Rewards /></RequireAuth>} />
-          <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
-          <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/auth-start" element={<AuthStart />} />
-          <Route path="/auth-end" element={<AuthEnd />} />
-          <Route path="*" element={<Navigate to="/feed" replace />} />         
-        </Routes>
-      </Stack>
-      </PageLayout>
+      <RewardNameProvider>
+        <TitleUpdater />
+        <ToastContainer
+          position="top-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="dark"
+        />
+        <PageLayout>
+          <Stack horizontalAlign="center">
+            <Routes>
+              <Route
+                path="/feed"
+                element={
+                  <RequireAuth>
+                    <Feed />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <RequireAuth>
+                    <Users />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/rewards"
+                element={
+                  <RequireAuth>
+                    <Rewards />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/wallet"
+                element={
+                  <RequireAuth>
+                    <Wallet />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <RequireAuth>
+                    <Settings />
+                  </RequireAuth>
+                }
+              />
+              <Route path="/login" element={<Login />} />
+              <Route path="/auth-start" element={<AuthStart />} />
+              <Route path="/auth-end" element={<AuthEnd />} />
+              <Route path="*" element={<Navigate to="/feed" replace />} />
+            </Routes>
+          </Stack>
+        </PageLayout>
       </RewardNameProvider>
-     </MsalProvider>
+    </MsalProvider>
   );
 }
 

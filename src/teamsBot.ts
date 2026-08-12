@@ -1,4 +1,3 @@
-/// <reference path="./types/global.d.ts" />
 import {
   TeamsActivityHandler,
   TurnContext,
@@ -12,7 +11,11 @@ import {
   MessagingExtensionActionResponse,
 } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
-import { SendZapCommand, SendZap, createZapCard } from './commands/sendZapCommand';
+import {
+  SendZapCommand,
+  SendZap,
+  createZapCard,
+} from './commands/sendZapCommand';
 import { ZapLedger, zapKey } from './services/zapLedger';
 import {
   getPendingRecipientIds,
@@ -25,11 +28,7 @@ import { validateZapSubmit } from './commands/zapBudget';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
-import {
-  getUser,
-  getUsers,
-  getWalletBalance,
-} from './services/lnbitsService';
+import { getUser, getUsers, getWalletBalance } from './services/lnbitsService';
 
 //Reward Name Constants
 
@@ -40,14 +39,7 @@ if (!globalRewardName) {
   );
 }
 
-
 const adminKey = process.env.LNBITS_ADMINKEY as string;
-
-interface CancellationToken {
-  isCancellationRequested: boolean;
-}
-
-let userSetupFlag = false;
 
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
@@ -86,11 +78,13 @@ export class TeamsBot extends TeamsActivityHandler {
       try {
         let textMessage = context.activity.text || '';
         const mentions = TurnContext.getMentions(context.activity);
-    
+
         // Check if the bot is mentioned
-        const botMentioned = mentions.some(mention => mention.mentioned.id === botId);
-    
-        let failedRecipients: string[] = [];
+        const botMentioned = mentions.some(
+          mention => mention.mentioned.id === botId,
+        );
+
+        const failedRecipients: string[] = [];
 
         if (botMentioned) {
           // Remove the mention from the text
@@ -100,7 +94,7 @@ export class TeamsBot extends TeamsActivityHandler {
             }
           });
         }
-    
+
         if (
           context.activity.value &&
           context.activity.value.action === 'submitZaps'
@@ -145,7 +139,9 @@ export class TeamsBot extends TeamsActivityHandler {
           }
 
           if (receiverIds.length === 0) {
-            throw new Error('No valid recipients were selected, so no zaps were sent.');
+            throw new Error(
+              'No valid recipients were selected, so no zaps were sent.',
+            );
           }
 
           if (currentUser.id && receiverIds.includes(currentUser.id)) {
@@ -158,11 +154,7 @@ export class TeamsBot extends TeamsActivityHandler {
             keyFor,
           );
           const handledSubmitMessage = () =>
-            hasUnknownRecipientOutcome(
-              this.zapLedger,
-              receiverIds,
-              keyFor,
-            )
+            hasUnknownRecipientOutcome(this.zapLedger, receiverIds, keyFor)
               ? 'One or more payments from this zap still need checking, so nothing was retried.'
               : 'That zap card was already submitted, so nothing was sent again.';
           if (pendingReceiverIds.length === 0) {
@@ -178,9 +170,9 @@ export class TeamsBot extends TeamsActivityHandler {
             globalRewardName,
           );
 
-          let successfulRecipients: string[] = [];
+          const successfulRecipients: string[] = [];
           const alreadyHandled: string[] = [];
-    
+
           for (const recId of pendingReceiverIds) {
             const outcome = await processZapRecipient({
               ledger: this.zapLedger,
@@ -227,15 +219,19 @@ export class TeamsBot extends TeamsActivityHandler {
             return;
           }
           const bulletReceivers = successfulRecipients
-            .map((name) => `- ${name}`)
+            .map(name => `- ${name}`)
             .join('\n');
 
-            const bulletFailed = failedRecipients.length ? failedRecipients.map((name) => `- ${name}`).join('\n') : 'None';
+          const bulletFailed = failedRecipients.length
+            ? failedRecipients.map(name => `- ${name}`).join('\n')
+            : 'None';
 
           //fetch remainingBalance
-          const remainingBalance = await getWalletBalance(currentUser.allowanceWallet.inkey);
+          const remainingBalance = await getWalletBalance(
+            currentUser.allowanceWallet.inkey,
+          );
           console.log('Remaining Balance:', remainingBalance);
-          
+
           const totalAmountSent = successfulRecipients.length * amount;
 
           // Update adaptive card to read-only with list of recipients
@@ -252,7 +248,7 @@ export class TeamsBot extends TeamsActivityHandler {
               {
                 type: 'TextBlock',
                 text: `**Successful Receivers:**\n${bulletReceivers}`,
-                wrap: true
+                wrap: true,
               },
               ...(failedRecipients.length > 0
                 ? [
@@ -267,14 +263,14 @@ export class TeamsBot extends TeamsActivityHandler {
               {
                 type: 'TextBlock',
                 text: `**Message:** ${zapMessage}`,
-                wrap: true
+                wrap: true,
               },
               {
                 type: 'TextBlock',
                 text: `**Amount (${globalRewardName}):** ${amount}`,
-                wrap: true
+                wrap: true,
               },
-              
+
               {
                 type: 'TextBlock',
                 text: `Total Amount (Sats): ${totalAmountSent}`,
@@ -291,40 +287,39 @@ export class TeamsBot extends TeamsActivityHandler {
             $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
             version: '1.2',
           };
-    
-          const updatedMessage = MessageFactory.attachment(CardFactory.adaptiveCard(updatedCard));
+
+          const updatedMessage = MessageFactory.attachment(
+            CardFactory.adaptiveCard(updatedCard),
+          );
           updatedMessage.id = context.activity.replyToId;
           await context.updateActivity(updatedMessage);
           await context.sendActivity(
             `Awesome! You sent ${amount} ${globalRewardName} to your colleague with a zap!`,
           );
-
         }
-    
+
         // Trigger command by IM text
-         if(textMessage){
-        const command = SSOCommandMap.get(textMessage.toLowerCase());
-        if (command) {
-          await command.execute(context);
-        } else {
+        if (textMessage) {
+          const command = SSOCommandMap.get(textMessage.toLowerCase());
+          if (command) {
+            await command.execute(context);
+          } else {
             await context.sendActivity(
               "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!",
             );
-          }}
-        } catch (error) {
-          console.error('Error in onMessage handler:', error.message);
-          await context.sendActivity(
-            `${error.message}`,
-          );
-        }  
+          }
+        }
+      } catch (error) {
+        console.error('Error in onMessage handler:', error.message);
+        await context.sendActivity(`${error.message}`);
+      }
 
-        await next();
-        });
+      await next();
+    });
 
     //this.onMembersAdded(async (context, next) => {
-    this.onCommand(async (context, next) => {
-    ;
-  })}
+    this.onCommand(async (_context, _next) => {});
+  }
 
   async run(context: TurnContext) {
     try {
@@ -340,8 +335,8 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   async handleTeamsSigninVerifyState(
-    context: TurnContext,
-    query: SigninStateVerificationQuery,
+    _context: TurnContext,
+    _query: SigninStateVerificationQuery,
   ) {
     try {
       console.log(
@@ -354,8 +349,8 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   async handleTeamsSigninTokenExchange(
-    context: TurnContext,
-    query: SigninStateVerificationQuery,
+    _context: TurnContext,
+    _query: SigninStateVerificationQuery,
   ) {
     try {
       // Your logic here for handling token exchange
@@ -456,7 +451,10 @@ export class TeamsBot extends TeamsActivityHandler {
 // HTML -> plaintext, capped to a short preview for the zap memo field.
 function stripHtmlSnippet(html: string | undefined): string {
   if (!html) return '';
-  return html.replace(/<[^>]+>/g, '').trim().slice(0, 80);
+  return html
+    .replace(/<[^>]+>/g, '')
+    .trim()
+    .slice(0, 80);
 }
 
 function getZapMessageDefaultSats(): number {

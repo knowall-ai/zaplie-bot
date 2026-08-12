@@ -29,17 +29,22 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   activeWallet,
 }) => {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); // Cache all transactions
-  const [displayedTransactions, setDisplayedTransactions] = useState<Transaction[]>([]); // Filtered transactions to display
+  const [displayedTransactions, setDisplayedTransactions] = useState<
+    Transaction[]
+  >([]); // Filtered transactions to display
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentWallet, setCurrentWallet] = useState<string | undefined>(undefined); // Track which wallet data is cached for
+  const [currentWallet, setCurrentWallet] = useState<string | undefined>(
+    undefined,
+  ); // Track which wallet data is cached for
 
   const { accounts } = useMsal();
 
   // Effect to fetch data when wallet changes
   useEffect(() => {
     // Calculate the timestamp for transaction history period
-    const transactionHistoryStart = Date.now() / MS_PER_SECOND - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+    const transactionHistoryStart =
+      Date.now() / MS_PER_SECOND - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
 
     const paymentsSinceTimestamp = transactionHistoryStart;
 
@@ -72,7 +77,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
           if (allUsers) {
             // Parallelize wallet fetches for all users
             const walletResults = await Promise.all(
-              allUsers.map(async (u) => {
+              allUsers.map(async u => {
                 try {
                   const wallets = await getUserWallets(adminKey, u.id);
                   return { user: u, wallets: wallets || [] };
@@ -80,7 +85,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
                   // Log error but continue - don't fail for one user
                   return { user: u, wallets: [] };
                 }
-              })
+              }),
             );
 
             // Build wallet to user mapping
@@ -93,7 +98,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             // Collect all wallets and parallelize payment fetches
             const allWallets = walletResults.flatMap(r => r.wallets);
             const paymentResults = await Promise.all(
-              allWallets.map(async (wallet) => {
+              allWallets.map(async wallet => {
                 try {
                   return await getWalletTransactionsSince(
                     wallet.inkey,
@@ -104,7 +109,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
                   // Log error but continue - don't fail for one wallet
                   return [];
                 }
-              })
+              }),
             );
             allPayments = paymentResults.flat();
           }
@@ -124,10 +129,14 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
           if (userWallets && userWallets.length > 0) {
             if (activeWallet === 'Private') {
-              const privateWallet = userWallets.find(w => w.name.toLowerCase().includes('private'));
+              const privateWallet = userWallets.find(w =>
+                w.name.toLowerCase().includes('private'),
+              );
               inkey = privateWallet?.inkey;
             } else {
-              const allowanceWallet = userWallets.find(w => w.name.toLowerCase().includes('allowance'));
+              const allowanceWallet = userWallets.find(w =>
+                w.name.toLowerCase().includes('allowance'),
+              );
               inkey = allowanceWallet?.inkey;
             }
           } else {
@@ -151,15 +160,20 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             }
 
             // Try to find matching internal payment (the other side of the transfer)
-            const cleanCheckingId = transaction.checking_id?.replace('internal_', '') || '';
-            const matchingPayments = paymentsByCheckingId.get(cleanCheckingId) || [];
-            const matchingPayment = matchingPayments.find(p => p.wallet_id !== transaction.wallet_id);
+            const cleanCheckingId =
+              transaction.checking_id?.replace('internal_', '') || '';
+            const matchingPayments =
+              paymentsByCheckingId.get(cleanCheckingId) || [];
+            const matchingPayment = matchingPayments.find(
+              p => p.wallet_id !== transaction.wallet_id,
+            );
 
             let otherUser: User | null = null;
 
             // First try to find the other party via matching payment
             if (matchingPayment) {
-              otherUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
+              otherUser =
+                walletToUserMap.get(matchingPayment.wallet_id) || null;
             }
 
             // If no matching payment found, try to extract from memo
@@ -244,12 +258,12 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
     setDisplayedTransactions(filtered);
   }, [activeTab, allTransactions]);
-  
+
   const rewardNameContext = useContext(RewardNameContext);
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
   }
-const rewardsName = rewardNameContext.rewardName;
+  const rewardsName = rewardNameContext.rewardName;
 
   if (loading) {
     return <div>Loading...</div>;
@@ -259,15 +273,19 @@ const rewardsName = rewardNameContext.rewardName;
     return <div>{error}</div>;
   }
 
-
-
   return (
     <div className={styles.feedlist}>
       {displayedTransactions
         ?.sort((a, b) => {
           // Convert both times to numbers for sorting
-          const timeA = typeof a.time === 'number' ? a.time : new Date(a.time).getTime() / 1000;
-          const timeB = typeof b.time === 'number' ? b.time : new Date(b.time).getTime() / 1000;
+          const timeA =
+            typeof a.time === 'number'
+              ? a.time
+              : new Date(a.time).getTime() / 1000;
+          const timeB =
+            typeof b.time === 'number'
+              ? b.time
+              : new Date(b.time).getTime() / 1000;
           return timeB - timeA;
         })
         .map((transaction, index) => (
@@ -293,7 +311,7 @@ const rewardsName = rewardNameContext.rewardName;
                     <b>
                       {transaction.extra?.tag === 'zap'
                         ? 'Zap!'
-                        : transaction.extra?.tag ?? 'Regular transaction'}
+                        : (transaction.extra?.tag ?? 'Regular transaction')}
                     </b>
                   </p>
                   {/* 
@@ -308,16 +326,23 @@ const rewardsName = rewardNameContext.rewardName;
                     {(() => {
                       const now = moment();
                       // Convert time to milliseconds for moment
-                      const timeInMs = typeof transaction.time === 'number'
-                        ? transaction.time * 1000
-                        : new Date(transaction.time).getTime();
+                      const timeInMs =
+                        typeof transaction.time === 'number'
+                          ? transaction.time * 1000
+                          : new Date(transaction.time).getTime();
                       const transactionTime = moment(timeInMs);
-                      const diffInSeconds = now.diff(transactionTime, 'seconds');
+                      const diffInSeconds = now.diff(
+                        transactionTime,
+                        'seconds',
+                      );
 
                       if (diffInSeconds < 60) {
                         return `${diffInSeconds} seconds ago `;
                       } else if (diffInSeconds < 3600) {
-                        const diffInMinutes = now.diff(transactionTime, 'minutes');
+                        const diffInMinutes = now.diff(
+                          transactionTime,
+                          'minutes',
+                        );
                         return `${diffInMinutes} minutes ago `;
                       } else if (diffInSeconds < 86400) {
                         const diffInHours = now.diff(transactionTime, 'hours');
@@ -327,9 +352,16 @@ const rewardsName = rewardNameContext.rewardName;
                         return `${diffInDays} days ago `;
                       }
                     })()}
-                    {(transaction.amount as number) < 0 ? 'to' : 'from'}{' '} <b>{(transaction.amount as number) < 0
-                        ? transaction.extra?.to?.displayName || transaction.extra?.to?.email || 'Unknown'
-                        : transaction.extra?.from?.displayName || transaction.extra?.from?.email || 'Unknown'}{' '}</b>
+                    {(transaction.amount as number) < 0 ? 'to' : 'from'}{' '}
+                    <b>
+                      {(transaction.amount as number) < 0
+                        ? transaction.extra?.to?.displayName ||
+                          transaction.extra?.to?.email ||
+                          'Unknown'
+                        : transaction.extra?.from?.displayName ||
+                          transaction.extra?.from?.email ||
+                          'Unknown'}{' '}
+                    </b>
                   </div>
                   <p className={styles.lightHelightInItems}>
                     {transaction.memo}
@@ -363,7 +395,9 @@ const rewardsName = rewardNameContext.rewardName;
             </div>
           </div>
         ))}
-      {displayedTransactions.length === 0 && <div>No transactions to show.</div>}
+      {displayedTransactions.length === 0 && (
+        <div>No transactions to show.</div>
+      )}
     </div>
   );
 };
