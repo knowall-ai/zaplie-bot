@@ -3,7 +3,12 @@ import './WalletAllowanceComponent.css'; // Assuming you'll use CSS for styling
 import BatteryImageDisplay from './BatteryImageDisplay';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
 import Calendar from '../images/Calendar.svg';
-import { getAllowance, getUsers, getUserWallets, getWalletTransactionsSince } from '../services/lnbitsServiceLocal';
+import {
+  getAllowance,
+  getUsers,
+  getUserWallets,
+  getWalletTransactionsSince,
+} from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import { RewardNameContext } from './RewardNameContext';
 import SendZapsPopup from './SendZapsPopup';
@@ -50,7 +55,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
         if (userWallets && userWallets.length > 0) {
           // Find the Allowance wallet
           const allowanceWallet = userWallets.find(w =>
-            w.name.toLowerCase().includes('allowance')
+            w.name.toLowerCase().includes('allowance'),
           );
 
           if (allowanceWallet) {
@@ -69,16 +74,20 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
 
             // Check if inkey exists before fetching transactions
             if (allowanceWallet.inkey) {
-              const transactionHistoryStart = Date.now() / MS_PER_SECOND - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+              const transactionHistoryStart =
+                Date.now() / MS_PER_SECOND -
+                TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
               const transaction = await getWalletTransactionsSince(
                 allowanceWallet.inkey,
                 transactionHistoryStart,
-                {}
+                {},
               );
 
-              const spent = transaction
-                .filter(t => t.amount < 0)
-                .reduce((total, t) => total + Math.abs(t.amount), 0) / MS_PER_SECOND;
+              const spent =
+                transaction
+                  .filter(t => t.amount < 0)
+                  .reduce((total, t) => total + Math.abs(t.amount), 0) /
+                MS_PER_SECOND;
               setSpentSats(spent);
             } else {
               setSpentSats(0);
@@ -94,7 +103,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
   }
-const rewardsName = rewardNameContext.rewardName;
+  const rewardsName = rewardNameContext.rewardName;
   return (
     <>
       <div className="wallet-container">
@@ -103,90 +112,93 @@ const rewardsName = rewardNameContext.rewardName;
           <p>Amount available to send to your teammates:</p>
         </div>
         <div className="mainContent">
-        <div
-          className="row"
-          style={{ paddingTop: '20px', paddingBottom: '20px' }}
-        >
-          <div className="col-md-5">
-            <div className="amountDisplayContainer">
-              <div className="amountDisplay">
-                {balance?.toLocaleString() ?? '0'}
-              </div>
-              <div>{rewardsName}</div>
-              <div style={{ paddingLeft: '20px', display: 'none' }}>
-                <button className="refreshImageIcon">
-                  <img
-                    src={ArrowClockwise}
-                    alt="icon"
-                    style={{ width: 30, height: 30 }}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-6" style={{ display: 'flex', alignItems: 'center', gap: '160px' }}>
-            <BatteryImageDisplay value={batteryPercentage} />
-            <button
-              className="sendZapsButton"
-              onClick={() => setShowSendZapsPopup(true)}
-              style={{ width: 'auto' }}
-            >
-              Send some zaps
-            </button>
-          </div>
-        </div>
-        <div
-          className="row"
-          style={{ paddingTop: '20px', paddingBottom: '20px' }}
-        >
-          <div className="col-md-5">
-            <div className="nextAllwanceContainer">
-              <img src={Calendar} alt="" />
-              <div className="remaining smallTextFont">Next allowance</div>
-              <div className="remaining smallTextFont">
-                {allowance ? allowance.amount.toLocaleString() : '0'}{' '}
-                <span>{rewardsName}</span>
-              </div>
-              <div className="remaining smallTextFont">
-                <div>
-                  {allowance
-                    ? new Date(allowance.nextPaymentDate).toLocaleDateString(
-                        'en-US',
-                        {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        },
-                      )
-                    : 'TBC'}
+          <div
+            className="row"
+            style={{ paddingTop: '20px', paddingBottom: '20px' }}
+          >
+            <div className="col-md-5">
+              <div className="amountDisplayContainer">
+                <div className="amountDisplay">
+                  {balance?.toLocaleString() ?? '0'}
+                </div>
+                <div>{rewardsName}</div>
+                <div style={{ paddingLeft: '20px', display: 'none' }}>
+                  <button className="refreshImageIcon">
+                    <img
+                      src={ArrowClockwise}
+                      alt="icon"
+                      style={{ width: 30, height: 30 }}
+                    />
+                  </button>
                 </div>
               </div>
             </div>
+
+            <div
+              className="col-md-6"
+              style={{ display: 'flex', alignItems: 'center', gap: '160px' }}
+            >
+              <BatteryImageDisplay value={batteryPercentage} />
+              <button
+                className="sendZapsButton"
+                onClick={() => setShowSendZapsPopup(true)}
+                style={{ width: 'auto' }}
+              >
+                Send some zaps
+              </button>
+            </div>
           </div>
-          <div className="col-md-3">
-            <div className="remaining smallTextFont">
-              <span className="color-box remaining-color "></span>Remaining this
-              week:
+          <div
+            className="row"
+            style={{ paddingTop: '20px', paddingBottom: '20px' }}
+          >
+            <div className="col-md-5">
+              <div className="nextAllwanceContainer">
+                <img src={Calendar} alt="" />
+                <div className="remaining smallTextFont">Next allowance</div>
+                <div className="remaining smallTextFont">
+                  {allowance ? allowance.amount.toLocaleString() : '0'}{' '}
+                  <span>{rewardsName}</span>
+                </div>
+                <div className="remaining smallTextFont">
+                  <div>
+                    {allowance
+                      ? new Date(allowance.nextPaymentDate).toLocaleDateString(
+                          'en-US',
+                          {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          },
+                        )
+                      : 'TBC'}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="spent smallTextFont">
-              <span className="color-box spent-color"></span>Spent this week:
+            <div className="col-md-3">
+              <div className="remaining smallTextFont">
+                <span className="color-box remaining-color "></span>Remaining
+                this week:
+              </div>
+              <div className="spent smallTextFont">
+                <span className="color-box spent-color"></span>Spent this week:
+              </div>
             </div>
-          </div>
-          <div className="col-md-3">
-            <div className="spent smallTextFont">
-              <b>{balance?.toLocaleString() ?? '0'}</b> {rewardsName}
-            </div>
-            <div className="spent smallTextFont">
-              <b>{spentSats?.toLocaleString()}</b> {rewardsName}
+            <div className="col-md-3">
+              <div className="spent smallTextFont">
+                <b>{balance?.toLocaleString() ?? '0'}</b> {rewardsName}
+              </div>
+              <div className="spent smallTextFont">
+                <b>{spentSats?.toLocaleString()}</b> {rewardsName}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    {showSendZapsPopup && (
-      <SendZapsPopup onClose={() => setShowSendZapsPopup(false)} />
-    )}
+      {showSendZapsPopup && (
+        <SendZapsPopup onClose={() => setShowSendZapsPopup(false)} />
+      )}
     </>
   );
 };

@@ -1,6 +1,11 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory, MessageFactory } from 'botbuilder';
-import { getUsers, payInvoice, createInvoice, getWalletBalance } from '../services/lnbitsService';
+import {
+  getUsers,
+  payInvoice,
+  createInvoice,
+  getWalletBalance,
+} from '../services/lnbitsService';
 import { UserService } from '../services/userService';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
@@ -9,7 +14,6 @@ const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
 export class SendZapCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
     try {
-
       console.log("Running SendZapCommand's execute method.");
 
       const globalRewardName = lnbitsLabel;
@@ -41,7 +45,10 @@ export interface SendZapResult {
 // Thrown only once payInvoice has been called: at that point the payment may
 // have settled even though we failed to confirm it, so a retry is unsafe.
 export class PaymentOutcomeUnknownError extends Error {
-  constructor(message: string, readonly cause?: unknown) {
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
     super(message);
     this.name = 'PaymentOutcomeUnknownError';
   }
@@ -54,7 +61,7 @@ export async function SendZap(
   zapAmount: number,
   context: TurnContext,
   updateCard: boolean = true,
-  globalRewardName: string
+  globalRewardName: string,
 ): Promise<SendZapResult> {
   try {
     console.log('Sending zap ...');
@@ -107,9 +114,11 @@ export async function SendZap(
     if (result && result.payment_hash && updateCard) {
       // Updated adaptive card (read-only)
       //fetch remainingBalance
-      const remainingBalance = await getWalletBalance(sender.allowanceWallet.inkey);
+      const remainingBalance = await getWalletBalance(
+        sender.allowanceWallet.inkey,
+      );
       console.log('Remaining Balance:', remainingBalance);
-      
+
       const updatedCard = {
         type: 'AdaptiveCard',
         body: [
@@ -130,7 +139,7 @@ export async function SendZap(
                   {
                     type: 'TextBlock',
                     text: `Receiver:`,
-                    weight: 'Bolder', 
+                    weight: 'Bolder',
                   },
                 ],
               },
@@ -140,7 +149,7 @@ export async function SendZap(
                 items: [
                   {
                     type: 'TextBlock',
-                    text: `${receiver.displayName}`, 
+                    text: `${receiver.displayName}`,
                   },
                 ],
               },
@@ -221,7 +230,7 @@ export async function SendZap(
                     ],
                   },
                 ],
-              }
+              },
             ],
           },
         ],
@@ -308,7 +317,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       }
     });
   }*/
-  
+
   return {
     type: 'AdaptiveCard',
     body: cardBody,

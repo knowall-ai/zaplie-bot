@@ -1,4 +1,10 @@
-import React, { FunctionComponent, useState, useEffect, useRef, useContext } from 'react';
+import React, {
+  FunctionComponent,
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+} from 'react';
 import styles from './RewardsComponent.module.css';
 import {
   getNostrRewards,
@@ -11,8 +17,10 @@ import { RewardNameContext } from './RewardNameContext';
 
 const stallID = process.env.REACT_APP_LNBITS_STORE_ID as string;
 
-const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> = ({ adminKey, userId }) => {
-
+const RewardsComponent: FunctionComponent<{
+  adminKey: string;
+  userId: string;
+}> = ({ adminKey, userId }) => {
   const [rewards, setRewards] = useState<Reward[]>([]); // Initialize as an empty array
   const [isDragging, setIsDragging] = useState(false);
   const [startPosition, setStartPosition] = useState(0);
@@ -105,14 +113,19 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
   };
 
   const rewardNameContext = useContext(RewardNameContext);
-  const  rewardName  = rewardNameContext.rewardName;
-
-
+  const rewardName = rewardNameContext.rewardName;
 
   // Only render rewards if they exist
   return (
     <div className={styles.mainContainer}>
-      <div className={styles.title}>Rewards <img src={ProvidedBy} alt="Provided By" className={styles.providedByImage} /></div>
+      <div className={styles.title}>
+        Rewards{' '}
+        <img
+          src={ProvidedBy}
+          alt="Provided By"
+          className={styles.providedByImage}
+        />
+      </div>
       <div
         className={styles.carousel}
         ref={carouselRef}
@@ -126,7 +139,11 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
           rewards.map(reward => (
             <div key={reward.id} className={styles.card}>
               <img
-                src={reward.image && reward.image.length > 0 ? reward.image : imagePlaceholder}
+                src={
+                  reward.image && reward.image.length > 0
+                    ? reward.image
+                    : imagePlaceholder
+                }
                 alt={reward.name}
                 className={styles.rewardImage}
                 style={{ height: '160px' }} // Fixed height
@@ -142,7 +159,8 @@ const RewardsComponent: FunctionComponent<{ adminKey: string; userId: string }> 
                   className={styles.productDetails}
                   onClick={() => handleProductDetailsClick(reward.link)}
                 >
-                  Product details</p>
+                  Product details
+                </p>
               )}
 
               <div className={styles.priceContainer}>

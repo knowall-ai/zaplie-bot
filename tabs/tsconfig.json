@@ -20,9 +20,9 @@
     "isolatedModules": true,
     "noEmit": false,
     "typeRoots": ["./src/types", "./node_modules/@types"],
-    "types": ["react", "react-dom", "node"],
+    "types": ["react", "react-dom", "node", "jest"],
     "jsx": "react-jsx"
   },
-  "include": ["src","backend"],
+  "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }

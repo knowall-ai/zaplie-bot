@@ -25,7 +25,10 @@
  * isActivePath('/settings-advanced', '/settings') // false - different route
  * isActivePath('/feed', '/') // false - root only matches exactly
  */
-export const isActivePath = (currentPath: string, targetPath: string): boolean => {
+export const isActivePath = (
+  currentPath: string,
+  targetPath: string,
+): boolean => {
   // Validate inputs to prevent runtime errors
   if (!currentPath || !targetPath) {
     return false;

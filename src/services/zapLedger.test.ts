@@ -1,7 +1,10 @@
 import { expect, describe, test } from '@jest/globals';
 import { ZapLedger, zapKey } from './zapLedger';
 
-const key = (recipientId: string, overrides: Partial<Parameters<typeof zapKey>[0]> = {}) =>
+const key = (
+  recipientId: string,
+  overrides: Partial<Parameters<typeof zapKey>[0]> = {},
+) =>
   zapKey({
     tenantId: 'tenant-1',
     conversationId: 'conv-1',
@@ -90,7 +93,9 @@ describe('ZapLedger', () => {
   test('the same card id in two tenants does not collide', () => {
     const ledger = new ZapLedger();
     expect(ledger.tryAcquire(key('alice'))).toBe(true);
-    expect(ledger.tryAcquire(key('alice', { tenantId: 'tenant-2' }))).toBe(true);
+    expect(ledger.tryAcquire(key('alice', { tenantId: 'tenant-2' }))).toBe(
+      true,
+    );
   });
 
   test('state is per recipient, so one card can pay several people', () => {
