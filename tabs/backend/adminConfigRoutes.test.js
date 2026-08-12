@@ -145,6 +145,22 @@ describe('admin config access and atomic persistence', () => {
     },
   );
 
+  test('serves the reward name without authentication', async () => {
+    const response = await call('GET', '/api/reward-name');
+
+    expect(response).toEqual({ status: 200, body: { rewardName: 'sats' } });
+  });
+
+  test('falls back to the default reward name when the config cannot be read', async () => {
+    fs.writeFileSync(testDataFile, 'not-json');
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await call('GET', '/api/reward-name');
+
+    expect(response).toEqual({ status: 200, body: { rewardName: 'sats' } });
+    consoleError.mockRestore();
+  });
+
   test('reports a failed atomic replacement and leaves the previous file intact', async () => {
     const before = fs.readFileSync(testDataFile, 'utf8');
     const rename = jest.spyOn(fs, 'renameSync').mockImplementationOnce(() => {

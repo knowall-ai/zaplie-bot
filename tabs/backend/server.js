@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { requireAdmin } = require('./adminAuth');
-const { createAdminConfigStore } = require('./adminConfigStore');
+const { createAdminConfigStore, DEFAULT_ADMIN_CONFIG } = require('./adminConfigStore');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -25,8 +25,10 @@ app.get('/api/reward-name', (req, res) => {
     const { rewardName } = readAdminConfig(readData());
     res.send({ rewardName });
   } catch (error) {
-    console.error('Unable to read reward name:', error.message);
-    res.status(500).send({ message: 'Unable to read reward name' });
+    // The reward label gates the whole portal render, so a read/parse failure
+    // must degrade to the safe default rather than fail the sign-in flow.
+    console.error('Unable to read reward name, serving default:', error.message);
+    res.send({ rewardName: DEFAULT_ADMIN_CONFIG.rewardName });
   }
 });
 
