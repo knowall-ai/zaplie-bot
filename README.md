@@ -45,7 +45,7 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
 - [Node.js](https://nodejs.org/), supported versions: 24
 - A Microsoft 365 tenant in which you have permission to upload Teams apps (where other developers have not been deploying the same bot with a matching ID). You may be able to get a free Microsoft 365 developer tenant by joining the [Microsoft 365 developer program](https://developer.microsoft.com/en-us/microsoft-365/dev-program). However, it seems recently Microsoft have removed this offering other than to users who have a Visual Studio Enterprise subscription, (see [Creating a Free Microsoft 365 Dev Tenant is Not Possible](https://o365reports.com/2024/03/14/creating-a-free-microsoft-365-e5-developer-tenant-is-no-longer-possible/)) and now advise creating a "single-license development tenant" (see steps in `Wiki` > `Setup` > `Microsoft development tenant`).
 - [Teams Toolkit Visual Studio Code Extension](https://aka.ms/teams-toolkit) version 5.0.0 and higher or [TeamsFx CLI](https://aka.ms/teams-toolkit-cli). You should be prompted to install this when you open the solution in VS Code.
-- [LNbits](https://www.lnbits.com) version 0.12 or higher. NB For development you can use the developer instance specified in `.env.dev`, or create your own instance, as specified in `Wiki` > `Setup` > `LNbits`.
+- [LNbits](https://www.lnbits.com) version 0.12 or higher. NB Credentials are no longer committed: copy `env/.env.dev.example` to `env/.env.dev` and fill in your own LNbits details (ask a maintainer for the shared development instance), or create your own instance, as specified in `Wiki` > `Setup` > `LNbits`.
 
 ## Running Zaplie bot
 
@@ -63,8 +63,8 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
       BOT_ENDPOINT=https://sample-id-3978.devtunnels.ms
       ```
   1.  Run command: `teamsapp provision --env local` .
-  2.  Run command: `teamsapp deploy --env local` .
-  3.  Run command: `teamsapp preview --env local` .
+  1.  Run command: `teamsapp deploy --env local` .
+  1.  Run command: `teamsapp preview --env local` .
 
 ### Deploy the app to Azure
 
@@ -97,6 +97,7 @@ This project uses ESLint and Prettier to maintain code quality and consistent fo
 ### Available Scripts
 
 **Bot/Backend (root directory):**
+
 ```bash
 npm run lint          # Run ESLint
 npm run lint:fix      # Auto-fix lint issues
@@ -106,6 +107,7 @@ npm run typecheck     # Run TypeScript type checking
 ```
 
 **Frontend/Tabs (`tabs/` directory):**
+
 ```bash
 npm run lint          # Run ESLint
 npm run lint:fix      # Auto-fix lint issues
@@ -117,6 +119,7 @@ npm run typecheck     # Run TypeScript type checking
 ### CI Pipeline
 
 The CI workflow (`.github/workflows/ci-quality-checks.yml`) runs on every push and PR to `main`:
+
 1. **Linting** - ESLint checks for both bot and tabs
 2. **Formatting** - Prettier validation
 3. **Type Checking** - TypeScript compilation checks for both bot and tabs
@@ -133,6 +136,7 @@ Have fun, and tag us on Twitter / Nostr!
 This project is developed and maintained by KnowAll AI.
 
 **Contact Information:**
+
 - Website: https://www.knowall.ai
 
 For support, partnerships, or licensing inquiries, please reach out to us using the contact details above.
