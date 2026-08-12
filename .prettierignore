@@ -5,6 +5,7 @@ node_modules/
 lib/
 build/
 dist/
+coverage/
 
 # Tabs (has its own prettier config)
 tabs/
