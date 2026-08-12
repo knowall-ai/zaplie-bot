@@ -31,6 +31,15 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+    ignore:
+      # ESLint 9+ dropped .eslintrc support, so this major needs a flat-config
+      # migration rather than a version bump — see #236. Minor/patch still flow.
+      - dependency-name: 'eslint'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: '@typescript-eslint/*'
+        update-types:
+          - 'version-update:semver-major'
 
   # React web app
   - package-ecosystem: 'npm'
@@ -56,6 +65,27 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+    ignore:
+      # Each of these majors needs a deliberate migration, not a version bump
+      # (see #236, and #234 for web-vitals). Minor/patch updates still flow.
+      - dependency-name: '@azure/msal-*'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: 'react'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: 'react-dom'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: '@types/react'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: '@types/react-dom'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: 'web-vitals'
+        update-types:
+          - 'version-update:semver-major'
 
   # Azure Functions
   - package-ecosystem: 'npm'
