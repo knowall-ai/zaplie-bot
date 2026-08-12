@@ -1,0 +1,62 @@
+# Dependabot — automated dependency update PRs.
+# PR titles use the `deps:` / `ci:` prefixes so they pass PR Lint
+# (which also skips its Fixes/test-plan checks for dependabot[bot]).
+version: 2
+updates:
+  # Bot / backend (repo root)
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps'
+    groups:
+      # One PR for all minor/patch bumps to keep the noise down;
+      # majors still get individual PRs.
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # React web app
+  - package-ecosystem: 'npm'
+    directory: '/tabs'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps'
+    groups:
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # Azure Functions
+  - package-ecosystem: 'npm'
+    directory: '/functions'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps'
+    groups:
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # GitHub Actions workflows
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'ci'
+    groups:
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'

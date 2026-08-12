@@ -1,0 +1,6 @@
+# Code owners for zaplie-bot.
+# These owners are requested for review on every pull request.
+# See: https://docs.github.com/articles/about-code-owners
+#
+# Ben owns everything for now; refine with per-path owners as the team grows.
+* @BenGWeeks
