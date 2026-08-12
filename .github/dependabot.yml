@@ -1,6 +1,11 @@
 # Dependabot — automated dependency update PRs.
 # PR titles use the `deps:` / `ci:` prefixes so they pass PR Lint
 # (which also skips its Fixes/test-plan checks for dependabot[bot]).
+#
+# Packages with peer-dependency relationships are grouped across ALL
+# update types. A major bump to one half of such a pair on its own cannot
+# install (`npm ci` fails with ERESOLVE), so the PR can never go green —
+# they have to move together.
 version: 2
 updates:
   # Bot / backend (repo root)
@@ -12,8 +17,16 @@ updates:
     commit-message:
       prefix: 'deps'
     groups:
-      # One PR for all minor/patch bumps to keep the noise down;
-      # majors still get individual PRs.
+      # eslint and the typescript-eslint plugins are peer-linked:
+      # @typescript-eslint/* v7 requires eslint ^8.56, so bumping eslint
+      # alone to v9/v10 breaks installation.
+      eslint:
+        patterns:
+          - 'eslint'
+          - '@typescript-eslint/*'
+      # One PR for all remaining minor/patch bumps to keep the noise down.
+      # Majors get individual PRs, except for the peer-linked groups above,
+      # which are deliberately grouped across every update type.
       minor-and-patch:
         update-types:
           - 'minor'
@@ -28,6 +41,17 @@ updates:
     commit-message:
       prefix: 'deps'
     groups:
+      # msal-react declares a peer range on msal-browser.
+      msal:
+        patterns:
+          - '@azure/msal-*'
+      # react, react-dom and their @types must stay on the same major.
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
       minor-and-patch:
         update-types:
           - 'minor'
