@@ -70,6 +70,57 @@ jobs:
         working-directory: tabs
         run: npm run typecheck
 
+  unit-tests-bot:
+    name: Unit Tests (Bot/Backend)
+    runs-on: ubuntu-latest
+    permissions:
+      # Allows the coverage ratchet to push a baseline bump on main-branch runs.
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests (with coverage)
+        run: npm test
+
+      - name: Coverage ratchet (must trend up)
+        run: npm run coverage:ratchet
+
+  unit-tests-tabs:
+    name: Unit Tests (Frontend/Tabs)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+          cache-dependency-path: tabs/package-lock.json
+
+      - name: Install dependencies
+        working-directory: tabs
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: tabs
+        env:
+          CI: true
+        run: npm test -- --watchAll=false
+
   build-check:
     name: Build Verification
     runs-on: ubuntu-latest
