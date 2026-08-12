@@ -19,14 +19,12 @@
   font-size: 16px;
   font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.01em;
-  text-wrap: balance;
 }
 
 .intro {
   max-width: 62ch;
   margin: 5px 0 0;
-  color: #b8b8b5;
+  color: #d6d6d6;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -40,10 +38,12 @@
   gap: 20px;
   padding: 16px 18px;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
-  background-color: #242223;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: #2d2b2c;
+  box-shadow:
+    0px 1px 2px rgba(0, 0, 0, 0.14),
+    0px 0px 1px rgba(0, 0, 0, 0.12);
 }
 
 .provider {
@@ -59,9 +59,9 @@
   flex: none;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background-color: #191819;
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: #1f1f1f;
 }
 
 .icon {
@@ -82,27 +82,29 @@
   line-height: 1.3;
 }
 
-.providerDescription,
-.accountHandle,
-.errorText {
+.providerDescription {
+  max-width: 52ch;
   margin: 4px 0 0;
+  color: #d6d6d6;
   font-size: 12px;
   line-height: 1.45;
 }
 
-.providerDescription {
-  max-width: 52ch;
-  color: #b8b8b5;
-}
-
 .accountHandle {
   max-width: 52ch;
+  margin: 4px 0 0;
   overflow-wrap: anywhere;
-  color: #d8d8d5;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .errorText {
+  margin: 4px 0 0;
   color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .actions {
@@ -117,80 +119,77 @@
   align-items: center;
   gap: 6px;
   padding: 6px 9px;
-  border: 1px solid rgba(132, 204, 22, 0.28);
-  border-radius: 7px;
-  background-color: rgba(132, 204, 22, 0.1);
-  color: #bef264;
-  font-size: 11px;
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: #1f1f1f;
+  color: #84cc16;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
 }
 
-.connectButton,
+.connectButton {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #84cc16;
+  border-radius: 4px;
+  background-color: #84cc16;
+  color: #17210b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition-property: background-color, border-color, color;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
+}
+
 .secondaryButton {
   min-height: 44px;
   padding: 8px 14px;
-  border-radius: 7px;
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: transparent;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
-  transition-property:
-    background-color, border-color, color, box-shadow, transform;
+  transition-property: background-color, border-color, color;
   transition-duration: 180ms;
   transition-timing-function: ease;
 }
 
-.connectButton {
-  border: 1px solid #84cc16;
-  background-color: #84cc16;
-  color: #152000;
-}
-
-.secondaryButton {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background-color: transparent;
-  color: #f4f4f2;
-}
-
 @media (hover: hover) {
   .connectButton:hover {
-    border-color: #a3e635;
-    background-color: #a3e635;
-    box-shadow: 0 6px 18px rgba(132, 204, 22, 0.14);
-    transform: translateY(-1px);
+    border-color: #6ba513;
+    background-color: #6ba513;
   }
 
   .secondaryButton:hover {
-    border-color: rgba(255, 255, 255, 0.32);
-    background-color: rgba(255, 255, 255, 0.06);
+    border-color: #4a4849;
+    background-color: #3b393a;
   }
-}
-
-.connectButton:active,
-.secondaryButton:active {
-  transform: translateY(1px);
 }
 
 .connectButton:focus-visible,
 .secondaryButton:focus-visible {
-  outline: 3px solid rgba(190, 242, 100, 0.48);
-  outline-offset: 3px;
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
 }
 
 .connectButton:disabled {
   opacity: 0.6;
   cursor: wait;
-  box-shadow: none;
-  transform: none;
 }
 
 .identityNote {
   max-width: 72ch;
   margin: 0;
-  color: #969693;
-  font-size: 11px;
+  color: #9a9a9a;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -202,17 +201,13 @@
   gap: 6px;
 }
 
-.loadingLine,
-.buttonPlaceholder {
-  display: block;
-  border-radius: 5px;
-  background-color: #3b393a;
-  animation: connectionPulse 1.4s ease-in-out infinite;
-}
-
 .loadingLine {
   width: 100%;
   height: 8px;
+  display: block;
+  border-radius: 4px;
+  background-color: #3b393a;
+  animation: connectionPulse 1.4s ease-in-out infinite;
 }
 
 .loadingLineShort {
@@ -222,7 +217,10 @@
 .buttonPlaceholder {
   width: 104px;
   height: 44px;
-  border-radius: 7px;
+  display: block;
+  border-radius: 4px;
+  background-color: #3b393a;
+  animation: connectionPulse 1.4s ease-in-out infinite;
 }
 
 .visuallyHidden {
