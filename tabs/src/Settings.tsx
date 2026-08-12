@@ -4,12 +4,15 @@ import { KNOWALL_CONSTANTS } from './constants/branding';
 
 const Settings: React.FC = () => {
   return (
-      <div className={styles.mainContainer}>
-        <div className={styles.title}>
-          Settings <span className={styles.providedBy}>Built by {KNOWALL_CONSTANTS.name}</span>
-        </div>
-        <AdminConfigSetting />
+    <div className={styles.mainContainer}>
+      <div className={styles.title}>
+        Settings{' '}
+        <span className={styles.providedBy}>
+          Built by {KNOWALL_CONSTANTS.name}
+        </span>
       </div>
+      <AdminConfigSetting />
+    </div>
   );
 };
 

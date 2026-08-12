@@ -54,14 +54,20 @@ describe('validateZapSubmit', () => {
   });
 
   test('rejects zero recipients', () => {
-    expect(() => validateZapSubmit('100', 0, 1000, 'Sats')).toThrow('No valid recipients');
+    expect(() => validateZapSubmit('100', 0, 1000, 'Sats')).toThrow(
+      'No valid recipients',
+    );
   });
 
   test('rejects a negative recipient count', () => {
-    expect(() => validateZapSubmit('100', -1, 1000, 'Sats')).toThrow('No valid recipients');
+    expect(() => validateZapSubmit('100', -1, 1000, 'Sats')).toThrow(
+      'No valid recipients',
+    );
   });
 
   test('rejects a fractional recipient count', () => {
-    expect(() => validateZapSubmit('100', 1.5, 1000, 'Sats')).toThrow('No valid recipients');
+    expect(() => validateZapSubmit('100', 1.5, 1000, 'Sats')).toThrow(
+      'No valid recipients',
+    );
   });
 });

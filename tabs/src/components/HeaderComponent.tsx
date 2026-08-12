@@ -17,7 +17,8 @@ const HeaderComponent: React.FC = () => {
   const dropdownButtonRef = useRef<HTMLDivElement>(null);
 
   // Use shared Teams auth hook
-  const { handleLogout, isLoggingOut, isTeamsInitializing, isInTeams } = useTeamsAuth();
+  const { handleLogout, isLoggingOut, isTeamsInitializing, isInTeams } =
+    useTeamsAuth();
 
   useEffect(() => {
     if (account) {
@@ -31,7 +32,11 @@ const HeaderComponent: React.FC = () => {
     let mounted = true;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (mounted && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        mounted &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsDropdownOpen(false);
       }
     };
@@ -54,33 +59,39 @@ const HeaderComponent: React.FC = () => {
   }, []);
 
   // Keyboard navigation handler
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    switch (event.key) {
-      case 'Enter':
-      case ' ':
-        event.preventDefault();
-        toggleDropdown();
-        break;
-      case 'Escape':
-        event.preventDefault();
-        closeDropdown();
-        break;
-      case 'ArrowDown':
-        if (!isDropdownOpen) {
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      switch (event.key) {
+        case 'Enter':
+        case ' ':
           event.preventDefault();
-          setIsDropdownOpen(true);
-        }
-        break;
-    }
-  }, [isDropdownOpen, toggleDropdown, closeDropdown]);
+          toggleDropdown();
+          break;
+        case 'Escape':
+          event.preventDefault();
+          closeDropdown();
+          break;
+        case 'ArrowDown':
+          if (!isDropdownOpen) {
+            event.preventDefault();
+            setIsDropdownOpen(true);
+          }
+          break;
+      }
+    },
+    [isDropdownOpen, toggleDropdown, closeDropdown],
+  );
 
   // Keyboard handler for dropdown items
-  const handleDropdownItemKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeDropdown();
-    }
-  }, [closeDropdown]);
+  const handleDropdownItemKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDropdown();
+      }
+    },
+    [closeDropdown],
+  );
 
   const onLogoutClick = useCallback(async () => {
     closeDropdown();
@@ -98,7 +109,8 @@ const HeaderComponent: React.FC = () => {
   };
 
   // Show loading skeleton during authentication initialization
-  const isLoading = inProgress !== InteractionStatus.None || isTeamsInitializing;
+  const isLoading =
+    inProgress !== InteractionStatus.None || isTeamsInitializing;
 
   // Hide header when running inside Microsoft Teams for cleaner integration
   if (isInTeams) {

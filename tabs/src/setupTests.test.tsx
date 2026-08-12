@@ -1,10 +1,5 @@
 // setupTests.test.tsx
 import '@testing-library/jest-dom';
-import { 
-  expect, 
-  describe, 
-  test,
- } from '@jest/globals';
 
 describe('Jest DOM Setup', () => {
   test('jest-dom is properly configured', () => {

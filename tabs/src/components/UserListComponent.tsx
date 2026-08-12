@@ -1,4 +1,11 @@
-import { FunctionComponent, useEffect, useState, useRef, useContext, useCallback } from 'react';
+import {
+  FunctionComponent,
+  useEffect,
+  useState,
+  useRef,
+  useContext,
+  useCallback,
+} from 'react';
 import styles from './UserListComponent.module.css';
 import { getUserWallets } from '../services/lnbitsServiceLocal';
 import { useCache } from '../utils/CacheContext';
@@ -28,16 +35,16 @@ const UserListComponent: FunctionComponent = () => {
 
       // Fetch wallets for each user
       const usersWithWallets = await Promise.all(
-        allUsers.map(async (user) => {
+        allUsers.map(async user => {
           try {
             const wallets = await getUserWallets(adminKey, user.id);
 
             if (wallets && wallets.length > 0) {
               const privateWallet = wallets.find(w =>
-                w.name.toLowerCase().includes('private')
+                w.name.toLowerCase().includes('private'),
               );
               const allowanceWallet = wallets.find(w =>
-                w.name.toLowerCase().includes('allowance')
+                w.name.toLowerCase().includes('allowance'),
               );
 
               return {
@@ -49,10 +56,13 @@ const UserListComponent: FunctionComponent = () => {
 
             return user;
           } catch (err) {
-            console.error(`[UserList] Error fetching wallets for user ${user.displayName}:`, err);
+            console.error(
+              `[UserList] Error fetching wallets for user ${user.displayName}:`,
+              err,
+            );
             return user;
           }
-        })
+        }),
       );
 
       setUsers(usersWithWallets);
@@ -74,15 +84,14 @@ const UserListComponent: FunctionComponent = () => {
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
   }
-const rewardsName = rewardNameContext.rewardName;
+  const rewardsName = rewardNameContext.rewardName;
   if (loading) {
     return <div>Loading...</div>;
   }
 
   if (error) {
     return <div>{error}</div>;
-  }  
-
+  }
 
   return (
     <div className={styles.userslist}>
@@ -138,7 +147,8 @@ const rewardsName = rewardNameContext.rewardName;
                     />
                     <div className={styles.userName}>
                       {/* Show displayName if it's not a UUID-like ID, otherwise show email or 'Unknown' */}
-                      {user.displayName && !user.displayName.match(/^[a-f0-9]{32}$/)
+                      {user.displayName &&
+                      !user.displayName.match(/^[a-f0-9]{32}$/)
                         ? user.displayName
                         : user.email || 'Unknown'}
                     </div>

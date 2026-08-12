@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+lib/
+build/
+dist/
+coverage/
+
+# Tabs (has its own prettier config)
+tabs/
+
+# Other
+*.min.js
+*.min.css
+package-lock.json
