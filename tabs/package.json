@@ -31,14 +31,15 @@
     "web-vitals": "^2.1.4",
     "webrtc-adapter": "^9.0.1"
   },
-  "resolutions": {
+  "overrides": {
     "chroma-js": "2.4.2"
   },
   "scripts": {
     "preinstall": "npx npm-force-resolutions",
     "prestart": "npm run tailwind:build",
-    "start": "concurrently --kill-others-on-fail \"npm run server\" \"npm run tailwind:watch\" \"react-scripts start\"",
+    "start": "concurrently --kill-others-on-fail \"npm run server:dev\" \"npm run tailwind:watch\" \"react-scripts start\"",
     "server": "node backend/server.js",
+    "server:dev": "node --watch backend/server.js",
     "preclient": "npm run tailwind:build",
     "client": "react-scripts start",
     "prebuild": "npm run tailwind:build:production",
@@ -47,7 +48,12 @@
     "tailwind:build:production": "tailwindcss -i ./src/styles/tailwind.css -o ./public/tailwind.css --minify",
     "tailwind:watch": "tailwindcss -i ./src/styles/tailwind.css -o ./public/tailwind.css --watch",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "eslint src/ --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint src/ --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx,json,css}\"",
+    "typecheck": "tsc --noEmit"
   },
   "eslintConfig": {
     "extends": [
@@ -76,8 +82,12 @@
     "@types/react-dom": "^18.3.0",
     "@types/react-qr-reader": "^2.1.7",
     "concurrently": "^9.1.2",
+    "prettier": "^3.2.0",
     "tailwindcss": "4.3.3",
     "ts-loader": "^9.5.1",
     "typescript": "^4.9.5"
+  },
+  "resolutions": {
+    "chroma-js": "2.4.2"
   }
 }

@@ -1,7 +1,8 @@
 @layer theme, base, components, utilities;
 
-@import "tailwindcss/theme.css" layer(theme) prefix(tw);
-@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none) important;
+@import 'tailwindcss/theme.css' layer(theme) prefix(tw);
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(tw) source(none)
+  important;
 
 :root {
   --zaplie-accent: #84cc16;

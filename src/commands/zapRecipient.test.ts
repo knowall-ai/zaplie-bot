@@ -42,7 +42,10 @@ describe('processZapRecipient', () => {
   });
 
   test('a confirmed payment records the hash', async () => {
-    await expect(run(ledger)).resolves.toEqual({ status: 'paid', label: 'Alice' });
+    await expect(run(ledger)).resolves.toEqual({
+      status: 'paid',
+      label: 'Alice',
+    });
     expect(ledger.get(ENTRY_KEY)).toMatchObject({
       state: 'paid',
       paymentHash: 'hash-1',
@@ -63,7 +66,9 @@ describe('processZapRecipient', () => {
   });
 
   test('a null receiver frees the slot instead of throwing', async () => {
-    await expect(run(ledger, { getReceiver: async () => null })).resolves.toEqual({
+    await expect(
+      run(ledger, { getReceiver: async () => null }),
+    ).resolves.toEqual({
       status: 'failed',
       label: 'User ID: alice',
     });
@@ -119,18 +124,22 @@ describe('processZapRecipient', () => {
     await expect(
       run(ledger, {
         pay: async () => {
-          throw new PaymentOutcomeUnknownError('LNbits timed out after sending');
+          throw new PaymentOutcomeUnknownError(
+            'LNbits timed out after sending',
+          );
         },
       }),
     ).resolves.toMatchObject({ status: 'needs-checking' });
 
     expect(ledger.get(ENTRY_KEY)?.state).toBe('unknown');
-    expect(
-      hasUnknownRecipientOutcome(ledger, ['alice'], () => ENTRY_KEY),
-    ).toBe(true);
+    expect(hasUnknownRecipientOutcome(ledger, ['alice'], () => ENTRY_KEY)).toBe(
+      true,
+    );
 
     const retryPay = jest.fn(okPay);
-    await expect(run(ledger, { pay: retryPay })).resolves.toEqual({ status: 'skipped' });
+    await expect(run(ledger, { pay: retryPay })).resolves.toEqual({
+      status: 'skipped',
+    });
     expect(retryPay).not.toHaveBeenCalled();
   });
 
@@ -138,7 +147,9 @@ describe('processZapRecipient', () => {
     await run(ledger);
 
     const secondPay = jest.fn(okPay);
-    await expect(run(ledger, { pay: secondPay })).resolves.toEqual({ status: 'skipped' });
+    await expect(run(ledger, { pay: secondPay })).resolves.toEqual({
+      status: 'skipped',
+    });
     expect(secondPay).not.toHaveBeenCalled();
   });
 
@@ -152,11 +163,7 @@ describe('processZapRecipient', () => {
         recipientId,
       });
 
-    const pending = getPendingRecipientIds(
-      ledger,
-      ['alice', 'bob'],
-      entryKey,
-    );
+    const pending = getPendingRecipientIds(ledger, ['alice', 'bob'], entryKey);
 
     expect(pending).toEqual(['bob']);
     expect(validateZapSubmit('100', pending.length, 100, 'Sats')).toBe(100);
@@ -197,7 +204,9 @@ describe('processZapRecipient', () => {
     ledger.releaseIfProcessing(ENTRY_KEY);
 
     const secondPay = jest.fn(okPay);
-    await expect(run(ledger, { pay: secondPay })).resolves.toEqual({ status: 'skipped' });
+    await expect(run(ledger, { pay: secondPay })).resolves.toEqual({
+      status: 'skipped',
+    });
     expect(secondPay).not.toHaveBeenCalled();
     expect(ledger.get(ENTRY_KEY)?.paymentHash).toBe('hash-1');
   });

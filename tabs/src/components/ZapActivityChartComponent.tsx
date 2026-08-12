@@ -1,4 +1,4 @@
-import React, { useEffect, useState,useContext } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { ActivityCalendar, Activity } from 'react-activity-calendar';
 import styles from './ZapActivityChartComponent.module.css';
 import { RewardNameContext } from './RewardNameContext';
@@ -82,7 +82,7 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
 }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   useEffect(() => {
-        const fetchActivities = async () => {
+    const fetchActivities = async () => {
       try {
         if (allZaps.length === 0) {
           console.log('No transactions available');
@@ -102,17 +102,16 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
       } catch (error) {
         console.error('Error fetching zaps:', error);
       }
-      
     };
 
     fetchActivities();
   }, [lnKey, timestamp, allZaps]);
 
-   const rewardNameContext = useContext(RewardNameContext);
+  const rewardNameContext = useContext(RewardNameContext);
   if (!rewardNameContext) {
     return null; // or handle the case where the context is not available
   }
-const rewardsName = rewardNameContext.rewardName;
+  const rewardsName = rewardNameContext.rewardName;
 
   return (
     <div className={styles.zapactivitychartbox}>
@@ -145,4 +144,3 @@ const rewardsName = rewardNameContext.rewardName;
 };
 
 export default ZapContributionsChart;
-

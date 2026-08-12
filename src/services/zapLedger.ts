@@ -72,7 +72,11 @@ export class ZapLedger {
     const entry = this.entries.get(key);
     // 'unknown' never expires on its own: it needs reconciliation, and dropping
     // it would silently re-enable a payment that may already have settled.
-    if (entry && entry.state !== 'unknown' && Date.now() - entry.at > this.ttlMs) {
+    if (
+      entry &&
+      entry.state !== 'unknown' &&
+      Date.now() - entry.at > this.ttlMs
+    ) {
       this.entries.delete(key);
     }
   }

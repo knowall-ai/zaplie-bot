@@ -39,12 +39,11 @@ export const theme = createTheme({
     DefaultButton: {
       styles: {
         root: {
-
           backgroundColor: '#84cc16',
           color: '#1f1f1f',
           border: 'none',
-          width:'150px',
-          height:'50px',
+          width: '150px',
+          height: '50px',
           selectors: {
             ':hover': {
               backgroundColor: '#6ba513',
@@ -57,7 +56,6 @@ export const theme = createTheme({
     PrimaryButton: {
       styles: {
         root: {
-
           backgroundColor: '#84cc16',
           color: '#1f1f1f',
           border: 'none',
