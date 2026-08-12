@@ -19,7 +19,8 @@ export const ADMIN_ROLE = 'Zaplie.Admin';
 // This claim check only controls what the portal renders. The backend verifies
 // the access token and role again and remains the authorization authority.
 export const isZaplieAdmin = (account: AccountInfo | undefined): boolean => {
-  const roles = (account?.idTokenClaims as { roles?: string[] } | undefined)?.roles;
+  const roles = (account?.idTokenClaims as { roles?: string[] } | undefined)
+    ?.roles;
   return Array.isArray(roles) && roles.includes(ADMIN_ROLE);
 };
 

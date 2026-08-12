@@ -1,11 +1,12 @@
+import { sanitizeApiError } from './apiService';
+
 jest.mock('axios', () => ({
   __esModule: true,
   default: {
-    isAxiosError: (error: { isAxiosError?: boolean }) => error?.isAxiosError === true,
+    isAxiosError: (error: { isAxiosError?: boolean }) =>
+      error?.isAxiosError === true,
   },
 }));
-
-import { sanitizeApiError } from './apiService';
 
 test('sanitizes Axios failures without retaining bearer headers or request data', () => {
   const error = {
@@ -15,7 +16,9 @@ test('sanitizes Axios failures without retaining bearer headers or request data'
     response: { status: 401 },
     config: {
       headers: { Authorization: 'Bearer must-not-be-logged' },
-      data: JSON.stringify({ botPersona: 'private administrator configuration' }),
+      data: JSON.stringify({
+        botPersona: 'private administrator configuration',
+      }),
     },
   };
 
@@ -27,5 +30,7 @@ test('sanitizes Axios failures without retaining bearer headers or request data'
     code: 'ERR_BAD_REQUEST',
   });
   expect(JSON.stringify(summary)).not.toContain('must-not-be-logged');
-  expect(JSON.stringify(summary)).not.toContain('private administrator configuration');
+  expect(JSON.stringify(summary)).not.toContain(
+    'private administrator configuration',
+  );
 });

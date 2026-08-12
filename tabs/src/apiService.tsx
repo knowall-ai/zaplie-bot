@@ -44,11 +44,16 @@ export const getRewardName = async () => {
   }
 };
 
-export const getAdminConfig = async (accessToken: string): Promise<AdminConfigResponse> => {
+export const getAdminConfig = async (
+  accessToken: string,
+): Promise<AdminConfigResponse> => {
   try {
-    const response = await axios.get<AdminConfigResponse>(`${API_URL}/admin-config`, {
-      headers: bearerHeaders(accessToken),
-    });
+    const response = await axios.get<AdminConfigResponse>(
+      `${API_URL}/admin-config`,
+      {
+        headers: bearerHeaders(accessToken),
+      },
+    );
     return response.data;
   } catch (error) {
     console.error('Error fetching admin config:', sanitizeApiError(error));

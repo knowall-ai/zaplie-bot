@@ -1,8 +1,17 @@
-import React, { FormEvent, FunctionComponent, useContext, useEffect, useState } from 'react';
+import React, {
+  FormEvent,
+  FunctionComponent,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { useMsal } from '@azure/msal-react';
 import { toast } from 'react-toastify';
 import { AdminConfig, getAdminConfig, updateAdminConfig } from '../apiService';
-import { acquireAdminApiAccessToken, isZaplieAdmin } from '../services/adminApiAuth';
+import {
+  acquireAdminApiAccessToken,
+  isZaplieAdmin,
+} from '../services/adminApiAuth';
 import { RewardNameContext } from './RewardNameContext';
 import styles from './setting.module.css';
 
@@ -55,7 +64,9 @@ const AdminConfigSetting: FunctionComponent = () => {
         }
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(getErrorMessage(error, 'Unable to load administrator settings.'));
+          setErrorMessage(
+            getErrorMessage(error, 'Unable to load administrator settings.'),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -90,12 +101,18 @@ const AdminConfigSetting: FunctionComponent = () => {
     setErrorMessage('');
     try {
       const accessToken = await acquireAdminApiAccessToken(instance, account);
-      const { config: savedConfig } = await updateAdminConfig(accessToken, config);
+      const { config: savedConfig } = await updateAdminConfig(
+        accessToken,
+        config,
+      );
       setDraft(toDraft(savedConfig));
       setRewardName(savedConfig.rewardName);
       toast.success('Administrator settings saved.');
     } catch (error) {
-      const message = getErrorMessage(error, 'Unable to save administrator settings.');
+      const message = getErrorMessage(
+        error,
+        'Unable to save administrator settings.',
+      );
       setErrorMessage(message);
       toast.error(message);
     } finally {
@@ -108,7 +125,9 @@ const AdminConfigSetting: FunctionComponent = () => {
   }
 
   if (isLoading) {
-    return <p className={styles.statusMessage}>Loading administrator settings...</p>;
+    return (
+      <p className={styles.statusMessage}>Loading administrator settings...</p>
+    );
   }
 
   return (
@@ -132,8 +151,11 @@ const AdminConfigSetting: FunctionComponent = () => {
           id="reward-name"
           type="text"
           value={draft.rewardName}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, rewardName: event.target.value }))
+          onChange={event =>
+            setDraft(current => ({
+              ...current,
+              rewardName: event.target.value,
+            }))
           }
           className={`${styles.textBox} ${styles.compactInput}`}
           maxLength={40}
@@ -148,8 +170,11 @@ const AdminConfigSetting: FunctionComponent = () => {
         <textarea
           id="bot-persona"
           value={draft.botPersona}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, botPersona: event.target.value }))
+          onChange={event =>
+            setDraft(current => ({
+              ...current,
+              botPersona: event.target.value,
+            }))
           }
           className={styles.textArea}
           placeholder="Describe the bot's tone, name, and organization vocabulary"
@@ -166,8 +191,11 @@ const AdminConfigSetting: FunctionComponent = () => {
           id="github-pr-merged-sats"
           type="number"
           value={draft.githubPrMergedSats}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, githubPrMergedSats: event.target.value }))
+          onChange={event =>
+            setDraft(current => ({
+              ...current,
+              githubPrMergedSats: event.target.value,
+            }))
           }
           className={`${styles.textBox} ${styles.amountInput}`}
           min={1}

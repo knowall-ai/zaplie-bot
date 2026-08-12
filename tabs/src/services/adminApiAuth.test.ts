@@ -20,7 +20,9 @@ test('returns the API access token rather than the ID token', async () => {
     acquireTokenPopup: jest.fn(),
   } as never;
 
-  await expect(acquireAdminApiAccessToken(instance, account)).resolves.toBe('api-access-token');
+  await expect(acquireAdminApiAccessToken(instance, account)).resolves.toBe(
+    'api-access-token',
+  );
 });
 
 test('fails before requesting a token when the API scope is absent', async () => {
@@ -44,7 +46,9 @@ test('uses an interactive API-scope request only when MSAL requires it', async (
   const instance = {
     acquireTokenSilent: jest
       .fn()
-      .mockRejectedValue(new InteractionRequiredAuthError('interaction_required')),
+      .mockRejectedValue(
+        new InteractionRequiredAuthError('interaction_required'),
+      ),
     acquireTokenPopup,
   } as never;
 
@@ -58,7 +62,11 @@ test('uses an interactive API-scope request only when MSAL requires it', async (
 });
 
 test('recognizes the exact Zaplie administrator claim for UI gating', () => {
-  expect(isZaplieAdmin({ idTokenClaims: { roles: ['Zaplie.Admin'] } } as never)).toBe(true);
-  expect(isZaplieAdmin({ idTokenClaims: { roles: ['Other.Role'] } } as never)).toBe(false);
+  expect(
+    isZaplieAdmin({ idTokenClaims: { roles: ['Zaplie.Admin'] } } as never),
+  ).toBe(true);
+  expect(
+    isZaplieAdmin({ idTokenClaims: { roles: ['Other.Role'] } } as never),
+  ).toBe(false);
   expect(isZaplieAdmin(undefined)).toBe(false);
 });
