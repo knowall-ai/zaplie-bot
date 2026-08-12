@@ -10,13 +10,15 @@ jest.mock('../services/lnbitsServiceLocal', () => ({
 
 describe('RewardsComponent', () => {
   test('renders the marketplace title without legacy provider branding', () => {
-    const markup = renderToStaticMarkup(
-      <RewardNameContext.Provider value={{ rewardName: 'sats', setRewardName: jest.fn() }}>
+    const view = renderToStaticMarkup(
+      <RewardNameContext.Provider
+        value={{ rewardName: 'sats', setRewardName: jest.fn() }}
+      >
         <RewardsComponent adminKey="test-admin-key" userId="test-user" />
       </RewardNameContext.Provider>,
     );
 
-    expect(markup).toMatch(/>\s*Rewards\s*<\/div>/);
-    expect(markup).not.toContain('Provided By');
+    expect(view).toMatch(/>\s*Rewards\s*<\/div>/);
+    expect(view).not.toContain('Provided By');
   });
 });
