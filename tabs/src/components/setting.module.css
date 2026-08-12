@@ -13,7 +13,7 @@
   background-color: #2d2b2c;
   padding: 20px;
   box-sizing: border-box;
-  color: #f3f4f6;
+  color: #d6d6d6;
   font-family: Inter, sans-serif;
 }
 
@@ -32,7 +32,7 @@
   right: 20px;
   top: 5px;
   font-size: 10px;
-  color: #a3e635;
+  color: #84cc16;
   font-weight: 500;
 }
 
@@ -67,13 +67,12 @@
 }
 
 .label {
-  color: #f3f4f6;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 600;
 }
 
-.textBox,
-.textArea {
+.textBox {
   box-sizing: border-box;
   max-width: 100%;
   padding: 8px 10px;
@@ -85,10 +84,26 @@
   font-size: 13px;
 }
 
+.textArea {
+  width: 100%;
+  min-height: 8rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: #1f1f1f;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 .textBox:focus,
 .textArea:focus {
-  border-color: #a3e635;
-  outline: 2px solid #a3e635;
+  border-color: #84cc16;
+  outline: 2px solid #84cc16;
   outline-offset: 2px;
 }
 
@@ -98,13 +113,6 @@
 
 .amountInput {
   width: 9rem;
-}
-
-.textArea {
-  width: 100%;
-  min-height: 8rem;
-  resize: vertical;
-  line-height: 1.5;
 }
 
 .formActions {
@@ -125,7 +133,7 @@
 }
 
 .saveButton:hover:not(:disabled) {
-  background-color: #a3e635;
+  background-color: #6ba513;
 }
 
 .saveButton:focus-visible {
@@ -134,33 +142,30 @@
 }
 
 .saveButton:disabled {
-  background-color: #4b5563;
-  color: #e5e7eb;
+  background-color: #3b393a;
+  color: #9a9a9a;
   cursor: not-allowed;
-}
-
-.statusMessage,
-.errorMessage,
-.validationMessage {
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .statusMessage {
   margin: 28px 0 0;
   color: #d6d6d6;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .errorMessage {
   margin: 0;
-  padding: 10px 12px;
-  border-left: 3px solid #fda4af;
-  background: rgba(190, 18, 60, 0.2);
-  color: #ffe4e6;
+  color: #fecdd3;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .validationMessage {
+  margin: 0;
   color: #fecdd3;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 @media (max-width: 600px) {
