@@ -56,7 +56,6 @@ msalInstance.initialize().then(async () => {
           </ThemeProvider>
         </Router>
       </CacheProvider>
-      ,
     </MsalProvider>,
   );
 });
