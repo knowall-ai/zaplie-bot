@@ -14,9 +14,12 @@ export async function fetchZapHistory(
   idToken: string,
   sinceEpochSeconds: number,
 ): Promise<ZapHistory> {
-  const response = await fetch(`/api/week/zap-history?sinceTs=${sinceEpochSeconds}`, {
-    headers: { Authorization: `Bearer ${idToken}` },
-  });
+  const response = await fetch(
+    `/api/week/zap-history?sinceTs=${sinceEpochSeconds}`,
+    {
+      headers: { Authorization: `Bearer ${idToken}` },
+    },
+  );
   if (!response.ok) {
     throw new Error(`Zap history request failed (status: ${response.status})`);
   }

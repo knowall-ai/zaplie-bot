@@ -23,7 +23,11 @@ const initialsOf = (label: string): string => {
 
 const renderAvatar = (name: string, matchedUser: User | null) =>
   matchedUser?.profileImg ? (
-    <img className={styles.avatar} src={matchedUser.profileImg} alt={`${name}'s profile`} />
+    <img
+      className={styles.avatar}
+      src={matchedUser.profileImg}
+      alt={`${name}'s profile`}
+    />
   ) : (
     <div className={styles.avatarFallback}>{initialsOf(name)}</div>
   );
@@ -70,7 +74,10 @@ const WeekComponent: React.FC = () => {
       let accessToken: string;
       let idToken: string;
       try {
-        const tokenResponse = await instance.acquireTokenSilent({ ...weekScopesRequest, account });
+        const tokenResponse = await instance.acquireTokenSilent({
+          ...weekScopesRequest,
+          account,
+        });
         accessToken = tokenResponse.accessToken;
         idToken = tokenResponse.idToken;
       } catch (tokenError) {
@@ -82,14 +89,15 @@ const WeekComponent: React.FC = () => {
         throw tokenError;
       }
 
-      const [events, relevantPeople, { allUsers, zappedUserIds }] = await Promise.all([
-        fetchRecentMeetings(accessToken, DAYS_BACK),
-        fetchRelevantPeople(accessToken, 10),
-        fetchZapHistory(
-          idToken,
-          Math.floor(Date.now() / 1000) - DAYS_BACK * 24 * 60 * 60,
-        ),
-      ]);
+      const [events, relevantPeople, { allUsers, zappedUserIds }] =
+        await Promise.all([
+          fetchRecentMeetings(accessToken, DAYS_BACK),
+          fetchRelevantPeople(accessToken, 10),
+          fetchZapHistory(
+            idToken,
+            Math.floor(Date.now() / 1000) - DAYS_BACK * 24 * 60 * 60,
+          ),
+        ]);
       setMeetings(events);
       const selfEmail = account.username.toLowerCase();
 
@@ -104,14 +112,17 @@ const WeekComponent: React.FC = () => {
               existing.meetingCount += 1;
               return;
             }
-            const matchedUser = allUsers.find(u => u.email.toLowerCase() === email) || null;
+            const matchedUser =
+              allUsers.find(u => u.email.toLowerCase() === email) || null;
             attendeeMap.set(email, {
               name: a.emailAddress.name || a.emailAddress.address,
               email: a.emailAddress.address,
               meetingSubject: event.subject,
               meetingCount: 1,
               matchedUser,
-              alreadyZapped: matchedUser ? zappedUserIds.has(matchedUser.id) : false,
+              alreadyZapped: matchedUser
+                ? zappedUserIds.has(matchedUser.id)
+                : false,
             });
           });
       });
@@ -121,20 +132,30 @@ const WeekComponent: React.FC = () => {
         a.matchedUser ? (a.alreadyZapped ? 1 : 2) : 0;
       setMetAttendees(
         Array.from(attendeeMap.values()).sort(
-          (a, b) => rankValue(b) - rankValue(a) || b.meetingCount - a.meetingCount,
+          (a, b) =>
+            rankValue(b) - rankValue(a) || b.meetingCount - a.meetingCount,
         ),
       );
 
       setCollaborators(
         relevantPeople
-          .filter(p => p.email.toLowerCase() !== selfEmail && !attendeeMap.has(p.email.toLowerCase()))
+          .filter(
+            p =>
+              p.email.toLowerCase() !== selfEmail &&
+              !attendeeMap.has(p.email.toLowerCase()),
+          )
           .map(p => {
-            const matchedUser = allUsers.find(u => u.email.toLowerCase() === p.email.toLowerCase()) || null;
+            const matchedUser =
+              allUsers.find(
+                u => u.email.toLowerCase() === p.email.toLowerCase(),
+              ) || null;
             return {
               name: p.name,
               email: p.email,
               matchedUser,
-              alreadyZapped: matchedUser ? zappedUserIds.has(matchedUser.id) : false,
+              alreadyZapped: matchedUser
+                ? zappedUserIds.has(matchedUser.id)
+                : false,
             };
           }),
       );
@@ -165,21 +186,35 @@ const WeekComponent: React.FC = () => {
   const pageHeader = (
     <header className={styles.header}>
       <span className={styles.eyebrow}>Weekly pulse</span>
-      <h1 id="week-title" className={styles.title}>Your week</h1>
-      <p className={styles.subtitle}>Recent meetings and the teammates worth recognising.</p>
+      <h1 id="week-title" className={styles.title}>
+        Your week
+      </h1>
+      <p className={styles.subtitle}>
+        Recent meetings and the teammates worth recognising.
+      </p>
     </header>
   );
 
   if (loading) {
     return (
-      <section className={styles.weekcomponent} aria-labelledby="week-title" aria-busy="true">
+      <section
+        className={styles.weekcomponent}
+        aria-labelledby="week-title"
+        aria-busy="true"
+      >
         {pageHeader}
-        <span className={styles.srOnly} role="status">Loading your week</span>
+        <span className={styles.srOnly} role="status">
+          Loading your week
+        </span>
         <div className={styles.skeletonStats} aria-hidden="true">
-          {[0, 1, 2].map(item => <div key={item} className={styles.skeletonStat} />)}
+          {[0, 1, 2].map(item => (
+            <div key={item} className={styles.skeletonStat} />
+          ))}
         </div>
         <div className={styles.skeletonList} aria-hidden="true">
-          {[0, 1, 2].map(item => <div key={item} className={styles.skeletonRow} />)}
+          {[0, 1, 2].map(item => (
+            <div key={item} className={styles.skeletonRow} />
+          ))}
         </div>
       </section>
     );
@@ -191,7 +226,8 @@ const WeekComponent: React.FC = () => {
         {pageHeader}
         <div className={styles.consentBox}>
           <p className={styles.subtitle}>
-            Zaplie needs permission to read your calendar and relevant contacts to show recent meetings and the people you work with.
+            Zaplie needs permission to read your calendar and relevant contacts
+            to show recent meetings and the people you work with.
           </p>
           <button className={styles.consentButton} onClick={handleGrantAccess}>
             Grant calendar access
@@ -210,7 +246,10 @@ const WeekComponent: React.FC = () => {
             <strong>We couldn't load your week.</strong>
             <p className={styles.errorText}>{error}</p>
           </div>
-          <button className={styles.secondaryButton} onClick={() => setReloadCount(count => count + 1)}>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setReloadCount(count => count + 1)}
+          >
             Try again
           </button>
         </div>
@@ -218,7 +257,9 @@ const WeekComponent: React.FC = () => {
     );
   }
 
-  const attendeesToZap = metAttendees.filter(a => a.matchedUser && !a.alreadyZapped);
+  const attendeesToZap = metAttendees.filter(
+    a => a.matchedUser && !a.alreadyZapped,
+  );
   const topSuggestion = attendeesToZap[0];
   const onZaplie = metAttendees.filter(a => a.matchedUser);
 
@@ -235,14 +276,19 @@ const WeekComponent: React.FC = () => {
         <span className={styles.rowTitle}>{name}</span>
         <span className={styles.rowMeta}>{meta}</span>
       </div>
-      {!matchedUser && <span className={styles.noAccountBadge}>Not on Zaplie</span>}
+      {!matchedUser && (
+        <span className={styles.noAccountBadge}>Not on Zaplie</span>
+      )}
       {matchedUser && alreadyZapped && (
         <span className={styles.zappedBadge}>
           Zapped <img src={ZapIcon} alt="" className={styles.inlineIcon} />
         </span>
       )}
       {matchedUser && !alreadyZapped && (
-        <button className={styles.zapButton} onClick={() => setZapTarget(matchedUser)}>
+        <button
+          className={styles.zapButton}
+          onClick={() => setZapTarget(matchedUser)}
+        >
           Zap
         </button>
       )}
@@ -253,7 +299,10 @@ const WeekComponent: React.FC = () => {
     <section className={styles.weekcomponent} aria-labelledby="week-title">
       {pageHeader}
 
-      <div className={styles.stats} aria-label={`Summary for the last ${DAYS_BACK} days`}>
+      <div
+        className={styles.stats}
+        aria-label={`Summary for the last ${DAYS_BACK} days`}
+      >
         <div className={styles.stat}>
           <span className={styles.statNum}>{meetings.length}</span>
           <span className={styles.statLabel}>meetings</span>
@@ -272,11 +321,17 @@ const WeekComponent: React.FC = () => {
         <div className={styles.suggestionRow}>
           <span className={styles.suggestionText}>
             You met <strong>{topSuggestion.name}</strong>{' '}
-            {topSuggestion.meetingCount === 1 ? 'this week' : `${topSuggestion.meetingCount} times this week`}{' '}
+            {topSuggestion.meetingCount === 1
+              ? 'this week'
+              : `${topSuggestion.meetingCount} times this week`}{' '}
             and haven't recognised them yet.
           </span>
-          <button className={styles.zapButton} onClick={() => setZapTarget(topSuggestion.matchedUser)}>
-            Zap {topSuggestion.name.split(' ')[0]} <img src={ZapIcon} alt="" className={styles.inlineIcon} />
+          <button
+            className={styles.zapButton}
+            onClick={() => setZapTarget(topSuggestion.matchedUser)}
+          >
+            Zap {topSuggestion.name.split(' ')[0]}{' '}
+            <img src={ZapIcon} alt="" className={styles.inlineIcon} />
           </button>
         </div>
       )}
@@ -286,7 +341,11 @@ const WeekComponent: React.FC = () => {
         <span className={styles.count}>{meetings.length}</span>
       </div>
       <div className={styles.section}>
-        {meetings.length === 0 && <p className={styles.emptyText}>No meetings found in the last {DAYS_BACK} days.</p>}
+        {meetings.length === 0 && (
+          <p className={styles.emptyText}>
+            No meetings found in the last {DAYS_BACK} days.
+          </p>
+        )}
         {meetings.map(event => {
           const start = asUtc(event.start.dateTime);
           return (
@@ -297,8 +356,13 @@ const WeekComponent: React.FC = () => {
               <div className={styles.rowInfo}>
                 <span className={styles.rowTitle}>{event.subject}</span>
                 <span className={styles.rowMeta}>
-                  {start.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-                  {' · '}{event.attendees.length} attendee{event.attendees.length !== 1 ? 's' : ''}
+                  {start.toLocaleString('en-GB', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
+                  {' · '}
+                  {event.attendees.length} attendee
+                  {event.attendees.length !== 1 ? 's' : ''}
                 </span>
               </div>
             </div>
@@ -311,7 +375,9 @@ const WeekComponent: React.FC = () => {
         <span className={styles.count}>{metAttendees.length}</span>
       </div>
       <div className={styles.section}>
-        {metAttendees.length === 0 && <p className={styles.emptyText}>No other attendees in this period.</p>}
+        {metAttendees.length === 0 && (
+          <p className={styles.emptyText}>No other attendees in this period.</p>
+        )}
         {metAttendees.map(attendee =>
           renderPerson(
             attendee.email,
@@ -323,10 +389,14 @@ const WeekComponent: React.FC = () => {
         )}
       </div>
       {metAttendees.length > 0 && onZaplie.length === 0 && (
-        <p className={styles.emptyText}>None of the people you met are on Zaplie yet.</p>
+        <p className={styles.emptyText}>
+          None of the people you met are on Zaplie yet.
+        </p>
       )}
       {onZaplie.length > 0 && attendeesToZap.length === 0 && (
-        <p className={styles.emptyText}>You have recognised everyone you met this week.</p>
+        <p className={styles.emptyText}>
+          You have recognised everyone you met this week.
+        </p>
       )}
 
       {collaborators.length > 0 && (
@@ -337,14 +407,23 @@ const WeekComponent: React.FC = () => {
           </div>
           <div className={styles.section}>
             {collaborators.map(person =>
-              renderPerson(person.email, person.name, person.email, person.matchedUser, person.alreadyZapped),
+              renderPerson(
+                person.email,
+                person.name,
+                person.email,
+                person.matchedUser,
+                person.alreadyZapped,
+              ),
             )}
           </div>
         </>
       )}
 
       {zapTarget && (
-        <SendZapsPopup initialUserId={zapTarget.id} onClose={() => setZapTarget(null)} />
+        <SendZapsPopup
+          initialUserId={zapTarget.id}
+          onClose={() => setZapTarget(null)}
+        />
       )}
     </section>
   );

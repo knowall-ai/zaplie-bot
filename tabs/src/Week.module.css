@@ -5,7 +5,11 @@
   margin: 0 0 2.5rem;
   box-sizing: border-box;
   background:
-    radial-gradient(circle at 12% 0%, rgba(132, 204, 22, 0.08), transparent 26rem),
+    radial-gradient(
+      circle at 12% 0%,
+      rgba(132, 204, 22, 0.08),
+      transparent 26rem
+    ),
     #1f1f1f;
 }
 

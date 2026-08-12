@@ -18,14 +18,17 @@ export interface GraphEvent {
   attendees: GraphAttendee[];
 }
 
-const CALENDAR_VIEW_ENDPOINT = 'https://graph.microsoft.com/v1.0/me/calendarView';
+const CALENDAR_VIEW_ENDPOINT =
+  'https://graph.microsoft.com/v1.0/me/calendarView';
 
 export async function fetchRecentMeetings(
   accessToken: string,
   daysBack: number,
 ): Promise<GraphEvent[]> {
   const endDateTime = new Date();
-  const startDateTime = new Date(endDateTime.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const startDateTime = new Date(
+    endDateTime.getTime() - daysBack * 24 * 60 * 60 * 1000,
+  );
 
   const params = new URLSearchParams({
     startDateTime: startDateTime.toISOString(),
@@ -35,13 +38,16 @@ export async function fetchRecentMeetings(
     $select: 'subject,start,end,organizer,attendees',
   });
 
-  const response = await fetch(`${CALENDAR_VIEW_ENDPOINT}?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      // Without this, start.dateTime comes back in the mailbox time zone.
-      Prefer: 'outlook.timezone="UTC"',
+  const response = await fetch(
+    `${CALENDAR_VIEW_ENDPOINT}?${params.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        // Without this, start.dateTime comes back in the mailbox time zone.
+        Prefer: 'outlook.timezone="UTC"',
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     const body = await response.text();

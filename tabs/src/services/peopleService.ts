@@ -15,9 +15,12 @@ export async function fetchRelevantPeople(
     $select: 'displayName,scoredEmailAddresses,personType',
   });
 
-  const response = await fetch(`https://graph.microsoft.com/v1.0/me/people?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/me/people?${params.toString()}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -28,7 +31,8 @@ export async function fetchRelevantPeople(
   return (data.value ?? [])
     .filter(
       (person: any) =>
-        person?.personType?.class === 'Person' && person?.scoredEmailAddresses?.[0]?.address,
+        person?.personType?.class === 'Person' &&
+        person?.scoredEmailAddresses?.[0]?.address,
     )
     .map((person: any) => ({
       name: person.displayName,
