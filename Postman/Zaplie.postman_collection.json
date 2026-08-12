@@ -23,7 +23,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -39,7 +39,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -56,7 +56,7 @@
 						"header": [
 							{
 								"key": "X-Api-Key",
-								"value": "1d5658a73ecf426d9039b6c5f30a3de5",
+								"value": "REPLACE_WITH_LNBITS_ADMIN_KEY",
 								"type": "text"
 							}
 						],
@@ -93,7 +93,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -109,7 +109,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -122,7 +122,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -138,7 +138,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -175,7 +175,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5",
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY",
 									"disabled": true
 								}
 							]
@@ -193,7 +193,7 @@
 						"header": [
 							{
 								"key": "X-Api-Key",
-								"value": "1d5658a73ecf426d9039b6c5f30a3de5",
+								"value": "REPLACE_WITH_LNBITS_ADMIN_KEY",
 								"type": "text"
 							}
 						],
@@ -224,7 +224,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5",
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY",
 									"disabled": true
 								}
 							]
@@ -238,7 +238,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -254,7 +254,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -267,7 +267,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -283,7 +283,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -407,7 +407,7 @@
 							"bearer": [
 								{
 									"key": "token",
-									"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlaXJldm8tZGV2IiwidXNyIjoiNjZlZWExZGJiZWMyNGRlZWE1YWNkOTgwZWZkMDFiMGIiLCJlbWFpbCI6bnVsbCwiZXhwIjoxNzU3OTUzODUxfQ.JX3e6Iut9dUUQaitCIo-eTJVx3w0B4SDzCyhbMEKZUw",
+									"value": "REPLACE_WITH_LNBITS_JWT",
 									"type": "string"
 								}
 							]
@@ -416,7 +416,7 @@
 						"header": [
 							{
 								"key": "X-Api-Key",
-								"value": "036d3f553b3e4e1598a32d20a08235f9",
+								"value": "REPLACE_WITH_LNBITS_KEY",
 								"type": "text",
 								"disabled": true
 							}
@@ -449,7 +449,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -465,7 +465,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -478,7 +478,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=1d5658a73ecf426d9039b6c5f30a3de5",
+							"raw": "https://lnbits-test.knowall.ai/usermanager/api/v1/users?X-Api-Key=REPLACE_WITH_LNBITS_ADMIN_KEY",
 							"protocol": "https",
 							"host": [
 								"finickyoil0",
@@ -494,7 +494,7 @@
 							"query": [
 								{
 									"key": "X-Api-Key",
-									"value": "1d5658a73ecf426d9039b6c5f30a3de5"
+									"value": "REPLACE_WITH_LNBITS_ADMIN_KEY"
 								}
 							]
 						}
@@ -522,7 +522,7 @@
 		"apikey": [
 			{
 				"key": "value",
-				"value": "7de4366449e14f699abed1f7974066ca",
+				"value": "REPLACE_WITH_LNBITS_KEY",
 				"type": "string"
 			},
 			{
