@@ -104,14 +104,12 @@ const getUserWallets = async (
   adminKey: string,
   userId: string,
 ): Promise<Wallet[] | null> => {
-  // Check cache first with wallet-specific TTL
   const cachedEntry = apiCache.userWallets.get(userId);
   if (isCacheValid(cachedEntry, CACHE_DURATION_WALLETS_MS)) {
     logger.debug(`[Cache HIT] getUserWallets for user ${userId}`);
     return cachedEntry.data;
   }
 
-  // Check if there's already a pending request for this user
   const pendingRequest = pendingRequests.userWallets.get(userId);
   if (pendingRequest) {
     logger.debug(
@@ -120,7 +118,6 @@ const getUserWallets = async (
     return pendingRequest;
   }
 
-  // Create new request and store it to prevent duplicates
   const requestPromise = (async (): Promise<Wallet[] | null> => {
     try {
       const accessToken = await getAccessToken(`${userName}`, `${password}`);
@@ -144,7 +141,6 @@ const getUserWallets = async (
 
       const data: Wallet[] = await response.json();
 
-      // Map the wallets to match the Wallet interface
       let walletData: Wallet[] = data.map((wallet: any) => ({
         id: wallet.id,
         admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
@@ -163,14 +159,12 @@ const getUserWallets = async (
 
       // Limit cache size to prevent unbounded memory growth
       if (apiCache.userWallets.size >= MAX_WALLET_CACHE_SIZE) {
-        // Remove oldest entry (first entry in Map)
         const firstKey = apiCache.userWallets.keys().next().value;
         if (firstKey) {
           apiCache.userWallets.delete(firstKey);
         }
       }
 
-      // Cache the result
       apiCache.userWallets.set(userId, {
         data: filteredWallets,
         timestamp: Date.now(),
@@ -181,7 +175,6 @@ const getUserWallets = async (
       logger.error('Error fetching user wallets:', error);
       throw error;
     } finally {
-      // Remove from pending requests
       pendingRequests.userWallets.delete(userId);
     }
   })();
@@ -268,7 +261,6 @@ const getWalletId = async (inKey: string) => {
       return null;
     }
 
-    // Return the id of the wallet
     return wallet.id;
   } catch (error) {
     logger.error(error);
@@ -276,7 +268,6 @@ const getWalletId = async (inKey: string) => {
   }
 };
 
-//Akash Performance Test - Migrated to use core API
 const getAllWallets = async (lnKey: string) => {
   try {
     const accessToken = await getAccessToken(`${userName}`, `${password}`);
@@ -300,7 +291,6 @@ const getAllWallets = async (lnKey: string) => {
     logger.debug('All Wallets returned:', data.length);
     logger.debug('All Wallets: ', data);
 
-    // Map the wallets to match the Wallet interface
     let walletData: Wallet[] = data.map((wallet: any) => ({
       id: wallet.id,
       admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
@@ -386,7 +376,6 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
   }
 };
 
-// NEW: Get wallets paginated for a specific user
 const getWalletsPaginated = async (
   userId: string,
   limit: number = 100,
@@ -433,7 +422,6 @@ const getWalletsPaginated = async (
       );
     });
 
-    // Map ALL fields from the API response to match the Wallet interface
     const walletData: Wallet[] = wallets.map((wallet: any) => ({
       id: wallet.id,
       admin: wallet.admin || '',
@@ -449,7 +437,6 @@ const getWalletsPaginated = async (
       updated_at: wallet.updated_at,
     }));
 
-    // Filter out deleted wallets
     const filteredWallets = walletData.filter(
       wallet => wallet.deleted !== true,
     );

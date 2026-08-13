@@ -21,7 +21,6 @@ const getNostrRewards = async (
       throw new Error(`Error getting products (status: ${response.status})`);
     }
 
-    // Check if the response is JSON
     const contentType = response.headers.get('content-type');
     logger.debug('Content-Type:', contentType);
 

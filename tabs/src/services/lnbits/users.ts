@@ -10,16 +10,13 @@ import type { RawApiUser } from './cache';
 import { nodeUrl, password, userName } from './config';
 import { getUserWallets } from './wallets';
 
-// NEW: Get all users from /users/api/v1/user endpoint
-// Returns raw API data - mapping to User type is done in getUsers()
+// Mapping to the User type happens in getUsers, not here.
 const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
-  // Check cache first
   if (isCacheValid(apiCache.rawUsers, CACHE_DURATION_USERS_MS)) {
     logger.debug('[Cache HIT] getAllUsersFromAPI');
     return apiCache.rawUsers.data;
   }
 
-  // Check if there's already a pending request
   if (pendingRequests.users) {
     logger.debug('[Dedup] Reusing pending getAllUsersFromAPI request');
     return pendingRequests.users;
@@ -27,7 +24,6 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
 
   logger.debug('[Cache MISS] Fetching users from API');
 
-  // Create new request and store it to prevent duplicates
   pendingRequests.users = (async (): Promise<RawApiUser[]> => {
     try {
       const accessToken = await getAccessToken(`${userName}`, `${password}`);
@@ -53,7 +49,6 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
 
       logger.debug(`Fetched ${result.length} users from API`);
 
-      // Cache the result with proper type
       apiCache.rawUsers = {
         data: result,
         timestamp: Date.now(),
@@ -71,8 +66,6 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
   return pendingRequests.users;
 };
 
-// Migrated to use LNbits v1+ core API
-// Gets all users from /users/api/v1/user endpoint
 const getUsers = async (
   adminKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
@@ -82,7 +75,6 @@ const getUsers = async (
   logger.debug('Filter criteria:', filterByExtra);
 
   try {
-    // Get all users directly from the Users API
     const rawUsers = await getAllUsersFromAPI();
 
     if (!rawUsers || rawUsers.length === 0) {
@@ -99,7 +91,6 @@ const getUsers = async (
       logger.debug('Available fields:', Object.keys(rawUsers[0]));
     }
 
-    // Map the raw user data to User objects
     // Note: Wallets are NOT fetched here - use separate functions to get wallets when needed
     const users: User[] = rawUsers.map((user: any) => {
       // Try to get a friendly display name from various fields
@@ -131,7 +122,6 @@ const getUsers = async (
     if (filterByExtra && Object.keys(filterByExtra).length > 0) {
       logger.debug('=== FILTERING USERS ===');
 
-      // Check if filtering by aadObjectId (which is stored in external_id field)
       if (filterByExtra.aadObjectId) {
         logger.debug(
           'Filtering by aadObjectId (external_id):',
@@ -196,8 +186,6 @@ const getUsers = async (
   }
 };
 
-// Migrated to use LNbits v1+ core API
-// Gets a single user by fetching their wallets and constructing a User object
 const getUser = async (
   adminKey: string,
   userId: string,
@@ -207,7 +195,6 @@ const getUser = async (
   }
 
   try {
-    // Get user's wallets using core API
     const userWallets = await getUserWallets(adminKey, userId);
 
     if (!userWallets || userWallets.length === 0) {
@@ -230,7 +217,6 @@ const getUser = async (
         displayName = nameParts[0].trim();
       }
     } else if (userWallets.length > 0) {
-      // Use first wallet name
       const nameParts = userWallets[0].name.split('-');
       if (nameParts.length > 1) {
         displayName = nameParts[0].trim();

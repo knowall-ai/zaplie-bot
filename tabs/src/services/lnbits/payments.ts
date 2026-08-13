@@ -56,7 +56,6 @@ const getWalletTransactionsSince = async (
 ): Promise<Transaction[]> => {
   // Note that the timestamp is in seconds, not milliseconds.
   try {
-    // Get walletId using the provided apiKey
     //const walletId = await getWalletId(lnKey);
     //const encodedExtra = JSON.stringify(filterByExtra);
 
@@ -88,7 +87,6 @@ const getWalletTransactionsSince = async (
     // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra
       ? paymentsSince.filter((payment: any) => {
-          // Check if the payment's extra field matches the filterByExtra object
           const paymentExtra = payment.extra || {};
           return Object.keys(filterByExtra).every(
             key => paymentExtra[key] === filterByExtra[key],
@@ -98,7 +96,6 @@ const getWalletTransactionsSince = async (
 
     logger.debug('DATA2', filteredPayments);
 
-    // Map the payments to match the Zap interface
     const transactionData: Transaction[] = filteredPayments.map(
       (transaction: any) => ({
         checking_id:
@@ -123,7 +120,6 @@ const getWalletTransactionsSince = async (
   }
 };
 
-// Migrated from UserManager to core API - Uses /api/v1/payments instead of /usermanager/api/v1/transactions
 const getUserWalletTransactions = async (
   walletId: string,
   apiKey: string,
@@ -153,7 +149,6 @@ const getUserWalletTransactions = async (
     // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra
       ? data.filter((payment: any) => {
-          // Check if the payment's extra field matches the filterByExtra object
           const paymentExtra = payment.extra || {};
           return Object.keys(filterByExtra).every(
             key => paymentExtra[key] === filterByExtra[key],
@@ -172,7 +167,6 @@ const getUserWalletTransactions = async (
   }
 };
 
-// NEW: Get all payments from all users across the entire system
 const getAllPayments = async (
   limit: number = 1000,
   offset: number = 0,
@@ -214,7 +208,6 @@ const getAllPayments = async (
     // The API might return an object with a 'data' or 'payments' property
     let payments = data;
 
-    // Check if data is wrapped in an object
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       if (data.data && Array.isArray(data.data)) {
         payments = data.data;
