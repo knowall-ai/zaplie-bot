@@ -3,20 +3,29 @@ process.env.AAD_CLIENT_ID = 'test-client';
 process.env.LNBITS_NODE_URL = 'https://lnbits.test';
 process.env.LNBITS_USERNAME = 'lnbits-admin';
 process.env.LNBITS_PASSWORD = 'lnbits-password';
+process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
+
+const assert = require('node:assert/strict');
+const { before, after, beforeEach, describe, test } = require('node:test');
+const http = require('http');
+
+const { SignJWT, UnsecuredJWT, generateKeyPair } = require('jose');
 
 // Only the JWKS network fetch is replaced; jwtVerify runs for real against a
 // local key pair, so weakening issuer/audience/alg checks makes tests fail.
+// Seeding require.cache stands in for a mocking framework, as in configRoutes.test.js.
 let mockPublicKey;
-jest.mock('jose', () => {
-  const actual = jest.requireActual('jose');
-  return {
-    ...actual,
-    createRemoteJWKSet: jest.fn(() => async () => mockPublicKey),
-  };
-});
+const josePath = require.resolve('jose');
+require.cache[josePath] = {
+  id: josePath,
+  filename: josePath,
+  loaded: true,
+  exports: {
+    ...require('jose'),
+    createRemoteJWKSet: () => async () => mockPublicKey,
+  },
+};
 
-const http = require('http');
-const { SignJWT, UnsecuredJWT, generateKeyPair } = jest.requireActual('jose');
 const app = require('./server');
 
 const OID = 'aad-oid-1';
@@ -52,16 +61,25 @@ const lnbitsBodies = {
   payments: [
     { amount: -1000, time: NOW - 60, memo: 'Zap!', extra: { to: { user: 'user-2' } } },
     { amount: -500, time: SINCE - 60, memo: 'old zap', extra: { to: { user: 'user-old' } } },
-    { amount: -200, time: NOW - 60, memo: 'Weekly Allowance cleared', extra: { to: { user: 'user-cleared' } } },
+    {
+      amount: -200,
+      time: NOW - 60,
+      memo: 'Weekly Allowance cleared',
+      extra: { to: { user: 'user-cleared' } },
+    },
     { amount: 3000, time: NOW - 60, memo: 'incoming', extra: { to: { user: 'user-incoming' } } },
   ],
 };
 
-const jsonResponse = (body) => ({ ok: true, status: 200, json: async () => body });
+const jsonResponse = body => ({ ok: true, status: 200, json: async () => body });
+
+let fetchCalls = [];
 
 const mockLnbitsFetch = (overrides = {}) => {
   const bodies = { ...lnbitsBodies, ...overrides };
-  global.fetch = jest.fn(async (url) => {
+  fetchCalls = [];
+  global.fetch = async (url, init) => {
+    fetchCalls.push([url, init]);
     if (url === 'https://lnbits.test/api/v1/auth') return jsonResponse(bodies.auth);
     if (url === 'https://lnbits.test/users/api/v1/user') return jsonResponse(bodies.users);
     if (url === 'https://lnbits.test/users/api/v1/user/user-1/wallet') {
@@ -71,7 +89,7 @@ const mockLnbitsFetch = (overrides = {}) => {
       return jsonResponse(bodies.payments);
     }
     throw new Error(`unexpected LNbits url: ${url}`);
-  });
+  };
 };
 
 let privateKey;
@@ -89,14 +107,14 @@ const signToken = ({ payload = { oid: OID }, issuer = ISSUER, audience = AUDIENC
     .setAudience(audience)
     .sign(key || privateKey);
 
-beforeAll(async () => {
+before(async () => {
   const pair = await generateKeyPair('RS256');
   privateKey = pair.privateKey;
   mockPublicKey = pair.publicKey;
   strangerPrivateKey = (await generateKeyPair('RS256')).privateKey;
   validToken = await signToken();
 
-  await new Promise((resolve) => {
+  await new Promise(resolve => {
     server = app.listen(0, () => {
       base = `http://127.0.0.1:${server.address().port}`;
       resolve();
@@ -104,8 +122,8 @@ beforeAll(async () => {
   });
 });
 
-afterAll(async () => {
-  await new Promise((resolve) => server.close(resolve));
+after(async () => {
+  await new Promise(resolve => server.close(resolve));
 });
 
 beforeEach(() => {
@@ -117,9 +135,9 @@ const get = (path, auth) =>
     const req = http.request(
       `${base}${path}`,
       { method: 'GET', headers: auth ? { Authorization: auth } : {} },
-      (res) => {
+      res => {
         let raw = '';
-        res.on('data', (chunk) => (raw += chunk));
+        res.on('data', chunk => (raw += chunk));
         res.on('end', () => resolve({ status: res.statusCode, body: raw }));
       },
     );
@@ -130,22 +148,22 @@ const get = (path, auth) =>
 describe('GET /api/week/zap-history auth', () => {
   test('rejects an anonymous request without touching LNbits', async () => {
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('rejects a token signed by a key outside the tenant JWKS', async () => {
     const token = await signToken({ key: strangerPrivateKey });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('rejects a token with the wrong audience', async () => {
     const token = await signToken({ audience: 'some-other-app' });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('rejects a token with the wrong issuer', async () => {
@@ -153,15 +171,15 @@ describe('GET /api/week/zap-history auth', () => {
       issuer: 'https://login.microsoftonline.com/other-tenant/v2.0',
     });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('rejects a valid token without an oid claim', async () => {
     const token = await signToken({ payload: { sub: 'someone' } });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('rejects an unsigned alg:none token', async () => {
@@ -172,8 +190,8 @@ describe('GET /api/week/zap-history auth', () => {
       .setAudience(AUDIENCE)
       .encode();
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('rejects an HS256-signed token', async () => {
@@ -185,8 +203,8 @@ describe('GET /api/week/zap-history auth', () => {
       .setAudience(AUDIENCE)
       .sign(new TextEncoder().encode('0'.repeat(32)));
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 
   // Only the algorithms allowlist rejects this: the trusted RSA key verifies
@@ -200,20 +218,20 @@ describe('GET /api/week/zap-history auth', () => {
       .setAudience(AUDIENCE)
       .sign(privateKey);
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${token}`);
-    expect(res.status).toBe(401);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(res.status, 401);
+    assert.equal(fetchCalls.length, 0);
   });
 });
 
 describe('GET /api/week/zap-history', () => {
   test('rejects a missing or non-numeric sinceTs without touching LNbits', async () => {
     const missing = await get('/api/week/zap-history', `Bearer ${validToken}`);
-    expect(missing.status).toBe(400);
+    assert.equal(missing.status, 400);
     const garbage = await get('/api/week/zap-history?sinceTs=abc', `Bearer ${validToken}`);
-    expect(garbage.status).toBe(400);
+    assert.equal(garbage.status, 400);
     const empty = await get('/api/week/zap-history?sinceTs=', `Bearer ${validToken}`);
-    expect(empty.status).toBe(400);
-    expect(global.fetch).not.toHaveBeenCalled();
+    assert.equal(empty.status, 400);
+    assert.equal(fetchCalls.length, 0);
   });
 
   test('fails loud when LNbits credentials are not configured', async () => {
@@ -221,7 +239,7 @@ describe('GET /api/week/zap-history', () => {
     delete process.env.LNBITS_NODE_URL;
     try {
       const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-      expect(res.status).toBe(503);
+      assert.equal(res.status, 503);
     } finally {
       process.env.LNBITS_NODE_URL = nodeUrl;
     }
@@ -229,10 +247,10 @@ describe('GET /api/week/zap-history', () => {
 
   test('returns the caller zap history using server-side LNbits credentials', async () => {
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(200);
+    assert.equal(res.status, 200);
 
     const body = JSON.parse(res.body);
-    expect(body.allUsers).toEqual([
+    assert.deepEqual(body.allUsers, [
       {
         id: 'user-1',
         displayName: 'Ben Weeks',
@@ -251,29 +269,25 @@ describe('GET /api/week/zap-history', () => {
       },
     ]);
     // Excludes the pre-sinceTs zap, the allowance-clearing sweep and incoming payments.
-    expect(body.zappedUserIds).toEqual(['user-2']);
+    assert.deepEqual(body.zappedUserIds, ['user-2']);
 
-    const authCall = global.fetch.mock.calls.find(
-      ([url]) => url === 'https://lnbits.test/api/v1/auth',
-    );
-    expect(JSON.parse(authCall[1].body)).toEqual({
+    const authCall = fetchCalls.find(([url]) => url === 'https://lnbits.test/api/v1/auth');
+    assert.deepEqual(JSON.parse(authCall[1].body), {
       username: 'lnbits-admin',
       password: 'lnbits-password',
     });
 
-    const paymentsCall = global.fetch.mock.calls.find(([url]) =>
-      url.includes('/api/v1/payments'),
-    );
-    expect(paymentsCall[1].headers['X-Api-Key']).toBe('secret-inkey');
+    const paymentsCall = fetchCalls.find(([url]) => url.includes('/api/v1/payments'));
+    assert.equal(paymentsCall[1].headers['X-Api-Key'], 'secret-inkey');
   });
 
   test('response never leaks wallet keys', async () => {
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body).not.toContain('secret-inkey');
-    expect(res.body).not.toContain('secret-adminkey');
-    expect(res.body).not.toContain('inkey');
-    expect(res.body).not.toContain('adminkey');
+    assert.equal(res.status, 200);
+    assert.ok(!res.body.includes('secret-inkey'));
+    assert.ok(!res.body.includes('secret-adminkey'));
+    assert.ok(!res.body.includes('inkey'));
+    assert.ok(!res.body.includes('adminkey'));
   });
 
   test('derives the user from the token oid, ignoring any client-supplied id', async () => {
@@ -281,42 +295,42 @@ describe('GET /api/week/zap-history', () => {
       `/api/week/zap-history?sinceTs=${SINCE}&userId=user-2`,
       `Bearer ${validToken}`,
     );
-    expect(res.status).toBe(200);
-    const walletCall = global.fetch.mock.calls.find(([url]) =>
-      url.includes('/users/api/v1/user/'),
-    );
-    expect(walletCall[0]).toBe('https://lnbits.test/users/api/v1/user/user-1/wallet');
+    assert.equal(res.status, 200);
+    const walletCall = fetchCalls.find(([url]) => url.includes('/users/api/v1/user/'));
+    assert.equal(walletCall[0], 'https://lnbits.test/users/api/v1/user/user-1/wallet');
   });
 
   test('responds 502 when the LNbits users response has no data array', async () => {
     mockLnbitsFetch({ users: { users: [] } });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(502);
+    assert.equal(res.status, 502);
   });
 
   test('responds 502 when the LNbits wallets response is not an array', async () => {
     mockLnbitsFetch({ wallets: { wallets: [] } });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(502);
+    assert.equal(res.status, 502);
   });
 
   test('responds 502 when the LNbits payments response is not an array', async () => {
     mockLnbitsFetch({ payments: { payments: [] } });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(502);
+    assert.equal(res.status, 502);
   });
 
   test('returns an empty history when the caller has no LNbits user', async () => {
     mockLnbitsFetch({ users: { data: [lnbitsBodies.users.data[1]] } });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(200);
-    expect(JSON.parse(res.body).zappedUserIds).toEqual([]);
+    assert.equal(res.status, 200);
+    assert.deepEqual(JSON.parse(res.body).zappedUserIds, []);
   });
 
   test('returns an empty history when the caller has no Allowance wallet', async () => {
-    mockLnbitsFetch({ wallets: [{ id: 'w', name: 'Private', user: 'user-1', inkey: 'k', deleted: false }] });
+    mockLnbitsFetch({
+      wallets: [{ id: 'w', name: 'Private', user: 'user-1', inkey: 'k', deleted: false }],
+    });
     const res = await get(`/api/week/zap-history?sinceTs=${SINCE}`, `Bearer ${validToken}`);
-    expect(res.status).toBe(200);
-    expect(JSON.parse(res.body).zappedUserIds).toEqual([]);
+    assert.equal(res.status, 200);
+    assert.deepEqual(JSON.parse(res.body).zappedUserIds, []);
   });
 });
