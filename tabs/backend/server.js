@@ -178,6 +178,7 @@ app.post('/api/reward-name', requireAdmin, (req, res) => {
 
 // Use the authentication middleware for API routes
 app.use('/api', authMiddleware);
+app.use('/api/achievements', require('./achievementsRoutes'));
 
 // Endpoint to update the reward name
 

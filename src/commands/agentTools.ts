@@ -11,6 +11,7 @@ import {
   getUsers,
 } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
+import { getAchievementsFor } from '../services/fetchAchievements';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -104,6 +105,23 @@ const getRecentActivityTool: ToolDefinition = {
   },
 };
 
+const getMyAchievementsTool: ToolDefinition = {
+  name: 'get_my_achievements',
+  description:
+    "Get the current user's achievement progress computed from real LNbits zap history. " +
+    'These are Zaplie milestones, not stored or published Nostr badges.',
+  parameters: { type: 'object', properties: {}, required: [] },
+  handler: async (_args, turnContext: TurnContext) => {
+    const user = turnContext.turnState.get('user') as User;
+    return { rewardLabel, ...(await getAchievementsFor(user.aadObjectId)) };
+  },
+};
+
 export function createReadOnlyTools(): ToolDefinition[] {
-  return [getMyBalanceTool, getLeaderboardTool, getRecentActivityTool];
+  return [
+    getMyBalanceTool,
+    getLeaderboardTool,
+    getRecentActivityTool,
+    getMyAchievementsTool,
+  ];
 }
