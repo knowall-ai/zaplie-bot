@@ -22,3 +22,15 @@ interface User {
 }
 
 type WalletType = 'Allowance' | 'Private';
+
+interface Transaction {
+  checking_id: string;
+  pending: boolean;
+  amount: number; // in millisatoshis (msats)
+  fee: number;
+  memo: string;
+  time: number | string; // Unix timestamp (number) or ISO date string
+  extra: { [key: string]: any }; // JSON object
+  wallet_id: string;
+  bolt11?: string; // Lightning invoice (optional)
+}
