@@ -60,7 +60,7 @@ With the Azure Bot in place, create the connection the code refers to via
 
 ```bash
 az bot authsetting create -g <resource-group> -n <BOT_ID> \
-  --setting-name GraphCalendars \
+  --setting-name GraphWorkSignals \
   --client-id <SSO_APP_CLIENT_ID> \
   --client-secret <SSO_APP_CLIENT_SECRET> \
   --service Aadv2 \
@@ -79,7 +79,7 @@ Where:
 - `tokenExchangeUrl` must match the SSO app's Application ID URI, or silent
   token exchange in Teams fails and users fall back to the sign-in card.
 
-Then set `GRAPH_CONNECTION_NAME=GraphCalendars` in the bot's environment.
+Then set `GRAPH_CONNECTION_NAME=GraphWorkSignals` in the bot's environment.
 
 ## Verifying
 
