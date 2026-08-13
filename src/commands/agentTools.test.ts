@@ -3,18 +3,20 @@
 // Mocks lnbitsService/zapHistoryService (external dependencies), not
 // agentTools itself.
 
-import { createReadOnlyTools } from './agentTools';
+import { createAgentTools } from './agentTools';
 import {
   getUserWallets,
   getWallets,
   getUsers,
 } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
+import { createZapCard } from './sendZapCommand';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
 
 jest.mock('../services/lnbitsService');
 jest.mock('../services/zapHistoryService');
+jest.mock('./sendZapCommand');
 
 const mockGetUserWallets = getUserWallets as jest.MockedFunction<
   typeof getUserWallets
@@ -23,6 +25,9 @@ const mockGetWallets = getWallets as jest.MockedFunction<typeof getWallets>;
 const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
 const mockGetRecentZaps = getRecentZaps as jest.MockedFunction<
   typeof getRecentZaps
+>;
+const mockCreateZapCard = createZapCard as jest.MockedFunction<
+  typeof createZapCard
 >;
 
 const currentUser: User = {
@@ -38,7 +43,10 @@ const currentUser: User = {
 const makeTurnContext = (user: User | undefined): TurnContext => {
   const turnState = new Map<string, unknown>();
   if (user) turnState.set('user', user);
-  return { turnState } as unknown as TurnContext;
+  return {
+    turnState,
+    sendActivity: jest.fn<() => Promise<any>>().mockResolvedValue(undefined),
+  } as unknown as TurnContext;
 };
 
 const wallet = (overrides: Partial<Wallet>): Wallet => ({
@@ -65,9 +73,7 @@ describe('agentTools', () => {
         wallet({ name: 'Private', balance_msat: 50000 }),
       ]);
 
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_my_balance',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_my_balance')!;
       const result: any = await tool.handler({}, makeTurnContext(currentUser));
 
       expect(result.wallets).toEqual([
@@ -89,23 +95,21 @@ describe('agentTools', () => {
         wallet({
           id: 'w-alice',
           name: 'Private',
-          user: 'user-alice',
+          user: currentUser.id,
           balance_msat: 1500000,
         }),
       ]);
       mockGetUsers.mockResolvedValue([
         { ...currentUser, id: 'user-bob', displayName: 'Bob' },
-        { ...currentUser, id: 'user-alice', displayName: 'Alice' },
+        currentUser,
       ]);
 
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
       const result: any = await tool.handler({}, makeTurnContext(currentUser));
 
       expect(result.leaderboard).toEqual([
-        { displayName: 'Alice', balanceSats: 1500 },
-        { displayName: 'Bob', balanceSats: 500 },
+        { displayName: 'Alice', balanceSats: 1500, isCurrentUser: true },
+        { displayName: 'Bob', balanceSats: 500, isCurrentUser: false },
       ]);
     });
   });
@@ -122,7 +126,7 @@ describe('agentTools', () => {
         },
       ]);
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
       const result: any = await tool.handler(
@@ -148,7 +152,7 @@ describe('agentTools', () => {
     test('clamps limit to [1, 50] and defaults to 20', async () => {
       mockGetRecentZaps.mockResolvedValue([]);
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -171,6 +175,99 @@ describe('agentTools', () => {
       expect(mockGetRecentZaps).toHaveBeenLastCalledWith({
         limit: 20,
         userAadObjectId: undefined,
+      });
+    });
+  });
+
+  describe('propose_zap', () => {
+    const sender: User = {
+      ...currentUser,
+      allowanceWallet: wallet({ balance_msat: 900000 }),
+    };
+    const bob: User = {
+      ...currentUser,
+      id: 'user-bob',
+      displayName: 'Bob Smith',
+      aadObjectId: 'aad-bob',
+    };
+    const tool = () => createAgentTools().find(t => t.name === 'propose_zap')!;
+
+    beforeEach(() => {
+      mockGetUsers.mockResolvedValue([sender, bob]);
+      mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as any);
+    });
+
+    test('posts a pre-filled proposal without executing a payment', async () => {
+      const context = makeTurnContext(sender);
+      const result: any = await tool().handler(
+        { recipientName: 'Bob', amountSats: 100, memo: 'Great review' },
+        context,
+      );
+
+      expect(mockCreateZapCard).toHaveBeenCalledWith(
+        sender,
+        process.env.LNBITS_POINTS_LABEL,
+        { receiverId: 'user-bob', message: 'Great review', amountSats: 100 },
+      );
+      expect(context.sendActivity).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        proposed: true,
+        recipient: 'Bob Smith',
+        amountSats: 100,
+        memo: 'Great review',
+      });
+    });
+
+    test('prefers an exact display name over partial matches', async () => {
+      const exactBob = { ...bob, id: 'user-exact', displayName: 'Bob' };
+      mockGetUsers.mockResolvedValue([sender, bob, exactBob]);
+
+      await tool().handler(
+        { recipientName: 'Bob', amountSats: 25, memo: 'Thanks' },
+        makeTurnContext(sender),
+      );
+
+      expect(mockCreateZapCard).toHaveBeenCalledWith(
+        sender,
+        process.env.LNBITS_POINTS_LABEL,
+        expect.objectContaining({ receiverId: 'user-exact' }),
+      );
+    });
+
+    test.each([
+      ['a self-zap', { recipientName: 'Alice', amountSats: 10, memo: 'Me' }],
+      ['a missing reason', { recipientName: 'Bob', amountSats: 10, memo: '' }],
+      [
+        'a fractional amount',
+        { recipientName: 'Bob', amountSats: 1.5, memo: 'Thanks' },
+      ],
+      [
+        'an excessive amount',
+        { recipientName: 'Bob', amountSats: 10001, memo: 'Thanks' },
+      ],
+    ])('refuses %s without posting a card', async (_label, args) => {
+      const context = makeTurnContext(sender);
+      const result: any = await tool().handler(args, context);
+
+      expect(result.proposed).toBe(false);
+      expect(context.sendActivity).not.toHaveBeenCalled();
+    });
+
+    test('returns candidates instead of guessing an ambiguous name', async () => {
+      mockGetUsers.mockResolvedValue([
+        sender,
+        bob,
+        { ...bob, id: 'user-bobby', displayName: 'Bobby Jones' },
+      ]);
+
+      const result: any = await tool().handler(
+        { recipientName: 'bob', amountSats: 10, memo: 'Thanks' },
+        makeTurnContext(sender),
+      );
+
+      expect(result).toMatchObject({
+        proposed: false,
+        candidates: ['Bob Smith', 'Bobby Jones'],
       });
     });
   });

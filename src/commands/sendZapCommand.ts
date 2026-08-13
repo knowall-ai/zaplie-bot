@@ -258,8 +258,13 @@ export async function SendZap(
   }
 }
 
-// Function to create an adaptive card
-async function createZapCard(sender: User, globalRewardName: string) {
+// `prefill` is used by the agent to prepare an editable proposal. Submission
+// still goes through the server-side submitZaps payment gate.
+export async function createZapCard(
+  sender: User,
+  globalRewardName: string,
+  prefill?: { receiverId: string; message: string; amountSats: number },
+) {
   console.log('Creating Zap Card ...');
   const walletChoices = await populateWalletChoices();
 
@@ -276,6 +281,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       isRequired: true,
       isMultiSelect: true,
       errorMessage: 'You must select at least one person to zap',
+      value: prefill?.receiverId,
     },
     {
       type: 'Input.Text',
@@ -285,11 +291,13 @@ async function createZapCard(sender: User, globalRewardName: string) {
       isRequired: true,
       placeholder: 'Thanks for helping me with the proposal!',
       errorMessage: 'You should tell them why you are zapping them',
+      value: prefill?.message,
     },
     {
       type: 'Input.Text',
       id: 'zapAmount',
       placeholder: '100',
+      value: prefill ? String(prefill.amountSats) : undefined,
       label: `Amount (${globalRewardName})`,
       regex: '^(?:10000|[1-9][0-9]{0,3})$',
       isRequired: true,

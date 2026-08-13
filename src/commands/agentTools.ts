@@ -1,9 +1,9 @@
 // agentTools.ts
 //
-// Read-only tools for the Foundry conversational agent. Each returns structured
-// data (not a chat activity) so the agent decides how to phrase the reply.
+// Tools for the Foundry conversational agent. Read tools return structured
+// data; propose_zap posts an editable confirmation card but never pays it.
 
-import { TurnContext } from 'botbuilder';
+import { CardFactory, MessageFactory, TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
 import {
   getUserWallets,
@@ -11,6 +11,9 @@ import {
   getUsers,
 } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
+import { MAX_ZAP_SATS } from './zapBudget';
+import { validateSelfZap } from './zapRecipient';
+import { createZapCard } from './sendZapCommand';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -39,7 +42,8 @@ const getLeaderboardTool: ToolDefinition = {
   description:
     "Get the team leaderboard, ranked by each teammate's Private wallet balance.",
   parameters: { type: 'object', properties: {}, required: [] },
-  handler: async () => {
+  handler: async (_args, turnContext: TurnContext) => {
+    const currentUser = turnContext.turnState.get('user') as User;
     const [privateWallets, users] = await Promise.all([
       getWallets(adminKey, 'Private'),
       getUsers(adminKey, null),
@@ -51,6 +55,7 @@ const getLeaderboardTool: ToolDefinition = {
       .map(wallet => ({
         displayName: displayNameByUserId.get(wallet.user) ?? 'Unknown',
         balanceSats: toSats(wallet.balance_msat),
+        isCurrentUser: wallet.user === currentUser.id,
       }))
       .sort((a, b) => b.balanceSats - a.balanceSats);
     return { rewardLabel, leaderboard };
@@ -61,7 +66,8 @@ const getRecentActivityTool: ToolDefinition = {
   name: 'get_recent_activity',
   description:
     'Get recent zaps sent across the team: who sent what to whom, how much, and why (the memo). ' +
-    'Use this for "recent rewards", "why was I zapped", or "team activity" questions.',
+    'Use this for "recent rewards", "why was I zapped", "team activity", or (with ' +
+    'get_leaderboard) who may deserve recognition. Request limit 50 for recognition suggestions.',
   parameters: {
     type: 'object',
     properties: {
@@ -104,6 +110,103 @@ const getRecentActivityTool: ToolDefinition = {
   },
 };
 
-export function createReadOnlyTools(): ToolDefinition[] {
-  return [getMyBalanceTool, getLeaderboardTool, getRecentActivityTool];
+const proposeZapTool: ToolDefinition = {
+  name: 'propose_zap',
+  description:
+    'Post an editable zap confirmation card for an explicit user request. This only proposes ' +
+    'a zap; payment requires the user to press Send Zap.',
+  parameters: {
+    type: 'object',
+    properties: {
+      recipientName: {
+        type: 'string',
+        description: "The teammate's display name.",
+      },
+      amountSats: {
+        type: 'number',
+        description: `Whole sats from 1 to ${MAX_ZAP_SATS}.`,
+      },
+      memo: {
+        type: 'string',
+        description: 'Why the teammate is being recognised.',
+      },
+    },
+    required: ['recipientName', 'amountSats', 'memo'],
+  },
+  handler: async (
+    args: { recipientName?: string; amountSats?: number; memo?: string },
+    turnContext: TurnContext,
+  ) => {
+    const { recipientName, amountSats, memo } = args;
+    if (
+      typeof recipientName !== 'string' ||
+      typeof memo !== 'string' ||
+      typeof amountSats !== 'number' ||
+      !recipientName.trim() ||
+      !memo.trim() ||
+      !Number.isInteger(amountSats) ||
+      amountSats < 1 ||
+      amountSats > MAX_ZAP_SATS
+    ) {
+      return {
+        proposed: false,
+        reason: `Recipient, reason, and a whole amount from 1 to ${MAX_ZAP_SATS} sats are required.`,
+      };
+    }
+
+    const sender = turnContext.turnState.get('user') as User | undefined;
+    if (!sender) {
+      throw new Error(
+        'The current user is unavailable, so no zap was proposed.',
+      );
+    }
+    const users = await getUsers(adminKey, null);
+    const query = recipientName.trim().toLowerCase();
+    const exact = users.filter(
+      user => user.displayName.toLowerCase() === query,
+    );
+    const matches = exact.length
+      ? exact
+      : users.filter(user => user.displayName.toLowerCase().includes(query));
+
+    if (matches.length !== 1) {
+      return {
+        proposed: false,
+        reason: matches.length
+          ? `More than one teammate matches "${recipientName}".`
+          : `No teammate matches "${recipientName}".`,
+        candidates: matches.map(user => user.displayName),
+      };
+    }
+
+    const recipient = matches[0];
+    const recipientError = validateSelfZap(sender, recipient);
+    if (recipientError) {
+      return { proposed: false, reason: recipientError };
+    }
+
+    const card = await createZapCard(sender, rewardLabel, {
+      receiverId: recipient.id,
+      message: memo.trim(),
+      amountSats,
+    });
+    await turnContext.sendActivity(
+      MessageFactory.attachment(CardFactory.adaptiveCard(card)),
+    );
+    return {
+      proposed: true,
+      recipient: recipient.displayName,
+      amountSats,
+      memo: memo.trim(),
+    };
+  },
+};
+
+export function createAgentTools(): ToolDefinition[] {
+  return [
+    getMyBalanceTool,
+    getLeaderboardTool,
+    getRecentActivityTool,
+    proposeZapTool,
+  ];
 }

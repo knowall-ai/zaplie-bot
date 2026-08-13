@@ -80,6 +80,9 @@ describe('foundryAgentService.runConversationalTurn', () => {
       expect.objectContaining({
         kind: 'prompt',
         model: 'test-model',
+        instructions: expect.stringMatching(
+          /get_recent_activity[\s\S]*get_leaderboard[\s\S]*Never recommend[\s\S]*isCurrentUser[\s\S]*get_my_balance[\s\S]*propose_zap/,
+        ),
         tools: [
           expect.objectContaining({ type: 'function', name: 'noop_tool' }),
         ],
@@ -178,6 +181,10 @@ describe('foundryAgentService.runConversationalTurn', () => {
   });
 
   test('names the tool and the payload when its arguments are not valid JSON', async () => {
+    const parameterTool: ToolDefinition = {
+      ...noopTool,
+      parameters: { type: 'object', properties: { value: { type: 'string' } } },
+    };
     mockResponsesCreate.mockResolvedValueOnce({
       output: [
         {
@@ -194,12 +201,66 @@ describe('foundryAgentService.runConversationalTurn', () => {
       runConversationalTurn(
         'do something',
         'conv_existing',
-        [noopTool],
+        [parameterTool],
         makeTurnContext(),
       ),
     ).rejects.toThrow(
       /could not parse the arguments for tool "noop_tool"[\s\S]*\{not json/,
     );
+  });
+
+  test('rejects non-object JSON arguments for a parameterized tool', async () => {
+    const parameterTool: ToolDefinition = {
+      ...noopTool,
+      parameters: { type: 'object', properties: { value: { type: 'string' } } },
+    };
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [
+        {
+          type: 'function_call',
+          name: noopTool.name,
+          call_id: 'call_non_object',
+          arguments: 'null',
+        },
+      ],
+      output_text: '',
+    });
+
+    await expect(
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [parameterTool],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(
+      /arguments for tool "noop_tool" must be a JSON object: null/,
+    );
+  });
+
+  test('ignores model noise in arguments for a tool that declares no parameters', async () => {
+    mockResponsesCreate
+      .mockResolvedValueOnce({
+        output: [
+          {
+            type: 'function_call',
+            name: noopTool.name,
+            call_id: 'call_empty',
+            arguments: '{}""',
+          },
+        ],
+        output_text: '',
+      })
+      .mockResolvedValueOnce({ output: [], output_text: 'ok' });
+
+    await expect(
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [noopTool],
+        makeTurnContext(),
+      ),
+    ).resolves.toMatchObject({ replyText: 'ok' });
   });
 
   test('rejects a handler that returns undefined instead of sending a non-string output', async () => {
