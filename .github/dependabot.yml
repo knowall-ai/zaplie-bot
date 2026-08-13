@@ -67,7 +67,9 @@ updates:
           - 'patch'
     ignore:
       # Each of these majors needs a deliberate migration, not a version bump
-      # (see #236, and #234 for web-vitals). Minor/patch updates still flow.
+      # (see #236). Minor/patch updates still flow.
+      # web-vitals is deliberately NOT ignored: #244 migrates reportWebVitals
+      # to the v6 API and bumps the dependency in the same change.
       - dependency-name: '@azure/msal-*'
         update-types:
           - 'version-update:semver-major'
@@ -81,9 +83,6 @@ updates:
         update-types:
           - 'version-update:semver-major'
       - dependency-name: '@types/react-dom'
-        update-types:
-          - 'version-update:semver-major'
-      - dependency-name: 'web-vitals'
         update-types:
           - 'version-update:semver-major'
 
