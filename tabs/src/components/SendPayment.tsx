@@ -8,7 +8,7 @@ import dismissIcon from '../images/DismissCircleRed.svg';
 import pasteInvoice from '../images/PasteInvoice.svg';
 import loaderGif from '../images/Loader.gif';
 import { decode } from 'light-bolt11-decoder';
-import { payInvoice } from '../services/lnbitsServiceLocal';
+import { payInvoice } from '../services/lnbits/payments';
 import { RewardNameContext } from './RewardNameContext';
 
 interface SendPopupProps {

@@ -3,11 +3,8 @@ import QRCode from 'react-qr-code';
 import styles from './SendReceivePayment.module.css';
 import copyDoc from '../images/DocumentCopy.svg';
 import copySuccess from '../images/CheckmarkCircleGreen.svg';
-import {
-  createInvoice,
-  getWalletPayments,
-  getWalletBalance,
-} from '../services/lnbitsServiceLocal';
+import { createInvoice, getWalletPayments } from '../services/lnbits/payments';
+import { getWalletBalance } from '../services/lnbits/wallets';
 
 interface ReceivePopupProps {
   onClose: () => void;

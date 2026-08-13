@@ -1,11 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './FeedList.module.css';
 import ZapIcon from '../images/ZapIcon.svg';
-import {
-  getUsers,
-  getUserWallets,
-  getWalletTransactionsSince,
-} from '../services/lnbitsServiceLocal';
+import { getWalletTransactionsSince } from '../services/lnbits/payments';
+import { getUsers } from '../services/lnbits/users';
+import { getUserWallets } from '../services/lnbits/wallets';
 
 interface FeedListProps {
   timestamp?: number | null;

@@ -3,7 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { toast } from 'react-toastify';
-import { clearApiCache } from '../services/lnbitsServiceLocal';
+import { clearApiCache } from '../services/lnbits/cache';
 
 interface UseTeamsAuthReturn {
   isInTeams: boolean;

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useContext, useCallback } from 'react';
 import './WalletInfoCard.css';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
-import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
+import { getUsers } from '../services/lnbits/users';
+import { getUserWallets } from '../services/lnbits/wallets';
 import { useMsal } from '@azure/msal-react';
 import SendPayment from './SendPayment';
 import ReceivePayment from './ReceivePayment';

@@ -3,8 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import RewardsComponent from './RewardsComponent';
 import { RewardNameContext } from './RewardNameContext';
 
-jest.mock('../services/lnbitsServiceLocal', () => ({
+jest.mock('../services/lnbits/rewards', () => ({
   getNostrRewards: jest.fn(),
+}));
+jest.mock('../services/lnbits/wallets', () => ({
   getUserWallets: jest.fn(),
 }));
 

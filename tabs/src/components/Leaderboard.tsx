@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from './Leaderboard.module.css';
-import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
+import { getUsers } from '../services/lnbits/users';
+import { getUserWallets } from '../services/lnbits/wallets';
 import { fetchAllowanceWalletTransactions } from '../utils/walletUtilities';
 import ZapIcon from '../images/ZapIcon.svg';
 import circleFirstPlace from '../images/circleFirstPlace.svg';

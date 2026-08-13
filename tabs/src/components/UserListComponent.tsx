@@ -7,7 +7,7 @@ import {
   useCallback,
 } from 'react';
 import styles from './UserListComponent.module.css';
-import { getUserWallets } from '../services/lnbitsServiceLocal';
+import { getUserWallets } from '../services/lnbits/wallets';
 import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
 
