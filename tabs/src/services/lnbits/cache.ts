@@ -14,6 +14,7 @@ export interface CacheEntry<T> {
 export interface RawApiUser {
   id: string;
   username?: string;
+  email?: string;
   external_id?: string;
   extra?: Record<string, unknown> | string;
 }

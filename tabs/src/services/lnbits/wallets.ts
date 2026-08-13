@@ -20,7 +20,6 @@ const getWallets = async (
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
-        //'X-Api-Key': apiKey,
       },
     });
 
@@ -128,7 +127,6 @@ const getUserWallets = async (
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
-            //'X-Api-Key': adminKey,
           },
         },
       );
@@ -141,7 +139,7 @@ const getUserWallets = async (
 
       const data: Wallet[] = await response.json();
 
-      let walletData: Wallet[] = data.map((wallet: any) => ({
+      const walletData: Wallet[] = data.map(wallet => ({
         id: wallet.id,
         admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
         name: wallet.name,
@@ -291,7 +289,7 @@ const getAllWallets = async (lnKey: string) => {
     logger.debug('All Wallets returned:', data.length);
     logger.debug('All Wallets: ', data);
 
-    let walletData: Wallet[] = data.map((wallet: any) => ({
+    const walletData: Wallet[] = data.map(wallet => ({
       id: wallet.id,
       admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
       name: wallet.name,
@@ -389,8 +387,6 @@ const getWalletsPaginated = async (
     url.searchParams.append('offset', offset.toString());
     url.searchParams.append('user_id', userId);
 
-    logger.debug('>>> Full URL with params:', url.toString());
-
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
@@ -400,29 +396,22 @@ const getWalletsPaginated = async (
     });
 
     if (!response.ok) {
-      logger.error('Response status:', response.status);
-      logger.error('Response statusText:', response);
       throw new Error(
-        `Error getting wallets for user ${userId} (status: ${response.status})`,
+        `Error getting wallets for user ${userId} (status: ${response.status} ${response.statusText})`,
       );
     }
 
     const responseData = await response.json();
-    logger.debug(`>>> Raw response for user ${userId}:`, responseData);
 
-    // Extract the wallets array from the response (API returns {data: [...], total: X})
-    const wallets = responseData?.data || [];
-    logger.debug(`>>> Extracted ${wallets.length} wallets from response`);
-
-    // DEBUG: Show the wallet.user field for each wallet to verify they match the requested userId
-    logger.debug(`>>> WALLET USER IDs FOR REQUESTED USER ${userId}:`);
-    wallets.forEach((wallet: any, index: number) => {
-      logger.debug(
-        `  Wallet ${index + 1}: ID=${wallet.id}, Name="${wallet.name}", User ID=${wallet.user}, Matches=${wallet.user === userId ? '✓' : '✗'}`,
+    // The endpoint answers {data: [...], total: X}.
+    const wallets = responseData?.data;
+    if (!Array.isArray(wallets)) {
+      throw new Error(
+        `Unexpected payload from ${url.pathname}: ${JSON.stringify(responseData)}`,
       );
-    });
+    }
 
-    const walletData: Wallet[] = wallets.map((wallet: any) => ({
+    const walletData: Wallet[] = wallets.map((wallet: Wallet) => ({
       id: wallet.id,
       admin: wallet.admin || '',
       name: wallet.name,
@@ -431,26 +420,9 @@ const getWalletsPaginated = async (
       inkey: wallet.inkey,
       balance_msat: wallet.balance_msat,
       deleted: wallet.deleted || false,
-      // Additional fields that might come from the API
-      currency: wallet.currency,
-      created_at: wallet.created_at,
-      updated_at: wallet.updated_at,
     }));
 
-    const filteredWallets = walletData.filter(
-      wallet => wallet.deleted !== true,
-    );
-
-    logger.debug(
-      `>>> Filtered wallets count for user ${userId}:`,
-      filteredWallets.length,
-    );
-    logger.debug(
-      `>>> Wallet IDs: [${filteredWallets.map(w => w.id).join(', ')}]`,
-    );
-    logger.debug('===========================');
-
-    return filteredWallets;
+    return walletData.filter(wallet => wallet.deleted !== true);
   } catch (error) {
     logger.error(`Error in getWalletsPaginated for user ${userId}:`, error);
     throw error;

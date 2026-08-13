@@ -2,26 +2,38 @@ import { logger } from '../../utils/logger';
 import { getAccessToken } from './auth';
 import { nodeUrl, password, userName } from './config';
 
-const getWalletPayments = async (inKey: string) => {
-  try {
-    const response = await fetch(`${nodeUrl}/api/v1/payments?limit=100`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': inKey,
-      },
-    });
+// Shape returned by the LNbits payments API, before it is mapped to Transaction.
+// Older LNbits builds name the identifier payment_hash or id instead of checking_id.
+interface RawPayment extends Omit<Transaction, 'checking_id'> {
+  checking_id?: string;
+  payment_hash?: string;
+  id?: string;
+}
 
-    if (!response.ok) {
-      throw new Error(`Error getting payments (status: ${response.status})`);
-    }
+const matchesExtra = (
+  payment: RawPayment,
+  filterByExtra: { [key: string]: string },
+): boolean => {
+  const paymentExtra = payment.extra ?? {};
+  return Object.keys(filterByExtra).every(
+    key => paymentExtra[key] === filterByExtra[key],
+  );
+};
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    logger.error('Error:', error);
-    return null;
+const getWalletPayments = async (inKey: string): Promise<RawPayment[]> => {
+  const response = await fetch(`${nodeUrl}/api/v1/payments?limit=100`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': inKey,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error getting payments (status: ${response.status})`);
   }
+
+  return response.json();
 };
 
 const getInvoicePayment = async (lnKey: string, invoice: string) => {
@@ -56,11 +68,8 @@ const getWalletTransactionsSince = async (
 ): Promise<Transaction[]> => {
   // Note that the timestamp is in seconds, not milliseconds.
   try {
-    //const walletId = await getWalletId(lnKey);
-    //const encodedExtra = JSON.stringify(filterByExtra);
-
+    // The endpoint ignores an `extra` query parameter, so filtering happens below.
     const response = await fetch(
-      //`/api/v1/payments?limit=100&extra=${encodedExtra}`, // This approach doesn't work on this endpoint for some reason, we need to filter afterwards.
       `${nodeUrl}/api/v1/payments?limit=100`,
       {
         method: 'GET',
@@ -77,43 +86,34 @@ const getWalletTransactionsSince = async (
       );
     }
 
-    const data = await response.json();
+    const data: RawPayment[] = await response.json();
 
-    logger.debug('DATA', data);
-
-    // Show all payments (timestamp filter removed)
-    const paymentsSince = data;
-
-    // Further filter by the `extra` field (if provided)
     const filteredPayments = filterByExtra
-      ? paymentsSince.filter((payment: any) => {
-          const paymentExtra = payment.extra || {};
-          return Object.keys(filterByExtra).every(
-            key => paymentExtra[key] === filterByExtra[key],
-          );
-        })
-      : paymentsSince;
+      ? data.filter(payment => matchesExtra(payment, filterByExtra))
+      : data;
 
-    logger.debug('DATA2', filteredPayments);
+    return filteredPayments.map(transaction => {
+      const checkingId =
+        transaction.checking_id || transaction.payment_hash || transaction.id;
+      if (!checkingId) {
+        // FeedList keys and de-duplicates on this, so a missing id corrupts the feed silently.
+        throw new Error(
+          `Payment has no checking_id, payment_hash or id: ${JSON.stringify(transaction)}`,
+        );
+      }
 
-    const transactionData: Transaction[] = filteredPayments.map(
-      (transaction: any) => ({
-        checking_id:
-          transaction.checking_id || transaction.payment_hash || transaction.id,
+      return {
+        checking_id: checkingId,
         bolt11: transaction.bolt11,
-        //from: transaction.extra?.from?.id || null, // This should be in "extra" field
-        //to: transaction.extra?.to?.id || null, // This should be in "extra" field
         memo: transaction.memo,
         amount: transaction.amount,
         wallet_id: transaction.wallet_id,
         time: transaction.time,
         extra: transaction.extra,
-      }),
-    );
-
-    //logger.debug('Transactions:', transactionData);
-
-    return transactionData;
+        pending: transaction.pending,
+        fee: transaction.fee,
+      };
+    });
   } catch (error) {
     logger.error(error);
     throw error;
@@ -124,7 +124,7 @@ const getUserWalletTransactions = async (
   walletId: string,
   apiKey: string,
   filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
-): Promise<Transaction[]> => {
+): Promise<RawPayment[]> => {
   try {
     // Use core API /api/v1/payments with wallet filter instead of deprecated /usermanager/api/v1/transactions
     const response = await fetch(
@@ -144,26 +144,14 @@ const getUserWalletTransactions = async (
       throw new Error(errorMessage);
     }
 
-    const data = await response.json();
+    const data: RawPayment[] = await response.json();
 
-    // Further filter by the `extra` field (if provided)
-    const filteredPayments = filterByExtra
-      ? data.filter((payment: any) => {
-          const paymentExtra = payment.extra || {};
-          return Object.keys(filterByExtra).every(
-            key => paymentExtra[key] === filterByExtra[key],
-          );
-        })
+    return filterByExtra
+      ? data.filter(payment => matchesExtra(payment, filterByExtra))
       : data;
-
-    /*logger.debug(
-      `Transactions fetched for wallet: ${walletId}`,
-      filteredPayments,
-    );*/ // Log fetched data
-    return filteredPayments; // Assuming data is an array of transactions
   } catch (error) {
     logger.error(`Error fetching transactions for wallet ${walletId}:`, error);
-    throw error; // Re-throw the error to handle it in the parent function
+    throw error;
   }
 };
 
@@ -182,8 +170,6 @@ const getAllPayments = async (
     url.searchParams.append('sortby', sortby);
     url.searchParams.append('direction', direction);
 
-    logger.debug('Full URL:', url.toString());
-
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
@@ -193,55 +179,38 @@ const getAllPayments = async (
     });
 
     if (!response.ok) {
-      logger.error('Response status:', response.status);
-      logger.error('Response statusText:', response.statusText);
       throw new Error(
-        `Error getting all payments (status: ${response.status})`,
+        `Error getting all payments (status: ${response.status} ${response.statusText})`,
       );
     }
 
     const data = await response.json();
-    logger.debug('Raw response data:', data);
-    logger.debug('Data type:', typeof data);
-    logger.debug('Is array:', Array.isArray(data));
 
-    // The API might return an object with a 'data' or 'payments' property
-    let payments = data;
+    // The paginated endpoint has shipped the array bare and wrapped under
+    // several keys across LNbits versions, so accept each known shape.
+    const payments = Array.isArray(data)
+      ? data
+      : (data?.data ?? data?.payments ?? data?.items);
 
-    if (data && typeof data === 'object' && !Array.isArray(data)) {
-      if (data.data && Array.isArray(data.data)) {
-        payments = data.data;
-      } else if (data.payments && Array.isArray(data.payments)) {
-        payments = data.payments;
-      } else if (data.items && Array.isArray(data.items)) {
-        payments = data.items;
-      }
+    if (!Array.isArray(payments)) {
+      throw new Error(
+        `Unexpected payload from ${url.pathname}: ${JSON.stringify(data)}`,
+      );
     }
 
-    logger.debug('Total payments retrieved:', payments?.length || 0);
-    logger.debug('Sample payment:', payments?.[0]);
-    logger.debug('===========================');
-
-    return Array.isArray(payments) ? payments : [];
+    return payments;
   } catch (error) {
     logger.error('Error in getAllPayments:', error);
     throw error;
   }
 };
 
-// TODO: This method needs checking!
 const createInvoice = async (
   lnKey: string,
   recipientWalletId: string,
   amount: number,
   memo: string,
-  // extra: object,
 ) => {
-  console
-    .log
-    // `createInvoice starting ... (lnKey: ${lnKey}, recipientWalletId: ${recipientWalletId}, amount: ${amount}, memo: ${memo}, extra: ${extra})`,
-    ();
-
   try {
     const response = await fetch(`${nodeUrl}/api/v1/payments`, {
       method: 'POST',
@@ -253,7 +222,6 @@ const createInvoice = async (
         out: false,
         amount: amount,
         memo: memo,
-        // extra: extra,
       }),
     });
 
@@ -271,29 +239,23 @@ const createInvoice = async (
 };
 
 const payInvoice = async (adminKey: string, paymentRequest: string) => {
-  try {
-    const response = await fetch(`${nodeUrl}/api/v1/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': adminKey,
-      },
-      body: JSON.stringify({
-        out: true,
-        bolt11: paymentRequest,
-      }),
-    });
+  const response = await fetch(`${nodeUrl}/api/v1/payments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': adminKey,
+    },
+    body: JSON.stringify({
+      out: true,
+      bolt11: paymentRequest,
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`Error paying invoice (status: ${response.status})`);
-    }
-
-    const data = await response.json();
-
-    return data;
-  } catch (error) {
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Error paying invoice (status: ${response.status})`);
   }
+
+  return response.json();
 };
 
 export {

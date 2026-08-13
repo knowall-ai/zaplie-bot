@@ -10,6 +10,9 @@ import type { RawApiUser } from './cache';
 import { nodeUrl, password, userName } from './config';
 import { getUserWallets } from './wallets';
 
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined;
+
 // Mapping to the User type happens in getUsers, not here.
 const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
   if (isCacheValid(apiCache.rawUsers, CACHE_DURATION_USERS_MS)) {
@@ -45,8 +48,12 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
       }
 
       const responseData = await response.json();
-      const users = responseData?.data || [];
-      const result: RawApiUser[] = Array.isArray(users) ? users : [];
+      const result: RawApiUser[] = responseData?.data;
+      if (!Array.isArray(result)) {
+        throw new Error(
+          `Unexpected payload from /users/api/v1/user: ${JSON.stringify(responseData)}`,
+        );
+      }
 
       logger.debug(`Fetched ${result.length} users from API`);
 
@@ -86,37 +93,31 @@ const getUsers = async (
 
     logger.debug(`Found ${rawUsers.length} users`);
 
-    // Debug: Log first user to see available fields
-    if (rawUsers.length > 0) {
-      logger.debug('=== SAMPLE RAW USER FROM API ===');
-      logger.debug('Sample user data:', rawUsers[0]);
-      logger.debug('Available fields:', Object.keys(rawUsers[0]));
-    }
-
-    // Note: Wallets are NOT fetched here - use separate functions to get wallets when needed
-    const users: User[] = rawUsers.map((user: any) => {
-      // Try to get a friendly display name from various fields
+    const users: User[] = rawUsers.map(user => {
+      const extra: Record<string, unknown> =
+        typeof user.extra === 'object' && user.extra ? user.extra : {};
       let displayName = user.username || user.id;
 
-      // If username is an email, extract the name part
+      // LNbits usernames are often the work email, which reads badly in the UI.
       if (displayName.includes('@')) {
-        displayName = displayName.split('@')[0].replace('.', ' ');
-        // Capitalize first letter of each word
         displayName = displayName
+          .split('@')[0]
+          .replace('.', ' ')
           .split(' ')
-          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
       }
 
       return {
         id: user.id,
-        displayName: displayName,
-        profileImg: user.extra?.profileImg || '', // Get from extra metadata if available
-        aadObjectId: user.external_id || user.extra?.aadObjectId || '', // Get from external_id or extra metadata
-        email: user.email || user.extra?.email || user.username || '', // Get from user object or extra metadata
-        type: (user.extra?.type as UserType) || ('Teammate' as UserType), // Default type
-        privateWallet: null, // Wallets should be fetched separately when needed
-        allowanceWallet: null, // Wallets should be fetched separately when needed
+        displayName,
+        profileImg: asString(extra.profileImg) || '',
+        aadObjectId: user.external_id || asString(extra.aadObjectId) || '',
+        email: user.email || asString(extra.email) || user.username || '',
+        type: (asString(extra.type) as UserType) || 'Teammate',
+        // Wallets are fetched separately; see getUserWallets.
+        privateWallet: null,
+        allowanceWallet: null,
       };
     });
 
@@ -131,7 +132,7 @@ const getUsers = async (
         );
 
         const filteredUsers = users.filter(user => {
-          const userRaw = rawUsers.find((u: any) => u.id === user.id);
+          const userRaw = rawUsers.find(u => u.id === user.id);
           if (!userRaw) return false;
 
           const matches = userRaw.external_id === filterByExtra.aadObjectId;
@@ -156,12 +157,11 @@ const getUsers = async (
           return false;
         }
 
-        // If extra is a string, try to parse it
         let extraData: Record<string, unknown>;
         if (typeof userRaw.extra === 'string') {
           try {
             extraData = JSON.parse(userRaw.extra);
-          } catch (e) {
+          } catch {
             return false;
           }
         } else {

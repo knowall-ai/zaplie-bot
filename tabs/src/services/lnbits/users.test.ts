@@ -79,10 +79,10 @@ describe('lnbits users', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    test('returns an empty list when the payload carries no data array', async () => {
+    test('throws when the payload carries no data array', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse({ total: 0 }));
 
-      await expect(getAllUsersFromAPI()).resolves.toEqual([]);
+      await expect(getAllUsersFromAPI()).rejects.toThrow('Unexpected payload');
     });
   });
 

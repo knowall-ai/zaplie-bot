@@ -92,10 +92,10 @@ describe('lnbits payments', () => {
       },
     );
 
-    test('returns an empty list for an unrecognised payload shape', async () => {
+    test('throws for an unrecognised payload shape', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse({ total: 0 }));
 
-      await expect(getAllPayments()).resolves.toEqual([]);
+      await expect(getAllPayments()).rejects.toThrow('Unexpected payload');
     });
 
     test('throws when the endpoint fails', async () => {
@@ -112,11 +112,10 @@ describe('lnbits payments', () => {
       await expect(getWalletPayments('in-key')).resolves.toHaveLength(1);
     });
 
-    // Odd one out: every other call in this module rethrows.
-    test('swallows the error and returns null when the request fails', async () => {
+    test('throws when the request fails', async () => {
       mockFetch.mockResolvedValueOnce(errorResponse(500));
 
-      await expect(getWalletPayments('in-key')).resolves.toBeNull();
+      await expect(getWalletPayments('in-key')).rejects.toThrow('status: 500');
     });
   });
 
@@ -152,6 +151,18 @@ describe('lnbits payments', () => {
       const transactions = await getWalletTransactionsSince('in-key', 0, null);
 
       expect(transactions[0].checking_id).toBe('hash-1');
+    });
+
+    test('throws when the payment carries no usable identifier', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse([
+          rawPayment({ checking_id: undefined, payment_hash: undefined }),
+        ]),
+      );
+
+      await expect(
+        getWalletTransactionsSince('in-key', 0, null),
+      ).rejects.toThrow('no checking_id, payment_hash or id');
     });
 
     test('filters by the extra field when a filter is given', async () => {

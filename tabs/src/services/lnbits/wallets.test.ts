@@ -180,5 +180,13 @@ describe('lnbits wallets', () => {
       expect(requestedUrl).toContain('offset=20');
       expect(requestedUrl).toContain('user_id=user-1');
     });
+
+    test('throws when the payload carries no data array', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ total: 0 }));
+
+      await expect(getWalletsPaginated('user-1')).rejects.toThrow(
+        'Unexpected payload',
+      );
+    });
   });
 });
