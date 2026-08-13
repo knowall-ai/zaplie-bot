@@ -5,5 +5,5 @@ export interface SSOCommand {
   operationWithSSOToken(
     context: TurnContext,
     ssoToken: string,
-  ): Promise<any> | undefined;
+  ): Promise<unknown> | undefined;
 }

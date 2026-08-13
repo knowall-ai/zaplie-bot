@@ -113,6 +113,36 @@ export async function getAccessToken(
   return accessTokenPromise;
 }
 
+interface RawLnbitsWallet {
+  id: string;
+  admin?: string;
+  name?: string;
+  user?: string;
+  adminkey?: string;
+  inkey?: string;
+  balance_msat?: number;
+  deleted?: boolean;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isRawLnbitsWallet = (value: unknown): value is RawLnbitsWallet =>
+  isRecord(value) && typeof value.id === 'string';
+
+const toRawLnbitsWallets = (
+  value: unknown,
+  source: string,
+): RawLnbitsWallet[] => {
+  if (!Array.isArray(value)) {
+    throw new Error(`${source}: LNbits did not return a wallet array`);
+  }
+  if (!value.every(isRawLnbitsWallet)) {
+    throw new Error(`${source}: LNbits returned a wallet without a string id`);
+  }
+  return value;
+};
+
 const getWallets = async (
   adminKey: string,
   filterByName?: string,
@@ -139,7 +169,7 @@ const getWallets = async (
       );
     }
 
-    const data = await response.json();
+    const data = toRawLnbitsWallets(await response.json(), 'getWallets');
 
     // If filter is provided, filter the wallets by name and/or id
     let filteredData = data;
@@ -155,17 +185,16 @@ const getWallets = async (
 
     // Map the wallets to match the Wallet interface
     let walletData: Wallet[] = await Promise.all(
-      filteredData.map(async (filteredData: any) => ({
-        id: filteredData.id,
-        admin: filteredData.admin,
-        name: filteredData.name,
-        adminkey: filteredData.adminkey,
-        user: filteredData.user,
-        inkey: filteredData.inkey,
+      filteredData.map(async rawWallet => ({
+        id: rawWallet.id,
+        admin: rawWallet.admin,
+        name: rawWallet.name,
+        adminkey: rawWallet.adminkey,
+        user: rawWallet.user,
+        inkey: rawWallet.inkey,
         // See: https://github.com/lnbits/lnbits/issues/2690
-        deleted: (await getWalletById(filteredData.user, filteredData.id))
-          ?.deleted,
-        balance_msat: (await getWalletById(filteredData.user, filteredData.id))
+        deleted: (await getWalletById(rawWallet.user, rawWallet.id))?.deleted,
+        balance_msat: (await getWalletById(rawWallet.user, rawWallet.id))
           ?.balance_msat,
       })),
     );
@@ -207,10 +236,10 @@ const getUserWallets = async (
       );
     }
 
-    const data: Wallet[] = await response.json();
+    const data = toRawLnbitsWallets(await response.json(), 'getUserWallets');
 
     // Map the wallets to match the Wallet interface
-    const walletData: Wallet[] = data.map((wallet: any) => ({
+    const walletData: Wallet[] = data.map(wallet => ({
       id: wallet.id,
       admin: null, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
       name: wallet.name,
@@ -550,15 +579,11 @@ const getWalletById = async (
       return null;
     }
 
-    const data = await response.json();
+    const data = toRawLnbitsWallets(await response.json(), 'getWalletById');
 
     // Find the wallet with a matching inkey that are not deleted.
-    const filteredWallets = data.filter(
-      (wallet: any) => wallet.deleted !== true,
-    );
-    const matchingWallet = filteredWallets.find(
-      (wallet: any) => wallet.id === id,
-    );
+    const filteredWallets = data.filter(wallet => wallet.deleted !== true);
+    const matchingWallet = filteredWallets.find(wallet => wallet.id === id);
     //console.log('matchingWallet: ', matchingWallet);
 
     if (!matchingWallet) {
@@ -606,10 +631,13 @@ const getWalletIdFromKey = async (inKey: string) => {
       return null;
     }
 
-    const data = await response.json();
+    const data = toRawLnbitsWallets(
+      await response.json(),
+      'getWalletIdFromKey',
+    );
 
     // Find the wallet with a matching inkey
-    const wallet = data.find((wallet: any) => wallet.inkey === inKey);
+    const wallet = data.find(rawWallet => rawWallet.inkey === inKey);
 
     if (!wallet) {
       console.error('No wallet found for this inKey.');
