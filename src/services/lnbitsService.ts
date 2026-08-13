@@ -116,7 +116,7 @@ export async function getAccessToken(
 interface RawLnbitsWallet {
   id: string;
   admin?: string;
-  name?: string;
+  name: string;
   user?: string;
   adminkey?: string;
   inkey?: string;
@@ -128,7 +128,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 const isRawLnbitsWallet = (value: unknown): value is RawLnbitsWallet =>
-  isRecord(value) && typeof value.id === 'string';
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.name === 'string';
 
 const toRawLnbitsWallets = (
   value: unknown,
@@ -138,7 +140,9 @@ const toRawLnbitsWallets = (
     throw new Error(`${source}: LNbits did not return a wallet array`);
   }
   if (!value.every(isRawLnbitsWallet)) {
-    throw new Error(`${source}: LNbits returned a wallet without a string id`);
+    throw new Error(
+      `${source}: LNbits returned a wallet without a string id or name`,
+    );
   }
   return value;
 };

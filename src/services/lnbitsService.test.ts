@@ -373,6 +373,17 @@ describe('getUserWallets', () => {
       'Error getting users wallets response (status: 404)',
     );
   });
+
+  test('rejects a wallet without a string name', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse([{ id: 'w-1', user: 'u-1' }]),
+    );
+
+    await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
+      'getUserWallets: LNbits returned a wallet without a string id or name',
+    );
+  });
 });
 
 describe('payInvoice', () => {
