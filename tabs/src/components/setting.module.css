@@ -38,11 +38,63 @@
 
 .adminForm {
   width: 100%;
-  max-width: 48rem;
+  box-sizing: border-box;
+  margin-top: 24px;
+  border: 1px solid #3d3b3c;
+  border-radius: 8px;
+  background-color: #262425;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-top: 28px;
+}
+
+.cardHeader {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #3d3b3c;
+}
+
+.sectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.sectionBlock + .sectionBlock {
+  border-top: 1px solid #363435;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sectionHint {
+  margin: -10px 0 0;
+  color: #9d9d99;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fieldsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+}
+
+.unitField {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.unitSuffix {
+  position: absolute;
+  right: 12px;
+  color: #9d9d99;
+  font-size: 12px;
+  pointer-events: none;
 }
 
 .sectionHeading h2 {
@@ -75,11 +127,11 @@
 .textBox {
   box-sizing: border-box;
   max-width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #9ca3af;
-  border-radius: 4px;
-  background-color: #ffffff;
-  color: #1f1f1f;
+  padding: 9px 12px;
+  border: 1px solid #45443f;
+  border-radius: 6px;
+  background-color: #201f1e;
+  color: #f3f3f1;
   font: inherit;
   font-size: 13px;
 }
@@ -89,11 +141,11 @@
   min-height: 8rem;
   box-sizing: border-box;
   max-width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #9ca3af;
-  border-radius: 4px;
-  background-color: #ffffff;
-  color: #1f1f1f;
+  padding: 9px 12px;
+  border: 1px solid #45443f;
+  border-radius: 6px;
+  background-color: #201f1e;
+  color: #f3f3f1;
   font: inherit;
   font-size: 13px;
   line-height: 1.5;
@@ -103,8 +155,13 @@
 .textBox:focus,
 .textArea:focus {
   border-color: #84cc16;
-  outline: 2px solid #84cc16;
-  outline-offset: 2px;
+  outline: 2px solid rgba(132, 204, 22, 0.45);
+  outline-offset: 1px;
+}
+
+.textBox::placeholder,
+.textArea::placeholder {
+  color: #8a8a86;
 }
 
 .compactInput {
@@ -113,15 +170,21 @@
 
 .amountInput {
   width: 9rem;
+  padding-right: 3rem;
 }
 
 .formActions {
   display: flex;
   justify-content: flex-end;
-  padding-top: 4px;
+  padding: 14px 20px;
+  border-top: 1px solid #3d3b3c;
+  background-color: #222021;
+  border-radius: 0 0 8px 8px;
 }
 
 .saveButton {
+  /* The portal ships a global `button { width: 100% }`; keep this one content-sized. */
+  width: auto;
   min-width: 100px;
   padding: 9px 18px;
   border: 1px solid transparent;

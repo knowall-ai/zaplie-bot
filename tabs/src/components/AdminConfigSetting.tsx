@@ -31,8 +31,6 @@ const EMPTY_DRAFT: AdminConfigDraft = {
   githubPrMergedSats: '',
 };
 
-const getErrorMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message ? error.message : fallback;
 
 const AdminConfigSetting: FunctionComponent = () => {
   const { instance, accounts } = useMsal();
@@ -71,10 +69,9 @@ const AdminConfigSetting: FunctionComponent = () => {
           });
         }
       } catch (error) {
+        console.error('Admin settings load failed:', error);
         if (!cancelled) {
-          setErrorMessage(
-            getErrorMessage(error, 'Unable to load administrator settings.'),
-          );
+          setErrorMessage('Unable to load administrator settings.');
         }
       } finally {
         if (!cancelled) {
@@ -116,12 +113,9 @@ const AdminConfigSetting: FunctionComponent = () => {
       setRewardName(rewardName);
       toast.success('Administrator settings saved.');
     } catch (error) {
-      const message = getErrorMessage(
-        error,
-        'Unable to save administrator settings.',
-      );
-      setErrorMessage(message);
-      toast.error(message);
+      console.error('Admin settings save failed:', error);
+      setErrorMessage('Unable to save administrator settings.');
+      toast.error('Unable to save administrator settings.');
     } finally {
       setIsSaving(false);
     }
@@ -144,83 +138,113 @@ const AdminConfigSetting: FunctionComponent = () => {
 
   return (
     <form className={styles.adminForm} onSubmit={handleSubmit}>
-      <div className={styles.sectionHeading}>
-        <h2>Admin</h2>
-        <p>Configure how Zaplie speaks and rewards completed work.</p>
+      <div className={styles.cardHeader}>
+        <div className={styles.sectionHeading}>
+          <h2>Admin</h2>
+          <p>Configure how Zaplie speaks and rewards completed work.</p>
+        </div>
       </div>
 
       {errorMessage ? (
-        <p className={styles.errorMessage} role="alert">
-          {errorMessage}
-        </p>
+        <div className={styles.sectionBlock}>
+          <p className={styles.errorMessage} role="alert">
+            {errorMessage}
+          </p>
+        </div>
       ) : null}
 
-      <div className={styles.fieldGroup}>
-        <label className={styles.label} htmlFor="reward-name">
-          Reward Name
-        </label>
-        <input
-          id="reward-name"
-          type="text"
-          value={draft.rewardName}
-          onChange={event =>
-            setDraft(current => ({
-              ...current,
-              rewardName: event.target.value,
-            }))
-          }
-          className={`${styles.textBox} ${styles.compactInput}`}
-          maxLength={40}
-          autoComplete="off"
-        />
+      <div className={styles.sectionBlock}>
+        <h3 className={styles.sectionTitle}>Bot personality</h3>
+        <p className={styles.sectionHint}>
+          Shapes how the assistant speaks in Teams. Leave it empty for the
+          default voice.
+        </p>
+        <div className={styles.fieldGroup}>
+          <label className={styles.label} htmlFor="bot-persona">
+            Persona prompt
+          </label>
+          <textarea
+            id="bot-persona"
+            value={draft.botPersona}
+            onChange={event =>
+              setDraft(current => ({
+                ...current,
+                botPersona: event.target.value,
+              }))
+            }
+            className={styles.textArea}
+            placeholder="Describe the bot's tone, name, and organization vocabulary"
+            rows={6}
+            maxLength={4000}
+          />
+        </div>
       </div>
 
-      <div className={styles.fieldGroup}>
-        <label className={styles.label} htmlFor="bot-persona">
-          Bot Persona / Prompt
-        </label>
-        <textarea
-          id="bot-persona"
-          value={draft.botPersona}
-          onChange={event =>
-            setDraft(current => ({
-              ...current,
-              botPersona: event.target.value,
-            }))
-          }
-          className={styles.textArea}
-          placeholder="Describe the bot's tone, name, and organization vocabulary"
-          rows={6}
-          maxLength={4000}
-        />
-      </div>
+      <div className={styles.sectionBlock}>
+        <h3 className={styles.sectionTitle}>Rewards</h3>
+        <p className={styles.sectionHint}>
+          What recognition is called across the portal, and what automated work
+          pays out.
+        </p>
+        <div className={styles.fieldsRow}>
+          <div className={styles.fieldGroup}>
+            <label className={styles.label} htmlFor="reward-name">
+              Reward name
+            </label>
+            <input
+              id="reward-name"
+              type="text"
+              value={draft.rewardName}
+              onChange={event =>
+                setDraft(current => ({
+                  ...current,
+                  rewardName: event.target.value,
+                }))
+              }
+              className={`${styles.textBox} ${styles.compactInput}`}
+              maxLength={40}
+              autoComplete="off"
+            />
+          </div>
 
-      <div className={styles.fieldGroup}>
-        <label className={styles.label} htmlFor="github-pr-merged-sats">
-          GitHub PR Merged (sats)
-        </label>
-        <input
-          id="github-pr-merged-sats"
-          type="number"
-          value={draft.githubPrMergedSats}
-          onChange={event =>
-            setDraft(current => ({
-              ...current,
-              githubPrMergedSats: event.target.value,
-            }))
-          }
-          className={`${styles.textBox} ${styles.amountInput}`}
-          min={1}
-          step={1}
-          inputMode="numeric"
-          aria-invalid={!isAmountValid}
-          aria-describedby={!isAmountValid ? 'reward-amount-error' : undefined}
-        />
-        {!isAmountValid ? (
-          <span id="reward-amount-error" className={styles.validationMessage}>
-            Enter a positive whole number of sats.
-          </span>
-        ) : null}
+          <div className={styles.fieldGroup}>
+            <label className={styles.label} htmlFor="github-pr-merged-sats">
+              GitHub PR merged
+            </label>
+            <span className={styles.unitField}>
+              <input
+                id="github-pr-merged-sats"
+                type="number"
+                value={draft.githubPrMergedSats}
+                onChange={event =>
+                  setDraft(current => ({
+                    ...current,
+                    githubPrMergedSats: event.target.value,
+                  }))
+                }
+                className={`${styles.textBox} ${styles.amountInput}`}
+                min={1}
+                step={1}
+                inputMode="numeric"
+                aria-invalid={!isAmountValid}
+                aria-describedby={
+                  !isAmountValid ? 'reward-amount-error' : undefined
+                }
+              />
+              <span className={styles.unitSuffix} aria-hidden="true">
+                sats
+              </span>
+            </span>
+            {!isAmountValid ? (
+              <span
+                id="reward-amount-error"
+                className={styles.validationMessage}
+              >
+                Enter a positive whole number of sats.
+              </span>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div className={styles.formActions}>

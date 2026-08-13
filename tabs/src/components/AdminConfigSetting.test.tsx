@@ -98,9 +98,9 @@ const renderSetting = () =>
 test('shows one Save button and submits all three settings with one click', async () => {
   renderSetting();
 
-  const rewardName = await screen.findByLabelText('Reward Name');
-  const persona = screen.getByLabelText('Bot Persona / Prompt');
-  const rewardAmount = screen.getByLabelText('GitHub PR Merged (sats)');
+  const rewardName = await screen.findByLabelText('Reward name');
+  const persona = screen.getByLabelText('Persona prompt');
+  const rewardAmount = screen.getByLabelText('GitHub PR merged');
   expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1);
   expect(
     screen.queryByRole('button', { name: 'Edit' }),
@@ -128,7 +128,7 @@ test('shows one Save button and submits all three settings with one click', asyn
 test('keeps Save disabled for a non-positive or fractional amount', async () => {
   renderSetting();
 
-  const rewardAmount = await screen.findByLabelText('GitHub PR Merged (sats)');
+  const rewardAmount = await screen.findByLabelText('GitHub PR merged');
   fireEvent.change(rewardAmount, { target: { value: '0' } });
 
   expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -156,7 +156,7 @@ test('shows the reward name read-only and fetches nothing admin-gated for a non-
   expect(
     screen.queryByRole('button', { name: 'Save' }),
   ).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('Reward Name')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Reward name')).not.toBeInTheDocument();
   expect(mockAcquireIdToken).not.toHaveBeenCalled();
   expect(mockGetRewardAmounts).not.toHaveBeenCalled();
   expect(mockGetBotPersona).not.toHaveBeenCalled();
