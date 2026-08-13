@@ -38,3 +38,5 @@ tabs/backend/webhook-keys.json
 # Generated documentation PDF
 docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
 docs/.asciidoctor/
+tabs/backend/github-app-credentials.json
+tabs/backend/secrets.json

@@ -32,6 +32,10 @@ app.use('/api/webhook-keys', require('./webhookKeysRoutes'));
 app.use('/api/automations-stats', require('./automationsStatsRoutes'));
 app.use('/api/reports', require('./reportsRoutes'));
 
+// Same reason: the manifest/callback routes are the admin's browser round trip
+// to GitHub and apply their own admin check, not the shared backend token.
+app.use('/api/setup', require('./setupRoutes'));
+
 const { requireAdmin } = require('./adminAuth');
 const { requireSignedInOrBot } = require('./readAuth');
 
