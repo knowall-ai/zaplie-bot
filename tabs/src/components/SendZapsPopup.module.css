@@ -428,7 +428,7 @@
 }
 
 .sendButton:hover {
-  background: #9ed929;
+  background: #84cc16;
 }
 
 .sendButtonDisabled {
@@ -557,7 +557,7 @@
 }
 
 .closeButton:hover {
-  background: #9ed929;
+  background: #84cc16;
 }
 
 /* Legacy styles for backwards compatibility */
