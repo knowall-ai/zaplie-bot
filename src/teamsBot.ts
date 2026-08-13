@@ -407,5 +407,4 @@ export class TeamsBot extends TeamsActivityHandler {
       console.error('Error in handleTeamsSigninTokenExchange:', error);
     }
   }
-
 }
