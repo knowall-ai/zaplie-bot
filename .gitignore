@@ -19,6 +19,7 @@ node_modules/
 # build
 lib/
 build/
+tabs/public/tailwind.css
 
 # test coverage
 coverage/
