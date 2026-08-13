@@ -30,6 +30,7 @@
     "url": "https://github.com/knowall-ai/GetZapl.ie"
   },
   "dependencies": {
+    "@azure/ai-projects": "^2.4.0",
     "@azure/identity": "^4.4.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@microsoft/teamsfx": "^2.0.0",
