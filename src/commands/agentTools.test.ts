@@ -198,7 +198,7 @@ describe('agentTools', () => {
       const turnState = new Map<unknown, unknown>();
       turnState.set(userTokenClientKey, {
         getUserToken: jest
-          .fn<() => Promise<any>>()
+          .fn<() => Promise<{ token: string } | undefined>>()
           .mockResolvedValue(token ? { token } : undefined),
       });
       return {

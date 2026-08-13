@@ -106,8 +106,8 @@ export async function getRelevantPeople(
   return (data.value ?? [])
     .filter(
       person =>
-        person?.personType?.class === 'Person' &&
-        person?.scoredEmailAddresses?.[0]?.address,
+        person.personType?.class === 'Person' &&
+        person.scoredEmailAddresses?.[0]?.address,
     )
     .map(person => ({
       name: person.displayName ?? '',

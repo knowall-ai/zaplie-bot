@@ -2,7 +2,6 @@
 
 import { SSOCommand } from './SSOCommandMap';
 import {
-  Activity,
   CardFactory,
   CloudAdapter,
   MessageFactory,
@@ -54,7 +53,7 @@ export class ConnectCalendarCommand extends SSOCommand {
 
     const resource = await getUserTokenClient(context).getSignInResource(
       connectionName,
-      context.activity as Activity,
+      context.activity,
       '',
     );
     const card = CardFactory.oauthCard(

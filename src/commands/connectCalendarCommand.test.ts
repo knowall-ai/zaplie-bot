@@ -19,11 +19,13 @@ describe('connectCalendarCommand', () => {
     const userTokenClientKey = Symbol('UserTokenClientKey');
     const userTokenClient = {
       getUserToken: jest
-        .fn<() => Promise<any>>()
+        .fn<() => Promise<{ token: string } | undefined>>()
         .mockResolvedValue(token ? { token } : undefined),
-      getSignInResource: jest.fn<() => Promise<any>>().mockResolvedValue({
-        signInLink: 'https://login.example.test',
-      }),
+      getSignInResource: jest
+        .fn<() => Promise<{ signInLink: string }>>()
+        .mockResolvedValue({
+          signInLink: 'https://login.example.test',
+        }),
     };
     const turnState = new Map<unknown, unknown>();
     turnState.set(userTokenClientKey, userTokenClient);
@@ -34,7 +36,7 @@ describe('connectCalendarCommand', () => {
         from: { id: 'teams-user' },
         channelId: 'msteams',
       },
-      sendActivity: jest.fn<() => Promise<any>>().mockResolvedValue(undefined),
+      sendActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     } as unknown as TurnContext;
     return { context, userTokenClient };
   };
