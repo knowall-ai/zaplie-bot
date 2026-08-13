@@ -17,7 +17,7 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js version
         uses: actions/setup-node@v7
@@ -27,13 +27,7 @@ jobs:
       - name: npm install, build, and test
         env:
           CI: false
-          REACT_APP_TENANT_ID: ${{ secrets.REACT_APP_TENANT_ID }}
-          REACT_APP_AAD_CLIENT_ID: ${{ secrets.REACT_APP_AAD_CLIENT_ID }}
-          REACT_APP_ADMIN_API_SCOPE: ${{ secrets.REACT_APP_ADMIN_API_SCOPE }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:REACT_APP_ADMIN_API_SCOPE)) { throw "REACT_APP_ADMIN_API_SCOPE is required" }
-          if ([string]::IsNullOrWhiteSpace($env:REACT_APP_AAD_CLIENT_ID)) { throw "REACT_APP_AAD_CLIENT_ID is required" }
-          if ([string]::IsNullOrWhiteSpace($env:REACT_APP_TENANT_ID)) { throw "REACT_APP_TENANT_ID is required" }
           cd tabs
           npm install
           npm run build --if-present

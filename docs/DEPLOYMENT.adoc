@@ -146,25 +146,9 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | MSAL configuration for the tabs SPA
 | Tabs
 
-| `REACT_APP_ADMIN_API_SCOPE`
-| Delegated scope exposed by the Zaplie API (for example,
-  `api://botid-<BOT_ID>/access_as_user`)
-| Tabs build
-
-| `AAD_APP_CLIENT_ID`, `AAD_APP_TENANT_ID`
-| Expected audience and tenant used by the tabs backend to validate v2 access
-  tokens
-| Tabs backend
-
-| `ZAPLIE_CONFIG_FILE`
-| Absolute path to the writable, persistent administrator configuration file.
-  Required in production; the provisioned Windows App Service uses
-  `D:/home/data/zaplie/admin-config.json`
-| Tabs backend
-
-| `REWARDS_MAX_AMOUNT_SATS`
-| Maximum positive safe-integer reward amount accepted from the Admin form
-  (default: `10000`)
+| `AAD_TENANT_ID`, `AAD_CLIENT_ID`
+| Expected issuer tenant and audience used by the tabs backend to validate
+  MSAL idTokens for config reads and admin writes
 | Tabs backend
 
 | `WEBSITE_URL`, `CONTENT_URL`
@@ -176,26 +160,12 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Bot
 |===
 
-The Entra manifest defines the `Zaplie.Admin` app role. Assign that role to
-the users or groups allowed to change organization settings. The Settings
-page requests an access token for `REACT_APP_ADMIN_API_SCOPE`; the backend
-verifies its signature, issuer, audience, delegated `access_as_user` scope,
-and `Zaplie.Admin` role before accepting the atomic configuration write.
-
-`REACT_APP_ADMIN_API_SCOPE` is build-time configuration, not a runtime App
-Service setting. Configure it for the GitHub `Test` and production builds as
-`api://botid-<BOT_ID>/access_as_user`; both deployment workflows fail before
-building when it is absent. The App Service must also expose
-`AAD_APP_CLIENT_ID` and `AAD_APP_TENANT_ID` to the backend. Teams Toolkit
-derives the local SPA and backend values into `tabs/.env.development.local`.
-
-Production must never write configuration inside the run-from-package content
-tree. `ZAPLIE_CONFIG_FILE` therefore has no production fallback. On first
-startup the backend creates the parent directory and a mode-restricted seed
-file only when the target does not already exist; malformed or unwritable
-state fails loudly. `tabs/backend/data.json` remains a development/test seed
-only. Provisioning the exposed API scope and assigning `Zaplie.Admin` are
-external tenant operations required before authenticated smoke testing.
+The Entra app manifest defines the `Zaplie.Admin` app role. Assign it in
+Entra ID (Enterprise applications > Users and groups) to the users allowed to
+change organization settings. The role arrives in the signed-in user's idToken
+`roles` claim; the tabs backend verifies the token's signature, issuer and
+audience and requires that role before accepting any admin write. Users
+without the role see the Settings page read-only.
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.

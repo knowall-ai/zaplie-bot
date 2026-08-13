@@ -3,77 +3,128 @@ import axios from 'axios';
 
 const API_URL = '/api';
 
-export interface RewardAmounts {
-  githubPrMergedSats: number;
-}
-
-export interface AdminConfig {
-  rewardName: string;
-  botPersona: string;
-  rewardAmounts: RewardAmounts;
-}
-
-interface AdminConfigResponse {
-  config: AdminConfig;
-}
-
-const bearerHeaders = (accessToken: string) => ({
-  Authorization: `Bearer ${accessToken}`,
-});
-
-export const sanitizeApiError = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    return {
-      message: error.message,
-      status: error.response?.status,
-      code: error.code,
-    };
-  }
-  return {
-    message: error instanceof Error ? error.message : 'Unknown API error',
-  };
-};
-
 export const getRewardName = async () => {
   try {
+    console.log('Fetching reward name');
     const response = await axios.get(`${API_URL}/reward-name`);
     return response.data;
   } catch (error) {
-    console.error('Error fetching reward name:', sanitizeApiError(error));
+    console.error('Error fetching reward name:', error);
     throw error;
   }
 };
 
-export const getAdminConfig = async (
-  accessToken: string,
-): Promise<AdminConfigResponse> => {
+export const updateRewardName = async (
+  idToken: string,
+  newRewardName: string,
+) => {
   try {
-    const response = await axios.get<AdminConfigResponse>(
-      `${API_URL}/admin-config`,
+    const response = await axios.post(
+      `${API_URL}/reward-name`,
+      { newRewardName },
       {
-        headers: bearerHeaders(accessToken),
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
       },
     );
     return response.data;
   } catch (error) {
-    console.error('Error fetching admin config:', sanitizeApiError(error));
+    console.error('Error updating reward name:', error);
+    throw error;
+  }
+};
+export const getRewardAmounts = async (idToken: string) => {
+  try {
+    const response = await axios.get(`${API_URL}/reward-amounts`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching reward amounts:', error);
     throw error;
   }
 };
 
-export const updateAdminConfig = async (
-  accessToken: string,
-  config: AdminConfig,
-): Promise<AdminConfigResponse> => {
+// Config writes authenticate with the caller's MSAL idToken; the backend
+// requires the Zaplie.Admin app role carried in its roles claim.
+export const updateRewardAmounts = async (
+  idToken: string,
+  rewardAmounts: Record<string, number>,
+) => {
   try {
-    const response = await axios.put<AdminConfigResponse>(
-      `${API_URL}/admin-config`,
-      config,
-      { headers: bearerHeaders(accessToken) },
+    const response = await axios.post(
+      `${API_URL}/reward-amounts`,
+      { rewardAmounts },
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      },
     );
     return response.data;
   } catch (error) {
-    console.error('Error updating admin config:', sanitizeApiError(error));
+    console.error('Error updating reward amounts:', error);
+    throw error;
+  }
+};
+
+export const getBotPersona = async (idToken: string) => {
+  try {
+    const response = await axios.get(`${API_URL}/bot-persona`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching bot persona:', error);
+    throw error;
+  }
+};
+
+export const updateBotPersona = async (idToken: string, botPersona: string) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/bot-persona`,
+      { botPersona },
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      },
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error updating bot persona:', error);
+    throw error;
+  }
+};
+
+export const getAutomations = async (idToken: string) => {
+  try {
+    const response = await axios.get(`${API_URL}/automations`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching automations:', error);
+    throw error;
+  }
+};
+
+export const updateAutomations = async (idToken: string, repos: string[]) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/automations`,
+      { repos },
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      },
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error updating automations:', error);
     throw error;
   }
 };

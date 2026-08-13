@@ -233,6 +233,11 @@ const getUserWallets = async (
   }
 };
 
+// LNbits v1+ wallet lookup authenticates with the server-side username/password
+// flow. This one-argument wrapper avoids implying that an admin key is used.
+const getUserWalletsByUserId = async (userId: string): Promise<Wallet[]> =>
+  getUserWallets('', userId);
+
 const adminFetch = async (
   path: string,
   init?: RequestInit,
@@ -882,6 +887,7 @@ export {
   getWalletDetails,
   getWalletPayLinks,
   getUserWallets,
+  getUserWalletsByUserId,
   getInvoicePayment,
   getPaymentsSince,
   createInvoice,

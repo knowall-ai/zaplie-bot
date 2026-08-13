@@ -97,12 +97,6 @@ deploy:
     with:
       target: ./tabs/.env.development.local
       envs:
-        NODE_ENV: development
         HTTPS: 'true'
         SSL_CRT_FILE: ${{SSL_CRT_FILE}}
         SSL_KEY_FILE: ${{SSL_KEY_FILE}}
-        REACT_APP_AAD_CLIENT_ID: ${{AAD_APP_CLIENT_ID}}
-        REACT_APP_TENANT_ID: ${{AAD_APP_TENANT_ID}}
-        REACT_APP_ADMIN_API_SCOPE: 'api://botid-${{BOT_ID}}/access_as_user'
-        AAD_APP_CLIENT_ID: ${{AAD_APP_CLIENT_ID}}
-        AAD_APP_TENANT_ID: ${{AAD_APP_TENANT_ID}}

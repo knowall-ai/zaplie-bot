@@ -1,4 +1,5 @@
 import AdminConfigSetting from './components/AdminConfigSetting';
+import ConnectionsSetting from './components/ConnectionsSetting';
 import styles from './components/setting.module.css';
 import { KNOWALL_CONSTANTS } from './constants/branding';
 
@@ -11,7 +12,14 @@ const Settings: React.FC = () => {
           Built by {KNOWALL_CONSTANTS.name}
         </span>
       </div>
-      <AdminConfigSetting />
+      <div style={{ width: '100%' }}>
+        {' '}
+        <AdminConfigSetting />{' '}
+      </div>
+      <div style={{ width: '100%' }}>
+        {' '}
+        <ConnectionsSetting />{' '}
+      </div>
     </div>
   );
 };

@@ -7,11 +7,15 @@ import React, {
 } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { toast } from 'react-toastify';
-import { AdminConfig, getAdminConfig, updateAdminConfig } from '../apiService';
 import {
-  acquireAdminApiAccessToken,
-  isZaplieAdmin,
-} from '../services/adminApiAuth';
+  getBotPersona,
+  getRewardAmounts,
+  getRewardName,
+  updateBotPersona,
+  updateRewardAmounts,
+  updateRewardName,
+} from '../apiService';
+import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 import { RewardNameContext } from './RewardNameContext';
 import styles from './setting.module.css';
 
@@ -26,12 +30,6 @@ const EMPTY_DRAFT: AdminConfigDraft = {
   botPersona: '',
   githubPrMergedSats: '',
 };
-
-const toDraft = (config: AdminConfig): AdminConfigDraft => ({
-  rewardName: config.rewardName,
-  botPersona: config.botPersona,
-  githubPrMergedSats: String(config.rewardAmounts.githubPrMergedSats),
-});
 
 const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
@@ -50,17 +48,27 @@ const AdminConfigSetting: FunctionComponent = () => {
     let cancelled = false;
 
     const loadConfig = async () => {
-      if (!account || !isAdmin) {
-        return;
-      }
-
       setIsLoading(true);
       setErrorMessage('');
       try {
-        const accessToken = await acquireAdminApiAccessToken(instance, account);
-        const { config } = await getAdminConfig(accessToken);
+        const { rewardName } = await getRewardName();
+        if (!account || !isAdmin) {
+          if (!cancelled) {
+            setDraft({ ...EMPTY_DRAFT, rewardName });
+          }
+          return;
+        }
+        const idToken = await acquireIdToken(instance, account);
+        const [{ rewardAmounts }, { botPersona }] = await Promise.all([
+          getRewardAmounts(idToken),
+          getBotPersona(idToken),
+        ]);
         if (!cancelled) {
-          setDraft(toDraft(config));
+          setDraft({
+            rewardName,
+            botPersona,
+            githubPrMergedSats: String(rewardAmounts.githubPrMergedSats),
+          });
         }
       } catch (error) {
         if (!cancelled) {
@@ -91,22 +99,21 @@ const AdminConfigSetting: FunctionComponent = () => {
       return;
     }
 
-    const config: AdminConfig = {
-      rewardName: draft.rewardName.trim(),
-      botPersona: draft.botPersona.trim(),
-      rewardAmounts: { githubPrMergedSats: amount },
-    };
-
     setIsSaving(true);
     setErrorMessage('');
     try {
-      const accessToken = await acquireAdminApiAccessToken(instance, account);
-      const { config: savedConfig } = await updateAdminConfig(
-        accessToken,
-        config,
+      const idToken = await acquireIdToken(instance, account);
+      const { rewardName } = await updateRewardName(
+        idToken,
+        draft.rewardName.trim(),
       );
-      setDraft(toDraft(savedConfig));
-      setRewardName(savedConfig.rewardName);
+      await updateRewardAmounts(idToken, { githubPrMergedSats: amount });
+      const { botPersona } = await updateBotPersona(
+        idToken,
+        draft.botPersona.trim(),
+      );
+      setDraft(current => ({ ...current, rewardName, botPersona }));
+      setRewardName(rewardName);
       toast.success('Administrator settings saved.');
     } catch (error) {
       const message = getErrorMessage(
@@ -120,13 +127,18 @@ const AdminConfigSetting: FunctionComponent = () => {
     }
   };
 
-  if (!isAdmin) {
-    return null;
-  }
-
   if (isLoading) {
     return (
       <p className={styles.statusMessage}>Loading administrator settings...</p>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className={styles.sectionHeading}>
+        <h2>Rewards</h2>
+        <p>Rewards on this team are called {draft.rewardName || 'sats'}.</p>
+      </div>
     );
   }
 

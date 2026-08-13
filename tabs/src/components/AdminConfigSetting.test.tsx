@@ -2,18 +2,29 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useMsal } from '@azure/msal-react';
-import { getAdminConfig, updateAdminConfig } from '../apiService';
-import { acquireAdminApiAccessToken } from '../services/adminApiAuth';
+import {
+  getBotPersona,
+  getRewardAmounts,
+  getRewardName,
+  updateBotPersona,
+  updateRewardAmounts,
+  updateRewardName,
+} from '../apiService';
+import { acquireIdToken } from '../services/adminRole';
 import AdminConfigSetting from './AdminConfigSetting';
 import { RewardNameContext } from './RewardNameContext';
 
 jest.mock('@azure/msal-react', () => ({ useMsal: jest.fn() }));
 jest.mock('../apiService', () => ({
-  getAdminConfig: jest.fn(),
-  updateAdminConfig: jest.fn(),
+  getRewardName: jest.fn(),
+  getRewardAmounts: jest.fn(),
+  getBotPersona: jest.fn(),
+  updateRewardName: jest.fn(),
+  updateRewardAmounts: jest.fn(),
+  updateBotPersona: jest.fn(),
 }));
-jest.mock('../services/adminApiAuth', () => ({
-  acquireAdminApiAccessToken: jest.fn(),
+jest.mock('../services/adminRole', () => ({
+  acquireIdToken: jest.fn(),
   isZaplieAdmin: (
     account: { idTokenClaims?: { roles?: string[] } } | undefined,
   ) => account?.idTokenClaims?.roles?.includes('Zaplie.Admin') === true,
@@ -23,21 +34,27 @@ jest.mock('react-toastify', () => ({
 }));
 
 const mockUseMsal = useMsal as jest.MockedFunction<typeof useMsal>;
-const mockGetAdminConfig = getAdminConfig as jest.MockedFunction<
-  typeof getAdminConfig
+const mockGetRewardName = getRewardName as jest.MockedFunction<
+  typeof getRewardName
 >;
-const mockUpdateAdminConfig = updateAdminConfig as jest.MockedFunction<
-  typeof updateAdminConfig
+const mockGetRewardAmounts = getRewardAmounts as jest.MockedFunction<
+  typeof getRewardAmounts
 >;
-const mockAcquireToken = acquireAdminApiAccessToken as jest.MockedFunction<
-  typeof acquireAdminApiAccessToken
+const mockGetBotPersona = getBotPersona as jest.MockedFunction<
+  typeof getBotPersona
 >;
-
-const initialConfig = {
-  rewardName: 'sats',
-  botPersona: 'Be concise.',
-  rewardAmounts: { githubPrMergedSats: 1000 },
-};
+const mockUpdateRewardName = updateRewardName as jest.MockedFunction<
+  typeof updateRewardName
+>;
+const mockUpdateRewardAmounts = updateRewardAmounts as jest.MockedFunction<
+  typeof updateRewardAmounts
+>;
+const mockUpdateBotPersona = updateBotPersona as jest.MockedFunction<
+  typeof updateBotPersona
+>;
+const mockAcquireIdToken = acquireIdToken as jest.MockedFunction<
+  typeof acquireIdToken
+>;
 
 const setRewardName = jest.fn();
 
@@ -54,10 +71,20 @@ beforeEach(() => {
     inProgress: 'none' as never,
     logger: {} as never,
   });
-  mockAcquireToken.mockResolvedValue('api-access-token');
-  mockGetAdminConfig.mockResolvedValue({ config: initialConfig });
-  mockUpdateAdminConfig.mockImplementation(async (_token, config) => ({
-    config,
+  mockAcquireIdToken.mockResolvedValue('fresh-id-token');
+  mockGetRewardName.mockResolvedValue({ rewardName: 'sats' });
+  mockGetRewardAmounts.mockResolvedValue({
+    rewardAmounts: { githubPrMergedSats: 1000 },
+  });
+  mockGetBotPersona.mockResolvedValue({ botPersona: 'Be concise.' });
+  mockUpdateRewardName.mockImplementation(async (_token, newRewardName) => ({
+    rewardName: newRewardName,
+  }));
+  mockUpdateRewardAmounts.mockImplementation(async (_token, rewardAmounts) => ({
+    rewardAmounts,
+  }));
+  mockUpdateBotPersona.mockImplementation(async (_token, botPersona) => ({
+    botPersona,
   }));
 });
 
@@ -68,7 +95,7 @@ const renderSetting = () =>
     </RewardNameContext.Provider>,
   );
 
-test('shows one Save button and submits all three settings atomically', async () => {
+test('shows one Save button and submits all three settings with one click', async () => {
   renderSetting();
 
   const rewardName = await screen.findByLabelText('Reward Name');
@@ -85,13 +112,16 @@ test('shows one Save button and submits all three settings atomically', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
   await waitFor(() => {
-    expect(mockUpdateAdminConfig).toHaveBeenCalledTimes(1);
+    expect(mockUpdateBotPersona).toHaveBeenCalledTimes(1);
   });
-  expect(mockUpdateAdminConfig).toHaveBeenCalledWith('api-access-token', {
-    rewardName: 'points',
-    botPersona: 'Celebrate specific work.',
-    rewardAmounts: { githubPrMergedSats: 2500 },
+  expect(mockUpdateRewardName).toHaveBeenCalledWith('fresh-id-token', 'points');
+  expect(mockUpdateRewardAmounts).toHaveBeenCalledWith('fresh-id-token', {
+    githubPrMergedSats: 2500,
   });
+  expect(mockUpdateBotPersona).toHaveBeenCalledWith(
+    'fresh-id-token',
+    'Celebrate specific work.',
+  );
   expect(setRewardName).toHaveBeenCalledWith('points');
 });
 
@@ -105,10 +135,10 @@ test('keeps Save disabled for a non-positive or fractional amount', async () => 
   expect(
     screen.getByText('Enter a positive whole number of sats.'),
   ).toBeInTheDocument();
-  expect(mockUpdateAdminConfig).not.toHaveBeenCalled();
+  expect(mockUpdateRewardName).not.toHaveBeenCalled();
 });
 
-test('does not render or fetch administrator settings for a non-admin user', () => {
+test('shows the reward name read-only and fetches nothing admin-gated for a non-admin', async () => {
   mockUseMsal.mockReturnValue({
     instance: {} as never,
     accounts: [
@@ -121,9 +151,13 @@ test('does not render or fetch administrator settings for a non-admin user', () 
   renderSetting();
 
   expect(
+    await screen.findByText('Rewards on this team are called sats.'),
+  ).toBeInTheDocument();
+  expect(
     screen.queryByRole('button', { name: 'Save' }),
   ).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Reward Name')).not.toBeInTheDocument();
-  expect(mockAcquireToken).not.toHaveBeenCalled();
-  expect(mockGetAdminConfig).not.toHaveBeenCalled();
+  expect(mockAcquireIdToken).not.toHaveBeenCalled();
+  expect(mockGetRewardAmounts).not.toHaveBeenCalled();
+  expect(mockGetBotPersona).not.toHaveBeenCalled();
 });

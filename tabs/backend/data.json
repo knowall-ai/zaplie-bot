@@ -1,7 +1,3 @@
 {
-  "rewardName": "sats",
-  "botPersona": "",
-  "rewardAmounts": {
-    "githubPrMergedSats": 1000
-  }
+  "rewardName": "sats"
 }
