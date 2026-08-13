@@ -27,9 +27,9 @@ npx jest src/services/lnbitsService.test.ts
 === Unit Tests — Web Tabs (`tabs/`)
 
 - Framework: Jest via react-scripts, with React Testing Library and jest-dom
-- Test files: `tabs/src/services/lnbitsServiceLocal.test.ts` (mocks global
-  `fetch` and localStorage; covers `getAccessToken`, `getWallets`,
-  `getWalletBalance`, `getUserWallets`, `createInvoice`, `payInvoice`) and
+- Test files: `tabs/src/services/lnbits/*.test.ts` (mock global `fetch` and
+  localStorage; cover `getAccessToken`, `getWallets`, `getWalletBalance`,
+  `getUserWallets`, `createInvoice`, `payInvoice`) and
   `tabs/src/setupTests.test.tsx` (environment smoke test)
 - Run:
 

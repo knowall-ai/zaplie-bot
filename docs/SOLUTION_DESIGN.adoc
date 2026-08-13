@@ -148,8 +148,8 @@ Three parallel clients speak to the LNbits REST API:
   (`/usermanager/api/v1/users|wallets`). Includes a `scheduledTopup()` routine
   (node-cron) that replenishes all Allowance wallets to
   `LNBITS_INITIAL_ALLOWANCE`.
-- `tabs/src/services/lnbitsServiceLocal.ts` — browser-side equivalent used by
-  the tabs (transactions, balances, allowance, payments).
+- `tabs/src/services/lnbits/` — browser-side equivalent used by the tabs, split
+  per concern (`auth`, `cache`, `users`, `wallets`, `payments`, `rewards`).
 - `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
   base URL and credentials arrive with each HTTP request.
 

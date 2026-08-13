@@ -1,0 +1,23 @@
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme) prefix(tw);
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(tw) source(none)
+  important;
+
+:root {
+  --zaplie-accent: #84cc16;
+  --zaplie-accent-strong: #6ba513;
+  --zaplie-canvas: #1f1f1f;
+  --zaplie-surface: #2d2b2c;
+  --zaplie-content: #ffffff;
+  --zaplie-content-muted: #d8d8d8;
+}
+
+@theme inline {
+  --color-zaplie-accent: var(--zaplie-accent);
+  --color-zaplie-accent-strong: var(--zaplie-accent-strong);
+  --color-zaplie-canvas: var(--zaplie-canvas);
+  --color-zaplie-surface: var(--zaplie-surface);
+  --color-zaplie-content: var(--zaplie-content);
+  --color-zaplie-content-muted: var(--zaplie-content-muted);
+}
