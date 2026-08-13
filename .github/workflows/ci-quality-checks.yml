@@ -151,3 +151,13 @@ jobs:
         env:
           CI: false
         run: npm run build
+
+      # functions/ is a third deployable package. Without this step its
+      # dependency bumps pass CI while actually breaking the build.
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
