@@ -31,7 +31,6 @@ const EMPTY_DRAFT: AdminConfigDraft = {
   githubPrMergedSats: '',
 };
 
-
 const AdminConfigSetting: FunctionComponent = () => {
   const { instance, accounts } = useMsal();
   const { setRewardName } = useContext(RewardNameContext);
