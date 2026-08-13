@@ -260,6 +260,11 @@ describe('getWallets', () => {
       'Content-Type': 'application/json',
       Authorization: 'Bearer tok-1',
     });
+    expect(
+      fetchMock.mock.calls.filter(
+        call => String(call[0]) === `${BASE}/users/api/v1/user/u-1/wallet`,
+      ),
+    ).toHaveLength(1);
   });
 
   test('filters wallets by name', async () => {
@@ -277,6 +282,27 @@ describe('getWallets', () => {
     const wallets = await service.getWallets('admin-key', 'Allowance');
 
     expect(wallets?.map(w => w.id)).toEqual(['w-1']);
+  });
+
+  test('rejects a wallet without a string user before requesting wallet details', async () => {
+    stubWalletRoutes(
+      [
+        {
+          id: 'w-1',
+          name: 'Alice - Allowance',
+        },
+      ],
+      {},
+    );
+
+    await expect(service.getWallets('admin-key')).rejects.toThrow(
+      'getWallets: LNbits returned a wallet without a string id, name, or user',
+    );
+    expect(
+      fetchMock.mock.calls.some(call =>
+        String(call[0]).includes('/undefined/'),
+      ),
+    ).toBe(false);
   });
 
   // Bug: getWalletById pre-filters deleted entries and returns null, so the wallet
@@ -298,8 +324,7 @@ describe('getWallets', () => {
     expect(wallets?.map(w => w.id)).toEqual(['w-1']);
   });
 
-  // Bug: the catch returns the Error, so callers receive it as the resolved value.
-  test.failing('rejects on a non-2xx response', async () => {
+  test('rejects on a non-2xx response', async () => {
     stubAuth();
     fetchMock.mockImplementationOnce(async () =>
       jsonResponse({}, { status: 500 }),
@@ -381,7 +406,7 @@ describe('getUserWallets', () => {
     );
 
     await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-      'getUserWallets: LNbits returned a wallet without a string id or name',
+      'getUserWallets: LNbits returned a wallet without a string id, name, or user',
     );
   });
 });
