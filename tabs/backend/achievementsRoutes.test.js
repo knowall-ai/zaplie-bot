@@ -176,6 +176,28 @@ test('requests further pages until a short batch arrives', async () => {
   assert.equal(byId(result)['first-recognition'].earned, true);
 });
 
+test('fails loudly when the payments response has no data array', async () => {
+  global.fetch = async (url, options = {}) => {
+    if (String(url).includes('/api/v1/payments/all/paginated')) {
+      return respond({ payments });
+    }
+    return worldFetch(url, options);
+  };
+
+  await assert.rejects(computeAchievements('aad-alice'), /no data array/);
+});
+
+test('fails loudly on a zap payment with an unparseable time', async () => {
+  global.fetch = async (url, options = {}) => {
+    if (String(url).includes('/api/v1/payments/all/paginated')) {
+      return respond({ data: zap('bad', 'A-alice', 'P-bob', 100, 'not-a-date') });
+    }
+    return worldFetch(url, options);
+  };
+
+  await assert.rejects(computeAchievements('aad-alice'), /unparseable time/);
+});
+
 test('caches results within the TTL', async () => {
   await getAchievements('aad-cache-hit');
   const callsAfterFirst = fetchCalls.length;

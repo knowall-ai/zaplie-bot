@@ -13,21 +13,19 @@ const MAX_PAGES = 40;
 const CACHE_TTL_MS = 15_000;
 const cache = new Map();
 
-const extractPayments = body => {
-  if (Array.isArray(body)) return body;
-  return body?.data || body?.payments || body?.items || [];
-};
-
 const paymentKey = payment =>
-  String(payment.checking_id || payment.payment_hash || '').replace(
-    /^internal_/,
-    '',
-  );
+  String(payment.checking_id || '').replace(/^internal_/, '');
 
+// LNbits returns epoch seconds up to v0.x and ISO strings from v1.
 const paymentTime = payment => {
   if (typeof payment.time === 'number') return payment.time;
   const milliseconds = Date.parse(payment.time);
-  return Number.isFinite(milliseconds) ? milliseconds / 1000 : 0;
+  if (!Number.isFinite(milliseconds)) {
+    throw new Error(
+      `payment ${payment.checking_id} has an unparseable time: ${payment.time}`,
+    );
+  }
+  return milliseconds / 1000;
 };
 
 const weekKey = seconds => {
@@ -54,7 +52,12 @@ async function listPayments(config, accessToken) {
       `${config.nodeUrl}/api/v1/payments/all/paginated?limit=${PAGE_SIZE}&offset=${offset}&sortby=time&direction=desc`,
       accessToken,
     );
-    const batch = extractPayments(body);
+    const batch = body?.data;
+    if (!Array.isArray(batch)) {
+      throw new Error(
+        `paginated payments response has no data array at offset ${offset}`,
+      );
+    }
     payments.push(...batch);
     if (batch.length < PAGE_SIZE) break;
   }
@@ -79,7 +82,7 @@ async function computeAchievements(aadObjectId) {
         `${config.nodeUrl}/users/api/v1/user/${user.id}/wallet`,
         accessToken,
       );
-      for (const wallet of wallets || []) {
+      for (const wallet of wallets) {
         if (wallet.deleted !== true) {
           walletOwners.set(wallet.id, { userId: user.id, name: wallet.name });
         }
