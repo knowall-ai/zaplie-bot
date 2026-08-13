@@ -117,7 +117,7 @@ interface RawLnbitsWallet {
   id: string;
   admin?: string;
   name: string;
-  user?: string;
+  user: string;
   adminkey?: string;
   inkey?: string;
   balance_msat?: number;
@@ -130,7 +130,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isRawLnbitsWallet = (value: unknown): value is RawLnbitsWallet =>
   isRecord(value) &&
   typeof value.id === 'string' &&
-  typeof value.name === 'string';
+  typeof value.name === 'string' &&
+  typeof value.user === 'string';
 
 const toRawLnbitsWallets = (
   value: unknown,
@@ -141,7 +142,7 @@ const toRawLnbitsWallets = (
   }
   if (!value.every(isRawLnbitsWallet)) {
     throw new Error(
-      `${source}: LNbits returned a wallet without a string id or name`,
+      `${source}: LNbits returned a wallet without a string id, name, or user`,
     );
   }
   return value;
@@ -189,18 +190,21 @@ const getWallets = async (
 
     // Map the wallets to match the Wallet interface
     let walletData: Wallet[] = await Promise.all(
-      filteredData.map(async rawWallet => ({
-        id: rawWallet.id,
-        admin: rawWallet.admin,
-        name: rawWallet.name,
-        adminkey: rawWallet.adminkey,
-        user: rawWallet.user,
-        inkey: rawWallet.inkey,
+      filteredData.map(async rawWallet => {
         // See: https://github.com/lnbits/lnbits/issues/2690
-        deleted: (await getWalletById(rawWallet.user, rawWallet.id))?.deleted,
-        balance_msat: (await getWalletById(rawWallet.user, rawWallet.id))
-          ?.balance_msat,
-      })),
+        const walletDetails = await getWalletById(rawWallet.user, rawWallet.id);
+
+        return {
+          id: rawWallet.id,
+          admin: rawWallet.admin,
+          name: rawWallet.name,
+          adminkey: rawWallet.adminkey,
+          user: rawWallet.user,
+          inkey: rawWallet.inkey,
+          deleted: walletDetails?.deleted,
+          balance_msat: walletDetails?.balance_msat,
+        };
+      }),
     );
 
     // Now remove the deleted wallets.
@@ -209,7 +213,7 @@ const getWallets = async (
     return walletData;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
