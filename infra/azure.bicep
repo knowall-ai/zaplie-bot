@@ -31,6 +31,8 @@ resource serverfarm 'Microsoft.Web/serverfarms@2021-02-01' = {
   name: serverfarmsName
   sku: {
     name: webAppSKU
+    // Token-exchange deduplication uses in-memory storage.
+    capacity: 1
   }
 }
 

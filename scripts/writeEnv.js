@@ -21,6 +21,7 @@ const selectedVars = {
   CONTENT_URL: envConfig.CONTENT_URL,
   FOUNDRY_PROJECT_ENDPOINT: envConfig.FOUNDRY_PROJECT_ENDPOINT,
   FOUNDRY_MODEL: envConfig.FOUNDRY_MODEL,
+  GRAPH_CONNECTION_NAME: envConfig.GRAPH_CONNECTION_NAME,
 };
 
 // Function to append selected variables to the appropriate environment files
@@ -37,9 +38,8 @@ const appendEnvFile = (filePath, vars) => {
   );
 
   if (newVars.length > 0) {
-    const envFileContent = '\n' + newVars
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n') + '\n';
+    const envFileContent =
+      '\n' + newVars.map(([key, value]) => `${key}=${value}`).join('\n') + '\n';
 
     fs.appendFileSync(filePath, envFileContent, 'utf8');
     console.log(`${filePath} appended successfully.`);
@@ -59,4 +59,5 @@ appendEnvFile(envOutputPath, {
   CONTENT_URL: selectedVars.CONTENT_URL,
   FOUNDRY_PROJECT_ENDPOINT: selectedVars.FOUNDRY_PROJECT_ENDPOINT,
   FOUNDRY_MODEL: selectedVars.FOUNDRY_MODEL,
+  GRAPH_CONNECTION_NAME: selectedVars.GRAPH_CONNECTION_NAME,
 });
