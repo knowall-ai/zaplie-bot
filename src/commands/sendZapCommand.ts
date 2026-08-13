@@ -365,7 +365,7 @@ async function populateWalletChoices() {
   }
 
   if (filteresUsers) {
-    return filteresUsers.map((user: any) => ({
+    return filteresUsers.map(user => ({
       title: user.displayName,
       value: user.id,
     }));
