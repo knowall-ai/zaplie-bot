@@ -45,7 +45,7 @@ const makeTurnContext = (user: User | undefined): TurnContext => {
   if (user) turnState.set('user', user);
   return {
     turnState,
-    sendActivity: jest.fn<() => Promise<any>>().mockResolvedValue(undefined),
+    sendActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   } as unknown as TurnContext;
 };
 
@@ -194,7 +194,9 @@ describe('agentTools', () => {
 
     beforeEach(() => {
       mockGetUsers.mockResolvedValue([sender, bob]);
-      mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as any);
+      mockCreateZapCard.mockResolvedValue({
+        type: 'AdaptiveCard',
+      } as Awaited<ReturnType<typeof createZapCard>>);
     });
 
     test('posts a pre-filled proposal without executing a payment', async () => {
