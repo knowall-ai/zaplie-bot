@@ -30,7 +30,7 @@ interface Transaction {
   fee: number;
   memo: string;
   time: number | string; // Unix timestamp (number) or ISO date string
-  extra: { [key: string]: any }; // JSON object
+  extra: Record<string, unknown>; // JSON object
   wallet_id: string;
   bolt11?: string; // Lightning invoice (optional)
 }

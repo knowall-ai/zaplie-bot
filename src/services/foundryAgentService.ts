@@ -10,7 +10,10 @@
 // project — see https://github.com/orgs/microsoft-foundry/discussions/326).
 
 import { DefaultAzureCredential } from '@azure/identity';
-import { AIProjectClient } from '@azure/ai-projects';
+import {
+  AIProjectClient,
+  type PromptAgentDefinition,
+} from '@azure/ai-projects';
 import { TurnContext } from 'botbuilder';
 import config from '../config';
 
@@ -29,7 +32,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
-  handler: (args: any, turnContext: TurnContext) => Promise<unknown>;
+  handler: (args: unknown, turnContext: TurnContext) => Promise<unknown>;
 }
 
 export interface RunTurnResult {
@@ -53,9 +56,67 @@ function getProjectClient(): AIProjectClient {
 }
 
 // Process-lifetime state, like projectClient/agentEnsured — not per-turn.
-let openAIClient: any = null;
+type ProjectOpenAIClient = ReturnType<AIProjectClient['getOpenAIClient']>;
 
-function getOpenAIClient(project: AIProjectClient): any {
+interface FoundryFunctionCall {
+  type: 'function_call';
+  name: string;
+  call_id: string;
+  arguments: string;
+}
+
+interface FunctionCallOutput {
+  type: 'function_call_output';
+  call_id: string;
+  output: string;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isFunctionCall = (value: unknown): value is FoundryFunctionCall =>
+  isRecord(value) &&
+  value.type === 'function_call' &&
+  typeof value.name === 'string' &&
+  typeof value.call_id === 'string' &&
+  typeof value.arguments === 'string';
+
+const parseFoundryResponse = (
+  value: unknown,
+): { functionCalls: FoundryFunctionCall[]; outputText: string } => {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.output) ||
+    typeof value.output_text !== 'string'
+  ) {
+    throw new Error(
+      'foundryAgentService: Foundry returned an invalid response payload.',
+    );
+  }
+
+  const malformedFunctionCall = value.output.some(
+    item =>
+      isRecord(item) && item.type === 'function_call' && !isFunctionCall(item),
+  );
+  if (malformedFunctionCall) {
+    throw new Error(
+      'foundryAgentService: Foundry returned an invalid function_call payload.',
+    );
+  }
+
+  return {
+    functionCalls: value.output.filter(isFunctionCall),
+    outputText: value.output_text,
+  };
+};
+
+const isNotFoundError = (error: unknown): boolean =>
+  (isRecord(error) && error.statusCode === 404) ||
+  (error instanceof Error && /does not exist/i.test(error.message));
+
+let openAIClient: ProjectOpenAIClient | null = null;
+
+function getOpenAIClient(project: AIProjectClient): ProjectOpenAIClient {
   if (!openAIClient) {
     openAIClient = project.getOpenAIClient();
   }
@@ -73,7 +134,7 @@ function ensureAgent(tools: ToolDefinition[]): Promise<void> {
         throw new Error('FOUNDRY_MODEL is not set.');
       }
       const project = getProjectClient();
-      const definition = {
+      const definition: PromptAgentDefinition = {
         kind: 'prompt',
         model: config.foundryModel,
         instructions: SYSTEM_INSTRUCTIONS,
@@ -88,13 +149,10 @@ function ensureAgent(tools: ToolDefinition[]): Promise<void> {
       // project the agent doesn't exist yet, so update 404s. Update, and
       // create on not-found (first run self-provisions the agent).
       try {
-        await project.agents.update(AGENT_NAME, definition as any);
-      } catch (error: any) {
-        const notFound =
-          error?.statusCode === 404 ||
-          /does not exist/i.test(error?.message ?? '');
-        if (!notFound) throw error;
-        await project.agents.create(AGENT_NAME, definition as any);
+        await project.agents.update(AGENT_NAME, definition);
+      } catch (error: unknown) {
+        if (!isNotFoundError(error)) throw error;
+        await project.agents.create(AGENT_NAME, definition);
       }
     })().catch(error => {
       // Let the next call retry instead of caching a rejected promise forever.
@@ -118,7 +176,7 @@ export async function runConversationalTurn(
     // ensureAgent and conversations.create are independent — run concurrently.
     const [, conversation] = await Promise.all([
       ensureAgent(tools),
-      (openai as any).conversations.create({}),
+      openai.conversations.create({}),
     ]);
     conversationId = conversation.id;
   } else {
@@ -128,7 +186,7 @@ export async function runConversationalTurn(
   const toolsByName = new Map(tools.map(tool => [tool.name, tool]));
 
   const runToolCall = async (
-    call: any,
+    call: FoundryFunctionCall,
     context: TurnContext,
   ): Promise<string> => {
     const tool = toolsByName.get(call.name);
@@ -158,10 +216,10 @@ export async function runConversationalTurn(
     return JSON.stringify(result);
   };
 
-  let nextInput: unknown = userText;
+  let nextInput: string | FunctionCallOutput[] = userText;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response: any = await (openai as any).responses.create(
+    const rawResponse = await openai.responses.create(
       { input: nextInput, conversation: conversationId },
       {
         body: {
@@ -170,19 +228,17 @@ export async function runConversationalTurn(
       },
     );
 
-    const functionCalls = (response.output || []).filter(
-      (item: any) => item.type === 'function_call',
-    );
+    const { functionCalls, outputText } = parseFoundryResponse(rawResponse);
 
     if (functionCalls.length === 0) {
       return {
-        replyText: response.output_text,
-        foundryConversationId: conversationId as string,
+        replyText: outputText,
+        foundryConversationId: conversationId,
       };
     }
 
     nextInput = await Promise.all(
-      functionCalls.map(async (call: any) => ({
+      functionCalls.map(async (call): Promise<FunctionCallOutput> => ({
         type: 'function_call_output',
         call_id: call.call_id,
         output: await runToolCall(call, turnContext),

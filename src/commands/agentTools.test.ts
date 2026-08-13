@@ -53,6 +53,16 @@ const wallet = (overrides: Partial<Wallet>): Wallet => ({
   ...overrides,
 });
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const requireRecord = (value: unknown): Record<string, unknown> => {
+  if (!isRecord(value)) {
+    throw new Error('Expected the tool to return an object.');
+  }
+  return value;
+};
+
 describe('agentTools', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -68,7 +78,9 @@ describe('agentTools', () => {
       const tool = createReadOnlyTools().find(
         t => t.name === 'get_my_balance',
       )!;
-      const result: any = await tool.handler({}, makeTurnContext(currentUser));
+      const result = requireRecord(
+        await tool.handler({}, makeTurnContext(currentUser)),
+      );
 
       expect(result.wallets).toEqual([
         { name: 'Allowance', balanceSats: 900 },
@@ -101,7 +113,9 @@ describe('agentTools', () => {
       const tool = createReadOnlyTools().find(
         t => t.name === 'get_leaderboard',
       )!;
-      const result: any = await tool.handler({}, makeTurnContext(currentUser));
+      const result = requireRecord(
+        await tool.handler({}, makeTurnContext(currentUser)),
+      );
 
       expect(result.leaderboard).toEqual([
         { displayName: 'Alice', balanceSats: 1500 },
@@ -125,9 +139,11 @@ describe('agentTools', () => {
       const tool = createReadOnlyTools().find(
         t => t.name === 'get_recent_activity',
       )!;
-      const result: any = await tool.handler(
-        { limit: 10, onlyInvolvingMe: true },
-        makeTurnContext(currentUser),
+      const result = requireRecord(
+        await tool.handler(
+          { limit: 10, onlyInvolvingMe: true },
+          makeTurnContext(currentUser),
+        ),
       );
 
       expect(mockGetRecentZaps).toHaveBeenCalledWith({

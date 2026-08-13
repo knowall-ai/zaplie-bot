@@ -17,6 +17,9 @@ const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
 
 const toSats = (balanceMsat: number): number => Math.floor(balanceMsat / 1000);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
 const getMyBalanceTool: ToolDefinition = {
   name: 'get_my_balance',
   description: "Get the current user's Allowance and Private wallet balances.",
@@ -78,18 +81,17 @@ const getRecentActivityTool: ToolDefinition = {
     },
     required: [],
   },
-  handler: async (
-    args: { limit?: number; onlyInvolvingMe?: boolean },
-    turnContext: TurnContext,
-  ) => {
+  handler: async (args: unknown, turnContext: TurnContext) => {
+    const options = isRecord(args) ? args : {};
     const user = turnContext.turnState.get('user') as User;
     const limit =
-      typeof args.limit === 'number'
-        ? Math.min(Math.max(args.limit, 1), 50)
+      typeof options.limit === 'number'
+        ? Math.min(Math.max(options.limit, 1), 50)
         : 20;
     const activity = await getRecentZaps({
       limit,
-      userAadObjectId: args.onlyInvolvingMe ? user.aadObjectId : undefined,
+      userAadObjectId:
+        options.onlyInvolvingMe === true ? user.aadObjectId : undefined,
     });
     return {
       rewardLabel,

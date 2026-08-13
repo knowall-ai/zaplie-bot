@@ -90,7 +90,7 @@ const setupUsersAndWallets = () => {
     return [];
   });
   mockGetPayments.mockImplementation(
-    async (inKey: string) => (walletsByInkey[inKey] || []) as any,
+    async (inKey: string) => walletsByInkey[inKey] || [],
   );
 };
 
