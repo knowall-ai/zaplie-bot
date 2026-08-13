@@ -28,6 +28,12 @@ coverage/
 
 appPackage/manifest.json
 
+# Identity foundation: local JSON stores, never real data in git
+tabs/backend/identities.json
+tabs/backend/pending-rewards.json
+tabs/backend/connections.json
+tabs/backend/webhook-keys.json
+
 # Generated documentation PDF
 docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
 docs/.asciidoctor/
