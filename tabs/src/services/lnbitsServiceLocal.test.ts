@@ -3,6 +3,8 @@ import {
   getAccessToken,
   getWallets,
   getUserWallets,
+  getAllUsersFromAPI,
+  clearApiCache,
   createInvoice,
   payInvoice,
 } from './lnbitsServiceLocal'; // Adjust the path if necessary
@@ -82,6 +84,22 @@ describe('lnbitsServiceLocal Tests', () => {
     expect(result?.[0].id).toBe('wallet1');
     expect(result?.[0].name).toBe('userWallet');
     expect(mockFetch).toHaveBeenCalled();
+  });
+
+  test('getAllUsersFromAPI reuses an in-flight users request', async () => {
+    clearApiCache();
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ data: [{ id: 'user1', username: 'Alice' }] }),
+    );
+
+    const [first, second] = await Promise.all([
+      getAllUsersFromAPI(),
+      getAllUsersFromAPI(),
+    ]);
+
+    expect(first).toEqual([{ id: 'user1', username: 'Alice' }]);
+    expect(second).toEqual(first);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   test('createInvoice should create an invoice and return the payment request', async () => {

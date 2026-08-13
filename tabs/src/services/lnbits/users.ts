@@ -17,14 +17,15 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
     return apiCache.rawUsers.data;
   }
 
-  if (pendingRequests.users) {
+  const pendingUsersRequest = pendingRequests.users;
+  if (pendingUsersRequest) {
     logger.debug('[Dedup] Reusing pending getAllUsersFromAPI request');
-    return pendingRequests.users;
+    return pendingUsersRequest;
   }
 
   logger.debug('[Cache MISS] Fetching users from API');
 
-  pendingRequests.users = (async (): Promise<RawApiUser[]> => {
+  const usersRequest = (async (): Promise<RawApiUser[]> => {
     try {
       const accessToken = await getAccessToken(`${userName}`, `${password}`);
 
@@ -63,7 +64,8 @@ const getAllUsersFromAPI = async (): Promise<RawApiUser[]> => {
     }
   })();
 
-  return pendingRequests.users;
+  pendingRequests.users = usersRequest;
+  return usersRequest;
 };
 
 const getUsers = async (
