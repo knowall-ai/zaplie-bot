@@ -15,7 +15,6 @@
     "@testing-library/user-event": "^14.6.3",
     "@yudiel/react-qr-scanner": "^2.0.8",
     "axios": "^1.8.1",
-    "body-parser": "^1.20.3",
     "cors": "^2.8.5",
     "dotenv-flow": "^4.1.0",
     "express": "^4.21.2",
