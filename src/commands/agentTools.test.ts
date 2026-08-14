@@ -193,6 +193,9 @@ describe('agentTools', () => {
     const tool = () => createAgentTools().find(t => t.name === 'propose_zap')!;
 
     beforeEach(() => {
+      mockGetUserWallets.mockResolvedValue([
+        wallet({ name: 'Allowance', balance_msat: 900000 }),
+      ]);
       mockGetUsers.mockResolvedValue([sender, bob]);
       mockCreateZapCard.mockResolvedValue({
         type: 'AdaptiveCard',
@@ -252,6 +255,21 @@ describe('agentTools', () => {
       const result: any = await tool().handler(args, context);
 
       expect(result.proposed).toBe(false);
+      expect(context.sendActivity).not.toHaveBeenCalled();
+    });
+
+    test('refuses an amount above the Allowance balance without posting a card', async () => {
+      const context = makeTurnContext(sender);
+      const result: any = await tool().handler(
+        { recipientName: 'Bob', amountSats: 901, memo: 'Thanks' },
+        context,
+      );
+
+      expect(result).toEqual({
+        proposed: false,
+        reason:
+          'The requested 901 sats exceeds the current Allowance balance of 900 sats.',
+      });
       expect(context.sendActivity).not.toHaveBeenCalled();
     });
 

@@ -160,6 +160,22 @@ const proposeZapTool: ToolDefinition = {
         'The current user is unavailable, so no zap was proposed.',
       );
     }
+
+    const senderWallets = await getUserWallets(adminKey, sender.id);
+    const allowance = senderWallets.find(w => w.name === 'Allowance');
+    if (!allowance) {
+      throw new Error(
+        `${sender.displayName} has no Allowance wallet, so no zap was proposed.`,
+      );
+    }
+    const allowanceSats = toSats(allowance.balance_msat);
+    if (amountSats > allowanceSats) {
+      return {
+        proposed: false,
+        reason: `The requested ${amountSats} sats exceeds the current Allowance balance of ${allowanceSats} sats.`,
+      };
+    }
+
     const users = await getUsers(adminKey, null);
     const query = recipientName.trim().toLowerCase();
     const exact = users.filter(
