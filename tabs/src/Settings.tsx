@@ -6,20 +6,18 @@ import { KNOWALL_CONSTANTS } from './constants/branding';
 const Settings: React.FC = () => {
   return (
     <div className={styles.mainContainer}>
-      <div className={styles.title}>
-        Settings{' '}
+      <header className={styles.pageHeader}>
+        <h1 className={styles.pageTitle}>Settings</h1>
+        <p className={styles.pageSubtitle}>
+          Team-wide reward configuration and the accounts linked to your
+          profile.
+        </p>
         <span className={styles.providedBy}>
           Built by {KNOWALL_CONSTANTS.name}
         </span>
-      </div>
-      <div style={{ width: '100%' }}>
-        {' '}
-        <AdminConfigSetting />{' '}
-      </div>
-      <div style={{ width: '100%' }}>
-        {' '}
-        <ConnectionsSetting />{' '}
-      </div>
+      </header>
+      <AdminConfigSetting />
+      <ConnectionsSetting />
     </div>
   );
 };

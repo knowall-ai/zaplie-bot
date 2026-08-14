@@ -130,17 +130,6 @@
   text-decoration: underline;
 }
 
-.card {
-  width: 100%;
-  background-color: #1f1f1f;
-  border-radius: 4px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-sizing: border-box;
-}
-
 .cardText {
   display: flex;
   flex-direction: column;
@@ -173,4 +162,19 @@
 
 .footnoteLink:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  /* Push the status or button onto its own line under the text. */
+  .cardText {
+    min-width: calc(100% - 32px);
+  }
+
+  .connectButton {
+    width: 100%;
+  }
 }

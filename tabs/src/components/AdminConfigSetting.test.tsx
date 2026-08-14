@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useMsal } from '@azure/msal-react';
 import {
+  getAutomations,
   getBotPersona,
   getRewardAmounts,
   getRewardName,
@@ -16,6 +17,7 @@ import { RewardNameContext } from './RewardNameContext';
 
 jest.mock('@azure/msal-react', () => ({ useMsal: jest.fn() }));
 jest.mock('../apiService', () => ({
+  getAutomations: jest.fn(),
   getRewardName: jest.fn(),
   getRewardAmounts: jest.fn(),
   getBotPersona: jest.fn(),
@@ -34,6 +36,9 @@ jest.mock('react-toastify', () => ({
 }));
 
 const mockUseMsal = useMsal as jest.MockedFunction<typeof useMsal>;
+const mockGetAutomations = getAutomations as jest.MockedFunction<
+  typeof getAutomations
+>;
 const mockGetRewardName = getRewardName as jest.MockedFunction<
   typeof getRewardName
 >;
@@ -72,6 +77,7 @@ beforeEach(() => {
     logger: {} as never,
   });
   mockAcquireIdToken.mockResolvedValue('fresh-id-token');
+  mockGetAutomations.mockResolvedValue({ repos: ['org/repo-a', 'org/repo-b'] });
   mockGetRewardName.mockResolvedValue({ rewardName: 'sats' });
   mockGetRewardAmounts.mockResolvedValue({
     rewardAmounts: { githubPrMergedSats: 1000 },
@@ -101,6 +107,11 @@ test('shows one Save button and submits all three settings with one click', asyn
   const rewardName = await screen.findByLabelText('Reward name');
   const persona = screen.getByLabelText('Persona prompt');
   const rewardAmount = screen.getByLabelText('GitHub PR merged');
+  expect(
+    screen.getByText(
+      'Automated rewards currently watch 2 connected repositories.',
+    ),
+  ).toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1);
   expect(
     screen.queryByRole('button', { name: 'Edit' }),
@@ -160,4 +171,17 @@ test('shows the reward name read-only and fetches nothing admin-gated for a non-
   expect(mockAcquireIdToken).not.toHaveBeenCalled();
   expect(mockGetRewardAmounts).not.toHaveBeenCalled();
   expect(mockGetBotPersona).not.toHaveBeenCalled();
+  expect(mockGetAutomations).not.toHaveBeenCalled();
+});
+
+test('still renders the form without the repository line when that read fails', async () => {
+  mockGetAutomations.mockRejectedValue(new Error('automations down'));
+
+  renderSetting();
+
+  expect(await screen.findByLabelText('Reward name')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  expect(
+    screen.queryByText(/Automated rewards currently watch/),
+  ).not.toBeInTheDocument();
 });

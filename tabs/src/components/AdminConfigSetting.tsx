@@ -8,6 +8,7 @@ import React, {
 import { useMsal } from '@azure/msal-react';
 import { toast } from 'react-toastify';
 import {
+  getAutomations,
   getBotPersona,
   getRewardAmounts,
   getRewardName,
@@ -35,6 +36,7 @@ const AdminConfigSetting: FunctionComponent = () => {
   const { instance, accounts } = useMsal();
   const { setRewardName } = useContext(RewardNameContext);
   const [draft, setDraft] = useState<AdminConfigDraft>(EMPTY_DRAFT);
+  const [repoCount, setRepoCount] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -56,16 +58,21 @@ const AdminConfigSetting: FunctionComponent = () => {
           return;
         }
         const idToken = await acquireIdToken(instance, account);
-        const [{ rewardAmounts }, { botPersona }] = await Promise.all([
-          getRewardAmounts(idToken),
-          getBotPersona(idToken),
-        ]);
+        // The repository count is an optional context line; its failure must
+        // not block the admin form, and getAutomations already logs it.
+        const [{ rewardAmounts }, { botPersona }, automations] =
+          await Promise.all([
+            getRewardAmounts(idToken),
+            getBotPersona(idToken),
+            getAutomations(idToken).catch(() => null),
+          ]);
         if (!cancelled) {
           setDraft({
             rewardName,
             botPersona,
             githubPrMergedSats: String(rewardAmounts.githubPrMergedSats),
           });
+          setRepoCount(automations ? automations.repos.length : null);
         }
       } catch (error) {
         console.error('Admin settings load failed:', error);
@@ -128,15 +135,19 @@ const AdminConfigSetting: FunctionComponent = () => {
 
   if (!isAdmin) {
     return (
-      <div className={styles.sectionHeading}>
-        <h2>Rewards</h2>
-        <p>Rewards on this team are called {draft.rewardName || 'sats'}.</p>
-      </div>
+      <section className={styles.settingCard}>
+        <div className={styles.sectionBlock}>
+          <div className={styles.sectionHeading}>
+            <h2>Rewards</h2>
+            <p>Rewards on this team are called {draft.rewardName || 'sats'}.</p>
+          </div>
+        </div>
+      </section>
     );
   }
 
   return (
-    <form className={styles.adminForm} onSubmit={handleSubmit}>
+    <form className={styles.settingCard} onSubmit={handleSubmit}>
       <div className={styles.cardHeader}>
         <div className={styles.sectionHeading}>
           <h2>Admin</h2>
@@ -244,6 +255,13 @@ const AdminConfigSetting: FunctionComponent = () => {
             ) : null}
           </div>
         </div>
+        {repoCount !== null ? (
+          <p className={styles.sectionFact}>
+            {`Automated rewards currently watch ${repoCount} connected ${
+              repoCount === 1 ? 'repository' : 'repositories'
+            }.`}
+          </p>
+        ) : null}
       </div>
 
       <div className={styles.formActions}>

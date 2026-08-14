@@ -15,16 +15,31 @@
   box-sizing: border-box;
   color: #d6d6d6;
   font-family: Inter, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.title {
-  width: 100%;
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pageTitle {
+  margin: 0;
   font-weight: 700;
-  font-size: 14px;
-  line-height: 17px;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
   color: #ffffff;
-  user-select: none;
-  -webkit-user-select: none;
+}
+
+.pageSubtitle {
+  margin: 0;
+  color: #9d9d99;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .providedBy {
@@ -36,10 +51,9 @@
   font-weight: 500;
 }
 
-.adminForm {
+.settingCard {
   width: 100%;
   box-sizing: border-box;
-  margin-top: 24px;
   border: 1px solid #3d3b3c;
   border-radius: 8px;
   background-color: #262425;
@@ -72,6 +86,13 @@
 
 .sectionHint {
   margin: -10px 0 0;
+  color: #9d9d99;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sectionFact {
+  margin: 0;
   color: #9d9d99;
   font-size: 12px;
   line-height: 1.5;
@@ -211,7 +232,7 @@
 }
 
 .statusMessage {
-  margin: 28px 0 0;
+  margin: 0;
   color: #d6d6d6;
   font-size: 12px;
   line-height: 1.5;
@@ -257,10 +278,8 @@
 }
 
 .currencySetting {
-  width: 100%; /* Make currency setting take full width */
+  width: 100%;
   display: flex;
-  flex-direction: column; /* Stack elements vertically */
-  align-items: flex-start;
-  justify-content: center;
-  margin: 20px 0;
+  flex-direction: column;
+  align-items: stretch;
 }

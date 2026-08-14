@@ -105,44 +105,52 @@ const ConnectionsSetting: FunctionComponent = () => {
 
   return (
     <div className={styles.currencySetting}>
-      <div className={connectionStyles.card}>
-        <div className={connectionStyles.row}>
-          <img
-            src={GithubIcon}
-            alt="GitHub"
-            className={connectionStyles.icon}
-          />
-          <div className={connectionStyles.cardText}>
-            <span className={connectionStyles.cardTitle}>GitHub</span>
-            <span className={connectionStyles.cardHint}>
-              Link your account so eligible GitHub rewards can resolve to your
-              wallet. The pull-request flow is still a draft pilot.
-            </span>
+      <section className={styles.settingCard}>
+        <div className={styles.cardHeader}>
+          <div className={styles.sectionHeading}>
+            <h2>Connections</h2>
+            <p>External accounts linked to your Zaplie profile.</p>
           </div>
-          {loading ? (
-            <span className={connectionStyles.status}>Loading...</span>
-          ) : githubIdentity ? (
-            <span className={connectionStyles.connected}>
-              Connected as @{githubIdentity.providerHandle}
-            </span>
-          ) : (
-            <button
-              onClick={handleConnect}
-              disabled={connecting}
-              className={connectionStyles.connectButton}
-            >
-              {connecting ? 'Redirecting…' : 'Connect GitHub'}
-            </button>
-          )}
         </div>
-        <span className={connectionStyles.footnote}>
-          Repositories and more organisation connections are managed in{' '}
-          <Link to="/automations" className={connectionStyles.footnoteLink}>
-            Automations
-          </Link>
-          .
-        </span>
-      </div>
+        <div className={styles.sectionBlock}>
+          <div className={connectionStyles.row}>
+            <img
+              src={GithubIcon}
+              alt="GitHub"
+              className={connectionStyles.icon}
+            />
+            <div className={connectionStyles.cardText}>
+              <span className={connectionStyles.cardTitle}>GitHub</span>
+              <span className={connectionStyles.cardHint}>
+                Link your account so eligible GitHub rewards can resolve to your
+                wallet. The pull-request flow is still a draft pilot.
+              </span>
+            </div>
+            {loading ? (
+              <span className={connectionStyles.status}>Loading...</span>
+            ) : githubIdentity ? (
+              <span className={connectionStyles.connected}>
+                Connected as @{githubIdentity.providerHandle}
+              </span>
+            ) : (
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className={connectionStyles.connectButton}
+              >
+                {connecting ? 'Redirecting…' : 'Connect GitHub'}
+              </button>
+            )}
+          </div>
+          <span className={connectionStyles.footnote}>
+            Repositories and more organisation connections are managed in{' '}
+            <Link to="/automations" className={connectionStyles.footnoteLink}>
+              Automations
+            </Link>
+            .
+          </span>
+        </div>
+      </section>
       <ToastContainer />
     </div>
   );
