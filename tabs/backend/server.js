@@ -1,5 +1,6 @@
 // filepath: /c:/projects/ZapVibes/tabs/backend/server.js
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -16,7 +17,21 @@ const {
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Azure App Service fronts the app with a single proxy; without this the
+// limiter would key every client on the proxy's IP.
+app.set('trust proxy', 1);
+
+const apiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.API_RATE_LIMIT) || 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(cors());
+// Mounted app-wide, not on /api: CodeQL also flags the sendFile catch-all
+// below (js/missing-rate-limiting), and every route does file or network work.
+app.use(apiRateLimiter);
 app.use(bodyParser.json());
 
 // Mounted before the generic authMiddleware below: its user-facing routes

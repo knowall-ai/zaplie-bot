@@ -85,7 +85,7 @@ const call = (method, route, auth, body) =>
       },
       res => {
         res.resume();
-        res.on('end', () => resolve({ status: res.statusCode }));
+        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers }));
       },
     );
     req.on('error', reject);
@@ -99,7 +99,9 @@ const post = (route, auth, body) => call('POST', route, auth, body);
 const PROTECTED_READS = ['/api/automations', '/api/reward-amounts'];
 
 test('reward-name is readable without credentials, since the portal reads it before sign-in', async () => {
-  assert.equal((await get('/api/reward-name')).status, 200);
+  const response = await get('/api/reward-name');
+  assert.equal(response.status, 200);
+  assert.match(response.headers['ratelimit-policy'], /300;w=900/);
 });
 
 for (const route of PROTECTED_READS) {
