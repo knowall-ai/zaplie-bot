@@ -1,11 +1,25 @@
-import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 import { getRecentMeetings, getRelevantPeople } from './graphService';
 
+const originalFetch = global.fetch;
 const mockFetch = jest.fn<typeof fetch>();
-global.fetch = mockFetch as unknown as typeof fetch;
 
 describe('graphService', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = mockFetch as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
 
   test('maps calendar events and caps returned attendees', async () => {
     const attendees = Array.from({ length: 25 }, (_, index) => ({

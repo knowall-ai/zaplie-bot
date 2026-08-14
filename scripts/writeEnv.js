@@ -33,8 +33,9 @@ const appendEnvFile = (filePath, vars) => {
   }
 
   // Filter out variables that already exist or have no value in the source
+  // (dotenv.parse yields '' for blank entries, not undefined)
   const newVars = Object.entries(vars).filter(
-    ([key, value]) => value !== undefined && !existingEnv[key],
+    ([key, value]) => value && !existingEnv[key],
   );
 
   if (newVars.length > 0) {
