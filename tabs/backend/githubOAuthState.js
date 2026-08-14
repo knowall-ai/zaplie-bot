@@ -2,16 +2,11 @@
 // Signed state ties the GitHub callback back to the oid that started the flow,
 // so a forged callback can't link a GitHub account to someone else's person.
 const crypto = require('crypto');
+const { getOrCreateSecret } = require('./secretsStore');
 
 const STATE_TTL_MS = 5 * 60 * 1000; // time to complete the GitHub authorize round trip
 
-const secret = () => {
-  const value = process.env.IDENTITY_STATE_SECRET;
-  if (!value) {
-    throw new Error('IDENTITY_STATE_SECRET is not set');
-  }
-  return value;
-};
+const secret = () => getOrCreateSecret('IDENTITY_STATE_SECRET');
 
 const sign = (payload) =>
   crypto.createHmac('sha256', secret()).update(payload).digest('hex');

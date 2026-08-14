@@ -21,7 +21,8 @@ import Feed from './Feed';
 import Users from './Users';
 import './App.css';
 import Rewards from './Rewards';
-import Bounties from './Bounties';
+import Automations from './Automations';
+import Reports from './Reports';
 import Wallet from './Wallet';
 import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
@@ -98,10 +99,18 @@ function App({ pca }: AppProps) {
                 }
               />
               <Route
-                path="/bounties"
+                path="/automations"
                 element={
                   <RequireAuth>
-                    <Bounties />
+                    <Automations />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <RequireAuth>
+                    <Reports />
                   </RequireAuth>
                 }
               />

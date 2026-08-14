@@ -24,20 +24,153 @@
 }
 
 .connectButton {
+  /* WalletAllowanceComponent.css sets a global button { width: 100% }. */
+  width: auto;
+  flex: none;
   padding: 8px 16px;
   border: none;
   border-radius: 4px;
-  background-color: #5b5fc7;
-  color: white;
+  background-color: #84cc16;
+  color: #1f1f1f;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .connectButton:hover {
-  background-color: #4850b8;
+  background-color: #6ba513;
 }
 
 .connectButton:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.reposSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.reposLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d6d6d6;
+}
+
+.repoList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.repoItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.repoLink {
+  font-size: 12px;
+  color: #84cc16;
+  text-decoration: none;
+}
+
+.repoLink:hover {
+  text-decoration: underline;
+}
+
+.privateBadge {
+  font-size: 10px;
+  color: #d6d6d6;
+  border: 1px solid #a19f9d;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.reposActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.secondaryButton {
+  padding: 8px 16px;
+  border: 1px solid #84cc16;
+  border-radius: 4px;
+  background-color: transparent;
+  color: #d6d6d6;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  background-color: #2d2b2c;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.manageLink {
+  font-size: 12px;
+  color: #84cc16;
+  text-decoration: none;
+}
+
+.manageLink:hover {
+  text-decoration: underline;
+}
+
+.card {
+  width: 100%;
+  background-color: #1f1f1f;
+  border-radius: 4px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.cardHint {
+  color: #a19f9d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.footnote {
+  color: #7a7877;
+  font-size: 11px;
+}
+
+.footnoteLink {
+  color: #84cc16;
+  text-decoration: none;
+}
+
+.footnoteLink:hover {
+  text-decoration: underline;
 }

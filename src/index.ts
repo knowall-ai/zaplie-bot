@@ -1,7 +1,8 @@
 // Import required packages
 import * as restify from 'restify';
 import * as path from 'path';
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
+import { getWebhookKeyHashes } from './services/fetchWebhookKeys';
 
 // Import required bot services.
 // See https://aka.ms/bot-services to learn more about the different parts of a bot.
@@ -20,6 +21,7 @@ import { FetchUserMiddleware } from './services/fetchUserMiddleware';
 import {
   parseRewardRequest,
   resolveAmountSats,
+  assertRepoConnected,
   payReward,
   RewardError,
 } from './services/rewardsService';
@@ -115,28 +117,54 @@ server.post('/api/messages', async (req, res) => {
     });
 });
 
+// A presented key is valid if it matches the env key or the hash of any
+// active portal-managed key (created and revoked by admins in Automations).
+const isAuthorizedRewardKey = async (providedKey: string): Promise<boolean> => {
+  const envKey = process.env.REWARDS_API_KEY;
+  if (envKey) {
+    // Buffers, not strings: timingSafeEqual throws on byte-length mismatch.
+    const provided = Buffer.from(providedKey);
+    const expected = Buffer.from(envKey);
+    if (
+      provided.length === expected.length &&
+      timingSafeEqual(provided, expected)
+    ) {
+      return true;
+    }
+  }
+  const hashes = await getWebhookKeyHashes();
+  if (!envKey && hashes.length === 0) {
+    throw new RewardError(
+      'rewards endpoint disabled: no API keys configured',
+      503,
+    );
+  }
+  const providedHash = createHash('sha256').update(providedKey).digest('hex');
+  return hashes.includes(providedHash);
+};
+
 // Deterministic automation path — no LLM can trigger a payment here.
 server.post('/api/v1/rewards', async (req, res) => {
-  const expectedKey = process.env.REWARDS_API_KEY;
-  if (!expectedKey) {
-    res.send(503, {
-      error: 'rewards endpoint disabled: REWARDS_API_KEY is not set',
-    });
-    return;
-  }
-  // Buffers, not strings: timingSafeEqual throws on byte-length mismatch.
-  const providedKey = Buffer.from(req.header('x-api-key') ?? '');
-  const expected = Buffer.from(expectedKey);
-  const keyMatches =
-    providedKey.length === expected.length &&
-    timingSafeEqual(providedKey, expected);
-  if (!keyMatches) {
-    res.send(401, { error: 'invalid API key' });
+  try {
+    if (!(await isAuthorizedRewardKey(req.header('x-api-key') ?? ''))) {
+      res.send(401, { error: 'invalid API key' });
+      return;
+    }
+  } catch (error) {
+    if (error instanceof RewardError) {
+      res.send(error.statusCode, { error: error.message });
+      return;
+    }
+    console.error('rewards key validation failed:', error);
+    res.send(503, { error: 'rewards endpoint unavailable' });
     return;
   }
 
   try {
     const request = parseRewardRequest(req.body);
+    // This draft endpoint is deliberately restricted to GitHub. Generic flow
+    // identities need a separate provider-aware contract before they can pay.
+    await assertRepoConnected(request.repo);
     const amountSats = await resolveAmountSats(request);
     const result = await payReward({ ...request, amountSats });
     if ('pending' in result) {
