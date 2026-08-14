@@ -1,5 +1,6 @@
 // filepath: /c:/projects/ZapVibes/tabs/backend/server.js
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -16,7 +17,17 @@ const {
 const app = express();
 const port = process.env.PORT || 5000;
 
+const apiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(cors());
+// Apply abuse protection before any API route performs authentication, file
+// access, or outbound requests. Static assets remain outside this budget.
+app.use('/api', apiRateLimiter);
 app.use(bodyParser.json());
 
 // Mounted before the generic authMiddleware below: its user-facing routes

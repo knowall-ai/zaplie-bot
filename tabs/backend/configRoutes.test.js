@@ -95,7 +95,7 @@ const call = (method, route, auth, body) =>
           } catch {
             // Non-JSON bodies stay null; status is what most tests assert on.
           }
-          resolve({ status: res.statusCode, body });
+          resolve({ status: res.statusCode, body, headers: res.headers });
         });
       },
     );
@@ -114,7 +114,9 @@ const PROTECTED_READS = [
 ];
 
 test('reward-name is readable without credentials, since the portal reads it before sign-in', async () => {
-  assert.equal((await get('/api/reward-name')).status, 200);
+  const response = await get('/api/reward-name');
+  assert.equal(response.status, 200);
+  assert.match(response.headers['ratelimit-policy'], /300;w=900/);
 });
 
 for (const route of PROTECTED_READS) {
