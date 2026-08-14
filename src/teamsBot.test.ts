@@ -97,6 +97,25 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     expect(response).toEqual({});
   });
 
+  test('reduces malformed message HTML to a safe plaintext memo', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(
+        authorUser.aadObjectId,
+        'Great <<script>script>alert(1)</script> & <b>safe</b>',
+      ),
+    );
+
+    const memo = mockCreateZapCard.mock.calls[0][2]?.message;
+    expect(memo).not.toMatch(/[<>&]/);
+    expect(memo).toContain('Great');
+    expect(memo).toContain('safe');
+  });
+
   test('guards against zapping yourself', async () => {
     mockGetUsers.mockResolvedValue([currentUser]);
 

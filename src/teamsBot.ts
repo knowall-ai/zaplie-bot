@@ -11,6 +11,7 @@ import {
   MessagingExtensionAction,
   MessagingExtensionActionResponse,
 } from 'botbuilder';
+import sanitizeHtml from 'sanitize-html';
 import { SSOCommandMap } from './commands/SSOCommandMap';
 import {
   SendZapCommand,
@@ -468,7 +469,11 @@ export class TeamsBot extends TeamsActivityHandler {
 // HTML -> plaintext, capped to a short preview for the zap memo field.
 function stripHtmlSnippet(html: string | undefined): string {
   if (!html) return '';
-  return html.replace(/<[^>]+>/g, '').trim().slice(0, 80);
+  return sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} })
+    .replace(/[<>&]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
 }
 
 function getZapMessageDefaultSats(): number {
