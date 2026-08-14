@@ -154,7 +154,7 @@ router.get('/mine', async (req, res) => {
 
 // GET /api/identities/resolve — internal, called by the bot (same weak
 // placeholder-token pattern as /api/reward-amounts; known limitation, issue #171).
-router.get('/resolve', authMiddleware, async (req, res) => {
+router.get('/resolve', internalAuthMiddleware, async (req, res) => {
   const { provider, providerId } = req.query;
   if (typeof provider !== 'string' || typeof providerId !== 'string') {
     res.status(400).json({ error: 'provider and providerId are required' });
