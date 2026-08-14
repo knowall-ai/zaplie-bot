@@ -13,6 +13,7 @@ import { DefaultAzureCredential } from '@azure/identity';
 import { AIProjectClient } from '@azure/ai-projects';
 import { TurnContext } from 'botbuilder';
 import config from '../config';
+import { getBotPersona } from './fetchBotPersona';
 
 const AGENT_NAME = 'zaplie-assistant';
 const MAX_TOOL_ROUNDS = 5;
@@ -62,21 +63,25 @@ function getOpenAIClient(project: AIProjectClient): any {
   return openAIClient;
 }
 
-// Upserting the agent is idempotent — safe to do once per process; a new
-// deployment/tool set is picked up on the next cold start.
-let agentEnsured: Promise<void> | null = null;
+// Upserting the agent is idempotent — safe to memoize per persona; a new
+// deployment/tool set is picked up on the next cold start, and a changed
+// persona re-upserts so an admin's save takes effect without a restart.
+let agentEnsured: { promise: Promise<void>; persona: string } | null = null;
 
-function ensureAgent(tools: ToolDefinition[]): Promise<void> {
-  if (!agentEnsured) {
-    agentEnsured = (async () => {
+function ensureAgent(tools: ToolDefinition[], persona: string): Promise<void> {
+  if (!agentEnsured || agentEnsured.persona !== persona) {
+    const promise = (async () => {
       if (!config.foundryModel) {
         throw new Error('FOUNDRY_MODEL is not set.');
       }
       const project = getProjectClient();
+      const instructions = persona
+        ? `${SYSTEM_INSTRUCTIONS}\n\nOrganization persona, set by an administrator:\n${persona}`
+        : SYSTEM_INSTRUCTIONS;
       const definition = {
         kind: 'prompt',
         model: config.foundryModel,
-        instructions: SYSTEM_INSTRUCTIONS,
+        instructions,
         tools: tools.map(tool => ({
           type: 'function',
           name: tool.name,
@@ -96,13 +101,15 @@ function ensureAgent(tools: ToolDefinition[]): Promise<void> {
         if (!notFound) throw error;
         await project.agents.create(AGENT_NAME, definition as any);
       }
-    })().catch(error => {
+    })();
+    const entry = { promise, persona };
+    agentEnsured = entry;
+    promise.catch(() => {
       // Let the next call retry instead of caching a rejected promise forever.
-      agentEnsured = null;
-      throw error;
+      if (agentEnsured === entry) agentEnsured = null;
     });
   }
-  return agentEnsured;
+  return agentEnsured.promise;
 }
 
 export async function runConversationalTurn(
@@ -112,17 +119,18 @@ export async function runConversationalTurn(
   turnContext: TurnContext,
 ): Promise<RunTurnResult> {
   const openai = getOpenAIClient(getProjectClient());
+  const persona = await getBotPersona();
 
   let conversationId = existingFoundryConversationId;
   if (!conversationId) {
     // ensureAgent and conversations.create are independent — run concurrently.
     const [, conversation] = await Promise.all([
-      ensureAgent(tools),
+      ensureAgent(tools, persona),
       (openai as any).conversations.create({}),
     ]);
     conversationId = conversation.id;
   } else {
-    await ensureAgent(tools);
+    await ensureAgent(tools, persona);
   }
 
   const toolsByName = new Map(tools.map(tool => [tool.name, tool]));

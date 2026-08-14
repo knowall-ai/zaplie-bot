@@ -185,3 +185,24 @@ test('still renders the form without the repository line when that read fails', 
     screen.queryByText(/Automated rewards currently watch/),
   ).not.toBeInTheDocument();
 });
+
+test('reloads the server state when a save fails partway', async () => {
+  renderSetting();
+
+  const rewardName = await screen.findByLabelText('Reward name');
+  fireEvent.change(rewardName, { target: { value: 'points' } });
+
+  mockUpdateRewardAmounts.mockRejectedValueOnce(new Error('backend down'));
+  mockGetRewardName.mockResolvedValueOnce({ rewardName: 'points' });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(
+    await screen.findByText(
+      'Saving failed partway. The values below are what the server has.',
+    ),
+  ).toBeInTheDocument();
+  // The form was refreshed from the backend, not left with optimistic state.
+  expect(mockGetRewardName).toHaveBeenCalledTimes(2);
+  expect(mockGetBotPersona).toHaveBeenCalledTimes(2);
+  expect(setRewardName).toHaveBeenCalledWith('points');
+});

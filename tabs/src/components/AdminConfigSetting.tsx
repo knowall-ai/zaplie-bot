@@ -1,6 +1,7 @@
 import React, {
   FormEvent,
   FunctionComponent,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -43,54 +44,43 @@ const AdminConfigSetting: FunctionComponent = () => {
   const account = accounts[0];
   const isAdmin = isZaplieAdmin(account);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadConfig = useCallback(async () => {
+    const { rewardName } = await getRewardName();
+    if (!account || !isAdmin) {
+      setDraft({ ...EMPTY_DRAFT, rewardName });
+      return;
+    }
+    const idToken = await acquireIdToken(instance, account);
+    // The repository count is an optional context line; its failure must
+    // not block the admin form, and getAutomations already logs it.
+    const [{ rewardAmounts }, { botPersona }, automations] = await Promise.all([
+      getRewardAmounts(idToken),
+      getBotPersona(idToken),
+      getAutomations(idToken).catch(() => null),
+    ]);
+    setDraft({
+      rewardName,
+      botPersona,
+      githubPrMergedSats: String(rewardAmounts.githubPrMergedSats),
+    });
+    setRepoCount(automations ? automations.repos.length : null);
+    setRewardName(rewardName);
+  }, [account, instance, isAdmin, setRewardName]);
 
-    const loadConfig = async () => {
+  useEffect(() => {
+    (async () => {
       setIsLoading(true);
       setErrorMessage('');
       try {
-        const { rewardName } = await getRewardName();
-        if (!account || !isAdmin) {
-          if (!cancelled) {
-            setDraft({ ...EMPTY_DRAFT, rewardName });
-          }
-          return;
-        }
-        const idToken = await acquireIdToken(instance, account);
-        // The repository count is an optional context line; its failure must
-        // not block the admin form, and getAutomations already logs it.
-        const [{ rewardAmounts }, { botPersona }, automations] =
-          await Promise.all([
-            getRewardAmounts(idToken),
-            getBotPersona(idToken),
-            getAutomations(idToken).catch(() => null),
-          ]);
-        if (!cancelled) {
-          setDraft({
-            rewardName,
-            botPersona,
-            githubPrMergedSats: String(rewardAmounts.githubPrMergedSats),
-          });
-          setRepoCount(automations ? automations.repos.length : null);
-        }
+        await loadConfig();
       } catch (error) {
         console.error('Admin settings load failed:', error);
-        if (!cancelled) {
-          setErrorMessage('Unable to load administrator settings.');
-        }
+        setErrorMessage('Unable to load administrator settings.');
       } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
-    };
-
-    loadConfig();
-    return () => {
-      cancelled = true;
-    };
-  }, [account, instance, isAdmin]);
+    })();
+  }, [loadConfig]);
 
   const amount = Number(draft.githubPrMergedSats);
   const isAmountValid = Number.isSafeInteger(amount) && amount > 0;
@@ -120,8 +110,18 @@ const AdminConfigSetting: FunctionComponent = () => {
       toast.success('Administrator settings saved.');
     } catch (error) {
       console.error('Admin settings save failed:', error);
-      setErrorMessage('Unable to save administrator settings.');
       toast.error('Unable to save administrator settings.');
+      // The three writes are sequential, so a failure can leave the backend
+      // partially updated; reload so the form shows what actually persisted.
+      try {
+        await loadConfig();
+        setErrorMessage(
+          'Saving failed partway. The values below are what the server has.',
+        );
+      } catch (reloadError) {
+        console.error('Admin settings reload failed:', reloadError);
+        setErrorMessage('Unable to save administrator settings.');
+      }
     } finally {
       setIsSaving(false);
     }

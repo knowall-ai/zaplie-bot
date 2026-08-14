@@ -7,8 +7,8 @@
 // test exists to stop it from silently regressing.
 //
 // projectClient/agentEnsured are cached at module scope in
-// foundryAgentService.ts (intentional — ensureAgent should run once per
-// process, not once per turn), so agents.update is only asserted once, and
+// foundryAgentService.ts (intentional — ensureAgent runs once per process and
+// persona, not once per turn), so agents.update is asserted sparingly, and
 // all tests share one mocked OpenAI client configured via mockResolvedValueOnce.
 
 import { expect, describe, test, beforeAll, jest } from '@jest/globals';
@@ -30,6 +30,13 @@ jest.mock('../config', () => ({
 const mockAgentsUpdate = jest
   .fn<() => Promise<any>>()
   .mockResolvedValue(undefined);
+const mockGetBotPersona = jest
+  .fn<() => Promise<string>>()
+  .mockResolvedValue('');
+
+jest.mock('./fetchBotPersona', () => ({
+  getBotPersona: mockGetBotPersona,
+}));
 const mockConversationsCreate = jest.fn<() => Promise<any>>();
 const mockResponsesCreate = jest.fn<(...args: any[]) => Promise<any>>();
 
@@ -150,6 +157,42 @@ describe('foundryAgentService.runConversationalTurn', () => {
       name: 'zaplie-assistant',
       type: 'agent_reference',
     });
+  });
+
+  test('a changed persona re-upserts the agent with it in the instructions', async () => {
+    mockGetBotPersona.mockResolvedValue('Be upbeat and celebrate specifics.');
+    mockAgentsUpdate.mockClear();
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
+
+    await runConversationalTurn(
+      'hi',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+
+    expect(mockAgentsUpdate).toHaveBeenCalledTimes(1);
+    const definition = (mockAgentsUpdate.mock.calls[0] as any[])[1];
+    expect(definition.instructions).toContain(
+      'Be upbeat and celebrate specifics.',
+    );
+
+    // The same persona again must not re-upsert.
+    mockAgentsUpdate.mockClear();
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
+    await runConversationalTurn(
+      'hi',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+    expect(mockAgentsUpdate).not.toHaveBeenCalled();
   });
 
   test('names the unregistered tool and the registered ones when the agent drifts', async () => {
