@@ -5,7 +5,10 @@ process.env.LNBITS_NODE_URL = 'http://lnbits.test';
 process.env.LNBITS_USERNAME = 'admin';
 process.env.LNBITS_PASSWORD = 'pw';
 
-const { computeAchievements, getAchievements } = require('./achievementsRoutes');
+const {
+  computeAchievements,
+  getAchievements,
+} = require('./achievementsRoutes');
 
 // LNbits v1 fixtures: sub-users keyed by AAD object id in external_id, each
 // with an Allowance and a Private wallet. Payment listing uses the paginated
@@ -157,7 +160,13 @@ test('requests further pages until a short batch arrives', async () => {
     amount: -1000,
     time: '2026-01-02T10:00:00.000Z',
   }));
-  const pageTwo = zap('deep', 'A-carol', 'P-alice', 50, '2026-01-09T10:00:00.000Z');
+  const pageTwo = zap(
+    'deep',
+    'A-carol',
+    'P-alice',
+    50,
+    '2026-01-09T10:00:00.000Z',
+  );
   global.fetch = async (url, options = {}) => {
     const path = String(url);
     if (path.includes('/api/v1/payments/all/paginated')) {
@@ -190,12 +199,45 @@ test('fails loudly when the payments response has no data array', async () => {
 test('fails loudly on a zap payment with an unparseable time', async () => {
   global.fetch = async (url, options = {}) => {
     if (String(url).includes('/api/v1/payments/all/paginated')) {
-      return respond({ data: zap('bad', 'A-alice', 'P-bob', 100, 'not-a-date') });
+      return respond({
+        data: zap('bad', 'A-alice', 'P-bob', 100, 'not-a-date'),
+      });
     }
     return worldFetch(url, options);
   };
 
   await assert.rejects(computeAchievements('aad-alice'), /unparseable time/);
+});
+
+test('fails loudly instead of computing from a truncated payment scan', async () => {
+  const fullPage = Array.from({ length: 500 }, (_, i) => ({
+    checking_id: `full-${i}`,
+    wallet_id: 'A-alice',
+    amount: -1000,
+    time: '2026-01-02T10:00:00.000Z',
+  }));
+  global.fetch = async (url, options = {}) => {
+    if (String(url).includes('/api/v1/payments/all/paginated')) {
+      return respond({ data: fullPage, total: 50000 });
+    }
+    return worldFetch(url, options);
+  };
+
+  await assert.rejects(computeAchievements('aad-alice'), /truncated scan/);
+});
+
+test('fails loudly when the users response has no data array', async () => {
+  global.fetch = async (url, options = {}) => {
+    if (String(url).endsWith('/users/api/v1/user')) {
+      return respond({ users });
+    }
+    return worldFetch(url, options);
+  };
+
+  await assert.rejects(
+    computeAchievements('aad-alice'),
+    /users response has no data array/,
+  );
 });
 
 test('caches results within the TTL', async () => {

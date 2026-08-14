@@ -59,9 +59,12 @@ async function listPayments(config, accessToken) {
       );
     }
     payments.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
+    if (batch.length < PAGE_SIZE) return payments;
   }
-  return payments;
+  // Achievements over a truncated history would silently un-earn badges.
+  throw new Error(
+    `payment history exceeds ${MAX_PAGES * PAGE_SIZE} records; refusing to compute from a truncated scan`,
+  );
 }
 
 async function computeAchievements(aadObjectId) {
@@ -71,7 +74,10 @@ async function computeAchievements(aadObjectId) {
     `${config.nodeUrl}/users/api/v1/user`,
     accessToken,
   );
-  const users = Array.isArray(usersBody?.data) ? usersBody.data : [];
+  const users = usersBody?.data;
+  if (!Array.isArray(users)) {
+    throw new Error('users response has no data array');
+  }
   const currentUser = users.find(user => user.external_id === aadObjectId);
   if (!currentUser) return null;
 
@@ -204,15 +210,22 @@ async function computeAchievements(aadObjectId) {
 }
 
 function getAchievements(aadObjectId) {
-  const now = Date.now();
   const cached = cache.get(aadObjectId);
-  if (cached && cached.expiresAt > now) return cached.promise;
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
   const promise = computeAchievements(aadObjectId);
-  cache.set(aadObjectId, { promise, expiresAt: now + CACHE_TTL_MS });
-  promise.catch(() => {
-    if (cache.get(aadObjectId)?.promise === promise) cache.delete(aadObjectId);
-  });
+  // The TTL starts when the scan finishes; a slow in-flight scan stays shared
+  // instead of letting a second request start a duplicate aggregation.
+  const entry = { promise, expiresAt: Infinity };
+  cache.set(aadObjectId, entry);
+  promise.then(
+    () => {
+      entry.expiresAt = Date.now() + CACHE_TTL_MS;
+    },
+    () => {
+      if (cache.get(aadObjectId) === entry) cache.delete(aadObjectId);
+    },
+  );
   return promise;
 }
 
