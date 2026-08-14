@@ -17,7 +17,8 @@ const Settings: React.FC = () => {
         <CurrencySetting />{' '}
       </div>
       <div style={{ width: '100%' }}>
-        <ConnectionsSetting />
+        {' '}
+        <ConnectionsSetting />{' '}
       </div>
     </div>
   );

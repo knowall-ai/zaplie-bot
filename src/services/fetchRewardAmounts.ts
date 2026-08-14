@@ -1,10 +1,8 @@
-const API_URL = process.env.WEBSITE_API_URL || 'http://localhost:5000/api';
+import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
-// Legacy config route: migrate its browser-facing auth to MSAL in #181. Do not
-// expose TAB_BACKEND_TOKEN to satisfy the current placeholder middleware.
 export async function getRewardAmounts(): Promise<Record<string, number>> {
-  const response = await fetch(`${API_URL}/reward-amounts`, {
-    headers: { Authorization: 'your-secret-token' },
+  const response = await fetch(`${tabBackendApiUrl()}/reward-amounts`, {
+    headers: { Authorization: tabBackendAuthHeader() },
   });
   if (!response.ok) {
     throw new Error(`reward amounts fetch failed: ${response.status}`);

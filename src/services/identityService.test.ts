@@ -1,19 +1,18 @@
-import { resolvePersonAadByGithubId } from './identityService';
+import { resolveRewardRecipientByGithubId } from './identityService';
 import { payReward } from './rewardsService';
 import {
-  getUserWallets,
-  getUsers,
+  getUserWalletsByUserId,
   createInvoice,
   payInvoice,
 } from './lnbitsService';
 import { createPendingReward } from './pendingRewardsService';
 import {
-  afterAll,
-  beforeEach,
-  describe,
   expect,
-  jest,
+  describe,
   test,
+  beforeEach,
+  afterAll,
+  jest,
 } from '@jest/globals';
 
 jest.mock('./lnbitsService');
@@ -32,9 +31,8 @@ afterAll(() => {
   }
 });
 
-const mockedGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
-const mockedGetUserWallets = getUserWallets as jest.MockedFunction<
-  typeof getUserWallets
+const mockedGetUserWallets = getUserWalletsByUserId as jest.MockedFunction<
+  typeof getUserWalletsByUserId
 >;
 const mockedCreateInvoice = createInvoice as jest.MockedFunction<
   typeof createInvoice
@@ -55,30 +53,26 @@ const privateWallet: Wallet = {
   deleted: false,
 };
 
-const resolvedUser: User = {
-  id: 'lnbits-user-1',
-  displayName: 'Octo Cat',
-  profileImg: '',
-  aadObjectId: 'aad-1',
-  email: 'octocat@zaplie.test',
-  allowanceWallet: null,
-  privateWallet: null,
-};
-
-describe('resolvePersonAadByGithubId', () => {
+describe('resolveRewardRecipientByGithubId', () => {
   beforeEach(() => {
+    process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
     jest.clearAllMocks();
     process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
   });
 
-  test('resolve happy path: returns the personAad for a linked GitHub id', async () => {
+  test('returns the linked person and server-resolved LNbits user id', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ personAad: 'aad-1' }),
+      json: async () => ({ personAad: 'aad-1', lnbitsUserId: 'lnbits-user-1' }),
     } as Response);
 
-    await expect(resolvePersonAadByGithubId('12345678')).resolves.toBe('aad-1');
+    await expect(resolveRewardRecipientByGithubId('12345678')).resolves.toEqual(
+      {
+        personAad: 'aad-1',
+        lnbitsUserId: 'lnbits-user-1',
+      },
+    );
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining(
         '/identities/resolve?provider=github&providerId=12345678',
@@ -96,7 +90,9 @@ describe('resolvePersonAadByGithubId', () => {
       json: async () => ({ error: 'no identity linked' }),
     } as Response);
 
-    await expect(resolvePersonAadByGithubId('99999999')).resolves.toBeNull();
+    await expect(
+      resolveRewardRecipientByGithubId('99999999'),
+    ).resolves.toBeNull();
   });
 
   test('throws on an unexpected non-404 error status', async () => {
@@ -106,18 +102,21 @@ describe('resolvePersonAadByGithubId', () => {
       json: async () => ({}),
     } as Response);
 
-    await expect(resolvePersonAadByGithubId('12345678')).rejects.toThrow(
+    await expect(resolveRewardRecipientByGithubId('12345678')).rejects.toThrow(
       'identity resolve failed: 500',
     );
   });
 
-  test('fails before fetching when the internal token is missing', async () => {
-    delete process.env.TAB_BACKEND_TOKEN;
+  test('fails loud when the backend omits the LNbits user id', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ personAad: 'aad-1' }),
+    } as Response);
 
-    await expect(resolvePersonAadByGithubId('12345678')).rejects.toThrow(
-      'TAB_BACKEND_TOKEN',
+    await expect(resolveRewardRecipientByGithubId('12345678')).rejects.toThrow(
+      'identity resolve returned an invalid recipient',
     );
-    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
@@ -134,7 +133,7 @@ describe('payReward recipientId resolution', () => {
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ personAad: 'aad-1' }),
+      json: async () => ({ personAad: 'aad-1', lnbitsUserId: 'lnbits-user-1' }),
     } as Response);
 
   const linkMissing = () =>
@@ -148,12 +147,10 @@ describe('payReward recipientId resolution', () => {
     jest.clearAllMocks();
     process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-adminkey';
-    process.env.LNBITS_ADMINKEY = 'lnbits-adminkey';
   });
 
   test('resolves the recipient via the identity graph and pays', async () => {
     linkResolves();
-    mockedGetUsers.mockResolvedValue([resolvedUser]);
     mockedGetUserWallets.mockResolvedValue([privateWallet]);
     mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
     mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
@@ -161,19 +158,12 @@ describe('payReward recipientId resolution', () => {
     const result = await payReward(rewardWithRecipientId);
 
     expect(result).toEqual({ paymentHash: 'hash-1' });
-    expect(mockedGetUsers).toHaveBeenCalledWith('lnbits-adminkey', {
-      aadObjectId: 'aad-1',
-    });
-    expect(mockedGetUserWallets).toHaveBeenCalledWith(
-      'lnbits-adminkey',
-      'lnbits-user-1',
-    );
+    expect(mockedGetUserWallets).toHaveBeenCalledWith('lnbits-user-1');
     expect(mockedCreatePendingReward).not.toHaveBeenCalled();
   });
 
   test('does not embed wallet keys in the payment extra', async () => {
     linkResolves();
-    mockedGetUsers.mockResolvedValue([resolvedUser]);
     mockedGetUserWallets.mockResolvedValue([privateWallet]);
     mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
     mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
@@ -183,6 +173,11 @@ describe('payReward recipientId resolution', () => {
     const extra = mockedCreateInvoice.mock.calls[0][4];
     expect(JSON.stringify(extra)).not.toContain('adminkey');
     expect(JSON.stringify(extra)).not.toContain('inkey');
+    expect(extra).toEqual(
+      expect.objectContaining({
+        to: expect.objectContaining({ displayName: 'octocat' }),
+      }),
+    );
   });
 
   test('holds the reward pending when the recipient has not linked their GitHub', async () => {
@@ -204,23 +199,29 @@ describe('payReward recipientId resolution', () => {
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 
-  test('fails loud when the LNbits user lookup errors, never silently dropping', async () => {
-    linkResolves();
-    mockedGetUsers.mockRejectedValue(new Error('getUsers unavailable'));
+  test('fails loud when server-side LNbits identity resolution errors', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({ error: 'LNbits unavailable' }),
+    } as Response);
 
     await expect(payReward(rewardWithRecipientId)).rejects.toThrow(
-      'getUsers unavailable',
+      'identity resolve failed: 502',
     );
     expect(mockedCreatePendingReward).not.toHaveBeenCalled();
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 
-  test('throws when a linked person has no LNbits user', async () => {
-    linkResolves();
-    mockedGetUsers.mockResolvedValue([]);
+  test('throws when a linked-person response has no LNbits user', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ personAad: 'aad-1' }),
+    } as Response);
 
     await expect(payReward(rewardWithRecipientId)).rejects.toThrow(
-      'has no LNbits user',
+      'identity resolve returned an invalid recipient',
     );
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
@@ -255,13 +256,12 @@ describe('payReward recipientId resolution', () => {
       'statusCode',
       400,
     );
-    expect(mockedGetUsers).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 
   test('throws when the recipient has no Private wallet', async () => {
     linkResolves();
-    mockedGetUsers.mockResolvedValue([resolvedUser]);
     mockedGetUserWallets.mockResolvedValue([
       { ...privateWallet, name: 'Allowance' },
     ]);
@@ -274,7 +274,6 @@ describe('payReward recipientId resolution', () => {
 
   test('throws when createInvoice returns an error instead of a bolt11', async () => {
     linkResolves();
-    mockedGetUsers.mockResolvedValue([resolvedUser]);
     mockedGetUserWallets.mockResolvedValue([privateWallet]);
     mockedCreateInvoice.mockResolvedValue(new Error('lnbits down'));
 
@@ -286,7 +285,6 @@ describe('payReward recipientId resolution', () => {
 
   test('throws when payInvoice returns no payment hash', async () => {
     linkResolves();
-    mockedGetUsers.mockResolvedValue([resolvedUser]);
     mockedGetUserWallets.mockResolvedValue([privateWallet]);
     mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
     mockedPayInvoice.mockResolvedValue({ detail: 'insufficient balance' });

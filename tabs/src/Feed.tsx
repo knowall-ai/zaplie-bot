@@ -69,7 +69,16 @@ const Home: React.FC = () => {
   }, [adminKey]); // cache and setCache are from context and are stable, intentionally excluded
 
   return (
-    <div style={{ background: '#1F1F1F', paddingBottom: 40 }}>
+    <div
+      style={{
+        background: '#1F1F1F',
+        paddingBottom: 40,
+        width: '100%',
+        minWidth: 0,
+        alignSelf: 'stretch',
+        boxSizing: 'border-box',
+      }}
+    >
       <div
         style={{
           width: '100%',
@@ -78,17 +87,18 @@ const Home: React.FC = () => {
           //background: '#1F1F1F',
           justifyContent: 'flex-start',
           alignItems: 'flex-start',
-          gap: 918,
-          display: 'inline-flex',
+          display: 'flex',
+          boxSizing: 'border-box',
         }}
       >
         <div
           style={{
-            /*height: 246.19,*/
+            width: '100%',
             justifyContent: 'flex-start',
-            alignItems: 'flex-start',
+            alignItems: 'stretch',
             gap: 6,
             display: 'flex',
+            flexWrap: 'wrap',
           }}
         >
           <TotalZapsComponent
@@ -111,6 +121,10 @@ const Home: React.FC = () => {
           paddingRight: 20,
           paddingBottom: 20,
           paddingTop: 0,
+          minWidth: 0,
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          overflowX: 'auto',
         }}
       >
         <FeedComponent />

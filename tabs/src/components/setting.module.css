@@ -90,6 +90,20 @@
   color: black; /* Text color when editing */
 }
 
+.textArea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: white;
+  font-family: Inter;
+  resize: vertical;
+}
+
+.textArea.editing {
+  color: black;
+}
+
 .editButton,
 .saveButton {
   width: 100px; /* Set button width to 100px */

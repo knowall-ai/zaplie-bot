@@ -1,9 +1,5 @@
-import React, {
-  FunctionComponent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import React, { FunctionComponent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import connectionStyles from './connections.module.css';
 import GithubIcon from '../images/GitHub.svg';
@@ -25,9 +21,13 @@ const useGithubReturnStatus = () => {
       return;
     }
     if (status === 'connected') {
-      toast.success('GitHub connected.');
+      toast.success('GitHub connected successfully!');
+    } else if (status === 'repos_connected') {
+      toast.success('Repositories connected successfully!');
     } else if (status === 'conflict') {
       toast.error('That GitHub account is already linked to another person.');
+    } else if (status === 'install_error') {
+      toast.error('Connecting repositories failed. Please try again.');
     } else {
       toast.error('Connecting GitHub failed. Please try again.');
     }
@@ -58,25 +58,26 @@ const ConnectionsSetting: FunctionComponent = () => {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    try {
-      const tokenResponse = await instance.acquireTokenSilent({
-        ...loginRequest,
-        account,
-      });
-      const mine = await getMyIdentities(tokenResponse.idToken);
-      setIdentities(mine);
-    } catch (error) {
-      console.error('Error fetching connections:', error);
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [account, instance]);
-
-  useEffect(() => {
-    void loadIdentities();
-  }, [loadIdentities]);
+    const load = async () => {
+      try {
+        // forceRefresh: acquireTokenSilent can serve a cached, already-expired
+        // idToken; the backend verifies exp and would reject it with a 401.
+        const tokenResponse = await instance.acquireTokenSilent({
+          ...loginRequest,
+          account,
+          forceRefresh: true,
+        });
+        const mine = await getMyIdentities(tokenResponse.idToken);
+        setIdentities(mine);
+      } catch (error) {
+        console.error('Error fetching identities:', error);
+        toast.error('Could not load your GitHub connection.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [accounts, instance]);
 
   const handleConnect = async () => {
     if (!account) {
@@ -87,6 +88,7 @@ const ConnectionsSetting: FunctionComponent = () => {
       const tokenResponse = await instance.acquireTokenSilent({
         ...loginRequest,
         account,
+        forceRefresh: true,
       });
       const authorizeUrl = await getGithubAuthorizeUrl(tokenResponse.idToken);
       window.location.href = authorizeUrl;
@@ -97,28 +99,49 @@ const ConnectionsSetting: FunctionComponent = () => {
     }
   };
 
-  const handleRetry = () => {
-    void loadIdentities();
-  };
-
   const githubIdentity = identities.find(
     identity => identity.provider === 'github',
   );
 
   return (
-    <section
-      className={connectionStyles.section}
-      aria-labelledby="connections-heading"
-    >
-      <div className={connectionStyles.sectionHeader}>
-        <div>
-          <h2 id="connections-heading" className={connectionStyles.heading}>
-            Connections
-          </h2>
-          <p className={connectionStyles.intro}>
-            Link accounts so automated rewards reach the right Zaplie profile.
-          </p>
+    <div className={styles.currencySetting}>
+      <div className={connectionStyles.card}>
+        <div className={connectionStyles.row}>
+          <img
+            src={GithubIcon}
+            alt="GitHub"
+            className={connectionStyles.icon}
+          />
+          <div className={connectionStyles.cardText}>
+            <span className={connectionStyles.cardTitle}>GitHub</span>
+            <span className={connectionStyles.cardHint}>
+              Link your account so eligible GitHub rewards can resolve to your
+              wallet. The pull-request flow is still a draft pilot.
+            </span>
+          </div>
+          {loading ? (
+            <span className={connectionStyles.status}>Loading...</span>
+          ) : githubIdentity ? (
+            <span className={connectionStyles.connected}>
+              Connected as @{githubIdentity.providerHandle}
+            </span>
+          ) : (
+            <button
+              onClick={handleConnect}
+              disabled={connecting}
+              className={connectionStyles.connectButton}
+            >
+              {connecting ? 'Redirecting…' : 'Connect GitHub'}
+            </button>
+          )}
         </div>
+        <span className={connectionStyles.footnote}>
+          Repositories and more organisation connections are managed in{' '}
+          <Link to="/automations" className={connectionStyles.footnoteLink}>
+            Automations
+          </Link>
+          .
+        </span>
       </div>
 
       <div className={connectionStyles.card} aria-busy={loading}>

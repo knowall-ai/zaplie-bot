@@ -5,6 +5,10 @@
     "outDir": "dist",
     "rootDir": ".",
     "sourceMap": true,
-    "strict": false
+    "strict": false,
+    // Without this, TypeScript 7 treats functions/types/ as a typeRoots entry,
+    // which replaces the default node_modules/@types root and drops @types/node
+    // (Buffer, inspector, buffer all stop resolving). No-op on TS 4.x.
+    "types": ["node"]
   }
 }

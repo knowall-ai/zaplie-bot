@@ -5,7 +5,7 @@ const originalToken = process.env.TAB_BACKEND_TOKEN;
 const originalApiUrl = process.env.WEBSITE_API_URL;
 const originalNodeEnv = process.env.NODE_ENV;
 
-describe('tab backend internal configuration', () => {
+describe('tabBackendAuthHeader', () => {
   beforeEach(() => {
     delete process.env.TAB_BACKEND_TOKEN;
     delete process.env.WEBSITE_API_URL;
