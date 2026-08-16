@@ -249,10 +249,9 @@ const getWalletId = async (inKey: string) => {
       return null;
     }
 
-    const data = await response.json();
+    const data: Wallet[] = await response.json();
 
-    // Find the wallet with a matching inkey
-    const wallet = data.find((wallet: any) => wallet.inkey === inKey);
+    const wallet = data.find(candidate => candidate.inkey === inKey);
 
     if (!wallet) {
       logger.error('No wallet found for this inKey.');
