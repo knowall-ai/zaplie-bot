@@ -33,12 +33,8 @@ export async function getAccessToken(
   username: string,
   password: string,
 ): Promise<string> {
-  logger.debug('=== getAccessToken DEBUG ===');
-
   if (accessToken) {
     return accessToken;
-  } else {
-    logger.debug('No cached access token found');
   }
 
   if (accessTokenPromise) {
@@ -76,25 +72,20 @@ export async function getAccessToken(
         throw new Error('Access token is missing in the response');
       }
 
-      accessToken = data.access_token;
-      if (accessToken) {
-        sessionStorage.setItem(TOKEN_KEY, accessToken);
-        sessionStorage.setItem(TOKEN_TIMESTAMP_KEY, Date.now().toString());
-        logger.info(
-          'Access token fetched and stored (expires in ' +
-            TOKEN_EXPIRY_HOURS +
-            ' hours)',
-        );
-      } else {
-        throw new Error(
-          'Access token is null, cannot store in sessionStorage.',
-        );
-      }
+      const token: string = data.access_token;
+      accessToken = token;
+      sessionStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.setItem(TOKEN_TIMESTAMP_KEY, Date.now().toString());
+      logger.info(
+        'Access token fetched and stored (expires in ' +
+          TOKEN_EXPIRY_HOURS +
+          ' hours)',
+      );
 
-      return accessToken;
+      return token;
     } catch (error) {
       logger.error('Error in getAccessToken:', error);
-      throw new Error('Failed to retrieve access token');
+      throw new Error('Failed to retrieve access token', { cause: error });
     } finally {
       // Reset the promise to allow future requests
       accessTokenPromise = null;

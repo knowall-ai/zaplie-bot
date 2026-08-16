@@ -84,9 +84,12 @@ describe('lnbits auth', () => {
     const { getAccessToken } = await loadAuth();
     mockFetch.mockResolvedValueOnce(errorResponse(401, 'Unauthorized'));
 
-    await expect(getAccessToken('user', 'password')).rejects.toThrow(
-      'Failed to retrieve access token',
-    );
+    await expect(getAccessToken('user', 'password')).rejects.toMatchObject({
+      message: 'Failed to retrieve access token',
+      cause: expect.objectContaining({
+        message: expect.stringContaining('status: 401'),
+      }),
+    });
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull();
   });
 
