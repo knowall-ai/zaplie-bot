@@ -1,7 +1,7 @@
 // filepath: tabs/backend/identityRoutes.js
 // "Connect GitHub" self-linking flow. Person canonical = LNbits user, anchored
 // to aadObjectId; GitHub is an optional linked identity, matched by numeric id
-// only (never the renamable login). See docs/wilmer/implementacion/identidad/.
+// only (never the renamable login). See docs/identity-connections.md.
 const express = require('express');
 const authMiddleware = require('./authMiddleware');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
