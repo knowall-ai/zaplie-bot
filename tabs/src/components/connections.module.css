@@ -1,26 +1,137 @@
-/* filepath: tabs/src/components/connections.module.css */
-.row {
+.section {
   width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.heading {
+  margin: 0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.intro {
+  max-width: 62ch;
+  margin: 5px 0 0;
+  color: #d6d6d6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.card {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: #2d2b2c;
+  box-shadow:
+    0px 1px 2px rgba(0, 0, 0, 0.14),
+    0px 0px 1px rgba(0, 0, 0, 0.12);
+}
+
+.provider {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.iconFrame {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: #1f1f1f;
 }
 
 .icon {
-  width: 20px;
-  height: 20px;
-  flex: none;
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 
-.status {
-  font-size: 12px;
-  color: #d6d6d6;
+.providerCopy {
+  min-width: 0;
 }
 
-.connected {
-  font-size: 12px;
-  color: #84cc16;
+.providerName {
+  margin: 0;
+  color: #ffffff;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.3;
+}
+
+.providerDescription {
+  max-width: 52ch;
+  margin: 4px 0 0;
+  color: #d6d6d6;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.accountHandle {
+  max-width: 52ch;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.errorText {
+  margin: 4px 0 0;
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.connectedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid #3b393a;
+  border-radius: 4px;
+  background-color: #1f1f1f;
+  color: #84cc16;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.connectedIcon {
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
 
 .connectButton {
@@ -44,61 +155,7 @@
 
 .connectButton:disabled {
   opacity: 0.6;
-  cursor: default;
-}
-
-.reposSection {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.reposLabel {
-  font-size: 12px;
-  font-weight: 600;
-  color: #d6d6d6;
-}
-
-.repoList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.repoItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.repoLink {
-  font-size: 12px;
-  color: #84cc16;
-  text-decoration: none;
-}
-
-.repoLink:hover {
-  text-decoration: underline;
-}
-
-.privateBadge {
-  font-size: 10px;
-  color: #d6d6d6;
-  border: 1px solid #a19f9d;
-  border-radius: 4px;
-  padding: 1px 6px;
-}
-
-.reposActions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  cursor: wait;
 }
 
 .secondaryButton {
@@ -115,62 +172,94 @@
   background-color: #2d2b2c;
 }
 
-.secondaryButton:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.manageLink {
+.identityNote {
+  max-width: 72ch;
+  margin: 0;
+  color: #9a9a9a;
   font-size: 12px;
-  color: #84cc16;
-  text-decoration: none;
-}
-
-.manageLink:hover {
-  text-decoration: underline;
-}
-
-.card {
-  width: 100%;
-  background-color: #1f1f1f;
-  border-radius: 4px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-sizing: border-box;
-}
-
-.cardText {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.cardTitle {
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.cardHint {
-  color: #a19f9d;
-  font-size: 11px;
   line-height: 1.5;
 }
 
-.footnote {
-  color: #7a7877;
-  font-size: 11px;
+.loadingLines {
+  width: min(320px, 42vw);
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.footnoteLink {
-  color: #84cc16;
-  text-decoration: none;
+.loadingLine {
+  width: 100%;
+  height: 8px;
+  display: block;
+  border-radius: 4px;
+  background-color: #3b393a;
+  animation: connectionPulse 1.4s ease-in-out infinite;
 }
 
-.footnoteLink:hover {
-  text-decoration: underline;
+.loadingLineShort {
+  width: 62%;
+}
+
+.buttonPlaceholder {
+  width: 104px;
+  height: 44px;
+  display: block;
+  border-radius: 4px;
+  background-color: #3b393a;
+  animation: connectionPulse 1.4s ease-in-out infinite;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes connectionPulse {
+  0%,
+  100% {
+    opacity: 0.48;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (max-width: 560px) {
+  .card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+    padding: 15px;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .connectButton,
+  .secondaryButton,
+  .buttonPlaceholder {
+    width: 100%;
+  }
+
+  .loadingLines {
+    width: min(62vw, 260px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingLine,
+  .buttonPlaceholder {
+    animation: none;
+    opacity: 0.7;
+  }
 }
