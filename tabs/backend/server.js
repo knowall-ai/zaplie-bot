@@ -152,6 +152,13 @@ app.get('/api/reward-name', (req, res) => {
   res.send({ rewardName: data.rewardName });
 });
 
+// Endpoint to get the bot persona prompt. Read by the bot when building its
+// instructions, so it takes either credential like the other config reads.
+app.get('/api/bot-persona', requireSignedInOrBot, (req, res) => {
+  const data = readData();
+  res.send({ botPersona: data.botPersona || '' });
+});
+
 // Endpoint to get the connected repository allowlist
 app.get('/api/automations', requireSignedInOrBot, (req, res) => {
   const data = readData();
@@ -189,6 +196,26 @@ app.post('/api/reward-name', requireAdmin, (req, res) => {
   } else {
     res.status(400).send({ message: 'Invalid reward name' });
   }
+});
+
+app.post('/api/bot-persona', requireAdmin, (req, res) => {
+  const { botPersona } = req.body || {};
+  if (typeof botPersona !== 'string' || botPersona.length > 4000) {
+    res.status(400).send({
+      message: 'botPersona must be a string of at most 4000 characters',
+    });
+    return;
+  }
+  const data = readData();
+  data.botPersona = botPersona.trim();
+  if (!writeData(data)) {
+    res.status(500).send({ message: 'Bot persona could not be persisted' });
+    return;
+  }
+  res.send({
+    message: 'Bot persona updated successfully',
+    botPersona: data.botPersona,
+  });
 });
 
 // Use the authentication middleware for API routes

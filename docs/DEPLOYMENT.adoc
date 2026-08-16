@@ -147,6 +147,11 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | MSAL configuration for the tabs SPA
 | Tabs
 
+| `AAD_TENANT_ID`, `AAD_CLIENT_ID`
+| Expected issuer tenant and audience used by the tabs backend to validate
+  MSAL idTokens for config reads and admin writes
+| Tabs backend
+
 | `WEBSITE_URL`, `CONTENT_URL`
 | Public URLs substituted into the Teams manifest by `build.js`
 | Manifest
@@ -155,6 +160,13 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Reward-name API base URL used by the bot
 | Bot
 |===
+
+The Entra app manifest defines the `Zaplie.Admin` app role. Assign it in
+Entra ID (Enterprise applications > Users and groups) to the users allowed to
+change organization settings. The role arrives in the signed-in user's idToken
+`roles` claim; the tabs backend verifies the token's signature, issuer and
+audience and requires that role before accepting any admin write. Users
+without the role see the Settings page read-only.
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.

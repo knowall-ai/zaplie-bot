@@ -84,8 +84,19 @@ const call = (method, route, auth, body) =>
         },
       },
       res => {
-        res.resume();
-        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers }));
+        let raw = '';
+        res.on('data', chunk => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          let body = null;
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            // Non-JSON bodies stay null; status is what most tests assert on.
+          }
+          resolve({ status: res.statusCode, body, headers: res.headers });
+        });
       },
     );
     req.on('error', reject);
@@ -96,7 +107,11 @@ const call = (method, route, auth, body) =>
 const get = (route, auth) => call('GET', route, auth);
 const post = (route, auth, body) => call('POST', route, auth, body);
 
-const PROTECTED_READS = ['/api/automations', '/api/reward-amounts'];
+const PROTECTED_READS = [
+  '/api/automations',
+  '/api/reward-amounts',
+  '/api/bot-persona',
+];
 
 test('reward-name is readable without credentials, since the portal reads it before sign-in', async () => {
   const response = await get('/api/reward-name');
@@ -141,4 +156,35 @@ test('an anonymous write is rejected', async () => {
     newRewardName: 'points',
   });
   assert.equal(res.status, 401);
+});
+
+test('a non-admin cannot write the bot persona', async () => {
+  const res = await post('/api/bot-persona', `Bearer ${USER_TOKEN}`, {
+    botPersona: 'Be nice.',
+  });
+  assert.equal(res.status, 403);
+});
+
+test('an admin writes the bot persona and reads back the trimmed value', async () => {
+  const written = await post('/api/bot-persona', `Bearer ${ADMIN_TOKEN}`, {
+    botPersona: '  Celebrate specific work.  ',
+  });
+  assert.equal(written.status, 200);
+  assert.equal(written.body.botPersona, 'Celebrate specific work.');
+
+  const read = await get('/api/bot-persona', `Bearer ${USER_TOKEN}`);
+  assert.equal(read.status, 200);
+  assert.equal(read.body.botPersona, 'Celebrate specific work.');
+});
+
+test('a non-string or oversized bot persona is rejected', async () => {
+  const nonString = await post('/api/bot-persona', `Bearer ${ADMIN_TOKEN}`, {
+    botPersona: 42,
+  });
+  assert.equal(nonString.status, 400);
+
+  const oversized = await post('/api/bot-persona', `Bearer ${ADMIN_TOKEN}`, {
+    botPersona: 'x'.repeat(4001),
+  });
+  assert.equal(oversized.status, 400);
 });
