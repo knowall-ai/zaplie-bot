@@ -17,7 +17,7 @@ Teams Toolkit's local-debug provisioning registers the bot with the
 it is not an Azure resource.
 
 The legacy portal **no longer offers OAuth Connection Settings**. Its settings
-page ends at Save/Delete, with a *Migrate* button at the top. OAuth connections
+page ends at Save/Delete, with a _Migrate_ button at the top. OAuth connections
 can only be configured on an **Azure Bot resource**, so a bot registered this
 way cannot use the token service at all.
 
@@ -28,7 +28,7 @@ messaging endpoint and configured channels (including Teams), so the running
 bot is unaffected. The Azure Bot's F0 tier is free.
 
 1. Open `https://dev.botframework.com/bots/settings?id=<BOT_ID>` and press
-   **Migrate**. This opens an Azure *Custom deployment* pre-filled with the bot.
+   **Migrate**. This opens an Azure _Custom deployment_ pre-filled with the bot.
 2. Pick a subscription and resource group, and change the **Sku to F0**.
 3. Deploy. Verify with:
 
@@ -45,9 +45,9 @@ after migration — the next debug session would fail on that step. Replace it i
 URLs are persistent per machine, so this is usually a no-op):
 
 ```yaml
-  - uses: script
-    with:
-      run: az bot update -g <resource-group> -n <BOT_ID> --endpoint ${{BOT_ENDPOINT}}/api/messages
+- uses: script
+  with:
+    run: az bot update -g <resource-group> -n <BOT_ID> --endpoint ${{BOT_ENDPOINT}}/api/messages
 ```
 
 This requires the Azure CLI to be signed in to the subscription that owns the
@@ -60,11 +60,11 @@ With the Azure Bot in place, create the connection the code refers to via
 
 ```bash
 az bot authsetting create -g <resource-group> -n <BOT_ID> \
-  --setting-name GraphCalendars \
+  --setting-name GraphWorkSignals \
   --client-id <SSO_APP_CLIENT_ID> \
   --client-secret <SSO_APP_CLIENT_SECRET> \
   --service Aadv2 \
-  --provider-scope-string "Calendars.Read" \
+  --provider-scope-string "Calendars.ReadBasic People.Read" \
   --parameters clientId=<SSO_APP_CLIENT_ID> clientSecret=<SSO_APP_CLIENT_SECRET> \
       tenantId=<TENANT_ID> tokenExchangeUrl=api://botid-<BOT_ID>
 ```
@@ -73,11 +73,13 @@ Where:
 
 - `<SSO_APP_CLIENT_ID>` is the AAD app used for SSO (`AAD_APP_CLIENT_ID`) — the
   app that exposes `api://botid-<BOT_ID>` and holds the delegated Graph
-  permissions. It needs delegated `Calendars.Read` plus admin consent.
+  permissions. It needs delegated `Calendars.ReadBasic` and `People.Read`.
+  `Calendars.ReadBasic` is sufficient because Zaplie does not request event
+  bodies, attachments, or extensions.
 - `tokenExchangeUrl` must match the SSO app's Application ID URI, or silent
   token exchange in Teams fails and users fall back to the sign-in card.
 
-Then set `GRAPH_CONNECTION_NAME=GraphCalendars` in the bot's environment.
+Then set `GRAPH_CONNECTION_NAME=GraphWorkSignals` in the bot's environment.
 
 ## Verifying
 

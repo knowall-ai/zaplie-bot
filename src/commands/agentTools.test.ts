@@ -10,11 +10,20 @@ import {
   getUsers,
 } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
-import { expect, describe, test, beforeEach, jest } from '@jest/globals';
+import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
+import {
+  afterEach,
+  expect,
+  describe,
+  test,
+  beforeEach,
+  jest,
+} from '@jest/globals';
 import { TurnContext } from 'botbuilder';
 
 jest.mock('../services/lnbitsService');
 jest.mock('../services/zapHistoryService');
+jest.mock('../services/graphService');
 
 const mockGetUserWallets = getUserWallets as jest.MockedFunction<
   typeof getUserWallets
@@ -23,6 +32,12 @@ const mockGetWallets = getWallets as jest.MockedFunction<typeof getWallets>;
 const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
 const mockGetRecentZaps = getRecentZaps as jest.MockedFunction<
   typeof getRecentZaps
+>;
+const mockGetRecentMeetings = getRecentMeetings as jest.MockedFunction<
+  typeof getRecentMeetings
+>;
+const mockGetRelevantPeople = getRelevantPeople as jest.MockedFunction<
+  typeof getRelevantPeople
 >;
 
 const currentUser: User = {
@@ -172,6 +187,85 @@ describe('agentTools', () => {
         limit: 20,
         userAadObjectId: undefined,
       });
+    });
+  });
+
+  describe('Microsoft Graph tools', () => {
+    const originalConnectionName = process.env.GRAPH_CONNECTION_NAME;
+
+    const makeGraphContext = (token?: string): TurnContext => {
+      const userTokenClientKey = Symbol('UserTokenClientKey');
+      const turnState = new Map<unknown, unknown>();
+      turnState.set(userTokenClientKey, {
+        getUserToken: jest
+          .fn<() => Promise<{ token: string } | undefined>>()
+          .mockResolvedValue(token ? { token } : undefined),
+      });
+      return {
+        turnState,
+        adapter: { UserTokenClientKey: userTokenClientKey },
+        activity: { from: { id: 'teams-user' }, channelId: 'msteams' },
+      } as unknown as TurnContext;
+    };
+
+    beforeEach(() => {
+      process.env.GRAPH_CONNECTION_NAME = 'GraphWorkSignals';
+    });
+
+    afterEach(() => {
+      if (originalConnectionName === undefined) {
+        delete process.env.GRAPH_CONNECTION_NAME;
+      } else {
+        process.env.GRAPH_CONNECTION_NAME = originalConnectionName;
+      }
+    });
+
+    test('uses delegated tokens and clamps the meeting look-back window', async () => {
+      mockGetRecentMeetings.mockResolvedValue([]);
+      const tool = createReadOnlyTools().find(
+        item => item.name === 'get_recent_meetings',
+      )!;
+
+      await expect(
+        tool.handler({ days: 90 }, makeGraphContext('graph-token')),
+      ).resolves.toEqual({ connected: true, periodDays: 30, meetings: [] });
+      expect(mockGetRecentMeetings).toHaveBeenCalledWith('graph-token', 30);
+    });
+
+    test('returns a connection instruction instead of calling Graph without a token', async () => {
+      const tool = createReadOnlyTools().find(
+        item => item.name === 'get_recent_meetings',
+      )!;
+
+      const result: any = await tool.handler({}, makeGraphContext());
+
+      expect(result).toMatchObject({ connected: false });
+      expect(result.message).toMatch(/connect calendar/);
+      expect(mockGetRecentMeetings).not.toHaveBeenCalled();
+    });
+
+    test('returns relevant collaborators without exposing message content', async () => {
+      mockGetRelevantPeople.mockResolvedValue([
+        { name: 'Ada', email: 'ada@zaplie.test' },
+      ]);
+      const tool = createReadOnlyTools().find(
+        item => item.name === 'get_frequent_collaborators',
+      )!;
+
+      await expect(
+        tool.handler({}, makeGraphContext('graph-token')),
+      ).resolves.toEqual({
+        connected: true,
+        collaborators: [{ name: 'Ada', email: 'ada@zaplie.test' }],
+      });
+    });
+
+    test('does not register Graph tools when the connection is disabled', () => {
+      delete process.env.GRAPH_CONNECTION_NAME;
+
+      expect(createReadOnlyTools().map(tool => tool.name)).not.toContain(
+        'get_recent_meetings',
+      );
     });
   });
 });

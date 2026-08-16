@@ -11,11 +11,26 @@ import {
   getUsers,
 } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
+import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
+import {
+  CONNECT_CALENDAR_COMMAND,
+  getStoredGraphToken,
+} from './connectCalendarCommand';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
 
 const toSats = (balanceMsat: number): number => Math.floor(balanceMsat / 1000);
+
+const DAYS_PARAMETER = {
+  type: 'number',
+  description: 'Look-back window in days. Defaults to 7, capped at 30.',
+};
+
+const clampDays = (days?: number): number =>
+  typeof days === 'number' && Number.isFinite(days)
+    ? Math.min(Math.max(Math.floor(days), 1), 30)
+    : 7;
 
 const getMyBalanceTool: ToolDefinition = {
   name: 'get_my_balance',
@@ -104,6 +119,61 @@ const getRecentActivityTool: ToolDefinition = {
   },
 };
 
+const getRecentMeetingsTool: ToolDefinition = {
+  name: 'get_recent_meetings',
+  description:
+    "Get the current user's recent meetings using delegated, read-only Microsoft Graph access. " +
+    'Combine the result with get_recent_activity when suggesting recognition.',
+  parameters: {
+    type: 'object',
+    properties: { days: DAYS_PARAMETER },
+    required: [],
+  },
+  handler: async (args: { days?: number }, turnContext: TurnContext) => {
+    const token = await getStoredGraphToken(turnContext);
+    if (!token) {
+      return {
+        connected: false,
+        message: `Ask the user to type "${CONNECT_CALENDAR_COMMAND}" before using work signals.`,
+      };
+    }
+    const periodDays = clampDays(args.days);
+    return {
+      connected: true,
+      periodDays,
+      meetings: await getRecentMeetings(token, periodDays),
+    };
+  },
+};
+
+const getFrequentCollaboratorsTool: ToolDefinition = {
+  name: 'get_frequent_collaborators',
+  description:
+    'Get people most relevant to the current user across Microsoft 365 communication signals. ' +
+    'No message content is returned. Combine with get_recent_activity when suggesting recognition.',
+  parameters: { type: 'object', properties: {}, required: [] },
+  handler: async (_args, turnContext: TurnContext) => {
+    const token = await getStoredGraphToken(turnContext);
+    if (!token) {
+      return {
+        connected: false,
+        message: `Ask the user to type "${CONNECT_CALENDAR_COMMAND}" before using work signals.`,
+      };
+    }
+    return {
+      connected: true,
+      collaborators: await getRelevantPeople(token, 10),
+    };
+  },
+};
+
 export function createReadOnlyTools(): ToolDefinition[] {
-  return [getMyBalanceTool, getLeaderboardTool, getRecentActivityTool];
+  return [
+    getMyBalanceTool,
+    getLeaderboardTool,
+    getRecentActivityTool,
+    ...(process.env.GRAPH_CONNECTION_NAME
+      ? [getRecentMeetingsTool, getFrequentCollaboratorsTool]
+      : []),
+  ];
 }
