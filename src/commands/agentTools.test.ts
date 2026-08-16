@@ -3,7 +3,7 @@
 // Mocks lnbitsService/zapHistoryService (external dependencies), not
 // agentTools itself.
 
-import { createReadOnlyTools } from './agentTools';
+import { createAgentTools } from './agentTools';
 import { getUserWallets } from '../services/lnbitsService';
 import {
   getZapActivity,
@@ -131,7 +131,7 @@ describe('agentTools', () => {
         wallet({ name: 'Private', balance_msat: 50000 }),
       ]);
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_my_balance',
       )!;
       const result = requireRecord(
@@ -150,7 +150,7 @@ describe('agentTools', () => {
         wallet({ name: 'PRIVATE', balance_msat: 50000 }),
       ]);
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_my_balance',
       )!;
       const result = requireRecord(
@@ -163,7 +163,7 @@ describe('agentTools', () => {
     });
 
     test('rejects unknown arguments rather than ignoring them', async () => {
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_my_balance',
       )!;
 
@@ -182,7 +182,7 @@ describe('agentTools', () => {
   test('every tool schema refuses properties it does not declare', () => {
     process.env.GRAPH_CONNECTION_NAME = 'GraphWorkSignals';
     try {
-      for (const tool of createReadOnlyTools()) {
+      for (const tool of createAgentTools()) {
         expect(tool.parameters).toMatchObject({ additionalProperties: false });
       }
     } finally {
@@ -205,7 +205,7 @@ describe('agentTools', () => {
         ]),
       );
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
       const result = requireRecord(
@@ -223,7 +223,7 @@ describe('agentTools', () => {
 
     test('accepts a days window and passes the cut-off through', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
 
@@ -245,7 +245,7 @@ describe('agentTools', () => {
 
     test('defaults to all-time when days is omitted', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
 
@@ -264,7 +264,7 @@ describe('agentTools', () => {
       // different question than the one asked while still reporting the asked-
       // for window — a wrong number, stated confidently.
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
 
@@ -280,7 +280,7 @@ describe('agentTools', () => {
 
     test('rejects unknown arguments rather than ignoring them', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
 
@@ -294,7 +294,7 @@ describe('agentTools', () => {
 
     test('reports exactly the window it measured', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
 
@@ -325,7 +325,7 @@ describe('agentTools', () => {
         ),
       );
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_leaderboard',
       )!;
       const result = requireRecord(
@@ -353,7 +353,7 @@ describe('agentTools', () => {
         ]),
       );
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
       const result = requireRecord(
@@ -381,7 +381,7 @@ describe('agentTools', () => {
     test('clamps limit to [1, 50] and defaults to 20', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -409,7 +409,7 @@ describe('agentTools', () => {
 
     test('falls back to the default limit rather than passing NaN or a fraction through', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -426,7 +426,7 @@ describe('agentTools', () => {
 
     test('rejects unknown arguments rather than ignoring them', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -440,7 +440,7 @@ describe('agentTools', () => {
 
     test('rejects a non-boolean onlyInvolvingMe instead of reading it as false', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -459,7 +459,7 @@ describe('agentTools', () => {
 
     test('accepts onlyInvolvingMe: false as a real filter choice', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -475,7 +475,7 @@ describe('agentTools', () => {
 
     test('falls back to the defaults when the arguments are not an object', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -524,7 +524,7 @@ describe('agentTools', () => {
 
     test('uses delegated tokens and clamps the meeting look-back window', async () => {
       mockGetRecentMeetings.mockResolvedValue([]);
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
@@ -535,7 +535,7 @@ describe('agentTools', () => {
     });
 
     test('returns a connection instruction instead of calling Graph without a token', async () => {
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
@@ -548,7 +548,7 @@ describe('agentTools', () => {
 
     test('falls back to the default window when the arguments are not an object', async () => {
       mockGetRecentMeetings.mockResolvedValue([]);
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
@@ -568,7 +568,7 @@ describe('agentTools', () => {
       mockGetRelevantPeople.mockResolvedValue([]);
 
       const meetings = requireRecord(
-        await createReadOnlyTools()
+        await createAgentTools()
           .find(item => item.name === 'get_recent_meetings')!
           .handler({ weeks: 2 }, makeGraphContext('graph-token')),
       );
@@ -576,7 +576,7 @@ describe('agentTools', () => {
       expect(mockGetRecentMeetings).not.toHaveBeenCalled();
 
       const collaborators = requireRecord(
-        await createReadOnlyTools()
+        await createAgentTools()
           .find(item => item.name === 'get_frequent_collaborators')!
           .handler({ top: 3 }, makeGraphContext('graph-token')),
       );
@@ -588,7 +588,7 @@ describe('agentTools', () => {
       mockGetRelevantPeople.mockResolvedValue([
         { name: 'Ada', email: 'ada@zaplie.test' },
       ]);
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_frequent_collaborators',
       )!;
 
@@ -603,7 +603,7 @@ describe('agentTools', () => {
     test('does not register Graph tools when the connection is disabled', () => {
       delete process.env.GRAPH_CONNECTION_NAME;
 
-      expect(createReadOnlyTools().map(tool => tool.name)).not.toContain(
+      expect(createAgentTools().map(tool => tool.name)).not.toContain(
         'get_recent_meetings',
       );
     });
