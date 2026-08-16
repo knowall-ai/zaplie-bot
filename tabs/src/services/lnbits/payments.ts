@@ -85,9 +85,15 @@ const getWalletTransactionsSince = async (
 
     const data: RawPayment[] = await response.json();
 
-    const filteredPayments = filterByExtra
-      ? data.filter(payment => matchesExtra(payment, filterByExtra))
+    // The endpoint returns the latest payments regardless of age, so the
+    // timestamp cut-off has to be applied client-side too.
+    const paymentsSince = timestamp
+      ? data.filter(payment => Number(payment.time) >= timestamp)
       : data;
+
+    const filteredPayments = filterByExtra
+      ? paymentsSince.filter(payment => matchesExtra(payment, filterByExtra))
+      : paymentsSince;
 
     return filteredPayments.map(transaction => {
       const checkingId =
@@ -113,41 +119,6 @@ const getWalletTransactionsSince = async (
     });
   } catch (error) {
     logger.error(error);
-    throw error;
-  }
-};
-
-const getUserWalletTransactions = async (
-  walletId: string,
-  apiKey: string,
-  filterByExtra: { [key: string]: string } | null, // Pass the extra field as an object
-): Promise<RawPayment[]> => {
-  try {
-    // Use core API /api/v1/payments with wallet filter instead of deprecated /usermanager/api/v1/transactions
-    const response = await fetch(
-      `${nodeUrl}/api/v1/payments?wallet=${walletId}&limit=100`,
-      {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'X-Api-Key': apiKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      const errorMessage = `Failed to fetch transactions for wallet ${walletId}: ${response.status} - ${response.statusText}`;
-      logger.error(errorMessage);
-      throw new Error(errorMessage);
-    }
-
-    const data: RawPayment[] = await response.json();
-
-    return filterByExtra
-      ? data.filter(payment => matchesExtra(payment, filterByExtra))
-      : data;
-  } catch (error) {
-    logger.error(`Error fetching transactions for wallet ${walletId}:`, error);
     throw error;
   }
 };
@@ -259,7 +230,6 @@ export {
   getWalletPayments,
   getInvoicePayment,
   getWalletTransactionsSince,
-  getUserWalletTransactions,
   getAllPayments,
   createInvoice,
   payInvoice,

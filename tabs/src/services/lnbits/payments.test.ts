@@ -7,7 +7,6 @@ import {
   createInvoice,
   getAllPayments,
   getInvoicePayment,
-  getUserWalletTransactions,
   getWalletPayments,
   getWalletTransactionsSince,
   payInvoice,
@@ -26,6 +25,8 @@ const rawPayment = (overrides: Record<string, unknown> = {}) => ({
   wallet_id: 'w1',
   time: 1723500000,
   extra: {},
+  pending: false,
+  fee: 12,
   ...overrides,
 });
 
@@ -103,6 +104,18 @@ describe('lnbits payments', () => {
 
       await expect(getAllPayments()).rejects.toThrow('status: 500');
     });
+
+    test('sends the pagination and sorting parameters', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse([]));
+
+      await getAllPayments(10, 20, 'amount', 'asc');
+
+      const requestedUrl = String(mockFetch.mock.calls[0][0]);
+      expect(requestedUrl).toContain('limit=10');
+      expect(requestedUrl).toContain('offset=20');
+      expect(requestedUrl).toContain('sortby=amount');
+      expect(requestedUrl).toContain('direction=asc');
+    });
   });
 
   describe('getWalletPayments', () => {
@@ -135,12 +148,36 @@ describe('lnbits payments', () => {
 
       const transactions = await getWalletTransactionsSince('in-key', 0, null);
 
-      expect(transactions[0]).toMatchObject({
-        checking_id: 'check-1',
-        memo: 'Thanks',
-        amount: 1000,
-        wallet_id: 'w1',
-      });
+      expect(transactions).toEqual([
+        {
+          checking_id: 'check-1',
+          bolt11: 'lnbc1...',
+          memo: 'Thanks',
+          amount: 1000,
+          wallet_id: 'w1',
+          time: 1723500000,
+          extra: {},
+          pending: false,
+          fee: 12,
+        },
+      ]);
+    });
+
+    test('drops payments older than the timestamp', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse([
+          rawPayment({ checking_id: 'old', time: 1723499999 }),
+          rawPayment({ checking_id: 'recent', time: 1723500000 }),
+        ]),
+      );
+
+      const transactions = await getWalletTransactionsSince(
+        'in-key',
+        1723500000,
+        null,
+      );
+
+      expect(transactions.map(t => t.checking_id)).toEqual(['recent']);
     });
 
     test('falls back to payment_hash when checking_id is absent', async () => {
@@ -178,24 +215,6 @@ describe('lnbits payments', () => {
       });
 
       expect(transactions.map(t => t.checking_id)).toEqual(['zap']);
-    });
-  });
-
-  describe('getUserWalletTransactions', () => {
-    test('scopes the request to the wallet', async () => {
-      mockFetch.mockResolvedValueOnce(jsonResponse([rawPayment()]));
-
-      await getUserWalletTransactions('w1', 'in-key', null);
-
-      expect(String(mockFetch.mock.calls[0][0])).toContain('wallet=w1');
-    });
-
-    test('throws when the wallet transactions endpoint fails', async () => {
-      mockFetch.mockResolvedValueOnce(errorResponse(403, 'Forbidden'));
-
-      await expect(
-        getUserWalletTransactions('w1', 'in-key', null),
-      ).rejects.toThrow('Failed to fetch transactions for wallet w1');
     });
   });
 });
