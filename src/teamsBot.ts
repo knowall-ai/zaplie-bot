@@ -11,7 +11,6 @@ import {
   MessagingExtensionAction,
   MessagingExtensionActionResponse,
 } from 'botbuilder';
-import sanitizeHtml from 'sanitize-html';
 import { SSOCommandMap } from './commands/SSOCommandMap';
 import {
   SendZapCommand,
@@ -420,13 +419,8 @@ export class TeamsBot extends TeamsActivityHandler {
     context: TurnContext,
     action: MessagingExtensionAction,
   ): Promise<MessagingExtensionActionResponse> {
+    // FetchUserMiddleware guarantees 'user' is set (or the turn already threw).
     const currentUser = context.turnState.get('user');
-    if (!currentUser) {
-      await context.sendActivity(
-        "D'oh! I couldn't find your Zaplie account. Message me directly first to get set up.",
-      );
-      return {};
-    }
 
     const authorUser = action.messagePayload?.from?.user;
     if (!authorUser?.id) {
@@ -436,8 +430,20 @@ export class TeamsBot extends TeamsActivityHandler {
       return {};
     }
 
-    const users = await getUsers(adminKey, null);
-    const author = users?.find(user => user.aadObjectId === authorUser.id);
+    let author: User | undefined;
+    try {
+      const users = await getUsers(adminKey, { aadObjectId: authorUser.id });
+      author = users[0];
+    } catch (error) {
+      console.error(
+        'Unable to resolve the message author in Zaplie:',
+        error instanceof Error ? error.message : error,
+      );
+      await context.sendActivity(
+        "D'oh! I couldn't check that teammate's Zaplie account right now. Please try again later.",
+      );
+      return {};
+    }
     if (!author) {
       await context.sendActivity(
         `D'oh! ${authorUser.displayName || 'That person'} doesn't have a Zaplie account yet.`,
@@ -452,10 +458,15 @@ export class TeamsBot extends TeamsActivityHandler {
       return {};
     }
 
+    // 'memo' comes from the static-parameter dialog Teams shows before this
+    // invoke (manifest zapMessage command); empty means "use the message text".
+    const dialogMemo =
+      typeof action.data?.memo === 'string' ? action.data.memo.trim() : '';
     const card = await createZapCard(currentUser, globalRewardName, {
       receiverId: author.id,
-      amountSats: getZapMessageDefaultSats(),
-      message: stripHtmlSnippet(action.messagePayload?.body?.content),
+      amountSats: ZAP_MESSAGE_DEFAULT_SATS,
+      message:
+        dialogMemo || htmlToMemoPreview(action.messagePayload?.body?.content),
     });
 
     await context.sendActivity(
@@ -466,21 +477,40 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 }
 
-// HTML -> plaintext, capped to a short preview for the zap memo field.
-function stripHtmlSnippet(html: string | undefined): string {
+// Prefill only: the user can still edit the amount on the card, whose input
+// regex enforces 1..10,000.
+const ZAP_MESSAGE_DEFAULT_SATS = 1000;
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+// The memo is a plain-text Adaptive Card value, never rendered as HTML, so we
+// extract text (strip tags, decode entities) instead of sanitizing. Entities
+// are decoded after tag removal so "&lt;b&gt;" stays the literal text "<b>".
+function htmlToMemoPreview(html: string | undefined): string {
   if (!html) return '';
-  return sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} })
-    .replace(/[<>&]/g, ' ')
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(
+      /&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g,
+      (entity, body: string) => {
+        if (body[0] === '#') {
+          const code =
+            body[1] === 'x' || body[1] === 'X'
+              ? parseInt(body.slice(2), 16)
+              : parseInt(body.slice(1), 10);
+          return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+        }
+        return HTML_ENTITIES[body.toLowerCase()] ?? entity;
+      },
+    )
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80);
-}
-
-function getZapMessageDefaultSats(): number {
-  const raw = process.env.ZAP_MESSAGE_DEFAULT_SATS ?? '1000';
-  const amount = Number(raw);
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error(`ZAP_MESSAGE_DEFAULT_SATS must be a positive integer, got "${raw}".`);
-  }
-  return amount;
 }
