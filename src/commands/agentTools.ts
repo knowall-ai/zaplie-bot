@@ -1,9 +1,10 @@
 // agentTools.ts
 //
-// Read-only tools for the Foundry conversational agent. Each returns structured
-// data (not a chat activity) so the agent decides how to phrase the reply.
+// Tools for the Foundry conversational agent. Read tools return structured
+// data (not a chat activity) so the agent decides how to phrase the reply;
+// propose_zap only posts a confirmation card (see ToolDefinition.sideEffect).
 
-import { TurnContext } from 'botbuilder';
+import { TurnContext, CardFactory, MessageFactory } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
 import { getUserWallets, getUsers } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
@@ -12,6 +13,8 @@ import {
   CONNECT_CALENDAR_COMMAND,
   getStoredGraphToken,
 } from './connectCalendarCommand';
+import { createZapCard } from './sendZapCommand';
+import { MAX_ZAP_SATS } from './zapBudget';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -177,11 +180,145 @@ const getFrequentCollaboratorsTool: ToolDefinition = {
   },
 };
 
-export function createReadOnlyTools(): ToolDefinition[] {
+const proposeZapTool: ToolDefinition = {
+  name: 'propose_zap',
+  description:
+    'Propose sending a zap to a teammate. Posts a pre-filled confirmation card in the chat; ' +
+    'nothing is paid until the user presses "Send Zap" on the card. ' +
+    'Returns { proposed: true } on success, or { proposed: false, reason } when the proposal ' +
+    'cannot be made (unknown/ambiguous recipient, self-zap, bad amount, insufficient balance).',
+  parameters: {
+    type: 'object',
+    properties: {
+      recipientName: {
+        type: 'string',
+        description:
+          "The teammate's display name (or an unambiguous part of it).",
+      },
+      amountSats: {
+        type: 'number',
+        description: `Whole number of sats to send, between 1 and ${MAX_ZAP_SATS}.`,
+      },
+      memo: {
+        type: 'string',
+        description:
+          'Why the recipient is being recognised. Ask the user if they gave no reason.',
+      },
+    },
+    required: ['recipientName', 'amountSats', 'memo'],
+  },
+  sideEffect: true,
+  handler: async (
+    args: { recipientName: unknown; amountSats: unknown; memo: unknown },
+    turnContext: TurnContext,
+  ) => {
+    const sender = turnContext.turnState.get('user') as User | undefined;
+    if (!sender) {
+      throw new Error(
+        'propose_zap: no current user in turn state, so no zap was proposed.',
+      );
+    }
+
+    const { recipientName, amountSats, memo } = args;
+    if (typeof recipientName !== 'string' || recipientName.trim() === '') {
+      return {
+        proposed: false,
+        reason: `recipientName must be a non-empty string, received: ${JSON.stringify(recipientName)}.`,
+      };
+    }
+    if (
+      typeof amountSats !== 'number' ||
+      !Number.isInteger(amountSats) ||
+      amountSats < 1 ||
+      amountSats > MAX_ZAP_SATS
+    ) {
+      return {
+        proposed: false,
+        reason: `amountSats must be a whole number between 1 and ${MAX_ZAP_SATS}, received: ${JSON.stringify(amountSats)}.`,
+      };
+    }
+    if (typeof memo !== 'string' || memo.trim() === '') {
+      return {
+        proposed: false,
+        reason: `memo must be a non-empty string saying why the recipient is recognised, received: ${JSON.stringify(memo)}.`,
+      };
+    }
+
+    // A live read, not the turn-state wallet snapshot: that snapshot was taken
+    // at sign-in and never decrements, so it would let the agent propose zaps
+    // the sender can no longer cover.
+    const senderWallets = await getUserWallets(adminKey, sender.id);
+    const allowance = senderWallets.find(w => w.name === 'Allowance');
+    if (!allowance) {
+      throw new Error(
+        `${sender.displayName} has no Allowance wallet, so no zap was proposed.`,
+      );
+    }
+    const allowanceSats = toSats(allowance.balance_msat);
+    if (amountSats > allowanceSats) {
+      return {
+        proposed: false,
+        reason: `The requested ${amountSats} sats exceeds the current Allowance balance of ${allowanceSats} sats.`,
+      };
+    }
+
+    const users = await getUsers(adminKey, null);
+    const query = recipientName.trim().toLowerCase();
+    const exact = users.filter(u => u.displayName.toLowerCase() === query);
+    const matches = exact.length
+      ? exact
+      : users.filter(u => u.displayName.toLowerCase().includes(query));
+
+    if (matches.length === 0) {
+      return {
+        proposed: false,
+        reason: `No teammate matches "${recipientName}".`,
+        teammates: users.map(u => u.displayName),
+      };
+    }
+    if (matches.length > 1) {
+      return {
+        proposed: false,
+        reason: `"${recipientName}" matches more than one teammate — ask the user which one they mean.`,
+        candidates: matches.map(u => u.displayName),
+      };
+    }
+
+    const recipient = matches[0];
+    if (recipient.aadObjectId === sender.aadObjectId) {
+      return {
+        proposed: false,
+        reason:
+          'Users cannot zap themselves — the allowance is for recognising others.',
+      };
+    }
+
+    const card = await createZapCard(sender, rewardLabel, {
+      receiverId: recipient.id,
+      message: memo,
+      amountSats,
+    });
+    await turnContext.sendActivity(
+      MessageFactory.attachment(CardFactory.adaptiveCard(card)),
+    );
+
+    return {
+      proposed: true,
+      recipient: recipient.displayName,
+      amountSats,
+      memo,
+    };
+  },
+};
+
+// ensureAgent memoizes the first tool set per process, so read and propose
+// tools must be registered together in a single list.
+export function createAgentTools(): ToolDefinition[] {
   return [
     getMyBalanceTool,
     getLeaderboardTool,
     getRecentActivityTool,
+    proposeZapTool,
     ...(process.env.GRAPH_CONNECTION_NAME
       ? [getRecentMeetingsTool, getFrequentCollaboratorsTool]
       : []),

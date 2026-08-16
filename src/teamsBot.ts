@@ -29,7 +29,7 @@ import {
   getStoredGraphToken,
 } from './commands/connectCalendarCommand';
 import { runConversationalTurn } from './services/foundryAgentService';
-import { createReadOnlyTools } from './commands/agentTools';
+import { createAgentTools } from './commands/agentTools';
 import { getUser, getWalletBalance } from './services/lnbitsService';
 
 const UNRECOGNIZED_COMMAND_MESSAGE =
@@ -365,7 +365,7 @@ export class TeamsBot extends TeamsActivityHandler {
       const result = await runConversationalTurn(
         textMessage,
         existingConversationId,
-        createReadOnlyTools(),
+        createAgentTools(),
         context,
       );
       await this.foundryConversationIdAccessor.set(
