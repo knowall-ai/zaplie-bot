@@ -497,7 +497,10 @@ describe('agentTools', () => {
         item => item.name === 'get_recent_meetings',
       )!;
 
-      const result: any = await tool.handler({}, makeGraphContext());
+      const result = (await tool.handler({}, makeGraphContext())) as {
+        connected: boolean;
+        message: string;
+      };
 
       expect(result).toMatchObject({ connected: false });
       expect(result.message).toMatch(/connect calendar/);
