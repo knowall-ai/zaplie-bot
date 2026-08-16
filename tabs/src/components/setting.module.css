@@ -110,11 +110,45 @@
   border: none;
   border-radius: 4px;
   background-color: #84cc16;
-  color: white;
+  /* Dark text: white on the brand green failed contrast (review feedback). */
+  color: #1a2e05;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .editButton:hover,
 .saveButton:hover {
-  background-color: #005a9e;
+  background-color: #a3e635;
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.personaSetting {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 20px 0;
+}
+
+.sectionHint {
+  font-size: 12px;
+  color: #a3a3a3;
+  margin: 0 0 8px;
+}
+
+.errorMessage {
+  font-size: 12px;
+  color: #f87171;
+  margin: 0 0 8px;
+}
+
+.formActions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
 }

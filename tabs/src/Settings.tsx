@@ -1,4 +1,5 @@
 import CurrencySetting from './components/RewardsNameSetting';
+import BotPersonaSetting from './components/BotPersonaSetting';
 import ConnectionsSetting from './components/ConnectionsSetting';
 import styles from './components/setting.module.css';
 import { KNOWALL_CONSTANTS } from './constants/branding';
@@ -15,6 +16,10 @@ const Settings: React.FC = () => {
       <div style={{ width: '100%' }}>
         {' '}
         <CurrencySetting />{' '}
+      </div>
+      <div style={{ width: '100%' }}>
+        {' '}
+        <BotPersonaSetting />{' '}
       </div>
       <div style={{ width: '100%' }}>
         {' '}

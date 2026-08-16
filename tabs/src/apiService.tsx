@@ -69,6 +69,36 @@ export const updateRewardAmounts = async (
   }
 };
 
+export const getBotPersona = async (idToken: string) => {
+  try {
+    const response = await axios.get(`${API_URL}/bot-persona`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching bot persona:', error);
+    throw error;
+  }
+};
+
+export const updateBotPersona = async (idToken: string, botPersona: string) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/bot-persona`,
+      { botPersona },
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      },
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error updating bot persona:', error);
+    throw error;
+  }
+};
+
 export const getAutomations = async (idToken: string) => {
   try {
     const response = await axios.get(`${API_URL}/automations`, {
