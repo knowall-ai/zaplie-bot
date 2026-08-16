@@ -55,8 +55,8 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
 
           // Start polling for payment
           intervalId.current = setInterval(() => {
-            getWalletPayments(myLNbitDetails.privateWallet?.inkey || '').then(
-              payments => {
+            getWalletPayments(myLNbitDetails.privateWallet?.inkey || '')
+              .then(payments => {
                 if (payments.length > 0) {
                   console.log('Payment received');
                   if (intervalId.current !== null) {
@@ -82,8 +82,16 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
                     }
                   });
                 }
-              },
-            );
+              })
+              .catch(error => {
+                console.error(
+                  'Polling wallet payments failed, stopping:',
+                  error,
+                );
+                if (intervalId.current !== null) {
+                  window.clearInterval(intervalId.current);
+                }
+              });
           }, 5000); // Check every 5 seconds
         });
       } else {
