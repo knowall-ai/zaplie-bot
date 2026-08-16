@@ -21,6 +21,7 @@ const selectedVars = {
   CONTENT_URL: envConfig.CONTENT_URL,
   FOUNDRY_PROJECT_ENDPOINT: envConfig.FOUNDRY_PROJECT_ENDPOINT,
   FOUNDRY_MODEL: envConfig.FOUNDRY_MODEL,
+  GRAPH_CONNECTION_NAME: envConfig.GRAPH_CONNECTION_NAME,
 };
 
 // Function to append selected variables to the appropriate environment files
@@ -32,14 +33,14 @@ const appendEnvFile = (filePath, vars) => {
   }
 
   // Filter out variables that already exist or have no value in the source
+  // (dotenv.parse yields '' for blank entries, not undefined)
   const newVars = Object.entries(vars).filter(
-    ([key, value]) => value !== undefined && !existingEnv[key],
+    ([key, value]) => value && !existingEnv[key],
   );
 
   if (newVars.length > 0) {
-    const envFileContent = '\n' + newVars
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n') + '\n';
+    const envFileContent =
+      '\n' + newVars.map(([key, value]) => `${key}=${value}`).join('\n') + '\n';
 
     fs.appendFileSync(filePath, envFileContent, 'utf8');
     console.log(`${filePath} appended successfully.`);
@@ -59,4 +60,5 @@ appendEnvFile(envOutputPath, {
   CONTENT_URL: selectedVars.CONTENT_URL,
   FOUNDRY_PROJECT_ENDPOINT: selectedVars.FOUNDRY_PROJECT_ENDPOINT,
   FOUNDRY_MODEL: selectedVars.FOUNDRY_MODEL,
+  GRAPH_CONNECTION_NAME: selectedVars.GRAPH_CONNECTION_NAME,
 });

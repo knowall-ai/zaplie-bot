@@ -80,6 +80,9 @@ describe('foundryAgentService.runConversationalTurn', () => {
       expect.objectContaining({
         kind: 'prompt',
         model: 'test-model',
+        instructions: expect.stringMatching(
+          /recent meetings[\s\S]*frequent collaborators[\s\S]*recent zap activity/,
+        ),
         tools: [
           expect.objectContaining({ type: 'function', name: 'noop_tool' }),
         ],

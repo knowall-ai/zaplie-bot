@@ -23,6 +23,11 @@ import { validateZapSubmit } from './commands/zapBudget';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
+import {
+  CONNECT_CALENDAR_COMMAND,
+  ConnectCalendarCommand,
+  getStoredGraphToken,
+} from './commands/connectCalendarCommand';
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createReadOnlyTools } from './commands/agentTools';
 import { getUser, getWalletBalance } from './services/lnbitsService';
@@ -66,6 +71,12 @@ export class TeamsBot extends TeamsActivityHandler {
     SSOCommandMap.register('show my balance', new ShowMyBalanceCommand());
     SSOCommandMap.register('withdraw my zaps', new WithdrawFundsCommand());
     SSOCommandMap.register('show leaderboard', new ShowLeaderboardCommand());
+    if (process.env.GRAPH_CONNECTION_NAME) {
+      SSOCommandMap.register(
+        CONNECT_CALENDAR_COMMAND,
+        new ConnectCalendarCommand(),
+      );
+    }
 
     this.onMessage(async (context, next) => {
       console.log('Running onMessage ...');
@@ -374,17 +385,16 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   async handleTeamsSigninVerifyState(
-    _context: TurnContext,
-    _query: SigninStateVerificationQuery,
+    context: TurnContext,
+    query: SigninStateVerificationQuery,
   ) {
-    try {
-      console.log(
-        'Running dialog with signin/verifystate from an Invoke Activity.',
-      );
-      // Your logic here for handling signin verify state
-    } catch (error) {
-      console.error('Error in handleTeamsSigninVerifyState:', error);
-    }
+    if (!process.env.GRAPH_CONNECTION_NAME) return;
+    const token = await getStoredGraphToken(context, query.state);
+    await context.sendActivity(
+      token
+        ? 'Work signals connected — ask me about recent meetings or collaborators!'
+        : `Sign-in could not be completed. Type "${CONNECT_CALENDAR_COMMAND}" to try again.`,
+    );
   }
 
   async handleTeamsSigninTokenExchange(
@@ -395,32 +405,6 @@ export class TeamsBot extends TeamsActivityHandler {
       // Your logic here for handling token exchange
     } catch (error) {
       console.error('Error in handleTeamsSigninTokenExchange:', error);
-    }
-  }
-
-  async onSignInInvoke(context: TurnContext) {
-    try {
-      const userId = context.activity.from.id;
-      const userName = context.activity.from.name;
-      console.log(`User ID: ${userId}, User Name: ${userName}`);
-
-      // Ensure the user has a wallet and get the wallet ID
-      /*
-      const wallet = await ensureMatchingUserWallet(
-        userId,
-        userName,
-        'Sending',
-      );
-
-      if (wallet.id) {
-        await context.sendActivity(`Wallet ID: ${wallet.id}`);
-      } else {
-        await context.sendActivity('Failed to ensure wallet.');
-      }
-      */
-    } catch (error) {
-      console.error('Error in onSignInInvoke:', error);
-      await context.sendActivity('An error occurred during sign-in.');
     }
   }
 }

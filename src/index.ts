@@ -10,6 +10,8 @@ import {
   CloudAdapter,
   ConfigurationServiceClientCredentialFactory,
   ConfigurationBotFrameworkAuthentication,
+  MemoryStorage,
+  TeamsSSOTokenExchangeMiddleware,
   TurnContext,
 } from 'botbuilder';
 
@@ -52,6 +54,15 @@ const adapter = new CloudAdapter(botFrameworkAuthentication);
 // Add EnsureUserSetupMiddleware to the adapter's middleware pipeline
 // Create UserService instance (using the singleton pattern)
 const userService = UserService.getInstance();
+
+if (process.env.GRAPH_CONNECTION_NAME) {
+  adapter.use(
+    new TeamsSSOTokenExchangeMiddleware(
+      new MemoryStorage(),
+      process.env.GRAPH_CONNECTION_NAME,
+    ),
+  );
+}
 
 // Add FetchUserMiddleware and pass the userService instance
 adapter.use(new FetchUserMiddleware(userService));
