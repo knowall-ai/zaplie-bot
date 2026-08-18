@@ -10,7 +10,11 @@ import {
   MessageFactory,
 } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
-import { SendZapCommand, SendZap } from './commands/sendZapCommand';
+import {
+  SendZapCommand,
+  SendZap,
+  buildZapReceiptCard,
+} from './commands/sendZapCommand';
 import { ZapLedger, zapKey } from './services/zapLedger';
 import {
   getPendingRecipientIds,
@@ -102,6 +106,9 @@ export class TeamsBot extends TeamsActivityHandler {
         );
 
         const failedRecipients: string[] = [];
+        // Kept separate from the failures: an unconfirmed payment may have
+        // settled, so it must never be presented as something to retry.
+        const uncertainRecipients: string[] = [];
 
         if (botMentioned) {
           // Remove the mention from the text
@@ -217,7 +224,7 @@ export class TeamsBot extends TeamsActivityHandler {
             } else if (outcome.status === 'paid') {
               successfulRecipients.push(outcome.label);
             } else if (outcome.status === 'needs-checking') {
-              failedRecipients.push(`${outcome.label} (needs checking)`);
+              uncertainRecipients.push(outcome.label);
             } else {
               failedRecipients.push(outcome.label);
             }
@@ -230,82 +237,43 @@ export class TeamsBot extends TeamsActivityHandler {
             return;
           }
 
-          // Nothing was paid this time: the card must not turn green.
+          // Nothing was confirmed this time: the card must not turn green.
           if (successfulRecipients.length === 0) {
             await context.sendActivity(
-              `No zaps were sent. Could not complete: ${failedRecipients.join(', ')}`,
+              [
+                uncertainRecipients.length > 0
+                  ? 'No zaps were confirmed.'
+                  : 'No zaps were sent.',
+                failedRecipients.length > 0
+                  ? `Could not complete: ${failedRecipients.join(', ')}.`
+                  : '',
+                uncertainRecipients.length > 0
+                  ? `Payment outcome uncertain for: ${uncertainRecipients.join(', ')} — an admin should verify before retrying.`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' '),
             );
             return;
           }
-          const bulletReceivers = successfulRecipients
-            .map(name => `- ${name}`)
-            .join('\n');
-
-          const bulletFailed = failedRecipients.length
-            ? failedRecipients.map(name => `- ${name}`).join('\n')
-            : 'None';
-
           //fetch remainingBalance
           const remainingBalance = await getWalletBalance(
             currentUser.allowanceWallet.inkey,
           );
           console.log('Remaining Balance:', remainingBalance);
 
-          const totalAmountSent = successfulRecipients.length * amount;
-
-          // Update adaptive card to read-only with list of recipients
-          const updatedCard = {
-            type: 'AdaptiveCard',
-            body: [
-              {
-                type: 'TextBlock',
-                text: `Zap sent!`,
-                weight: 'Bolder',
-                size: 'Large',
-                color: 'Good',
-              },
-              {
-                type: 'TextBlock',
-                text: `**Successful Receivers:**\n${bulletReceivers}`,
-                wrap: true,
-              },
-              ...(failedRecipients.length > 0
-                ? [
-                    {
-                      type: 'TextBlock',
-                      text: `**Failed Receivers:**\n${bulletFailed}`,
-                      wrap: true,
-                      color: 'Attention',
-                    },
-                  ]
-                : []),
-              {
-                type: 'TextBlock',
-                text: `**Message:** ${zapMessage}`,
-                wrap: true,
-              },
-              {
-                type: 'TextBlock',
-                text: `**Amount (${globalRewardName}):** ${amount}`,
-                wrap: true,
-              },
-
-              {
-                type: 'TextBlock',
-                text: `Total Amount (Sats): ${totalAmountSent}`,
-                wrap: true,
-                color: 'Good',
-              },
-              {
-                type: 'TextBlock',
-                text: `**Remaining Amount (${globalRewardName}):** ${remainingBalance}`,
-                wrap: true,
-                color: 'Good',
-              },
-            ],
-            $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-            version: '1.2',
-          };
+          // Update the adaptive card to a read-only receipt for the
+          // recipients this submit processed. Recipients already settled by an
+          // earlier submit of the same card were skipped and are not relisted.
+          const updatedCard = buildZapReceiptCard({
+            recipients: successfulRecipients,
+            failedRecipients,
+            uncertainRecipients,
+            message: zapMessage,
+            amount,
+            remainingBalance,
+            rewardName: globalRewardName,
+          });
 
           const updatedMessage = MessageFactory.attachment(
             CardFactory.adaptiveCard(updatedCard),
