@@ -50,6 +50,17 @@
                             "endpoint": "BOT_ENDPOINT", // output tunnel endpoint as BOT_ENDPOINT
                             "domain": "BOT_DOMAIN" // output tunnel domain as BOT_DOMAIN
                         }
+                    },
+                    {
+                        // Chrome and Edge block Teams from framing localhost,
+                        // so local tabs use the same public tunnel as the bot.
+                        "portNumber": 3000,
+                        "protocol": "https",
+                        "access": "public",
+                        "writeToEnvironmentFile": {
+                            "endpoint": "TAB_ENDPOINT",
+                            "domain": "TAB_DOMAIN"
+                        }
                     }
                 ],
                 "env": "local"
