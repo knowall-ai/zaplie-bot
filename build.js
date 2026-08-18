@@ -2,16 +2,38 @@ const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Read environment variables from .env.dev file
+// Load optional development defaults, then overlay the active Teams
+// environment. Process variables win so CI can build without local .env files.
 const envFilePath = path.join(__dirname, '.', 'env', '.env.dev');
-const envConfig = dotenv.parse(fs.readFileSync(envFilePath));
-const contentUrl = envConfig.CONTENT_URL;
-const websiteUrl = envConfig.WEBSITE_URL;
+let envConfig = fs.existsSync(envFilePath)
+  ? dotenv.parse(fs.readFileSync(envFilePath))
+  : {};
+
+const activeEnv = process.env.TEAMSFX_ENV;
+if (activeEnv && activeEnv !== 'dev') {
+  const activeEnvPath = path.join(__dirname, '.', 'env', `.env.${activeEnv}`);
+  if (fs.existsSync(activeEnvPath)) {
+    envConfig = {
+      ...envConfig,
+      ...dotenv.parse(fs.readFileSync(activeEnvPath)),
+    };
+  }
+}
+
+envConfig = {
+  ...envConfig,
+  ...process.env,
+};
+
+const contentUrl = envConfig.TAB_ENDPOINT || envConfig.CONTENT_URL;
+const websiteUrl = envConfig.TAB_ENDPOINT || envConfig.WEBSITE_URL;
 
 
 // Check for missing environment variables
 if (!contentUrl || !websiteUrl) {
-  console.error('Error: CONTENT_URL and WEBSITE_URL environment variables added to your envirfonment file.');
+  console.error(
+    'Error: configure TAB_ENDPOINT, or both CONTENT_URL and WEBSITE_URL.',
+  );
   process.exit(1);
 }
 
