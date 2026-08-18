@@ -26,6 +26,11 @@ export const loginRequest: PopupRequest = {
   scopes: ['User.Read'],
 };
 
+// Requested only by the "Your week" page, so signing in never depends on them.
+export const weekScopesRequest: PopupRequest = {
+  scopes: ['User.Read', 'Calendars.Read', 'People.Read'],
+};
+
 // Add here the endpoints for MS Graph API services you would like to use.
 export const graphConfig = {
   graphMeEndpoint: 'https://graph.microsoft.com/v1.0/me',
