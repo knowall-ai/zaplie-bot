@@ -22,6 +22,15 @@ test('finds a user by application-level aadObjectId metadata', () => {
   assert.equal(findUniqueUserByAadObjectId(users, 'aad-missing'), null);
 });
 
+test('finds an LNbits v1 user by external_id', () => {
+  const users = [
+    { id: 'user-1', external_id: 'aad-1' },
+    { id: 'user-2', external_id: 'aad-2' },
+  ];
+
+  assert.equal(findUniqueUserByAadObjectId(users, 'aad-2'), users[1]);
+});
+
 test('fails loud for malformed or ambiguous directory data', () => {
   assert.throws(
     () => findUniqueUserByAadObjectId(null, 'aad-1'),
