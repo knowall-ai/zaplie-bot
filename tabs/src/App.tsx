@@ -1,21 +1,16 @@
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
-// Fluent UI imports
 import { Stack } from '@fluentui/react';
-// Toast notifications
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// MSAL imports
 import { MsalProvider } from '@azure/msal-react';
 import { IPublicClientApplication } from '@azure/msal-browser';
 import RequireAuth from './components/RequireAuth';
 
-// Sample app imports
 import { PageLayout } from './components/PageLayout';
 import { RewardNameProvider } from './components/RewardNameContext';
 
-// Import the pages
 import Login from './Login';
 import Feed from './Feed';
 import Week from './Week';
@@ -33,7 +28,6 @@ type AppProps = {
   pca: IPublicClientApplication;
 };
 
-// Function to update the title based on the current route
 function TitleUpdater() {
   const location = useLocation();
 
@@ -74,7 +68,7 @@ function App({ pca }: AppProps) {
           theme="dark"
         />
         <PageLayout>
-          <Stack horizontalAlign="center">
+          <Stack styles={{ root: { width: '100%', minWidth: 0 } }}>
             <Routes>
               <Route
                 path="/feed"
