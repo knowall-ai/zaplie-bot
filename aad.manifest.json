@@ -4,6 +4,18 @@
     "name": "Zaplie v2",
     "accessTokenAcceptedVersion": 2,
     "signInAudience": "AzureADMyOrg",
+    "appRoles": [
+        {
+            "allowedMemberTypes": [
+                "User"
+            ],
+            "description": "Can configure reward policy, bot persona and integrations",
+            "displayName": "Zaplie Administrator",
+            "id": "a753735c-1fd6-4e7e-bd5a-66e975060a45",
+            "isEnabled": true,
+            "value": "Zaplie.Admin"
+        }
+    ],
     "optionalClaims": {
         "idToken": [],
         "accessToken": [
