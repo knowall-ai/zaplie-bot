@@ -815,44 +815,129 @@ async function topUpWallet(walletId: string, amount: number): Promise<void> {
     amount,
   };
 
-  try {
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(body),
-    });
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    console.log('Wallet topped up successfully:', responseData);
-  } catch (error) {
-    console.error('Error topping up wallet:', error);
+  if (!response.ok) {
+    throw new Error(`Error topping up wallet (status: ${response.status})`);
   }
 }
 
-async function scheduledTopup() {
-  const allowancewallets = await getWallets(
-    process.env.LNBITS_ADMINKEY as string,
-    'Allowance',
-  );
-  const allowanceValue = process.env.LNBITS_INITIAL_ALLOWANCE as string;
-  const hostWalletId = process.env.LNBITS_HOST_WALLET_ID as string;
-  const hostUserId = process.env.LNBITS_HOST_USER_ID as string;
+interface WeeklyAllowanceDependencies {
+  getWallets: typeof getWallets;
+  getUser: typeof getUser;
+  getWalletById: typeof getWalletById;
+  createInvoice: typeof createInvoice;
+  payInvoice: typeof payInvoice;
+  topUpWallet: typeof topUpWallet;
+}
 
-  const host = await getWalletById(hostUserId, hostWalletId);
+interface WeeklyAllowanceFailure {
+  walletId: string;
+  error: string;
+}
 
-  if (allowancewallets) {
-    allowancewallets.forEach(async wallet => {
-      const User = await getUser(
-        process.env.LNBITS_ADMINKEY as string,
-        wallet.user,
-      );
+interface WeeklyAllowanceWarning {
+  walletId: string;
+  warning: string;
+}
+
+interface WeeklyAllowanceSummary {
+  wallets: number;
+  swept: number;
+  toppedUp: number;
+  failures: WeeklyAllowanceFailure[];
+  warnings: WeeklyAllowanceWarning[];
+}
+
+const requirePositiveIntegerEnv = (name: string): number => {
+  const value = Number(requireEnv(name));
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+};
+
+// Validates everything the weekly run needs before any request is made, so a
+// misconfigured scheduler call fails closed instead of half-running.
+function assertWeeklyAllowanceConfig(): void {
+  requireEnv('LNBITS_NODE_URL');
+  requireEnv('LNBITS_ADMINKEY');
+  requireEnv('LNBITS_INKEY');
+  requireEnv('LNBITS_HOST_WALLET_ID');
+  requireEnv('LNBITS_HOST_USER_ID');
+  requirePositiveIntegerEnv('LNBITS_INITIAL_ALLOWANCE');
+}
+
+async function scheduledTopup(
+  dependencies: WeeklyAllowanceDependencies = {
+    getWallets,
+    getUser,
+    getWalletById,
+    createInvoice,
+    payInvoice,
+    topUpWallet,
+  },
+): Promise<WeeklyAllowanceSummary> {
+  assertWeeklyAllowanceConfig();
+  const adminKey = requireEnv('LNBITS_ADMINKEY');
+  const invoiceKey = requireEnv('LNBITS_INKEY');
+  const hostWalletId = requireEnv('LNBITS_HOST_WALLET_ID');
+  const hostUserId = requireEnv('LNBITS_HOST_USER_ID');
+  const allowanceValue = requirePositiveIntegerEnv('LNBITS_INITIAL_ALLOWANCE');
+
+  const allowanceWallets = await dependencies.getWallets(adminKey, 'Allowance');
+  if (!Array.isArray(allowanceWallets)) {
+    throw new Error('Unable to load allowance wallets');
+  }
+
+  const host = await dependencies.getWalletById(hostUserId, hostWalletId);
+  if (!host) {
+    throw new Error('Unable to load treasury wallet');
+  }
+
+  const summary: WeeklyAllowanceSummary = {
+    wallets: allowanceWallets.length,
+    swept: 0,
+    toppedUp: 0,
+    failures: [],
+    warnings: [],
+  };
+
+  // Per-wallet failures are recorded and skipped so one broken wallet cannot
+  // block everyone else's allowance; a failed sweep never reaches the top-up.
+  for (const wallet of allowanceWallets) {
+    try {
+      const user = await dependencies.getUser(adminKey, wallet.user);
+      if (!user) {
+        throw new Error(`Allowance owner not found for wallet ${wallet.id}`);
+      }
+      if (
+        !Number.isSafeInteger(wallet.balance_msat) ||
+        wallet.balance_msat < 0
+      ) {
+        throw new Error(`Invalid balance for allowance wallet ${wallet.id}`);
+      }
+
+      // LNbits invoices are denominated in whole sats. A balance carrying a
+      // sub-sat remainder is swept down to the last whole sat rather than
+      // excluded from the week: skipping it would leave the wallet
+      // permanently above its allowance. The remainder is reported so an
+      // operator can see why the wallet did not end up empty.
+      const sweepSats = Math.floor(wallet.balance_msat / 1000);
+      const remainderMsat = wallet.balance_msat - sweepSats * 1000;
+      if (remainderMsat > 0) {
+        summary.warnings.push({
+          walletId: wallet.id,
+          warning: `Balance is not a whole number of sats; swept ${sweepSats} sats and left ${remainderMsat} msat`,
+        });
+      }
 
       const extra = {
         from: wallet,
@@ -860,19 +945,29 @@ async function scheduledTopup() {
         tag: 'zap',
       };
 
-      if (wallet.balance_msat > 0) {
-        const paymentRequest = await createInvoice(
-          process.env.LNBITS_INKEY as string,
+      if (sweepSats > 0) {
+        const paymentRequest = await dependencies.createInvoice(
+          invoiceKey,
           hostWalletId,
-          wallet.balance_msat / 1000,
-          `${User.displayName} Weekly Allowance cleared`,
+          sweepSats,
+          `${user.displayName} Weekly Allowance cleared`,
           extra,
         );
-        await payInvoice(wallet.adminkey, paymentRequest, extra);
+        await dependencies.payInvoice(wallet.adminkey, paymentRequest, extra);
+        summary.swept += 1;
       }
-      topUpWallet(wallet.id, parseInt(allowanceValue));
-    });
+
+      await dependencies.topUpWallet(wallet.id, allowanceValue);
+      summary.toppedUp += 1;
+    } catch (error) {
+      summary.failures.push({
+        walletId: wallet.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
+
+  return summary;
 }
 
 export {
@@ -895,5 +990,13 @@ export {
   payInvoice,
   getWalletIdByUserId,
   topUpWallet,
+  assertWeeklyAllowanceConfig,
   scheduledTopup,
+};
+
+export type {
+  WeeklyAllowanceDependencies,
+  WeeklyAllowanceFailure,
+  WeeklyAllowanceWarning,
+  WeeklyAllowanceSummary,
 };

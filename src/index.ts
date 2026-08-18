@@ -1,5 +1,6 @@
 // Import required packages
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash, timingSafeEqual } from 'crypto';
@@ -28,6 +29,7 @@ import {
   payReward,
   RewardError,
 } from './services/rewardsService';
+import { createAllowanceTopupHandler } from './services/allowanceTopup';
 
 // Create adapter.
 // See https://aka.ms/about-bot-adapter to learn more about adapters.
@@ -111,6 +113,42 @@ const bot = new TeamsBot();
 // Create HTTP server. Express instead of restify: restify still requires
 // spdy, whose native http_parser binding no longer exists on Node >= 21.
 const server = express();
+
+// Azure App Service fronts the bot with a single proxy; without this the
+// limiter would key every client on the proxy's IP.
+server.set('trust proxy', 1);
+
+const DEFAULT_API_RATE_LIMIT = 30;
+
+// Named for the bot specifically: the tabs backend reads API_RATE_LIMIT with a
+// browser-sized default, and one shared name would silently apply the wrong
+// budget to whichever process is configured second. A malformed value falls
+// back to the default rather than to `Number()`'s NaN, which would disable the
+// limit entirely.
+const botApiRateLimit = (): number => {
+  const configured = process.env.BOT_API_RATE_LIMIT?.trim();
+  if (!configured) {
+    return DEFAULT_API_RATE_LIMIT;
+  }
+  const parsed = Number(configured);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    console.warn(
+      `BOT_API_RATE_LIMIT must be a positive integer; using ${DEFAULT_API_RATE_LIMIT}`,
+    );
+    return DEFAULT_API_RATE_LIMIT;
+  }
+  return parsed;
+};
+
+// The API routes are called by schedulers and automations, never by browsers,
+// so a tight window is plenty and CodeQL's js/missing-rate-limiting is
+// satisfied by a recognised middleware.
+const apiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: botApiRateLimit(),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 server.disable('x-powered-by');
 server.use(express.json());
 server.get('/healthz', (_req, res) => {
@@ -162,7 +200,7 @@ const isAuthorizedRewardKey = async (providedKey: string): Promise<boolean> => {
 };
 
 // Deterministic automation path — no LLM can trigger a payment here.
-server.post('/api/v1/rewards', async (req, res) => {
+server.post('/api/v1/rewards', apiRateLimiter, async (req, res) => {
   try {
     if (!(await isAuthorizedRewardKey(req.header('x-api-key') ?? ''))) {
       res.status(401).json({ error: 'invalid API key' });
@@ -209,6 +247,16 @@ server.post('/api/v1/rewards', async (req, res) => {
     res.status(500).json({ error: 'internal error' });
   }
 });
+
+// Weekly allowance sweep-and-refill, fired by an external scheduler (e.g. an
+// Azure Logic App). Same key contract as /api/v1/rewards; a re-fired trigger
+// inside the same ISO week is answered with {skipped: true} instead of
+// sweeping wallets twice.
+server.post(
+  '/api/v1/allowance/topup',
+  apiRateLimiter,
+  createAllowanceTopupHandler({ isAuthorized: isAuthorizedRewardKey }),
+);
 
 const authStartPage = fs.readFileSync(
   path.join(__dirname, '../public/auth-start.html'),
