@@ -1,34 +1,30 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import styles from './SendZapsPopup.module.css';
 import { RewardNameContext } from './RewardNameContext';
 import { useCache } from '../utils/CacheContext';
 import {
   getUserWallets,
   getUsers,
+  invalidateWalletCache,
   sendZap,
 } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
-import loaderGif from '../images/Loader.gif';
-import ZapIcon from '../images/ZapIcon.svg';
 import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';
 import dismissIcon from '../images/DismissCircleRed.svg';
+import {
+  pickExactWallet,
+  prepareZapRequest,
+  ZapRequest,
+} from '../utils/paymentState';
 
 interface SendZapsPopupProps {
   onClose: () => void;
   initialUserId?: string;
 }
 
-// Extended User type with wallet information for this component
 type UserWithWallet = User & { privateWallet: Wallet | null };
 
-const PRESET_AMOUNTS = [5000, 10000, 25000];
-
-// Prioritize the Private wallet, then any non-allowance wallet
-const pickTargetWallet = (wallets: Wallet[] | null): Wallet | null =>
-  wallets?.find(w => w.name.toLowerCase().includes('private')) ??
-  wallets?.find(w => !w.name.toLowerCase().includes('allowance')) ??
-  wallets?.[0] ??
-  null;
+const PRESET_AMOUNTS = [20, 5000, 10000, 25000];
 
 const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
   onClose,
@@ -44,19 +40,21 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
   const [users, setUsers] = useState<UserWithWallet[]>([]);
   const [currentUserWallets, setCurrentUserWallets] = useState<{
     allowance: Wallet | null;
-    balance: number;
+    balance: number | null;
   }>({
     allowance: null,
-    balance: 0,
+    balance: null,
   });
   const [sendAnonymously, setSendAnonymously] = useState(false);
   const [selectedValue, setSelectedValue] = useState<string>('');
   const [paymentHash, setPaymentHash] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const requestRef = useRef<ZapRequest | null>(null);
 
   const { cache, setCache } = useCache();
+  const cachedUsers = cache['allUsers'];
   const { accounts } = useMsal();
-  const rewardNameContext = useContext(RewardNameContext);
-  const rewardsName = rewardNameContext?.rewardName ?? 'Sats';
+  const { rewardName } = useContext(RewardNameContext);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -64,50 +62,52 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
       try {
         const account = accounts[0];
         if (!account?.localAccountId) {
-          setIsLoadingUsers(false);
-          return;
+          throw new Error('Sign in to send zaps.');
         }
 
-        // Get users from cache or fetch them
-        let allUsers = cache['allUsers'] as User[];
-        if (!allUsers || allUsers.length === 0) {
+        let allUsers = Array.isArray(cachedUsers)
+          ? (cachedUsers as User[])
+          : [];
+        if (allUsers.length === 0) {
           const fetchedUsers = await getUsers({});
-          if (fetchedUsers && fetchedUsers.length > 0) {
+          if (fetchedUsers.length > 0) {
             allUsers = fetchedUsers;
             setCache('allUsers', fetchedUsers);
           } else {
-            setIsLoadingUsers(false);
-            return;
+            throw new Error('No Zaplie users are available.');
           }
         }
 
-        // Fetch current user's wallet
-        const currentUserData = allUsers.find(
+        const matchingUsers = allUsers.filter(
           u => u.aadObjectId === account.localAccountId,
         );
-
-        if (currentUserData) {
-          // Always fetch fresh wallet data to get accurate balance
-          const wallets = await getUserWallets(currentUserData.id);
-          const allowanceWallet = wallets?.find(w =>
-            w.name.toLowerCase().includes('allowance'),
+        if (matchingUsers.length !== 1) {
+          throw new Error(
+            "We couldn't match your signed-in account to Zaplie.",
           );
-          const currentBalance = allowanceWallet
-            ? allowanceWallet.balance_msat / 1000
-            : 0;
-
-          setCurrentUserWallets({
-            allowance: allowanceWallet || null,
-            balance: currentBalance,
-          });
         }
 
-        // Filter out current user - wallet fetching happens on user selection
+        const currentUserData = matchingUsers[0];
+        setCurrentUserId(currentUserData.id);
+
+        const wallets = await getUserWallets(currentUserData.id);
+        const allowanceWallet = pickExactWallet(wallets, 'allowance');
+        if (!allowanceWallet) {
+          throw new Error('Your Allowance wallet is unavailable.');
+        }
+        if (!Number.isFinite(allowanceWallet.balance_msat)) {
+          throw new Error('Your Allowance balance is unavailable.');
+        }
+
+        setCurrentUserWallets({
+          allowance: allowanceWallet,
+          balance: allowanceWallet.balance_msat / 1000,
+        });
+
         const otherUsers = allUsers.filter(
           u => u.aadObjectId !== account.localAccountId,
         );
 
-        // Initialize users without wallet data - will fetch on selection
         const usersWithoutWallets: UserWithWallet[] = otherUsers.map(user => ({
           ...user,
           privateWallet: null,
@@ -115,14 +115,16 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
 
         setUsers(usersWithoutWallets);
 
-        // Preselect a recipient (e.g. from the "Your week" page) and fetch their wallet up front
         if (
           initialUserId &&
           usersWithoutWallets.some(u => u.id === initialUserId)
         ) {
           setSelectedUser(initialUserId);
           const wallets = await getUserWallets(initialUserId);
-          const targetWallet = pickTargetWallet(wallets);
+          const targetWallet = pickExactWallet(wallets, 'private');
+          if (!targetWallet) {
+            throw new Error('The selected recipient has no Private wallet.');
+          }
           setUsers(prev =>
             prev.map(u =>
               u.id === initialUserId
@@ -131,42 +133,46 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
             ),
           );
         }
-      } catch (err) {
-        setError('Failed to load users');
+      } catch (caught) {
+        setError(
+          caught instanceof Error ? caught.message : 'Unable to load users.',
+        );
       } finally {
         setIsLoadingUsers(false);
       }
     };
 
-    loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts, initialUserId]); // cache and setCache are from context and are stable, intentionally excluded
+    void loadUsers();
+  }, [accounts, cachedUsers, initialUserId, setCache]);
 
-  // Fetch wallet for selected user on demand
   const handleUserSelect = async (userId: string) => {
     setSelectedUser(userId);
+    setError(null);
 
     if (!userId) return;
 
     const user = users.find(u => u.id === userId);
-    if (!user || user.privateWallet) return; // Already has wallet or not found
+    if (!user || user.privateWallet) return;
 
     try {
       const wallets = await getUserWallets(userId);
-      const targetWallet = pickTargetWallet(wallets);
+      const targetWallet = pickExactWallet(wallets, 'private');
+      if (!targetWallet) {
+        throw new Error('The selected recipient has no Private wallet.');
+      }
       setUsers(prev =>
         prev.map(u =>
           u.id === userId ? { ...u, privateWallet: targetWallet } : u,
         ),
       );
-    } catch {
-      // Silently fail - error will show when trying to send
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to load the recipient wallet.',
+      );
     }
   };
-
-  if (!rewardNameContext) {
-    return null;
-  }
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -179,23 +185,35 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
   };
 
   const handleSendZap = async () => {
-    // Validation
     if (!selectedUser) {
       setError('Please select a user');
       return;
     }
 
-    if (!amount || parseFloat(amount) <= 0) {
+    if (!rewardName) {
+      setError('The reward name is unavailable. Try again later.');
+      return;
+    }
+
+    if (!memo.trim()) {
+      setError('Add a description for this zap.');
+      return;
+    }
+
+    const zapAmount = Number(amount);
+    if (!Number.isSafeInteger(zapAmount) || zapAmount <= 0) {
       setError('Please enter a valid amount');
       return;
     }
 
-    const zapAmount = parseFloat(amount);
+    if (currentUserWallets.balance === null) {
+      setError('Your Allowance balance is unavailable.');
+      return;
+    }
 
-    // Balance validation
     if (zapAmount > currentUserWallets.balance) {
       setError(
-        `Insufficient balance. You have ${currentUserWallets.balance} ${rewardsName} available.`,
+        `Insufficient balance. You have ${currentUserWallets.balance} ${rewardName} available.`,
       );
       return;
     }
@@ -215,8 +233,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
     setError(null);
 
     try {
-      // Build the memo with value and anonymous prefix if needed
-      let paymentMemo = memo || 'Zap payment';
+      let paymentMemo = memo.trim();
       if (selectedValue) {
         paymentMemo = `[${selectedValue.charAt(0).toUpperCase() + selectedValue.slice(1)}] ${paymentMemo}`;
       }
@@ -224,20 +241,41 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
         paymentMemo = `[Anonymous] ${paymentMemo}`;
       }
 
-      const result = await sendZap(recipient.id, zapAmount, paymentMemo);
+      const fingerprint = JSON.stringify([
+        recipient.id,
+        zapAmount,
+        paymentMemo,
+      ]);
+      requestRef.current = prepareZapRequest(requestRef.current, fingerprint);
+      const result = await sendZap(
+        recipient.id,
+        zapAmount,
+        paymentMemo,
+        requestRef.current.key,
+      );
 
-      if (result && result.payment_hash) {
-        setPaymentHash(result.payment_hash);
-        setSuccess(true);
-        // Optimistic update for immediate UI feedback
-        // Fresh balance will be fetched from API when popup reopens
-        const updatedBalance = currentUserWallets.balance - zapAmount;
-        setCurrentUserWallets(prev => ({ ...prev, balance: updatedBalance }));
-      } else {
-        throw new Error('Payment failed');
+      requestRef.current = null;
+      setPaymentHash(result.payment_hash);
+      setSuccess(true);
+      if (currentUserId) {
+        invalidateWalletCache(currentUserId);
+        try {
+          const refreshedWallets = await getUserWallets(currentUserId);
+          const refreshedAllowance = pickExactWallet(
+            refreshedWallets,
+            'allowance',
+          );
+          setCurrentUserWallets({
+            allowance: refreshedAllowance ?? null,
+            balance: refreshedAllowance
+              ? refreshedAllowance.balance_msat / 1000
+              : null,
+          });
+        } catch {
+          setCurrentUserWallets(prev => ({ ...prev, balance: null }));
+        }
       }
     } catch (err) {
-      console.error('Error sending zap:', err);
       setError(err instanceof Error ? err.message : 'Failed to send zap');
     } finally {
       setIsLoading(false);
@@ -251,9 +289,13 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
   };
 
   const selectedUserData = users.find(u => u.id === selectedUser);
-  const isSendDisabled = !selectedUser || !amount || parseFloat(amount) <= 0;
+  const isSendDisabled =
+    !selectedUser ||
+    !amount ||
+    !memo.trim() ||
+    !rewardName ||
+    parseFloat(amount) <= 0;
 
-  // Get initials for avatar placeholder
   const getInitials = (name?: string) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -263,51 +305,55 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
     return name[0]?.toUpperCase() || '?';
   };
 
+  const getDisplayName = (user?: UserWithWallet) => {
+    if (!user) return '';
+    const isGuid = /^[a-f0-9]{32}$/i.test(user.displayName || '');
+    return (
+      (!user.displayName || isGuid ? user.email : user.displayName) || 'Unknown'
+    );
+  };
+  const recipientName = getDisplayName(selectedUserData);
+  const numericAmount = Number(amount);
+  const amountIsValid =
+    Number.isSafeInteger(numericAmount) && numericAmount > 0;
+
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
-      {!isLoading && !success && !error && (
-        <div className={styles.popup}>
-          {/* Header Banner with lightning pattern */}
-          <div className={styles.headerBanner}>
-            <div className={styles.avatarContainer}>
-              {selectedUserData ? (
-                <div className={styles.avatarPlaceholder}>
-                  {getInitials(selectedUserData.displayName)}
-                </div>
-              ) : (
-                <div className={styles.avatarPlaceholder}>
-                  <img src={ZapIcon} alt="" className={styles.avatarIcon} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Popup Content */}
+      {!success && (
+        <div
+          className={styles.popup}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-zaps-title"
+        >
           <div className={styles.popupContent}>
-            <h2 className={styles.title}>Send some zaps</h2>
-            <p className={styles.text}>
+            <h2 id="send-zaps-title" className={styles.title}>
+              Send some zaps
+            </h2>
+            <p className={styles.subtitle}>
               Show gratitude, thanks and recognising awesomeness to others in
               your team
             </p>
 
-            {/* Two Column Layout */}
             <div className={styles.formRow}>
-              {/* Left Column - User Selection */}
               <div className={styles.formColumn}>
                 <div className={styles.formGroup}>
+                  <label htmlFor="send-zaps-recipient" className={styles.label}>
+                    Send zaps to
+                  </label>
                   <select
+                    id="send-zaps-recipient"
                     value={selectedUser}
                     onChange={e => handleUserSelect(e.target.value)}
                     className={styles.select}
                     disabled={isLoadingUsers}
                   >
                     <option value="">
-                      {isLoadingUsers ? 'Loading users...' : 'Send zaps to'}
+                      {isLoadingUsers ? 'Loading users...' : 'Select a person'}
                     </option>
                     {!isLoadingUsers &&
                       users
                         .filter(user => {
-                          // Check if displayName exists and is not a GUID (32 hex chars)
                           const isGuid = /^[a-f0-9]{32}$/i.test(
                             user.displayName || '',
                           );
@@ -317,7 +363,6 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
                           return hasValidName || hasEmail;
                         })
                         .map(user => {
-                          // Check if displayName looks like a GUID
                           const isGuid = /^[a-f0-9]{32}$/i.test(
                             user.displayName || '',
                           );
@@ -334,57 +379,24 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
                   </select>
                 </div>
 
-                {/* User count info */}
                 {!isLoadingUsers && users.length > 0 && (
-                  <p className={styles.balanceText}>
+                  <p className={styles.hintText}>
                     {users.length} team member{users.length !== 1 ? 's' : ''}{' '}
                     available
                   </p>
                 )}
-              </div>
 
-              {/* Right Column - Amount */}
-              <div className={styles.formColumn}>
                 <div className={styles.formGroup}>
-                  <div className={styles.amountInputRow}>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={e => setAmount(e.target.value)}
-                      placeholder="Specify amount"
-                      min="1"
-                      className={styles.amountInput}
-                    />
-                    <span className={styles.currencyLabel}>{rewardsName}</span>
-                  </div>
-                </div>
-
-                {/* Preset Amount Buttons */}
-                <div className={styles.presetAmounts}>
-                  {PRESET_AMOUNTS.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => handlePresetAmount(preset)}
-                      className={
-                        amount === preset.toString()
-                          ? styles.presetButtonActive
-                          : styles.presetButton
-                      }
-                    >
-                      {preset.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Value Dropdown */}
-                <div className={styles.formGroup}>
+                  <label htmlFor="send-zaps-value" className={styles.label}>
+                    Value
+                  </label>
                   <select
+                    id="send-zaps-value"
                     value={selectedValue}
                     onChange={e => setSelectedValue(e.target.value)}
-                    className={styles.valueSelect}
+                    className={styles.select}
                   >
-                    <option value="">Value</option>
+                    <option value="">Select a value</option>
                     <option value="teamwork">Teamwork</option>
                     <option value="innovation">Innovation</option>
                     <option value="excellence">Excellence</option>
@@ -392,36 +404,135 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
                   </select>
                 </div>
               </div>
+
+              <div className={styles.formColumn}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="send-zaps-amount" className={styles.label}>
+                    Specify amount
+                  </label>
+                  <div className={styles.amountInputRow}>
+                    <input
+                      id="send-zaps-amount"
+                      type="number"
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      placeholder="0"
+                      min="1"
+                      step="1"
+                      className={styles.amountInput}
+                    />
+                    <span className={styles.currencyLabel}>
+                      {rewardName ?? 'Unavailable'}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className={styles.presetAmounts}
+                  role="group"
+                  aria-label="Quick amounts"
+                >
+                  {PRESET_AMOUNTS.map((preset, index) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handlePresetAmount(preset)}
+                      aria-pressed={amount === preset.toString()}
+                      className={
+                        amount === preset.toString()
+                          ? styles.presetChipActive
+                          : index === 0
+                            ? styles.presetChipFeatured
+                            : styles.presetChip
+                      }
+                    >
+                      {preset.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                <p className={styles.balanceText}>
+                  Available balance:{' '}
+                  <b className={styles.balanceValue}>
+                    {currentUserWallets.balance === null
+                      ? 'Loading...'
+                      : rewardName
+                        ? `${currentUserWallets.balance.toLocaleString()} ${rewardName}`
+                        : 'Reward name unavailable'}
+                  </b>
+                </p>
+              </div>
             </div>
 
-            {/* Description */}
             <div className={styles.formGroup}>
+              <label htmlFor="send-zaps-description" className={styles.label}>
+                Description
+              </label>
               <textarea
+                id="send-zaps-description"
                 value={memo}
                 onChange={e => setMemo(e.target.value)}
-                placeholder="Description"
+                placeholder="What are these zaps for?"
                 className={styles.textarea}
                 rows={3}
               />
             </div>
 
-            {/* Balance Info */}
-            <p className={styles.balanceText}>
-              Available balance: {currentUserWallets.balance.toLocaleString()}{' '}
-              {rewardsName}
-            </p>
+            {selectedUserData && (
+              <div className={styles.summary}>
+                <span className={styles.summaryAvatar} aria-hidden="true">
+                  {getInitials(recipientName)}
+                </span>
+                <span className={styles.summaryText}>
+                  <b className={styles.summaryName}>{recipientName}</b>
+                  {amountIsValid ? (
+                    <>
+                      {' '}
+                      will receive{' '}
+                      <b className={styles.summaryAmount}>
+                        {numericAmount.toLocaleString()} {rewardName}
+                      </b>
+                      {sendAnonymously ? ' anonymously' : ''}
+                    </>
+                  ) : (
+                    <> — choose an amount to continue</>
+                  )}
+                </span>
+              </div>
+            )}
 
-            {/* Action Row */}
+            {error && (
+              <div className={styles.errorBanner} role="alert">
+                <img src={dismissIcon} alt="" className={styles.errorIcon} />
+                <span className={styles.errorText}>{error}</span>
+                <button
+                  type="button"
+                  className={styles.errorDismiss}
+                  onClick={() => setError(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div className={styles.actionRow}>
               <div className={styles.leftActions}>
-                <button onClick={handleClose} className={styles.cancelButton}>
+                <button
+                  onClick={handleClose}
+                  className={styles.cancelButton}
+                  disabled={isLoading}
+                >
                   Cancel
                 </button>
               </div>
 
               <div className={styles.rightActions}>
-                <label className={styles.checkboxLabel}>
+                <label
+                  className={styles.checkboxLabel}
+                  htmlFor="send-zaps-anonymous"
+                >
                   <input
+                    id="send-zaps-anonymous"
                     type="checkbox"
                     checked={sendAnonymously}
                     onChange={e => setSendAnonymously(e.target.checked)}
@@ -432,14 +543,17 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
 
                 <button
                   onClick={handleSendZap}
-                  className={
-                    isSendDisabled
-                      ? styles.sendButtonDisabled
-                      : styles.sendButton
-                  }
-                  disabled={isSendDisabled}
+                  className={styles.sendButton}
+                  disabled={isSendDisabled || isLoading}
                 >
-                  Send
+                  {isLoading ? (
+                    <>
+                      <span className={styles.spinner} aria-hidden="true" />
+                      Sending...
+                    </>
+                  ) : (
+                    'Send'
+                  )}
                 </button>
               </div>
             </div>
@@ -447,58 +561,43 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
         </div>
       )}
 
-      {isLoading && (
-        <div className={styles.loaderOverlay}>
-          <img src={loaderGif} alt="Loading..." className={styles.loaderIcon} />
-          <p className={styles.loaderText}>Sending zap...</p>
-        </div>
-      )}
-
-      {!isLoading && success && (
-        <div className={styles.overlay} onClick={handleOverlayClick}>
-          <div className={styles.successPopup}>
-            <div className={styles.popupHeader}>
-              <img
-                src={checkmarkIcon}
-                alt="Success"
-                className={styles.statusIcon}
-              />
-              <div className={styles.popupText}>Zap sent successfully!</div>
+      {success && (
+        <div
+          className={styles.successPopup}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-zaps-success-title"
+        >
+          <div className={styles.popupHeader} role="status">
+            <img src={checkmarkIcon} alt="" className={styles.statusIcon} />
+            <div id="send-zaps-success-title" className={styles.popupText}>
+              Zap sent successfully!
             </div>
-            {paymentHash && (
-              <div className={styles.transactionId}>
-                <span className={styles.transactionLabel}>Transaction ID:</span>
-                <span className={styles.transactionHash}>
-                  {paymentHash.substring(0, 16)}...
-                </span>
-              </div>
+          </div>
+          <div className={styles.successSummary}>
+            <span className={styles.successAmount}>
+              {amountIsValid && rewardName
+                ? `+${numericAmount.toLocaleString()} ${rewardName}`
+                : 'Zap sent'}
+            </span>
+            {selectedUserData && (
+              <span className={styles.successRecipient}>
+                to <b className={styles.summaryName}>{recipientName}</b>
+                {sendAnonymously ? ' (sent anonymously)' : ''}
+              </span>
             )}
-            <button className={styles.closeButton} onClick={handleClose}>
-              Close
-            </button>
           </div>
-        </div>
-      )}
-
-      {!isLoading && error && (
-        <div className={styles.overlay} onClick={handleOverlayClick}>
-          <div className={styles.errorPopup}>
-            <div className={styles.popupHeader}>
-              <img
-                src={dismissIcon}
-                alt="Error"
-                className={styles.statusIcon}
-              />
-              <div className={styles.popupText}>Failed to send zap</div>
+          {paymentHash && (
+            <div className={styles.transactionId}>
+              <span className={styles.transactionLabel}>Transaction ID:</span>
+              <span className={styles.transactionHash}>
+                {paymentHash.substring(0, 16)}...
+              </span>
             </div>
-            <div className={styles.errorMessage}>{error}</div>
-            <button
-              className={styles.closeButton}
-              onClick={() => setError(null)}
-            >
-              Try Again
-            </button>
-          </div>
+          )}
+          <button className={styles.closeButton} onClick={handleClose}>
+            Close
+          </button>
         </div>
       )}
     </div>
