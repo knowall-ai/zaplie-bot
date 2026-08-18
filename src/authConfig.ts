@@ -1,4 +1,4 @@
-import { OnBehalfOfCredentialAuthConfig } from '@microsoft/teamsfx';
+import type { OnBehalfOfCredentialAuthConfig } from '@microsoft/teamsfx';
 import config from './config';
 
 const oboAuthConfig: OnBehalfOfCredentialAuthConfig = {

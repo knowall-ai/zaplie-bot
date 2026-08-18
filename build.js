@@ -28,7 +28,6 @@ envConfig = {
 const contentUrl = envConfig.TAB_ENDPOINT || envConfig.CONTENT_URL;
 const websiteUrl = envConfig.TAB_ENDPOINT || envConfig.WEBSITE_URL;
 
-
 // Check for missing environment variables
 if (!contentUrl || !websiteUrl) {
   console.error(
@@ -45,20 +44,12 @@ try {
   // Parse the template to a JSON object
   const manifest = JSON.parse(template);
 
-  // Extract the current version
-  const currentVersion = manifest.version;
-
-  // Split the version into its components
-  const versionParts = currentVersion.split('.').map(Number);
-
-  // Increment the patch version (the last number) only for Test and Prod environments
-  const environment = envConfig.ENVIRONMENT;
-  if (environment === 'Test' || environment === 'Prod') {
-    versionParts[2] += 1;
+  // Teams requires a numeric, monotonically increasing version. Releases can
+  // override the source version explicitly; normal local builds stay stable.
+  const newVersion = envConfig.APP_VERSION || manifest.version;
+  if (!/^\d+\.\d+\.\d+$/.test(newVersion)) {
+    throw new Error('APP_VERSION must use numeric major.minor.patch format.');
   }
-
-  // Join the version parts back into a string
-  const newVersion = versionParts.join('.');
 
   // Update the version number in the manifest
   manifest.version = newVersion;
@@ -68,13 +59,14 @@ try {
     .replace(/{{CONTENT_URL}}/g, contentUrl)
     .replace(/{{WEBSITE_URL}}/g, websiteUrl);
 
-
   // Write the final manifest.json file
   const outputPath = path.join(__dirname, 'appPackage', 'manifest.json');
   fs.writeFileSync(outputPath, updatedManifest, 'utf8');
 
-  console.log(`manifest.json has been generated successfully with version ${newVersion}.`);
-} catch (error) {
-  console.error('Error generating manifest.json:', error);
+  console.log('manifest.json has been generated successfully.');
+} catch {
+  // Environment-derived values may contain secrets, so never include the
+  // caught error or manifest inputs in build logs.
+  console.error('Error generating manifest.json.');
   process.exit(1);
 }
