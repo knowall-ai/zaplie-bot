@@ -6,6 +6,7 @@ interface TotalZapsComponentProps {
   allZaps: Transaction[];
   allUsers: User[];
   isLoading: boolean;
+  hasError?: boolean;
 }
 
 const toSeconds = (time: Transaction['time']): number =>
@@ -15,6 +16,7 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({
   allZaps,
   allUsers,
   isLoading,
+  hasError = false,
 }) => {
   const { rewardName } = useContext(RewardNameContext);
   const stats = useMemo(() => {
@@ -45,14 +47,16 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({
   }, [allUsers.length, allZaps]);
 
   const value = (amount: number) =>
-    isLoading ? 'Loading…' : amount.toLocaleString();
+    hasError ? 'Unavailable' : isLoading ? 'Loading…' : amount.toLocaleString();
 
   return (
     <section className={styles.sentcomponent} aria-busy={isLoading}>
       <h2 className={styles.title}>Total Zaps sent</h2>
       <div className={styles.zapsSentContainer}>
         <span className={styles.bigNumber}>{value(stats.total)}</span>
-        {!isLoading && <span className={styles.sats}>{rewardName}</span>}
+        {!isLoading && !hasError && (
+          <span className={styles.sats}>{rewardName}</span>
+        )}
       </div>
       <dl className={styles.statsList}>
         <div>

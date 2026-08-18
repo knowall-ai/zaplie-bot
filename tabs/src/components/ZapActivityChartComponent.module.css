@@ -31,6 +31,19 @@
   font-size: 14px;
 }
 
+.zapactivitychartbox ::-webkit-scrollbar {
+  height: 6px;
+}
+
+.zapactivitychartbox ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-full);
+}
+
+.zapactivitychartbox ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 @media (max-width: 600px) {
   .zapactivitychartbox {
     flex-basis: 100%;
