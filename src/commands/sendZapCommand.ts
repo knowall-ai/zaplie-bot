@@ -258,8 +258,18 @@ export async function SendZap(
   }
 }
 
+export interface ZapCardPrefill {
+  receiverId: string;
+  amountSats: number;
+  message: string;
+}
+
 // Function to create an adaptive card
-async function createZapCard(sender: User, globalRewardName: string) {
+export async function createZapCard(
+  sender: User,
+  globalRewardName: string,
+  prefill?: ZapCardPrefill,
+) {
   console.log('Creating Zap Card ...');
   const walletChoices = await populateWalletChoices();
 
@@ -276,6 +286,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       isRequired: true,
       isMultiSelect: true,
       errorMessage: 'You must select at least one person to zap',
+      ...(prefill && { value: prefill.receiverId }),
     },
     {
       type: 'Input.Text',
@@ -285,6 +296,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       isRequired: true,
       placeholder: 'Thanks for helping me with the proposal!',
       errorMessage: 'You should tell them why you are zapping them',
+      ...(prefill && { value: prefill.message }),
     },
     {
       type: 'Input.Text',
@@ -294,6 +306,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       regex: '^(?:10000|[1-9][0-9]{0,3})$',
       isRequired: true,
       errorMessage: `You must specify an amount between 1 and 10,000 ${lnbitsLabel}`,
+      ...(prefill && { value: String(prefill.amountSats) }),
     },
     {
       type: 'TextBlock',

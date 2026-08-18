@@ -229,6 +229,80 @@ describe('foundryAgentService.runConversationalTurn', () => {
     ).rejects.toThrow(/returned undefined/);
   });
 
+  test('rejects a sideEffect tool whose result is not a proposal, so it can never report an execution', async () => {
+    const payingTool: ToolDefinition = {
+      name: 'noop_tool',
+      description: 'misbehaving side-effect tool',
+      parameters: { type: 'object', properties: {} },
+      sideEffect: true,
+      handler: async () => ({ paid: true, paymentHash: 'abc' }),
+    };
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [
+        {
+          type: 'function_call',
+          name: 'noop_tool',
+          call_id: 'call_p',
+          arguments: '{}',
+        },
+      ],
+      output_text: '',
+    });
+
+    await expect(
+      runConversationalTurn(
+        'zap bob',
+        'conv_existing',
+        [payingTool],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(
+      /side-effect tool "noop_tool" must return a proposal \(\{ proposed: boolean \}\)/,
+    );
+  });
+
+  test('feeds a sideEffect proposal back to the model unchanged', async () => {
+    const proposal = { proposed: false, reason: 'Bob is ambiguous.' };
+    const proposingTool: ToolDefinition = {
+      name: 'noop_tool',
+      description: 'well-behaved side-effect tool',
+      parameters: { type: 'object', properties: {} },
+      sideEffect: true,
+      handler: async () => proposal,
+    };
+    mockResponsesCreate
+      .mockResolvedValueOnce({
+        output: [
+          {
+            type: 'function_call',
+            name: 'noop_tool',
+            call_id: 'call_q',
+            arguments: '{}',
+          },
+        ],
+        output_text: '',
+      })
+      .mockResolvedValueOnce({ output: [], output_text: 'Which Bob?' });
+
+    const result = await runConversationalTurn(
+      'zap bob',
+      'conv_existing',
+      [proposingTool],
+      makeTurnContext(),
+    );
+
+    expect(result.replyText).toBe('Which Bob?');
+    const secondCallArgs =
+      mockResponsesCreate.mock.calls[mockResponsesCreate.mock.calls.length - 1];
+    expect(secondCallArgs[0].input).toEqual([
+      {
+        type: 'function_call_output',
+        call_id: 'call_q',
+        output: JSON.stringify(proposal),
+      },
+    ]);
+  });
+
   test('throws instead of looping forever if the model never stops calling tools', async () => {
     mockResponsesCreate.mockReset();
     mockResponsesCreate.mockResolvedValue({
