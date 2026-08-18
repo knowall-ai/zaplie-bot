@@ -5,7 +5,7 @@ const Users: React.FC = () => {
   return (
     <div
       style={{
-        background: '#1F1F1F',
+        background: 'var(--surface-page)',
         marginTop: 20,
         marginBottom: 40,
       }}
