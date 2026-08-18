@@ -1,133 +1,263 @@
 .weekcomponent {
-  --week-accent: #84cc16;
-  --week-surface: #2d2b2c;
-  --week-border: #3b393a;
-  --week-shadow:
-    0px 1px 2px rgba(0, 0, 0, 0.14), 0px 0px 1px rgba(0, 0, 0, 0.12);
   width: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
   box-sizing: border-box;
-  color: #d6d6d6;
-  font-family: Inter, system-ui, sans-serif;
+  color: var(--text-body);
+  font-family: var(--font-family-base);
 }
+
+/* ---------- Page header (plain on the page surface, like other tabs) ---------- */
 
 .header {
-  max-width: 44rem;
-}
-
-.eyebrow {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: #9a9a9a;
-  font-size: 0.75rem;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .title {
   margin: 0;
-  color: #fff;
-  font-size: 1.5rem;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
   font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .subtitle {
-  max-width: 60ch;
-  margin: 0.5rem 0 0;
-  color: #9a9a9a;
-  font-size: 0.875rem;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
   line-height: 1.5;
 }
 
-.stats,
-.skeletonStats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
+/* ---------- Section cards (Figma pattern: flat raised card, bold title) ---------- */
 
-.stat {
+.card {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid var(--week-border);
-  border-radius: 4px;
-  background: var(--week-surface);
-  box-shadow: var(--week-shadow);
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow:
+    0px 1px 2px rgba(0, 0, 0, 0.14),
+    0px 0px 1px rgba(0, 0, 0, 0.12);
   box-sizing: border-box;
 }
 
-.statLabel {
-  color: #fff;
-  font-size: 0.875rem;
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
   font-weight: 700;
+  line-height: 1.3;
+}
+
+.count {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Recognition progress: one plain line in the card header ---------- */
+
+.progressInline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.progressText {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressTrack {
+  display: inline-block;
+  width: 96px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+/* ---------- Calendar band (consecutive day columns, normally 7) ---------- */
+
+.rangeLabel {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendarScroll {
+  min-width: 0;
+}
+
+.calendar {
+  display: grid;
+  /* One track per day; --cal-days is set inline (normally 7). */
+  grid-template-columns: repeat(var(--cal-days, 7), minmax(160px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 1024px) {
+  .calendar {
+    grid-template-columns: repeat(var(--cal-days, 7), minmax(0, 1fr));
+  }
+}
+
+.calDay {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+/* Vertical hairlines between day columns make it read as a grid. */
+.calDay + .calDay {
+  border-left: 1px solid var(--border);
+}
+
+/* Header row: weekday muted + prominent day number, hairline underneath
+   (each column draws its own segment; with no column gaps it reads as one
+   continuous line). */
+.calDayHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.calWeekday {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   line-height: 1.2;
 }
 
-.statNum {
-  color: var(--week-accent);
-  font-size: 2rem;
-  font-weight: 500;
+.calDayNum {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
-.statHint {
-  color: #9a9a9a;
-  font-size: 0.75rem;
-  line-height: 1.3;
+.calDayNumToday {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: var(--font-size-md);
 }
 
-.sectionHeader {
+.calDayEvents {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.sectionHeading {
+  min-height: 112px;
+  flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 700;
+  padding: var(--space-2);
+  list-style: none;
 }
 
-.count {
-  color: #9a9a9a;
-  font-size: 0.75rem;
+.meetingChip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  box-sizing: border-box;
+}
+
+.meetingTime {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.section {
+.meetingTitle {
+  color: var(--text-body);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.meetingMeta {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* ---------- People cards side by side on desktop ---------- */
+
+.peopleGrid {
   display: grid;
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--week-border);
-  border-radius: 4px;
-  background: var(--week-border);
-  box-shadow: var(--week-shadow);
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .peopleGrid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+}
+
+/* ---------- People rows (Figma table-row pattern) ---------- */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  min-height: 4rem;
-  padding: 0.75rem 1rem;
-  background: var(--week-surface);
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
   box-sizing: border-box;
 }
 
+.row:last-child {
+  border-bottom: 0;
+}
+
 .rowMedia {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-full);
   box-sizing: border-box;
 }
 
@@ -138,21 +268,11 @@
 .avatarFallback {
   display: grid;
   place-items: center;
-  background: #3b393a;
-  color: #fff;
-  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
   font-weight: 700;
-}
-
-.meetingIcon {
-  display: grid;
-  place-items: center;
-  background: #3b393a;
-}
-
-.glyph {
-  width: 1.1rem;
-  height: 1.1rem;
 }
 
 .inlineIcon {
@@ -167,48 +287,40 @@
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 2px;
 }
 
 .rowTitle {
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 600;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
   overflow-wrap: anywhere;
 }
 
 .rowMeta {
-  color: #9a9a9a;
-  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
-.zappedBadge {
-  color: var(--week-accent);
-  font-size: 0.75rem;
-  font-weight: 600;
+.rowState {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   white-space: nowrap;
 }
 
-.noAccountBadge {
-  color: #9a9a9a;
-  font-size: 0.75rem;
-  white-space: nowrap;
-}
+/* ---------- Buttons ---------- */
 
 .button {
   width: fit-content;
-  min-height: 2.75rem;
-  padding: 0.65rem 1rem;
-  border-radius: 4px;
+  min-height: 2rem;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   cursor: pointer;
-  transition:
-    transform 160ms ease,
-    background-color 160ms ease;
+  white-space: nowrap;
 }
 
 .button:active {
@@ -216,97 +328,64 @@
 }
 
 .button:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 3px;
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 
 .primaryButton {
   border: 0;
-  background: var(--week-accent);
-  color: #1f1f1f;
-  box-shadow: var(--week-shadow);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .primaryButton:hover {
-  background: #6ba513;
+  background: var(--accent-hover);
 }
 
 .secondaryButton {
-  border: 1px solid var(--week-border);
+  border: 1px solid var(--border);
   background: transparent;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .secondaryButton:hover {
-  background: #3b393a;
+  background: var(--surface-card);
 }
 
-.suggestionRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--week-border);
-  border-radius: 4px;
-  background: var(--week-surface);
-  box-shadow: var(--week-shadow);
-}
-
-.suggestionText {
-  min-width: 0;
-  color: #d6d6d6;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.stateCard {
-  display: flex;
-  max-width: 34rem;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border: 1px solid var(--week-border);
-  border-radius: 4px;
-  background: var(--week-surface);
-  box-shadow: var(--week-shadow);
-  box-sizing: border-box;
-}
-
-.stateTitle {
-  margin: 0;
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
+/* ---------- State / empty text ---------- */
 
 .stateText {
   max-width: 52ch;
   margin: 0;
-  color: #9a9a9a;
-  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
   line-height: 1.5;
 }
 
 .emptyText {
   margin: 0;
-  padding: 1.3rem 1rem;
-  background: var(--week-surface);
-  color: #9a9a9a;
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
   line-height: 1.5;
 }
 
 .summaryText {
   margin: 0;
-  color: #9a9a9a;
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
+/* ---------- Skeletons (two flat card shapes, no rails) ---------- */
+
+.skeletonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .shimmer {
-  background-color: var(--week-surface);
+  background-color: var(--surface-raised);
   background-image: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 25%,
@@ -317,23 +396,14 @@
   animation: shimmer 1.3s ease-in-out infinite;
 }
 
-.skeletonStat {
-  height: 7rem;
-  border: 1px solid var(--week-border);
-  border-radius: 4px;
-  box-sizing: border-box;
+.skeletonStripCard {
+  height: 13rem;
+  border-radius: var(--radius-sm);
 }
 
-.skeletonList {
-  display: grid;
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--week-border);
-  border-radius: 4px;
-}
-
-.skeletonRow {
-  height: 4rem;
+.skeletonListCard {
+  height: 16rem;
+  border-radius: var(--radius-sm);
 }
 
 .srOnly {
@@ -357,49 +427,55 @@
   }
 }
 
+/* ---------- Small screens (320-480px single column) ---------- */
+
 @media (max-width: 640px) {
-  .stats,
-  .skeletonStats {
-    gap: 0.5rem;
+  .card {
+    padding: var(--space-4);
   }
-  .stat {
-    padding: 0.75rem;
-  }
-  .statLabel {
-    font-size: 0.8rem;
-  }
-  .statNum {
-    font-size: 1.75rem;
+  .progressInline {
+    width: 100%;
+    margin-left: 0;
   }
   .row {
     align-items: flex-start;
     flex-wrap: wrap;
-    padding: 0.85rem;
   }
   .rowInfo {
-    min-width: calc(100% - 3.35rem);
+    min-width: calc(100% - 44px);
   }
   .row .button,
-  .row .zappedBadge,
-  .row .noAccountBadge {
-    margin-left: 3.35rem;
+  .row .rowState {
+    margin-left: 44px;
   }
-  .suggestionRow {
-    align-items: stretch;
-    flex-direction: column;
+
+  .calendar {
+    grid-template-columns: 1fr;
   }
-  .suggestionRow .button {
-    width: 100%;
+
+  .calDay {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
   }
-  .stateCard {
-    padding: 1.15rem;
+
+  .calDay + .calDay {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  .calDayHeader {
+    padding: 12px 8px;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+  }
+
+  .calDayEvents {
+    min-height: 0;
+    padding: 8px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .button {
-    transition: none;
-  }
   .shimmer {
     animation: none;
   }

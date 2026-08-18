@@ -35,8 +35,6 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
-// Per-event rule metadata for the list; the amounts themselves come from /api/reward-amounts
-// and the run counts from /api/automations-stats. Nothing here is a metric.
 const RULE_META: Record<
   string,
   {
@@ -180,7 +178,6 @@ const AutomationsComponent: FunctionComponent = () => {
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, instance]);
 
   const isAdmin = isZaplieAdmin(accounts[0]);
@@ -202,15 +199,13 @@ const AutomationsComponent: FunctionComponent = () => {
         setAppInstalled(connection.connected);
         setStats(statsData);
         setWebhookKeys(keys);
-      } catch (err) {
-        console.error('Error fetching connections state:', err);
+      } catch {
         toast.error('Could not load connection status.');
       } finally {
         setStatsLoading(false);
       }
     };
     loadConnections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, accounts, instance]);
 
   const handleCreateKey = async () => {
@@ -226,8 +221,7 @@ const AutomationsComponent: FunctionComponent = () => {
       setCreatedKey(created.key);
       setNewKeyLabel('');
       setWebhookKeys(await getWebhookKeys(idToken));
-    } catch (err) {
-      console.error('Error creating webhook key:', err);
+    } catch {
       toast.error('Could not create the API key.');
     } finally {
       setCreatingKey(false);
@@ -240,8 +234,7 @@ const AutomationsComponent: FunctionComponent = () => {
       await revokeWebhookKey(idToken, id);
       setWebhookKeys(await getWebhookKeys(idToken));
       toast.success('Key revoked. Flows using it stop working immediately.');
-    } catch (err) {
-      console.error('Error revoking webhook key:', err);
+    } catch {
       toast.error('Could not revoke the API key.');
     }
   };
@@ -291,8 +284,7 @@ const AutomationsComponent: FunctionComponent = () => {
       });
       const installUrl = await getGithubInstallUrl(tokenResponse.idToken);
       window.location.href = installUrl;
-    } catch (err) {
-      console.error('Error starting repository install:', err);
+    } catch {
       toast.error('Could not start the GitHub App install.');
       setInstalling(false);
     }
@@ -311,7 +303,6 @@ const AutomationsComponent: FunctionComponent = () => {
     }
     try {
       const idToken = await acquireIdToken(instance, accounts[0]);
-      // `amounts` only changes on a successful save, so another card's unsaved edit can't bleed in here.
       const data = await updateRewardAmounts(idToken, {
         ...amounts,
         [key]: nextAmount,
@@ -483,7 +474,7 @@ const AutomationsComponent: FunctionComponent = () => {
         <div className={styles.step}>
           <span className={styles.stepNum}>1</span>
           <span className={styles.stepText}>
-            Connect GitHub and deploy the pull-request sample flow.
+            Connect GitHub and deploy the pull-request reward flow.
           </span>
         </div>
         <div className={styles.step}>
@@ -604,7 +595,7 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
           </div>
           <p className={styles.connDescription}>
-            Create a key for the GitHub pull-request sample flow. Production use
+            Create a key for the GitHub pull-request reward flow. Production use
             remains blocked until durable idempotency and aggregate budget
             controls land.
           </p>
