@@ -28,6 +28,7 @@ import {
   ConnectCalendarCommand,
   getStoredGraphToken,
 } from './commands/connectCalendarCommand';
+import { GENERIC_ERROR_MESSAGE, UserFacingError } from './messages';
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createReadOnlyTools } from './commands/agentTools';
 import { getUser, getWalletBalance } from './services/lnbitsService';
@@ -141,7 +142,7 @@ export class TeamsBot extends TeamsActivityHandler {
 
           const sendingWallet = currentUser?.allowanceWallet;
           if (!currentUser || (!currentUser.id && !currentUser.aadObjectId)) {
-            throw new Error(
+            throw new UserFacingError(
               'Could not verify your sender identity, so no zaps were sent.',
             );
           }
@@ -154,13 +155,15 @@ export class TeamsBot extends TeamsActivityHandler {
           }
 
           if (receiverIds.length === 0) {
-            throw new Error(
+            throw new UserFacingError(
               'No valid recipients were selected, so no zaps were sent.',
             );
           }
 
           if (currentUser.id && receiverIds.includes(currentUser.id)) {
-            throw new Error('You cannot zap yourself, so no zaps were sent.');
+            throw new UserFacingError(
+              'You cannot zap yourself, so no zaps were sent.',
+            );
           }
 
           const pendingReceiverIds = getPendingRecipientIds(
@@ -332,8 +335,12 @@ export class TeamsBot extends TeamsActivityHandler {
           }
         }
       } catch (error) {
-        console.error('Error in onMessage handler:', error.message);
-        await context.sendActivity(`${error.message}`);
+        console.error('Error in onMessage handler:', error);
+        await context.sendActivity(
+          error instanceof UserFacingError
+            ? `D'oh! ${error.message}`
+            : GENERIC_ERROR_MESSAGE,
+        );
       }
 
       await next();
@@ -349,7 +356,7 @@ export class TeamsBot extends TeamsActivityHandler {
       await this.userState.saveChanges(context, false);
     } catch (error) {
       console.error('Error in run method:', error);
-      await context.sendActivity(error);
+      await context.sendActivity(GENERIC_ERROR_MESSAGE);
     }
   }
 

@@ -7,6 +7,7 @@ import {
   getWalletBalance,
 } from '../services/lnbitsService';
 import { UserService } from '../services/userService';
+import { GENERIC_ERROR_MESSAGE } from '../messages';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -31,9 +32,10 @@ export class SendZapCommand extends SSOCommand {
       await context.sendActivity(message);
       console.log('sendActivity completed.');
     } catch (error) {
-      await context.sendActivity(
-        'Oops! Something went wrong (' + error.message + ')',
-      );
+      // The details belong in the logs: an LNbits error message can carry
+      // wallet ids or configuration names into the chat.
+      console.error('SendZapCommand failed:', error);
+      await context.sendActivity(GENERIC_ERROR_MESSAGE);
     }
   }
 }
