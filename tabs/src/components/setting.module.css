@@ -58,6 +58,12 @@
   gap: var(--space-2);
 }
 
+/* Character count on the left, the admin's button on the right. */
+.textAreaFooter {
+  composes: inputRow;
+  justify-content: space-between;
+}
+
 .textBox {
   flex: 1 1 220px;
   min-width: 0;
@@ -87,6 +93,17 @@
 .textBox:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* Same surface as .textBox, sized for a paragraph and resizable vertically
+   only, so a long persona never widens the card. */
+.textArea {
+  composes: textBox;
+  width: 100%;
+  flex: none;
+  min-height: 108px;
+  resize: vertical;
+  line-height: 1.5;
 }
 
 .primaryButton,
@@ -144,6 +161,12 @@
   border-radius: var(--radius-sm);
   background-color: var(--border);
   animation: settingPulse 1.4s ease-in-out infinite;
+}
+
+.textAreaSkeleton {
+  composes: inputSkeleton;
+  max-width: none;
+  height: 108px;
 }
 
 .errorText {

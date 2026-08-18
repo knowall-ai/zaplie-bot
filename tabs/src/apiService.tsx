@@ -89,6 +89,54 @@ const parseAutomationsResponse = (data: unknown): AutomationsResponse => {
   return { repos };
 };
 
+export interface BotPersonaResponse {
+  botPersona: string;
+}
+
+// Kept in step with backend/botPersona.js: the editor stops the admin at the
+// limit, the backend is what actually enforces it.
+export const MAX_BOT_PERSONA_LENGTH = 2000;
+
+const parseBotPersonaResponse = (data: unknown): BotPersonaResponse => {
+  if (!data || typeof data !== 'object') {
+    throw new Error('The assistant persona response was invalid.');
+  }
+
+  const botPersona = (data as { botPersona?: unknown }).botPersona;
+  // An empty persona is the normal "built-in voice" state, so only the type
+  // matters here.
+  if (typeof botPersona !== 'string') {
+    throw new Error('The assistant persona response was invalid.');
+  }
+
+  return { botPersona };
+};
+
+export const getBotPersona = async (
+  idToken: string,
+): Promise<BotPersonaResponse> => {
+  const response = await axios.get(`${API_URL}/bot-persona`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  return parseBotPersonaResponse(response.data);
+};
+
+export const updateBotPersona = async (
+  idToken: string,
+  botPersona: string,
+): Promise<BotPersonaResponse> => {
+  const response = await axios.post(
+    `${API_URL}/bot-persona`,
+    { botPersona: botPersona.trim() },
+    {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+    },
+  );
+  return parseBotPersonaResponse(response.data);
+};
+
 export const getRewardAmounts = async (
   idToken: string,
 ): Promise<RewardAmountsResponse> => {
