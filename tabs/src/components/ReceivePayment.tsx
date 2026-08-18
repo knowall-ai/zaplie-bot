@@ -66,9 +66,7 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
                   window.clearInterval(intervalId.current);
                 }
 
-                console.log(
-                  'Update the wallet balance in the context balance',
-                );
+                console.log('Update the wallet balance in the context balance');
                 // Update the wallet balance in the context balance
                 getWalletBalance(walletId).then(balance => {
                   console.log('getWalletBalance:', balance);
