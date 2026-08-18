@@ -1,65 +1,100 @@
-import { getAllPayments } from '../services/lnbitsServiceLocal';
+import {
+  getAllPayments,
+  getUsers,
+  getUserWallets,
+} from '../services/lnbitsServiceLocal';
 
-//import { Wallet, ZapTransaction } from 'path-to-types';
+export interface ZapTransfer {
+  transaction: Transaction;
+  from: User;
+  to: User;
+}
 
-export const fetchAllowanceWalletTransactions = async (): Promise<
-  Transaction[]
-> => {
-  console.log('=== fetchAllowanceWalletTransactions DEBUG ===');
-  console.log(
-    'Using getAllPayments endpoint to fetch ALL payments from ALL users',
-  );
+export interface ZapActivity {
+  users: User[];
+  transfers: ZapTransfer[];
+}
 
-  try {
-    // Fetch ALL payments from ALL users using the new endpoint
-    const allPayments = await getAllPayments(10000); // Get up to 10000 payments
+export const pairId = (payment: Transaction) =>
+  payment.checking_id?.replace(/^internal_/, '') || '';
 
-    console.log('Total Payments Retrieved: ', allPayments.length);
-
-    // Filter to only exclude system transactions like "Weekly Allowance cleared"
-    // Don't filter by extra.tag since that field doesn't exist in the payment data
-    const zapTransactions = allPayments.filter(
-      payment => !payment.memo?.includes('Weekly Allowance cleared'),
-    );
-
-    console.log('Zap Transactions (filtered): ', zapTransactions.length);
-    console.log('Sample transaction:', zapTransactions[0]);
-    console.log('==============================================');
-
-    return zapTransactions;
-  } catch (error) {
-    console.error('Error fetching all payments:', error);
-    console.log('==============================================');
-    throw error;
-  }
+const walletType = (wallet: Wallet): 'allowance' | 'private' | null => {
+  const name = wallet.name.trim().toLowerCase();
+  if (name === 'allowance') return 'allowance';
+  if (name === 'private') return 'private';
+  return null;
 };
 
-export function getUserName(wallet: Wallet | null): string {
-  let userName = null;
-  try {
-    if (!wallet) {
-      return 'Unknown';
-    }
+export const transactionTime = (transaction: Transaction): number => {
+  const seconds =
+    typeof transaction.time === 'number'
+      ? transaction.time
+      : Date.parse(transaction.time) / 1000;
+  return Number.isFinite(seconds) ? seconds : Number.NEGATIVE_INFINITY;
+};
 
-    if (!wallet.name) {
-      return 'Unknown';
-    }
+export const fetchZapActivity = async (): Promise<ZapActivity> => {
+  const users = await getUsers();
+  const walletsByUser = await Promise.all(
+    users.map(async user => ({ user, wallets: await getUserWallets(user.id) })),
+  );
+  const walletOwners = new Map<string, User>();
+  const allowanceWalletIds = new Set<string>();
+  const privateWalletIds = new Set<string>();
 
-    if (wallet.name.includes(' - ')) {
-      userName = wallet.name.split(' - ')[0];
-      return userName;
-    } else {
-      return 'Unknown';
-    }
-  } catch (e) {
-    return 'Unknown';
-  }
-}
+  walletsByUser.forEach(({ user, wallets }) => {
+    wallets.forEach(wallet => {
+      const existingOwner = walletOwners.get(wallet.id);
+      if (existingOwner && existingOwner.id !== user.id) {
+        throw new Error(`Wallet ${wallet.id} has conflicting owners.`);
+      }
 
-export function getAadObjectId(wallet: Wallet): string {
-  throw new Error('Not yet implemented.');
-}
+      walletOwners.set(wallet.id, user);
+      const type = walletType(wallet);
+      if (type === 'allowance') allowanceWalletIds.add(wallet.id);
+      if (type === 'private') privateWalletIds.add(wallet.id);
+    });
+  });
 
-export function getWalletType(wallet: Wallet): string {
-  throw new Error('Not yet implemented.');
-}
+  const payments = await getAllPayments(10_000);
+  const paymentsByPair = new Map<string, Transaction[]>();
+  payments.forEach(payment => {
+    const id = pairId(payment);
+    if (!id) return;
+    const matches = paymentsByPair.get(id) ?? [];
+    matches.push(payment);
+    paymentsByPair.set(id, matches);
+  });
+
+  const transfers = Array.from(paymentsByPair.values()).flatMap<ZapTransfer>(
+    pairedPayments => {
+      if (pairedPayments.length !== 2) return [];
+
+      const outgoing = pairedPayments.filter(
+        payment =>
+          payment.amount < 0 && allowanceWalletIds.has(payment.wallet_id),
+      );
+      const incoming = pairedPayments.filter(
+        payment =>
+          payment.amount > 0 && privateWalletIds.has(payment.wallet_id),
+      );
+      if (outgoing.length !== 1 || incoming.length !== 1) return [];
+      if (Math.abs(outgoing[0].amount) !== incoming[0].amount) return [];
+
+      const from = walletOwners.get(outgoing[0].wallet_id);
+      const to = walletOwners.get(incoming[0].wallet_id);
+      if (!from || !to || from.id === to.id) return [];
+
+      return [{ transaction: outgoing[0], from, to }];
+    },
+  );
+
+  transfers.sort(
+    (left, right) =>
+      transactionTime(right.transaction) - transactionTime(left.transaction),
+  );
+  return { users, transfers };
+};
+
+export const fetchAllowanceWalletTransactions = async () =>
+  (await fetchZapActivity()).transfers.map(transfer => transfer.transaction);
