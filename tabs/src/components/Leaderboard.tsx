@@ -50,8 +50,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
         // Fetch all transactions using the same method as Feed
         console.log('[Leaderboard] Fetching all transactions...');
-        const allTransactions =
-          await fetchAllowanceWalletTransactions();
+        const allTransactions = await fetchAllowanceWalletTransactions();
         console.log(
           `[Leaderboard] Found ${allTransactions.length} total transactions`,
         );
