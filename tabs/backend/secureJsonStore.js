@@ -3,8 +3,10 @@
 // temporary file and renaming it over the target applies the mode for real and
 // makes the replacement atomic, so a crash mid-write cannot truncate the store.
 const fs = require('fs');
+const path = require('path');
 
 const writeJsonSecure = (filePath, data) => {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   const tempPath = `${filePath}.${process.pid}.tmp`;
   try {
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 });

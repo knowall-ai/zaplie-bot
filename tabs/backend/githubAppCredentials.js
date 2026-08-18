@@ -2,10 +2,10 @@
 // Credentials issued by the GitHub App manifest conversion. Stored server-side
 // only, and read exclusively from this file: there is no env var fallback.
 const fs = require('fs');
-const path = require('path');
+const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = path.join(__dirname, 'github-app-credentials.json');
+const STORE_PATH = dataPath('github-app-credentials.json');
 
 const getCredentials = () => {
   if (!fs.existsSync(STORE_PATH)) {

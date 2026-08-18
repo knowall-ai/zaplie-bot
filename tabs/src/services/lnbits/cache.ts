@@ -10,17 +10,8 @@ export interface CacheEntry<T> {
   timestamp: number;
 }
 
-// Shape returned by the LNbits users API, before getUsers maps it to User.
-export interface RawApiUser {
-  id: string;
-  username?: string;
-  email?: string;
-  external_id?: string;
-  extra?: Record<string, unknown> | string;
-}
-
 export const apiCache: {
-  rawUsers?: CacheEntry<RawApiUser[]>;
+  users?: CacheEntry<User[]>;
   userWallets: Map<string, CacheEntry<Wallet[]>>;
 } = {
   userWallets: new Map(),
@@ -37,15 +28,15 @@ export const isCacheValid = <T>(
 // Held on a shared object so the owning modules can reassign these without
 // splitting the single registry the in-flight deduplication depends on.
 export const pendingRequests: {
-  users: Promise<RawApiUser[]> | null;
-  userWallets: Map<string, Promise<Wallet[] | null>>;
+  users: Promise<User[]> | null;
+  userWallets: Map<string, Promise<Wallet[]>>;
 } = {
   users: null,
   userWallets: new Map(),
 };
 
 export const clearApiCache = () => {
-  apiCache.rawUsers = undefined;
+  apiCache.users = undefined;
   apiCache.userWallets.clear();
   pendingRequests.users = null;
   pendingRequests.userWallets.clear();

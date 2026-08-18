@@ -2,10 +2,10 @@
 // Maps a Zaplie person (Entra oid) to the GitHub App installation they created
 // when selecting repositories. Gitignored — see connections.json.
 const fs = require('fs');
-const path = require('path');
+const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = path.join(__dirname, 'connections.json');
+const STORE_PATH = dataPath('connections.json');
 
 const readStore = () => {
   try {

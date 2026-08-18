@@ -3,11 +3,11 @@
 // deployments keep their values), otherwise the secret is generated once and
 // persisted server-side. The store swaps to Key Vault in Azure (phase 2).
 const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
+const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = path.join(__dirname, 'secrets.json');
+const STORE_PATH = dataPath('secrets.json');
 
 const readStore = () => {
   if (!fs.existsSync(STORE_PATH)) {

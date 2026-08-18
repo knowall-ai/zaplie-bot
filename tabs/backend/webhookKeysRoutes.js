@@ -4,15 +4,15 @@
 // at creation; the bot validates presented keys against the active hashes.
 const express = require('express');
 const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 const { requireAdmin } = require('./adminAuth');
 const authMiddleware = require('./authMiddleware');
+const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
 const router = express.Router();
 
-const STORE_PATH = path.join(__dirname, 'webhook-keys.json');
+const STORE_PATH = dataPath('webhook-keys.json');
 
 const readStore = () => {
   let raw;

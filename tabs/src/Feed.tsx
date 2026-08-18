@@ -17,8 +17,6 @@ const Home: React.FC = () => {
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
 
-  const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
-
   useEffect(() => {
     const fetchZaps = async () => {
       setLoading(true);
@@ -26,7 +24,7 @@ const Home: React.FC = () => {
 
       try {
         if (!cache['allUsers']) {
-          const allUsers = await getUsers(adminKey, {});
+          const allUsers = await getUsers({});
           console.log('allUsers', allUsers);
           if (allUsers) {
             setCache('allUsers', allUsers);
@@ -47,7 +45,7 @@ const Home: React.FC = () => {
       // Load zaps and set in cache.
       try {
         if (!cache['allZaps']) {
-          const allZaps = await fetchAllowanceWalletTransactions(adminKey);
+          const allZaps = await fetchAllowanceWalletTransactions();
           console.log('allZaps', allZaps);
           setCache('allZaps', allZaps);
           setZaps(allZaps);
@@ -66,7 +64,7 @@ const Home: React.FC = () => {
 
     fetchZaps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminKey]); // cache and setCache are from context and are stable, intentionally excluded
+  }, []); // cache and setCache are from context and are stable, intentionally excluded
 
   return (
     <div

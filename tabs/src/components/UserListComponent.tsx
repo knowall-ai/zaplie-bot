@@ -11,8 +11,6 @@ import { getUserWallets } from '../services/lnbits/wallets';
 import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
 
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
-
 const UserListComponent: FunctionComponent = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +35,7 @@ const UserListComponent: FunctionComponent = () => {
       const usersWithWallets = await Promise.all(
         allUsers.map(async user => {
           try {
-            const wallets = await getUserWallets(adminKey, user.id);
+            const wallets = await getUserWallets(user.id);
 
             if (wallets && wallets.length > 0) {
               const privateWallet = wallets.find(w =>

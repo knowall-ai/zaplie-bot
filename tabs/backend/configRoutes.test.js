@@ -98,6 +98,10 @@ const post = (route, auth, body) => call('POST', route, auth, body);
 
 const PROTECTED_READS = ['/api/automations', '/api/reward-amounts'];
 
+test('healthz provides an anonymous liveness signal for deployment smoke tests', async () => {
+  assert.equal((await get('/healthz')).status, 200);
+});
+
 test('reward-name is readable without credentials, since the portal reads it before sign-in', async () => {
   const response = await get('/api/reward-name');
   assert.equal(response.status, 200);

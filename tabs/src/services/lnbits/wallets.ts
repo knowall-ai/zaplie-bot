@@ -1,5 +1,4 @@
 import { logger } from '../../utils/logger';
-import { getAccessToken } from './auth';
 import {
   apiCache,
   isCacheValid,
@@ -7,102 +6,35 @@ import {
   CACHE_DURATION_WALLETS_MS,
   MAX_WALLET_CACHE_SIZE,
 } from './cache';
-import { nodeUrl, password, userName } from './config';
+import { apiRequest } from './gateway';
 
 const getWallets = async (
   filterByName?: string,
   filterById?: string,
-): Promise<Wallet[] | null> => {
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-    const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+): Promise<Wallet[]> => {
+  let wallets = await apiRequest<Wallet[]>('/wallets');
 
-    if (!response.ok) {
-      throw new Error(
-        `Error getting wallets response (status: ${response.status})`,
-      );
-    }
-
-    const data: Wallet[] = (await response.json()) as Wallet[];
-
-    // If filter is provided, filter the wallets by name and/or id
-    let filteredData = data;
-    if (filterByName) {
-      filteredData = filteredData.filter(wallet =>
-        wallet.name.includes(filterByName),
-      );
-    }
-    if (filterById) {
-      filteredData = filteredData.filter(wallet => wallet.id === filterById);
-    }
-
-    return filteredData;
-  } catch (error) {
-    logger.error(error);
-    throw error;
+  if (filterByName) {
+    wallets = wallets.filter(wallet => wallet.name.includes(filterByName));
   }
+  if (filterById) {
+    wallets = wallets.filter(wallet => wallet.id === filterById);
+  }
+
+  return wallets;
 };
 
-const getWalletDetails = async (inKey: string, walletId: string) => {
-  try {
-    const response = await fetch(`${nodeUrl}/api/v1/wallets/${walletId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': inKey,
-      },
-    });
+const getWalletDetails = async (walletId: string): Promise<Wallet> =>
+  apiRequest<Wallet>(`/wallets/${encodeURIComponent(walletId)}`);
 
-    if (!response.ok) {
-      throw new Error(
-        `Error getting wallet details (status: ${response.status})`,
-      );
-    }
-
-    const data = await response.json();
-
-    return data;
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
+const getWalletBalance = async (walletId: string): Promise<number> => {
+  const result = await apiRequest<{ balance: number }>(
+    `/wallets/${encodeURIComponent(walletId)}/balance`,
+  );
+  return result.balance;
 };
 
-const getWalletBalance = async (inKey: string) => {
-  try {
-    const response = await fetch(`${nodeUrl}/api/v1/wallet`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': inKey,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting wallet balance (status: ${response.status})`,
-      );
-    }
-
-    const data = await response.json();
-
-    return data.balance / 1000; // return in Sats (not millisatoshis)
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
-};
-
-const getUserWallets = async (
-  adminKey: string,
-  userId: string,
-): Promise<Wallet[] | null> => {
+const getUserWallets = async (userId: string): Promise<Wallet[]> => {
   const cachedEntry = apiCache.userWallets.get(userId);
   if (isCacheValid(cachedEntry, CACHE_DURATION_WALLETS_MS)) {
     logger.debug(`[Cache HIT] getUserWallets for user ${userId}`);
@@ -117,42 +49,10 @@ const getUserWallets = async (
     return pendingRequest;
   }
 
-  const requestPromise = (async (): Promise<Wallet[] | null> => {
+  const requestPromise = (async (): Promise<Wallet[]> => {
     try {
-      const accessToken = await getAccessToken(`${userName}`, `${password}`);
-      const response = await fetch(
-        `${nodeUrl}/users/api/v1/user/${userId}/wallet`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Error getting users wallets response (status: ${response.status})`,
-        );
-      }
-
-      const data: Wallet[] = await response.json();
-
-      const walletData: Wallet[] = data.map(wallet => ({
-        id: wallet.id,
-        admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-        name: wallet.name,
-        adminkey: wallet.adminkey,
-        user: wallet.user,
-        inkey: wallet.inkey,
-        balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-        deleted: wallet.deleted,
-      }));
-
-      // Now remove the deleted wallets.
-      const filteredWallets = walletData.filter(
-        wallet => wallet.deleted !== true,
+      const wallets = await apiRequest<Wallet[]>(
+        `/users/${encodeURIComponent(userId)}/wallets`,
       );
 
       // Limit cache size to prevent unbounded memory growth
@@ -164,14 +64,11 @@ const getUserWallets = async (
       }
 
       apiCache.userWallets.set(userId, {
-        data: filteredWallets,
+        data: wallets,
         timestamp: Date.now(),
       });
 
-      return filteredWallets;
-    } catch (error) {
-      logger.error('Error fetching user wallets:', error);
-      throw error;
+      return wallets;
     } finally {
       pendingRequests.userWallets.delete(userId);
     }
@@ -181,252 +78,27 @@ const getUserWallets = async (
   return requestPromise;
 };
 
-const getWalletName = async (inKey: string) => {
-  try {
-    const response = await fetch(`${nodeUrl}/api/v1/wallet`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': inKey,
-      },
-    });
+const getWalletName = async (walletId: string): Promise<string> =>
+  (await getWalletDetails(walletId)).name;
 
-    if (!response.ok) {
-      throw new Error(`Error getting wallet name (status: ${response.status})`);
-    }
+const getWalletPayLinks = async (walletId: string) =>
+  apiRequest<unknown>(`/wallets/${encodeURIComponent(walletId)}/paylinks`);
 
-    const data = await response.json();
+// Wallets are addressed by id everywhere now that the invoice key never
+// reaches the browser; the indirection is kept so callers need no change.
+const getWalletId = async (walletId: string) => walletId;
 
-    return data.name;
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
-};
+const getAllWallets = async (): Promise<Wallet[]> => getWallets();
 
-const getWalletPayLinks = async (inKey: string, walletId: string) => {
-  try {
-    const response = await fetch(
-      `${nodeUrl}/lnurlp/api/v1/links?all_wallets=false&wallet=${walletId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': inKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      logger.error(
-        `Error getting paylinks for wallet (status: ${response.status})`,
-      );
-      return null;
-    }
-
-    const data = await response.json();
-
-    return data;
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
-};
-
-// May need fixing!
-const getWalletId = async (inKey: string) => {
-  try {
-    const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': inKey,
-      },
-    });
-
-    if (!response.ok) {
-      logger.error(`Error getting wallet ID (status: ${response.status})`);
-      return null;
-    }
-
-    const data: Wallet[] = await response.json();
-
-    const wallet = data.find(candidate => candidate.inkey === inKey);
-
-    if (!wallet) {
-      logger.error('No wallet found for this inKey.');
-      return null;
-    }
-
-    return wallet.id;
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
-};
-
-const getAllWallets = async (lnKey: string) => {
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-
-    const response = await fetch(`${nodeUrl}/api/v1/wallets`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      logger.error('Response status:', response.status);
-      logger.error('Response statusText:', response.statusText);
-      throw new Error(`Error getting wallets (status: ${response.status})`);
-    }
-
-    const data: Wallet[] = await response.json();
-
-    logger.debug('All Wallets returned:', data.length);
-    logger.debug('All Wallets: ', data);
-
-    const walletData: Wallet[] = data.map(wallet => ({
-      id: wallet.id,
-      admin: wallet.admin || '', // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-      name: wallet.name,
-      adminkey: wallet.adminkey,
-      user: wallet.user,
-      inkey: wallet.inkey,
-      balance_msat: wallet.balance_msat, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
-      deleted: wallet.deleted,
-    }));
-
-    // Now remove the deleted wallets.
-    const filteredWallets = walletData.filter(
-      wallet => wallet.deleted !== true,
-    );
-
-    logger.debug('Filtered wallets count:', filteredWallets.length);
-    return filteredWallets;
-  } catch (error) {
-    logger.error('Error in getAllWallets:', error);
-    throw error;
-  }
-};
-
-const createWallet = async (
-  apiKey: string,
-  objectID: string,
-  displayName: string,
-) => {
-  try {
-    const url = `${nodeUrl}/api/v1/wallet`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'X-API-KEY': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: `${displayName}`,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error creating wallet (${response.statusText})`);
-    }
-
-    const data = await response.json();
-
-    return data;
-  } catch (error) {
-    logger.error(error);
-    throw error;
-  }
-};
-
-// TODO: This method needs checking!
-const getWalletIdByUserId = async (adminKey: string, userId: string) => {
-  try {
-    const response = await fetch(
-      `${nodeUrl}/api/v1/wallets?user_id=${userId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': adminKey,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting wallet ID from the user ID (status: ${response.status})`,
-      );
-    }
-
-    const data = await response.json();
-
-    return data.id;
-  } catch (error) {
-    logger.error(error);
-    return null;
-  }
-};
+const getWalletIdByUserId = async (userId: string): Promise<string | null> =>
+  (await getUserWallets(userId))[0]?.id || null;
 
 const getWalletsPaginated = async (
   userId: string,
   limit: number = 100,
   offset: number = 0,
-): Promise<Wallet[]> => {
-  try {
-    const accessToken = await getAccessToken(`${userName}`, `${password}`);
-
-    const url = new URL(`${nodeUrl}/api/v1/wallet/paginated`);
-    url.searchParams.append('limit', limit.toString());
-    url.searchParams.append('offset', offset.toString());
-    url.searchParams.append('user_id', userId);
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Error getting wallets for user ${userId} (status: ${response.status} ${response.statusText})`,
-      );
-    }
-
-    const responseData = await response.json();
-
-    // The endpoint answers {data: [...], total: X}.
-    const wallets = responseData?.data;
-    if (!Array.isArray(wallets)) {
-      throw new Error(
-        `Unexpected payload from ${url.pathname}: ${JSON.stringify(responseData)}`,
-      );
-    }
-
-    const walletData: Wallet[] = wallets.map((wallet: Wallet) => ({
-      id: wallet.id,
-      admin: wallet.admin || '',
-      name: wallet.name,
-      user: wallet.user,
-      adminkey: wallet.adminkey,
-      inkey: wallet.inkey,
-      balance_msat: wallet.balance_msat,
-      deleted: wallet.deleted || false,
-    }));
-
-    return walletData.filter(wallet => wallet.deleted !== true);
-  } catch (error) {
-    logger.error(`Error in getWalletsPaginated for user ${userId}:`, error);
-    throw error;
-  }
-};
+): Promise<Wallet[]> =>
+  (await getUserWallets(userId)).slice(offset, offset + limit);
 
 export {
   getWallets,
@@ -437,7 +109,6 @@ export {
   getWalletPayLinks,
   getWalletId,
   getAllWallets,
-  createWallet,
   getWalletIdByUserId,
   getWalletsPaginated,
 };

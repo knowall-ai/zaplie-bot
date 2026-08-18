@@ -1,192 +1,147 @@
-import {
-  errorResponse,
-  installFetchMock,
-  jsonResponse,
-} from '../../testUtils/fetchMock';
 import { apiCache, clearApiCache, MAX_WALLET_CACHE_SIZE } from './cache';
+import { apiRequest } from './gateway';
 import {
   getUserWallets,
   getWalletBalance,
+  getWalletDetails,
+  getWalletIdByUserId,
+  getWalletName,
   getWallets,
   getWalletsPaginated,
 } from './wallets';
 
-jest.mock('./auth', () => ({
-  getAccessToken: jest.fn(async () => 'test-token'),
+jest.mock('./gateway', () => ({
+  apiRequest: jest.fn(),
 }));
 
-const rawWallet = (id: string, name: string, deleted = false) => ({
+const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>;
+
+const wallet = (id: string, name = `${id} - Private`): Wallet => ({
   id,
   name,
   user: 'user-1',
-  adminkey: 'admin-key',
-  inkey: 'in-key',
-  balance_msat: 1000,
-  deleted,
+  balance_msat: 0,
+  deleted: false,
 });
 
 describe('lnbits wallets', () => {
-  let mockFetch: jest.MockedFunction<typeof fetch>;
-
   beforeEach(() => {
-    mockFetch = installFetchMock();
+    mockApiRequest.mockReset();
     clearApiCache();
   });
 
   describe('getWallets', () => {
-    test('returns every wallet when no filter is given', async () => {
-      mockFetch.mockResolvedValueOnce(
-        jsonResponse([rawWallet('w1', 'Alice - Private')]),
+    test('reads the gateway wallet list', async () => {
+      mockApiRequest.mockResolvedValueOnce([wallet('w1')]);
+
+      await expect(getWallets()).resolves.toEqual([wallet('w1')]);
+      expect(mockApiRequest).toHaveBeenCalledWith('/wallets');
+    });
+
+    test('filters by name and id', async () => {
+      mockApiRequest.mockResolvedValue([
+        wallet('w1', 'Alice - Private'),
+        wallet('w2', 'Alice - Allowance'),
+      ]);
+
+      await expect(getWallets('Allowance')).resolves.toHaveLength(1);
+      await expect(getWallets(undefined, 'w1')).resolves.toHaveLength(1);
+    });
+  });
+
+  describe('getWalletDetails and getWalletName', () => {
+    test('address the wallet by id', async () => {
+      mockApiRequest.mockResolvedValue(wallet('w1', 'Alice - Private'));
+
+      await expect(getWalletDetails('w1')).resolves.toEqual(
+        wallet('w1', 'Alice - Private'),
       );
-
-      await expect(getWallets()).resolves.toHaveLength(1);
-    });
-
-    test('filters by name fragment and by exact id', async () => {
-      const wallets = [
-        rawWallet('w1', 'Alice - Private'),
-        rawWallet('w2', 'Alice - Allowance'),
-        rawWallet('w3', 'Bob - Private'),
-      ];
-      mockFetch.mockResolvedValueOnce(jsonResponse(wallets));
-
-      await expect(getWallets('Private')).resolves.toHaveLength(2);
-
-      mockFetch.mockResolvedValueOnce(jsonResponse(wallets));
-      const byId = await getWallets(undefined, 'w2');
-      expect(byId?.map(w => w.id)).toEqual(['w2']);
-    });
-
-    test('throws when the wallets endpoint fails', async () => {
-      mockFetch.mockResolvedValueOnce(errorResponse(503));
-
-      await expect(getWallets()).rejects.toThrow('status: 503');
+      await expect(getWalletName('w1')).resolves.toBe('Alice - Private');
+      expect(mockApiRequest).toHaveBeenCalledWith('/wallets/w1');
     });
   });
 
   describe('getWalletBalance', () => {
-    test('converts millisatoshis to sats', async () => {
-      mockFetch.mockResolvedValueOnce(jsonResponse({ balance: 21000 }));
+    test('returns the balance the gateway reports', async () => {
+      mockApiRequest.mockResolvedValueOnce({ balance: 21 });
 
-      await expect(getWalletBalance('in-key')).resolves.toBe(21);
-    });
-
-    test('throws when the wallet endpoint fails', async () => {
-      mockFetch.mockResolvedValueOnce(errorResponse(404, 'Not Found'));
-
-      await expect(getWalletBalance('in-key')).rejects.toThrow('status: 404');
+      await expect(getWalletBalance('w1')).resolves.toBe(21);
+      expect(mockApiRequest).toHaveBeenCalledWith('/wallets/w1/balance');
     });
   });
 
   describe('getUserWallets', () => {
-    test('drops deleted wallets and caches the result', async () => {
-      mockFetch.mockResolvedValueOnce(
-        jsonResponse([
-          rawWallet('w1', 'Alice - Private'),
-          rawWallet('w2', 'Alice - Old', true),
-        ]),
-      );
+    test('fetches once and serves the second call from cache', async () => {
+      mockApiRequest.mockResolvedValue([wallet('w1')]);
 
-      const first = await getUserWallets('admin-key', 'user-1');
-      const second = await getUserWallets('admin-key', 'user-1');
+      await getUserWallets('user-1');
+      await getUserWallets('user-1');
 
-      expect(first?.map(w => w.id)).toEqual(['w1']);
-      expect(second).toEqual(first);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockApiRequest).toHaveBeenCalledTimes(1);
+      expect(mockApiRequest).toHaveBeenCalledWith('/users/user-1/wallets');
     });
 
-    test('reuses an in-flight request for the same user', async () => {
-      mockFetch.mockResolvedValueOnce(
-        jsonResponse([rawWallet('w1', 'Alice - Private')]),
-      );
+    test('de-duplicates concurrent requests for the same user', async () => {
+      mockApiRequest.mockResolvedValue([wallet('w1')]);
 
-      const [first, second] = await Promise.all([
-        getUserWallets('admin-key', 'user-1'),
-        getUserWallets('admin-key', 'user-1'),
-      ]);
+      await Promise.all([getUserWallets('user-1'), getUserWallets('user-1')]);
 
-      expect(second).toEqual(first);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockApiRequest).toHaveBeenCalledTimes(1);
     });
 
-    test('still fetches separately for a different user', async () => {
-      mockFetch.mockResolvedValue(
-        jsonResponse([rawWallet('w1', 'Alice - Private')]),
-      );
+    test('keeps separate requests per user', async () => {
+      mockApiRequest.mockResolvedValue([wallet('w1')]);
 
-      await Promise.all([
-        getUserWallets('admin-key', 'user-1'),
-        getUserWallets('admin-key', 'user-2'),
-      ]);
+      await Promise.all([getUserWallets('user-1'), getUserWallets('user-2')]);
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockApiRequest).toHaveBeenCalledTimes(2);
     });
 
-    test('retries after a failure instead of reusing the rejected request', async () => {
-      mockFetch.mockResolvedValueOnce(errorResponse(500));
+    test('drops the pending request when the gateway fails', async () => {
+      mockApiRequest.mockRejectedValueOnce(new Error('gateway down'));
 
-      await expect(getUserWallets('admin-key', 'user-1')).rejects.toThrow(
-        'status: 500',
-      );
+      await expect(getUserWallets('user-1')).rejects.toThrow('gateway down');
 
-      mockFetch.mockResolvedValueOnce(
-        jsonResponse([rawWallet('w1', 'Alice - Private')]),
-      );
-      await expect(getUserWallets('admin-key', 'user-1')).resolves.toHaveLength(
-        1,
-      );
+      mockApiRequest.mockResolvedValueOnce([wallet('w1')]);
+      await expect(getUserWallets('user-1')).resolves.toHaveLength(1);
     });
 
     test('evicts the oldest entry once the cache is full', async () => {
-      mockFetch.mockResolvedValue(jsonResponse([]));
+      mockApiRequest.mockResolvedValue([wallet('w1')]);
 
       for (let i = 0; i < MAX_WALLET_CACHE_SIZE; i += 1) {
-        await getUserWallets('admin-key', `user-${i}`);
+        await getUserWallets(`user-${i}`);
       }
-      expect(apiCache.userWallets.size).toBe(MAX_WALLET_CACHE_SIZE);
-
-      await getUserWallets('admin-key', 'user-overflow');
+      await getUserWallets('user-overflow');
 
       expect(apiCache.userWallets.size).toBe(MAX_WALLET_CACHE_SIZE);
       expect(apiCache.userWallets.has('user-0')).toBe(false);
-      expect(apiCache.userWallets.has('user-overflow')).toBe(true);
     });
   });
 
-  describe('getWalletsPaginated', () => {
-    test('unwraps the paginated payload and drops deleted wallets', async () => {
-      mockFetch.mockResolvedValueOnce(
-        jsonResponse({
-          data: [
-            rawWallet('w1', 'Alice - Private'),
-            rawWallet('w2', 'Alice - Old', true),
-          ],
-          total: 2,
-        }),
-      );
+  describe('derived helpers', () => {
+    test('getWalletIdByUserId returns the first wallet id', async () => {
+      mockApiRequest.mockResolvedValueOnce([wallet('w1'), wallet('w2')]);
 
-      const wallets = await getWalletsPaginated('user-1');
-
-      expect(wallets.map(w => w.id)).toEqual(['w1']);
+      await expect(getWalletIdByUserId('user-1')).resolves.toBe('w1');
     });
 
-    test('sends limit, offset and user_id as query parameters', async () => {
-      mockFetch.mockResolvedValueOnce(jsonResponse({ data: [] }));
+    test('getWalletIdByUserId returns null without wallets', async () => {
+      mockApiRequest.mockResolvedValueOnce([]);
 
-      await getWalletsPaginated('user-1', 10, 20);
-
-      const requestedUrl = String(mockFetch.mock.calls[0][0]);
-      expect(requestedUrl).toContain('limit=10');
-      expect(requestedUrl).toContain('offset=20');
-      expect(requestedUrl).toContain('user_id=user-1');
+      await expect(getWalletIdByUserId('user-1')).resolves.toBeNull();
     });
 
-    test('throws when the payload carries no data array', async () => {
-      mockFetch.mockResolvedValueOnce(jsonResponse({ total: 0 }));
+    test('getWalletsPaginated slices the cached list', async () => {
+      mockApiRequest.mockResolvedValueOnce([
+        wallet('w1'),
+        wallet('w2'),
+        wallet('w3'),
+      ]);
 
-      await expect(getWalletsPaginated('user-1')).rejects.toThrow(
-        'Unexpected payload',
-      );
+      await expect(getWalletsPaginated('user-1', 1, 1)).resolves.toEqual([
+        wallet('w2'),
+      ]);
     });
   });
 });
