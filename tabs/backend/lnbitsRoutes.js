@@ -8,6 +8,7 @@ const {
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const INVOICE_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 const BOLT11_PATTERN = /^ln[a-z0-9]+$/i;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]{16,128}$/;
 
 const validId = (value) => typeof value === 'string' && ID_PATTERN.test(value);
 
@@ -142,13 +143,13 @@ const createLnbitsRouter = ({
       res.status(400).json({ error: 'invalid invoice request' });
       return;
     }
-    const paymentRequest = await service.createOwnedInvoice({
+    const invoice = await service.createOwnedInvoice({
       walletId: req.params.walletId,
       amount,
       memo,
       aadObjectId: req.auth.oid,
     });
-    res.status(201).json({ paymentRequest });
+    res.status(201).json(invoice);
   }));
 
   router.post('/wallets/:walletId/payments', asyncRoute(async (req, res) => {
@@ -174,7 +175,13 @@ const createLnbitsRouter = ({
   router.post('/zaps', asyncRoute(async (req, res) => {
     const amount = parseAmount(req.body?.amount);
     const memo = parseMemo(req.body?.memo);
-    if (!validId(req.body?.recipientUserId) || amount === null || memo === null) {
+    const idempotencyKey = req.get('Idempotency-Key');
+    if (
+      !validId(req.body?.recipientUserId) ||
+      amount === null ||
+      memo === null ||
+      !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey || '')
+    ) {
       res.status(400).json({ error: 'invalid zap request' });
       return;
     }
@@ -184,6 +191,7 @@ const createLnbitsRouter = ({
         amount,
         memo,
         aadObjectId: req.auth.oid,
+        idempotencyKey,
       }),
     );
   }));
