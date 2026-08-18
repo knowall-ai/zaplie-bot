@@ -85,9 +85,13 @@ const UserListComponent: FunctionComponent = () => {
         setCache('allUsers', allUsers);
       }
 
+      // Service and test accounts have no linked Entra identity; the
+      // directory only lists teammates who can actually use Teams.
+      const linkedUsers = allUsers.filter(user => user.aadObjectId);
+
       // Fetch wallets for each user, a bounded number of requests at a time
       const usersWithWallets = await mapWithConcurrency(
-        allUsers,
+        linkedUsers,
         WALLET_FETCH_CONCURRENCY,
         async user => {
           try {

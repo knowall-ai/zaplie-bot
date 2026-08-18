@@ -43,10 +43,10 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
     const totals = new Map<string, { user: User; total: number }>();
     transfers
       .filter(transfer => timeInSeconds(transfer.transaction) >= timestamp)
-      .forEach(({ from, transaction }) => {
-        const current = totals.get(from.id) ?? { user: from, total: 0 };
+      .forEach(({ to, transaction }) => {
+        const current = totals.get(to.id) ?? { user: to, total: 0 };
         current.total += Math.abs(transaction.amount) / 1000;
-        totals.set(from.id, current);
+        totals.set(to.id, current);
       });
 
     const ranked: UserTransactionSummary[] = Array.from(totals.values())
