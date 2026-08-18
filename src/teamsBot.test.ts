@@ -15,6 +15,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { TurnContext } from 'botbuilder';
 import { GENERIC_ERROR_MESSAGE } from './messages';
+import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
 
 jest.mock('./services/lnbitsService');
 jest.mock('./services/foundryAgentService');
@@ -62,6 +63,10 @@ const makeContext = (activity: Record<string, unknown>): MockContext => {
   } as unknown as TurnContext;
   return { context, sendActivity };
 };
+
+class SpyCommand extends SSOCommand {
+  execute = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+}
 
 describe('TeamsBot onMessage error hygiene', () => {
   let consoleError: jest.SpiedFunction<typeof console.error>;
@@ -207,5 +212,74 @@ describe('TeamsBot submitZaps message validation', () => {
       "D'oh! Your zap needs a message, so no zaps were sent.",
     );
     expect(context.updateActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe('TeamsBot command matching', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('runs a command when the message merely starts with it', async () => {
+    const bot = new TeamsBot();
+    const spy = new SpyCommand();
+    SSOCommandMap.register('send zap', spy);
+    const { context } = makeContext({ text: 'Send   Zap to bob please' });
+
+    await bot.run(context);
+
+    expect(spy.execute).toHaveBeenCalledTimes(1);
+  });
+
+  test('lists the known commands when a channel message matches nothing', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      text: 'what can you do?',
+      conversation: {
+        id: 'conv-2',
+        conversationType: 'channel',
+        tenantId: 'tenant-1',
+      },
+    });
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledTimes(1);
+    const [guide] = sendActivity.mock.calls[0] as unknown as [string];
+    expect(guide).toContain("D'oh!");
+    expect(guide).toContain('send zap');
+    expect(guide).toContain('show my balance');
+    expect(guide).toContain('show leaderboard');
+  });
+});
+
+describe('TeamsBot welcome message', () => {
+  test('welcomes with the command list when the bot itself is added', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      type: 'conversationUpdate',
+      text: undefined,
+      membersAdded: [{ id: 'bot-id' }],
+    });
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledTimes(1);
+    const [welcome] = sendActivity.mock.calls[0] as unknown as [string];
+    expect(welcome).toContain('send zap');
+    expect(welcome).toContain('show leaderboard');
+  });
+
+  test('stays quiet when only a regular member is added', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      type: 'conversationUpdate',
+      text: undefined,
+      membersAdded: [{ id: 'someone-else' }],
+    });
+
+    await bot.run(context);
+
+    expect(sendActivity).not.toHaveBeenCalled();
   });
 });
