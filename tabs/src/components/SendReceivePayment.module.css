@@ -1,198 +1,164 @@
+/*
+ * Send payment / Receive payment modals.
+ * Modal pattern: --surface-raised, radius 8, title 700@18, gray subtitle,
+ * labeled inputs, footer Cancel (accent text/outline) + primary (accent fill),
+ * disabled state muted. Responsive down to 320px.
+ */
+
 .overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: var(--space-4);
+  box-sizing: border-box;
   z-index: 1000;
 }
 
-.popup {
-  width: 688px;
-  height: 400px;
-  padding: 28px 32px 32px 32px;
-  gap: 20px;
-  opacity: 1;
-  position: relative;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 28px 32px 32px;
-  background: #2d2b2c;
-  box-shadow:
-    0px 0px 8px rgba(0, 0, 0, 0.12),
-    0px 14px 250px rgba(0, 0, 0, 0.14);
-  border-radius: 4px;
-}
-
+.popup,
 .popupReceive {
-  width: 688px;
-  height: 345px;
-  padding: 28px 32px 32px 32px;
-  gap: 20px;
-  opacity: 1;
-  position: relative;
+  width: min(688px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  padding: 28px 32px 32px;
-  background: #2d2b2c;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
   box-shadow:
     0px 0px 8px rgba(0, 0, 0, 0.12),
     0px 14px 250px rgba(0, 0, 0, 0.14);
-  border-radius: 4px;
+  box-sizing: border-box;
+  font-family: var(--font-family-base);
+  color: var(--text-body);
 }
 
 .title {
-  width: 624px;
-  height: 24px;
-  font-family: 'Segoe UI';
-  font-style: normal;
   font-weight: 700;
-  font-size: 18px;
+  font-size: var(--font-size-lg);
   line-height: 24px;
-  color: #ffffff;
-  flex: none;
-  order: 0;
-  flex-grow: 0;
+  color: var(--text-primary);
+  margin: 0;
 }
 
 .text {
-  width: 624px;
-  height: 20px;
-  font-family: 'Segoe UI';
-  font-style: normal;
-  font-weight: 400;
-  font-size: 14px;
+  font-size: var(--font-size-md);
   line-height: 20px;
-  color: rgba(216, 216, 216, 1);
-  flex: none;
-  order: 1;
-  flex-grow: 0;
-  margin-bottom: 10px;
+  color: var(--text-muted);
+  margin: 0;
 }
 
-.inputForm {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0px;
-  gap: 10px;
-  width: 624px;
-  height: 177px;
-  flex: none;
-  order: 1;
-  flex-grow: 0;
+.errorText {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+/* Field labels above inputs. */
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-body);
+  margin: var(--space-2) 0 0;
 }
 
 .container {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
 }
 
 .inputRow {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding-bottom: 10px;
-  padding-top: 10px;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
   width: 100%;
 }
 
 .inputField {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0px 0px 0px 10px;
-  /* gap: 10px; */
-  left: 0px;
-  width: 302px;
-  height: 32px;
-  background: #1f1f1f;
-  border-radius: 4px;
-  border: #1f1f1f;
-  flex: none;
-  order: 0;
-  align-self: stretch;
-  flex-grow: 1;
-  font-size: 12px;
-}
-
-.button {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  background: var(--surface-page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 0px;
-  width: 94px;
-  height: 32px;
-  border: 1px solid #d8d8d8;
-  border-radius: 4px;
-  flex: none;
-  order: 0;
-  flex-grow: 1;
-  font-family: Inter;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 14.52px;
-  text-align: center;
-  color: #84cc16;
-}
-
-.button:hover {
-  background-color: #2d2b2c;
+  flex: 1 1 auto;
 }
 
 .textarea {
-  width: 624px;
-  height: 86px;
-  background: #1f1f1f;
-  border-radius: 4px;
-  padding: 8px;
-  color: white;
-  border: none;
+  width: 100%;
+  min-height: 86px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
   resize: none;
-  flex: none;
-  order: 1;
-  align-self: stretch;
-  flex-grow: 1;
-  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.inputField::placeholder,
+.textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.inputField:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.buttonContainer {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
 .scanButton {
   box-sizing: border-box;
-  display: flex;
+  display: inline-flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  padding: 0px;
-  width: 214px;
   height: 38px;
-  border: 1px solid #d8d8d8;
-  border-radius: 4px;
-  margin-top: 20px;
-  margin-bottom: 20px;
-  margin-left: auto;
-  margin-right: auto;
-  flex: none;
-  order: 0;
-  flex-grow: 0;
-  font-family: 'Inter';
-  font-style: normal;
+  padding: 0 var(--space-4);
+  margin: var(--space-2) auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-base);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 20px;
   text-align: center;
-  color: #d8d8d8;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.scanButton:hover {
+  border-color: var(--text-body);
+  color: var(--text-primary);
 }
 
 .qrIcon {
-  margin-right: 8px;
+  margin-right: var(--space-2);
   width: 21px;
   height: 21px;
 }
@@ -200,343 +166,306 @@
 .actionRow {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
   width: 100%;
-  margin-top: 20px;
+  margin-top: var(--space-4);
 }
 
+/* Cancel: accent text in an accent outline. */
 .cancelButton {
   box-sizing: border-box;
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 0px;
-  width: 96px;
+  min-width: 96px;
   height: 38px;
-  border: 1px solid #84cc16;
-  border-radius: 4px;
-  flex: none;
-  order: 0;
-  flex-grow: 0;
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: normal;
-  font-size: 12px;
-  color: #84cc16;
-  background-color: #2d2b2c;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-base);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--accent);
+  background-color: transparent;
+  cursor: pointer;
 }
 
 .cancelButton:hover {
-  background-color: #1f1f1f;
+  background-color: rgba(132, 204, 22, 0.12);
 }
 
 .sendOptions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
-.checkboxContainer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  align-items: flex-end;
-}
-
-.checkbox {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0px;
-  width: 16px;
-  height: 19px;
-  flex: none;
-  order: 0;
-  flex-grow: 0;
-  align-items: center;
-  margin-right: 20px;
-  border: 1px solid #d8d8d8;
-  border-radius: 4px;
-}
-
-.checkboxLabel {
-  width: 120px;
-  height: 15px;
-  display: flex;
-  align-items: center;
-  font-family: 'Inter';
-  padding: 0px;
-  font-style: normal;
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 15px;
-  order: 1;
-  flex-grow: 0;
-  margin-left: 10px;
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 15px;
-  color: rgba(216, 216, 216, 1);
-  flex: none;
-  order: 1;
-  flex-grow: 0;
-  padding-top: 3px;
-}
-
+/* Primary action, disabled: muted on page surface. */
 .sendButton {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 0px;
-  width: 111px;
+  min-width: 111px;
   height: 38px;
-  background: #1f1f1f;
-  border-radius: 4px;
-  flex: none;
-  order: 1;
-  flex-grow: 0;
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: normal;
-  font-size: 12px;
-  color: rgba(121, 121, 121, 1);
+  padding: 0 var(--space-4);
+  background: var(--surface-page);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-base);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
-.sendButton:hover {
-  background-color: #1f1f1f;
-}
-
+/* Primary action, enabled: accent fill. */
 .sendButtonEnabled {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 0px;
-  width: 111px;
+  min-width: 111px;
   height: 38px;
-  background: #84cc16;
-  border-radius: 4px;
-  flex: none;
-  order: 1;
-  flex-grow: 0;
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-base);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--accent-contrast);
   cursor: pointer;
-  color: rgb(0, 0, 0);
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: normal;
-  font-size: 12px;
 }
 
 .sendButtonEnabled:hover {
-  background-color: #6ba513;
+  background-color: var(--accent-hover);
 }
 
+.scanButton:focus-visible,
+.cancelButton:focus-visible,
+.sendButtonEnabled:focus-visible,
+.changeAmountButton:focus-visible,
+.copyButton:focus-visible,
+.closeButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Result popups (success / failure / QR error). */
 .sendPopupSuccess {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 32px 32px;
-  gap: 20px;
+  padding: var(--space-6) var(--space-8);
+  gap: var(--space-4);
   position: relative;
-  width: 287px;
-  height: 84px;
-  background: #2d2b2c;
+  width: min(360px, 100%);
+  background: var(--surface-raised);
   box-shadow:
     0px 0px 8px rgba(0, 0, 0, 0.12),
     0px 14px 250px rgba(0, 0, 0, 0.14);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
 }
 
-.sendPopupFailed {
+.sendPopupFailed,
+.errorPopup {
   display: flex;
   flex-direction: column;
-  align-items: left;
-  padding: 28px 32px 32px;
-  gap: 20px;
+  align-items: flex-start;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  gap: var(--space-4);
   position: relative;
-  width: 337px;
-  height: 220px;
-  background: #2d2b2c;
+  width: min(400px, 100%);
+  background: var(--surface-raised);
   box-shadow:
     0px 0px 8px rgba(0, 0, 0, 0.12),
     0px 14px 250px rgba(0, 0, 0, 0.14);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
 }
 
 .sendPopupHeader {
   display: flex;
   align-items: center;
   flex-direction: row;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .sendPopupText {
-  color: white;
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
   font-size: 16px;
-  width: 220px;
+  line-height: 22px;
 }
 
 .sendPopupSubText {
-  color: rgba(216, 216, 216, 1);
-  font-size: 14px;
-  margin-top: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-md);
+  line-height: 20px;
 }
 
 .checkmarkIcon {
   width: 24px;
   height: 24px;
+  flex-shrink: 0;
 }
 
 .buttonContainerSmallPopup {
   display: flex;
   justify-content: space-between;
-  width: 100%+20px;
-  margin-top: 0px;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .changeAmountButton {
   box-sizing: border-box;
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 0px;
-  width: 117px;
+  min-width: 117px;
   height: 38px;
-  border: 1px solid #84cc16;
-  border-radius: 4px;
-  flex: none;
-  order: 0;
-  flex-grow: 0;
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: normal;
-  font-size: 12px;
-  color: #84cc16;
-  background-color: #2d2b2c;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-base);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--accent);
+  background-color: transparent;
+  cursor: pointer;
 }
 
 .changeAmountButton:hover {
-  background-color: #1f1f1f;
+  background-color: rgba(132, 204, 22, 0.12);
 }
 
+/* Receive: generated invoice + QR step. */
 .receivePopupWithQrCode {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 28px 32px 32px;
-  gap: 4px;
+  align-items: stretch;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  gap: var(--space-3);
   position: relative;
-  width: 688px;
-  height: 360px;
-  background: #2d2b2c;
+  width: min(688px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface-raised);
   box-shadow:
     0px 0px 8px rgba(0, 0, 0, 0.12),
     0px 14px 250px rgba(0, 0, 0, 0.14);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  font-family: var(--font-family-base);
+  color: var(--text-body);
 }
 
 .sendQrCodeContainer {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
-  padding: 0px;
-  left: 10px;
-  gap: 40px;
-  width: 625px;
-  height: 232px;
-  order: 1;
-  flex-grow: 0;
-  justify-content: center;
   align-items: center;
-  height: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  width: 100%;
+  margin-top: var(--space-3);
 }
 
+/* White rounded QR panel. */
 .qrCode {
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  padding: 16px;
-  gap: 0px;
-  width: 234px;
-  height: 232px;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
   background: #ffffff;
   border: 1px solid #f5f5f5;
-  border-radius: 24px;
-  flex: none;
-  order: 0;
-  flex-grow: 0;
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.qrCode svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .txtContainer {
   display: flex;
   flex-direction: column;
-  padding: 0px;
-  gap: 20px;
-  width: 351px;
-  flex: none;
-  order: 0;
-  align-self: stretch;
-  flex-grow: 0;
-  font-size: 16px;
-  margin-bottom: 20px;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-  font-family: 'Segoe UI';
-  font-style: normal;
-  font-weight: 400;
-  font-size: 14px;
+  gap: var(--space-3);
+  flex: 1 1 260px;
+  min-width: 0;
+  font-size: var(--font-size-md);
   line-height: 20px;
-  color: rgba(216, 216, 216, 1);
+  color: var(--text-body);
+  overflow-wrap: anywhere;
+}
+
+.invoiceText {
+  font-size: var(--font-size-sm);
+  line-height: 18px;
+  color: var(--text-muted);
+  word-break: break-all;
 }
 
 .receiveButtonContainer {
   display: flex;
-  /* gap: 10px; */
-  margin-top: 10px;
-  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
 }
 
 .copyButton,
 .closeButton {
   box-sizing: border-box;
-  display: flex;
+  display: inline-flex;
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  padding: 0px;
-  width: 96px;
+  min-width: 96px;
   height: 38px;
-  border: 1px solid #d8d8d8;
-  border-radius: 4px;
-  flex: none;
-  order: 1;
-  flex-grow: 0;
-  background-color: #2d2b2c;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  font-family: var(--font-family-base);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.copyButton:hover,
+.closeButton:hover {
+  border-color: var(--text-body);
+  color: var(--text-primary);
 }
 
 .copyIcon {
-  margin-right: 5px;
+  margin-right: var(--space-1);
   width: 20px;
   height: 20px;
 }
 
+/* QR scanner viewport. */
 .qrReaderForm {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0px;
-  padding-top: 0px;
-  gap: 10px;
-  width: 624px;
+  width: 100%;
   height: 324px;
-  flex: none;
-  order: 1;
-  flex-grow: 0;
-  background-color: #1f1f1f;
+  background-color: var(--surface-page);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -544,14 +473,9 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0px;
-  gap: 0px;
   width: 100%;
   height: 100%;
-  flex: none;
-  order: 1;
-  flex-grow: 0;
-  background-color: #1f1f1f;
+  background-color: var(--surface-page);
   position: relative;
 }
 
@@ -573,15 +497,65 @@ input[type='number'] {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: var(--space-3);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
   z-index: 9999;
 }
 
 .loaderIcon {
   width: 100px;
   height: 100px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .scanButton,
+  .cancelButton,
+  .sendButtonEnabled,
+  .changeAmountButton,
+  .copyButton,
+  .closeButton {
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+}
+
+@media (max-width: 480px) {
+  .popup,
+  .popupReceive,
+  .receivePopupWithQrCode,
+  .sendPopupSuccess,
+  .sendPopupFailed,
+  .errorPopup {
+    padding: var(--space-4);
+  }
+
+  .actionRow,
+  .buttonContainerSmallPopup {
+    justify-content: stretch;
+  }
+
+  .cancelButton,
+  .sendButton,
+  .sendButtonEnabled,
+  .changeAmountButton,
+  .copyButton,
+  .closeButton {
+    flex: 1 1 auto;
+  }
+
+  .sendOptions {
+    flex: 1 1 auto;
+  }
+
+  .qrReaderForm {
+    height: 240px;
+  }
 }

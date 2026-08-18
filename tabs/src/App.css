@@ -1,9 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
 body {
-  background-color: #2d2b2c;
-  color: white;
-  font-family: 'Inter';
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
 }
 
 App {
@@ -16,7 +16,7 @@ App {
 }
 
 .App-background {
-  background-color: rgb(31, 31, 31);
+  background-color: var(--surface-page);
   padding: 20px;
 }
 

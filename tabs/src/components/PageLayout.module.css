@@ -1,11 +1,24 @@
-/* PageLayout.module.css */
 .pageContainer {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  max-width: 100vw;
+  background-color: var(--surface-page);
 }
 
 .contentWrap {
   flex: 1;
-  padding-top: 70px; /* Add padding for fixed header */
+  width: 100%;
+  max-width: var(--content-max-width);
+  min-width: 0;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+}
+
+@media (max-width: 480px) {
+  .contentWrap {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
 }

@@ -56,21 +56,6 @@ interface Transaction {
   bolt11?: string; // Lightning invoice (optional)
 }
 
-interface Allowance {
-  id: string;
-  name: string;
-  wallet: string;
-  toWallet: string;
-  amount: number;
-  startDate: date;
-  endDate: date | null;
-  frequency: AllowanceFrequency;
-  nextPaymentDate: date;
-  lastPaymentDate: date | null;
-  memo: string | null;
-  active: boolean;
-}
-
 declare module '*.module.css' {
   const classes: { [key: string]: string };
   export default classes;

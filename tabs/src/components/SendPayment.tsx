@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useContext } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import styles from './SendReceivePayment.module.css';
@@ -26,23 +26,13 @@ const SendPayment: React.FC<SendPopupProps> = ({
     useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const myLNbitDetails = currentUserLNbitDetails;
-  const [invoiceAmount, setInvoiceAmount] = useState<number | null>();
+  const [invoiceAmount, setInvoiceAmount] = useState<number | null>(null);
   const isSendDisabled = !invoice || !invoiceAmount;
   const [failureMessage, setFailureMessage] = useState('');
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const isMounted = useRef<boolean>(true);
-  const [invoiceMemo, setInvoiceMemo] = useState<string | null>();
-  const [isAmountReadOnly, setIsAmountReadOnly] = useState<boolean>(false);
-  const [scannerPaused, setScannerPaused] = useState(true); // Make sure scanner starts paused
+  const [invoiceMemo, setInvoiceMemo] = useState<string | null>(null);
+  const [scannerPaused, setScannerPaused] = useState(true);
   const [qrError, setQrError] = useState<string | null>(null);
-
-  // Effect for controlling scanner state
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-      setScannerPaused(true); // Pause the scanner when the component unmounts
-    };
-  }, []);
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -58,7 +48,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
   };
 
   const handleCancelClick = () => {
-    setIsLoading(true);
+    setIsLoading(false);
     setIsPaymentSuccess(false);
     setIsSuccessFailurePopupVisible(false);
     onClose();
@@ -73,10 +63,10 @@ const SendPayment: React.FC<SendPopupProps> = ({
       payInvoice(myLNbitDetails.privateWallet.id, invoice)
         .then(() => {
           setIsPaymentSuccess(true);
-          setIsSuccessFailurePopupVisible(true); // Show the success popup
+          setIsSuccessFailurePopupVisible(true);
           setIsLoading(false);
         })
-        .catch(error => {
+        .catch(() => {
           handlePaymentFailure(
             `Error paying invoice. The link might be expired or you do not have enough ${rewardsName} on your wallet`,
           );
@@ -85,21 +75,14 @@ const SendPayment: React.FC<SendPopupProps> = ({
   };
 
   const handleScanButtonClick = () => {
+    setQrError(null);
     setIsScanning(true);
-    setScannerPaused(false); // Activate scanner when scanning starts
+    setScannerPaused(false);
   };
 
   const handlePasteInvoiceClick = () => {
     setIsScanning(false);
-    setScannerPaused(true); // Ensure scanner is paused when pasting the invoice manually
-  };
-
-  const debounce = (func: (...args: any[]) => void, delay: number) => {
-    let timeoutId: NodeJS.Timeout;
-    return (...args: any[]) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => func(...args), delay);
-    };
+    setScannerPaused(true);
   };
 
   const decodeAndSetInvoice = async (processedInvoice: string) => {
@@ -122,23 +105,21 @@ const SendPayment: React.FC<SendPopupProps> = ({
           ? parseInt(invoiceAmountInSatoshis.toString())
           : null,
       );
-      setInvoiceMemo(memoValue);
+      setInvoiceMemo(memoValue ?? null);
       setInvoice(processedInvoice);
-      if (invoiceAmountInSatoshis) {
-        setIsAmountReadOnly(true);
+      if (!invoiceAmountInSatoshis) {
+        setFailureMessage('The invoice must include an amount.');
       } else {
-        setIsAmountReadOnly(false);
-      } // Make input read-only if needed
-    } catch (err) {
-      console.error('Error decoding invoice:', err);
+        setFailureMessage('');
+      }
+    } catch {
       setInvoiceAmount(null);
       setInvoiceMemo(null);
+      setFailureMessage('Enter a valid Lightning invoice.');
     }
   };
 
-  const handleScan = debounce(async (detectedCodes: IDetectedBarcode[]) => {
-    if (!isMounted.current) return;
-
+  const handleScan = async (detectedCodes: IDetectedBarcode[]) => {
     if (detectedCodes.length > 0) {
       const data = detectedCodes[0].rawValue;
       const processedInvoice = data.split('lightning:').pop() || '';
@@ -149,47 +130,28 @@ const SendPayment: React.FC<SendPopupProps> = ({
         setScannerPaused(true);
       }
     }
-  }, 500);
-
-  const handleError = (error: any) => {
-    // Suppress the error to prevent it from throwing an uncaught runtime error
-    try {
-      console.error('QR Scan Error:', error);
-      if (error.name === 'NotAllowedError') {
-        setQrError(
-          'Camera access was denied. Please enable camera permissions in your browser settings.',
-        );
-      } else {
-        setQrError(
-          'An error occurred while accessing the camera. Please try again.',
-        );
-      }
-    } catch (err) {
-      // If any other unexpected error occurs, log it but do not throw it to the console
-      console.warn('Suppressed error:', err);
-      setQrError('An unexpected error occurred. Please try again.');
-    }
   };
 
-  window.addEventListener('unhandledrejection', function (event) {
-    if (event.reason.message.includes('Permission denied')) {
-      // Prevent the error from being logged as uncaught
-      event.preventDefault();
-    }
-  });
+  const handleError = (error: unknown) => {
+    const name =
+      typeof error === 'object' && error && 'name' in error
+        ? String(error.name)
+        : '';
+    setQrError(
+      name === 'NotAllowedError'
+        ? 'Camera access was denied. Enable camera access and try again.'
+        : 'The camera could not be opened. Paste the invoice instead.',
+    );
+    setIsScanning(false);
+    setScannerPaused(true);
+  };
 
   const rewardNameContext = useContext(RewardNameContext);
-  if (!rewardNameContext) {
-    return null; // or handle the case where the context is not available
-  }
   const rewardsName = rewardNameContext.rewardName;
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
-      <div
-        className={styles.popup}
-        style={{ height: isScanning ? '604px' : '420px' }}
-      >
+      <div className={styles.popup} role="dialog" aria-modal="true">
         <p className={styles.title}>Send payment</p>
         <p className={styles.text}>
           Show gratitude, thanks, and recognizing awesomeness to others in your
@@ -198,7 +160,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
 
         {!isScanning && (
           <>
-            <p className={styles.text}>Paste invoice</p>
+            <p className={styles.label}>Paste invoice</p>
             <textarea
               value={invoice}
               onChange={async e => {
@@ -217,6 +179,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
             />
             <div className={styles.buttonContainer}>
               <button
+                type="button"
                 onClick={handleScanButtonClick}
                 className={styles.scanButton}
               >
@@ -230,24 +193,20 @@ const SendPayment: React.FC<SendPopupProps> = ({
             </div>
             <div className={styles.container}>
               <div className={styles.inputRow}>
-                {isAmountReadOnly && (
+                {invoiceAmount !== null && (
                   <input
-                    type={'text'}
-                    value={`${invoiceAmount !== null ? invoiceAmount : ''} ${
+                    type="text"
+                    value={`${invoiceAmount} ${
                       invoiceMemo ? ` ${rewardsName}. Note: ${invoiceMemo}` : ''
                     }`}
-                    readOnly={isAmountReadOnly}
+                    readOnly
                     className={styles.inputField}
                   />
                 )}
-                {!isAmountReadOnly && (
-                  <input
-                    type="number"
-                    value={invoiceAmount ?? ''}
-                    onChange={e => setInvoiceAmount(parseInt(e.target.value))}
-                    className={styles.inputField}
-                    placeholder="Specify amount"
-                  />
+                {failureMessage && (
+                  <p role="alert" className={styles.errorText}>
+                    {failureMessage}
+                  </p>
                 )}
               </div>
             </div>
@@ -256,7 +215,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
 
         {isScanning && (
           <React.Fragment>
-            <p className={styles.text}>Scan QR code</p>
+            <p className={styles.label}>Scan QR code</p>
             <div className={styles.qrReaderForm}>
               <div className={styles.qrReaderContainer}>
                 <Scanner
@@ -264,7 +223,7 @@ const SendPayment: React.FC<SendPopupProps> = ({
                   scanDelay={300}
                   onError={handleError}
                   components={{ finder: false }}
-                  paused={scannerPaused} // Ensure scanner is only active when scanning
+                  paused={scannerPaused}
                   onScan={handleScan}
                   styles={{
                     video: {
@@ -292,11 +251,16 @@ const SendPayment: React.FC<SendPopupProps> = ({
         )}
 
         <div className={styles.actionRow}>
-          <button onClick={handleCancelClick} className={styles.cancelButton}>
+          <button
+            type="button"
+            onClick={handleCancelClick}
+            className={styles.cancelButton}
+          >
             Cancel
           </button>
           <div className={styles.sendOptions}>
             <button
+              type="button"
               onClick={handleSendClick}
               className={
                 isSendDisabled ? styles.sendButton : styles.sendButtonEnabled
@@ -344,12 +308,14 @@ const SendPayment: React.FC<SendPopupProps> = ({
             <div className={styles.sendPopupSubText}>{failureMessage}</div>
             <div className={styles.buttonContainerSmallPopup}>
               <button
+                type="button"
                 className={styles.cancelButton}
                 onClick={handleCancelClick}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 className={styles.changeAmountButton}
                 onClick={handlePasteInvoiceClick}
               >

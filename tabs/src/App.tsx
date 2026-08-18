@@ -74,7 +74,10 @@ function App({ pca }: AppProps) {
           theme="dark"
         />
         <PageLayout>
-          <Stack horizontalAlign="center">
+          {/* Full-width stack: PageLayout centers content via max-width.
+              horizontalAlign="center" made overflowing views clip on BOTH
+              edges at narrow widths (left side unreachable). */}
+          <Stack styles={{ root: { width: '100%', minWidth: 0 } }}>
             <Routes>
               <Route
                 path="/feed"
