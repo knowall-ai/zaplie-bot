@@ -4,15 +4,32 @@ const express = require('express');
 const { createLnbitsRouter } = require('./lnbitsRoutes');
 
 const calls = [];
+const ensureCalls = [];
 const service = {
-  assertCaller: async (oid) => {
-    if (oid === 'unlinked-oid') {
-      const error = new Error('No LNbits user is linked to this account');
-      error.status = 403;
+  ensureCaller: async (profile) => {
+    ensureCalls.push(profile);
+    if (profile.aadObjectId === 'unprovisionable-oid') {
+      const error = new Error(
+        'We could not create your Zaplie wallet yet — try again',
+      );
+      error.status = 503;
+      error.expose = true;
       throw error;
     }
+    if (profile.aadObjectId === 'unlinked-oid') {
+      return { user: { id: 'user-new' }, provisioned: true };
+    }
+    return { user: { id: 'user-1' }, provisioned: false };
   },
   listUsers: async () => [{ id: 'user-1' }],
+  listUserWallets: async (userId) => {
+    calls.push(['wallets', userId]);
+    return [{ id: `${userId}-private`, name: 'Private' }];
+  },
+  repairCallerWallets: async (userId, wallets) => {
+    calls.push(['repair', userId]);
+    return [...wallets, { id: `${userId}-allowance`, name: 'Allowance' }];
+  },
   createOwnedInvoice: async (input) => {
     calls.push(['invoice', input]);
     return {
@@ -37,7 +54,15 @@ const extractBearerToken = (req) => {
 
 const verifyMsalPayload = async (token) => {
   if (token === 'valid-token') return { oid: 'caller-oid' };
-  if (token === 'unlinked-token') return { oid: 'unlinked-oid' };
+  if (token === 'unlinked-token') {
+    return {
+      oid: 'unlinked-oid',
+      name: 'Ada Lovelace',
+      preferred_username: 'ada@example.com',
+      upn: 'ada@example.com',
+    };
+  }
+  if (token === 'unprovisionable-token') return { oid: 'unprovisionable-oid' };
   throw new Error('bad token');
 };
 
@@ -77,15 +102,63 @@ const request = (path, options = {}) =>
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
-test('requires a verified token and a linked LNbits user', async () => {
+test('requires a verified token and provisions a first-time caller', async () => {
   assert.equal((await request('/api/lnbits/users')).status, 401);
-  assert.equal(
-    (await request('/api/lnbits/users', { token: 'unlinked-token' })).status,
-    403,
-  );
+  assert.equal((await request('/api/lnbits/users', { token: 'nope' })).status, 401);
+  // An unverified caller must never reach provisioning.
+  assert.equal(ensureCalls.length, 0);
+
+  const firstRun = await request('/api/lnbits/users', {
+    token: 'unlinked-token',
+  });
+  assert.equal(firstRun.status, 200);
+  assert.deepEqual(ensureCalls.at(-1), {
+    aadObjectId: 'unlinked-oid',
+    displayName: 'Ada Lovelace',
+    email: 'ada@example.com',
+    userPrincipalName: 'ada@example.com',
+  });
+
   const response = await request('/api/lnbits/users', { token: 'valid-token' });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), [{ id: 'user-1' }]);
+});
+
+test('a failed provisioning explains itself instead of masking a 5xx', async () => {
+  const response = await request('/api/lnbits/users', {
+    token: 'unprovisionable-token',
+  });
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: 'We could not create your Zaplie wallet yet — try again',
+  });
+});
+
+test('repairs the caller own half-provisioned account, and only theirs', async () => {
+  // ensureCaller short-circuits for an already linked user, so this listing is
+  // where a missing wallet is actually noticed.
+  const own = await request('/api/lnbits/users/user-1/wallets', {
+    token: 'valid-token',
+  });
+  assert.equal(own.status, 200);
+  assert.deepEqual(await own.json(), [
+    { id: 'user-1-private', name: 'Private' },
+    { id: 'user-1-allowance', name: 'Allowance' },
+  ]);
+  assert.deepEqual(calls.slice(-2), [
+    ['wallets', 'user-1'],
+    ['repair', 'user-1'],
+  ]);
+
+  const other = await request('/api/lnbits/users/user-2/wallets', {
+    token: 'valid-token',
+  });
+  assert.deepEqual(await other.json(), [
+    { id: 'user-2-private', name: 'Private' },
+  ]);
+  // Somebody else's account is never touched by the caller's request.
+  assert.deepEqual(calls.at(-1), ['wallets', 'user-2']);
 });
 
 test('derives wallet-write authorization from the verified oid', async () => {

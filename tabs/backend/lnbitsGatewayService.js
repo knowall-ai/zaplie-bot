@@ -4,6 +4,7 @@ const {
 } = require('./lnbitsAdmin');
 const {
   findUniqueUserByAadObjectId,
+  findUsersByAadObjectId,
   parseExtra,
 } = require('./lnbitsUserDirectory');
 const {
@@ -15,15 +16,41 @@ const WALLET_CACHE_MS = 30 * 1000;
 const SENSITIVE_FIELD = /(adminkey|inkey|admin.?key|invoice.?key|password|preimage|secret|token)/i;
 const USER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]{16,128}$/;
+const PRIVATE_WALLET_NAME = 'Private';
+const ALLOWANCE_WALLET_NAME = 'Allowance';
+// Surfaced verbatim by the tab (src/services/lnbitsServiceLocal.ts forwards the
+// gateway's `error` field), so it has to read as user-facing copy.
+const PROVISIONING_FAILED_MESSAGE =
+  'We could not create your Zaplie wallet yet — try again';
+// Avatars come from the tenant's own SharePoint host, so there is no sane
+// default: the bot hardcodes one tenant (src/services/userService.ts), which
+// would fabricate a URL for the wrong organisation everywhere else. When
+// PROFILE_PHOTO_HOST is unset the avatar is simply omitted and the tab falls
+// back to its initials placeholder.
+const profilePhotoUrl = (userPrincipalName) => {
+  const host = String(process.env.PROFILE_PHOTO_HOST || '')
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/+$/, '');
+  if (!host || !userPrincipalName) {
+    return '';
+  }
+  return `https://${host}/_layouts/15/userphoto.aspx?AccountName=${encodeURIComponent(
+    userPrincipalName,
+  )}`;
+};
 
 let tokenCache = null;
 const walletCache = new Map();
 
 class LnbitsGatewayError extends Error {
-  constructor(message, status = 502) {
+  constructor(message, status = 502, { expose = false } = {}) {
     super(message);
     this.name = 'LnbitsGatewayError';
     this.status = status;
+    // 5xx messages are masked by the router unless they are deliberate,
+    // already-safe copy for the signed-in user.
+    this.expose = expose;
   }
 }
 
@@ -97,6 +124,9 @@ const lnbitsRequest = async (path, options = {}) => {
       `LNbits request failed with status ${response.status}`,
     );
   }
+  if (options.expectJson === false) {
+    return null;
+  }
   return safeJson(response);
 };
 
@@ -119,7 +149,11 @@ const redactSensitive = (value, depth = 0) => {
 
 const sanitizeUser = (user) => {
   const extra = parseExtra(user);
-  let displayName = user.username || user.name || user.id;
+  // extra.display_name is what a provisioned account actually carries (LNbits
+  // itself leaves username/name empty), so it has to be read before falling
+  // back to the opaque LNbits id.
+  let displayName =
+    user.username || user.name || extra.display_name || user.email || user.id;
   if (displayName.includes('@')) {
     displayName = displayName
       .split('@')[0]
@@ -244,17 +278,385 @@ const listAllWallets = async () => {
   return wallets;
 };
 
+const findLinkedUser = async (aadObjectId) =>
+  findUniqueUserByAadObjectId(await listRawUsers(), aadObjectId);
+
 const findCaller = async (aadObjectId) => {
-  const user = findUniqueUserByAadObjectId(await listRawUsers(), aadObjectId);
+  const user = await findLinkedUser(aadObjectId);
   if (!user) {
     throw new LnbitsGatewayError('No LNbits user is linked to this account', 403);
   }
   return user;
 };
 
-const assertCaller = async (aadObjectId) => {
-  await findCaller(aadObjectId);
+// Wallet names are matched case-insensitively because sendZap already treats
+// them that way, and a hand-renamed wallet must not trigger a duplicate.
+const walletNamed = (wallets, name) =>
+  wallets.find(
+    (wallet) => String(wallet.name).trim().toLowerCase() === name.toLowerCase(),
+  ) || null;
+
+// Two different situations, deliberately kept apart:
+//
+// - ABSENT: no opening allowance is configured for this deployment. First-touch
+//   portal provisioning still has to succeed, so the account is created
+//   unfunded and the skip is recorded on the result. This is the divergence
+//   from the weekly-allowance path, which simply has nothing to top up.
+// - MALFORMED: a value is configured but cannot be honoured. That is an
+//   operator mistake, not a deployment choice, so it is flagged as a
+//   configuration error and logged as one.
+//
+// The "positive integer" rule is the same one the rest of the backend applies
+// to sat amounts (rewardAmounts.js maxRewardSats, maxZapAmountSats above), so
+// '500abc' is malformed here exactly as it is there — unlike the bot's
+// parseInt, which would silently read it as 500.
+const initialAllowance = () => {
+  const configured = process.env.LNBITS_INITIAL_ALLOWANCE;
+  if (configured === undefined || String(configured).trim() === '') {
+    return {
+      amount: 0,
+      skipReason: 'LNBITS_INITIAL_ALLOWANCE is not set',
+      configurationError: false,
+    };
+  }
+  const amount = Number(String(configured).trim());
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    return {
+      amount: 0,
+      skipReason: `LNBITS_INITIAL_ALLOWANCE must be a positive integer (${configured})`,
+      configurationError: true,
+    };
+  }
+  return { amount, skipReason: null, configurationError: false };
 };
+
+const createLnbitsUser = async ({
+  aadObjectId,
+  displayName,
+  email,
+  userPrincipalName,
+}) => {
+  const profileImg = profilePhotoUrl(userPrincipalName);
+  const user = await lnbitsRequest('/users/api/v1/user', {
+    method: 'POST',
+    body: {
+      email: email || undefined,
+      // The Entra object id lives in external_id, exactly as the bot writes it,
+      // so lnbitsUserDirectory links the account either way it is queried.
+      external_id: aadObjectId,
+      extra: {
+        // display_name/picture are what the bot reads back
+        // (src/services/lnbitsService.ts toUser); profileImg/type/aadObjectId
+        // are what the tab reads back (sanitizeUser above). Writing both keeps
+        // bot- and portal-provisioned accounts interchangeable.
+        display_name: displayName,
+        picture: profileImg,
+        profileImg,
+        aadObjectId,
+        email: email || '',
+        type: 'Teammate',
+        userType: 'teammate',
+      },
+    },
+  });
+  if (!user || typeof user.id !== 'string' || user.id.length === 0) {
+    throw new LnbitsGatewayError('LNbits user creation response is malformed');
+  }
+  return user;
+};
+
+const deleteLnbitsUser = async (userId) => {
+  await lnbitsRequest(`/users/api/v1/user/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    // The User Manager delete returns 200 with no body on some LNbits builds.
+    expectJson: false,
+  });
+};
+
+// The in-flight map that dedupes concurrent first requests is per-process, so
+// two portal instances behind the same load balancer can both miss the
+// directory lookup and create an LNbits user for one Entra oid. That leaves the
+// account permanently unusable: findUniqueUserByAadObjectId throws on every
+// later request. Re-read the directory immediately after creating, and collapse
+// a lost race back to a single row.
+const resolveDuplicateLnbitsUser = async (aadObjectId, created) => {
+  const linked = findUsersByAadObjectId(await listRawUsers(), aadObjectId);
+  // Anything else carrying this oid is another instance's account. Not finding
+  // our own row back (a lagging directory read) is not a reason to keep both.
+  const others = linked.filter((user) => user.id !== created.id);
+  if (others.length === 0) {
+    return created;
+  }
+  const survivor = others[0];
+  console.warn(
+    `Zaplie provisioning: ${others.length + 1} LNbits users are linked to ` +
+      `${aadObjectId}; keeping ${survivor.id} and removing the duplicate ` +
+      `${created.id}`,
+  );
+  try {
+    await deleteLnbitsUser(created.id);
+  } catch (error) {
+    console.error(
+      `Zaplie provisioning: could not delete duplicate LNbits user ${created.id} for ` +
+        `${aadObjectId} (${error.message}). Every request for this account will fail ` +
+        'until the duplicate is removed by hand.',
+    );
+  }
+  return survivor;
+};
+
+const createUserWallet = async (userId, name) => {
+  // POST /api/v1/wallet creates under the caller, so the per-user admin route
+  // is required to own the wallet from the target account.
+  const wallet = await lnbitsRequest(
+    `/users/api/v1/user/${encodeURIComponent(userId)}/wallet`,
+    { method: 'POST', body: { name } },
+  );
+  if (!wallet || typeof wallet.id !== 'string' || wallet.id.length === 0) {
+    throw new LnbitsGatewayError('LNbits wallet creation response is malformed');
+  }
+  cacheWallet(wallet);
+  return wallet;
+};
+
+// LNbits >= 1.0 dropped /topup in favour of PUT /users/api/v1/balance, which is
+// the same admin-credit call the bot makes (lnbitsService.ts topUpWallet). It
+// authenticates with the superuser token the gateway already holds, so no host
+// wallet key is involved.
+const creditWallet = async (walletId, amount) => {
+  await lnbitsRequest('/users/api/v1/balance', {
+    method: 'PUT',
+    body: { id: walletId, amount },
+  });
+};
+
+const ensureProvisionedWallets = async (userId) => {
+  const existing = await listUserWalletsWithKeys(userId);
+  const knownAllowance = walletNamed(existing, ALLOWANCE_WALLET_NAME);
+  const privateWallet =
+    walletNamed(existing, PRIVATE_WALLET_NAME) ||
+    (await createUserWallet(userId, PRIVATE_WALLET_NAME));
+  const allowanceWallet =
+    knownAllowance || (await createUserWallet(userId, ALLOWANCE_WALLET_NAME));
+  return {
+    privateWallet,
+    allowanceWallet,
+    // Only a wallet we just created may be funded: topping up an existing one
+    // would hand a refill to anyone who spends down to zero.
+    allowanceCreated: knownAllowance === null,
+  };
+};
+
+const fundAllowanceWallet = async (walletId) => {
+  const { amount, skipReason, configurationError } = initialAllowance();
+  if (amount === 0) {
+    const message =
+      `Zaplie provisioning: allowance wallet ${walletId} left unfunded ` +
+      `(${skipReason})`;
+    // A misconfigured value is an operator error worth an error-level line; an
+    // absent one is a deliberate deployment choice and only warrants a warning.
+    if (configurationError) {
+      console.error(message);
+    } else {
+      console.warn(message);
+    }
+    return { funded: false, amount: 0, skipReason, configurationError };
+  }
+  try {
+    await creditWallet(walletId, amount);
+    return {
+      funded: true,
+      amount,
+      skipReason: null,
+      configurationError: false,
+    };
+  } catch (error) {
+    // Funding is deliberately not fatal here: this is first-touch provisioning,
+    // and refusing to serve a brand-new user with a 503 because a funding env
+    // is missing or LNbits rejected the credit would lock them out of the
+    // portal entirely. The account works without its opening balance, so the
+    // failure is logged and flagged on the result instead.
+    const reason = `initial allowance top-up failed: ${error.message}`;
+    console.error(`Zaplie provisioning: ${reason}`);
+    return {
+      funded: false,
+      amount,
+      skipReason: reason,
+      configurationError: false,
+    };
+  }
+};
+
+// The wallets were cached at creation time, before the allowance credit landed,
+// so drop this account's directory entries and let the next read repopulate.
+const invalidateUserDirectory = (userId) => {
+  for (const [walletId, entry] of walletCache) {
+    if (entry.wallet?.user === userId) {
+      walletCache.delete(walletId);
+    }
+  }
+};
+
+// The Entra object id is a GUID and must never reach the UI: it would become
+// this account's name in the directory, on the leaderboard and on every zap.
+// A caller whose token carries no name claim falls back to the email local
+// part, and a caller with neither to a readable label kept distinguishable by a
+// short suffix.
+const callerDisplayName = (aadObjectId, profile = {}) => {
+  const claimed = String(profile.displayName || '').trim();
+  if (claimed) {
+    return claimed;
+  }
+  const localPart = String(profile.email || profile.userPrincipalName || '')
+    .split('@')[0]
+    .trim();
+  if (localPart) {
+    return localPart;
+  }
+  return `Teammate ${String(aadObjectId).slice(-4)}`;
+};
+
+// Provisioning can be interrupted between "LNbits user created" and "both
+// wallets created", and the caller gate deliberately short-circuits for an
+// already linked user, so nothing would ever finish the job. Verifying the two
+// wallets on the caller gate would cost an extra LNbits listing on *every*
+// request, so the repair hangs off the one moment the gap is actually observed
+// for free: the caller's own wallet listing (GET /users/:id/wallets, the first
+// thing the tab asks for) coming back without both wallets. A healthy account
+// pays nothing — the listing already happened, and the check is in memory.
+const repairCallerWallets = async (userId, wallets) => {
+  const list = Array.isArray(wallets) ? wallets : [];
+  const missing = [PRIVATE_WALLET_NAME, ALLOWANCE_WALLET_NAME].filter(
+    (name) => walletNamed(list, name) === null,
+  );
+  if (missing.length === 0) {
+    return list;
+  }
+
+  try {
+    console.warn(
+      `Zaplie provisioning: repairing half-provisioned LNbits user ${userId} ` +
+        `(missing ${missing.join(', ')})`,
+    );
+    const repaired = await ensureProvisionedWallets(userId);
+    if (repaired.allowanceCreated) {
+      // This finishes an interrupted provisioning rather than refilling an
+      // account: a wallet that already existed is never topped up, so nobody
+      // can farm an allowance by spending down to zero.
+      await fundAllowanceWallet(repaired.allowanceWallet.id);
+      invalidateUserDirectory(userId);
+    }
+    const known = new Set(list.map((wallet) => wallet.id));
+    return [
+      ...list,
+      ...[repaired.privateWallet, repaired.allowanceWallet]
+        .filter((wallet) => !known.has(wallet.id))
+        .map(sanitizeWallet),
+    ];
+  } catch (error) {
+    // A failed repair must not blank the wallet page: whatever the account does
+    // have is still returned, and the next request tries again.
+    console.error(
+      `Zaplie provisioning: repair of LNbits user ${userId} failed: ${error.message}`,
+    );
+    return list;
+  }
+};
+
+const createEnsureCaller = ({
+  findLinkedUserForCaller = findLinkedUser,
+  createUserForCaller = createLnbitsUser,
+  ensureWalletsForCaller = ensureProvisionedWallets,
+  fundAllowanceForCaller = fundAllowanceWallet,
+  invalidateForCaller = invalidateUserDirectory,
+  resolveDuplicateForCaller = resolveDuplicateLnbitsUser,
+} = {}) => {
+  const inFlight = new Map();
+
+  const provision = async (aadObjectId, profile) => {
+    // Re-check inside the critical section: a request that queued behind the
+    // directory lookup must not create a second LNbits account.
+    const linked = await findLinkedUserForCaller(aadObjectId);
+    if (linked) {
+      return { user: linked, provisioned: false, funding: null };
+    }
+
+    const created = await createUserForCaller({
+      aadObjectId,
+      displayName: callerDisplayName(aadObjectId, profile),
+      email: profile.email || '',
+      userPrincipalName: profile.userPrincipalName || '',
+    });
+
+    const user = await resolveDuplicateForCaller(aadObjectId, created);
+    if (user.id !== created.id) {
+      // Another instance won the race; its account is the survivor and it is
+      // provisioning its own wallets, so nothing more is owed here.
+      return { user, provisioned: false, funding: null };
+    }
+
+    const wallets = await ensureWalletsForCaller(user.id);
+    const funding = wallets.allowanceCreated
+      ? await fundAllowanceForCaller(wallets.allowanceWallet.id)
+      : {
+          funded: false,
+          amount: 0,
+          skipReason: 'allowance wallet already existed',
+          configurationError: false,
+        };
+    await invalidateForCaller(user.id);
+
+    console.log(
+      `Zaplie provisioning: created LNbits user ${user.id} for ${aadObjectId} ` +
+        `(funded: ${funding.funded}${funding.skipReason ? `, ${funding.skipReason}` : ''})`,
+    );
+    return { user, provisioned: true, wallets, funding };
+  };
+
+  return async (input) => {
+    const profile = typeof input === 'string' ? { aadObjectId: input } : input || {};
+    const aadObjectId = profile.aadObjectId;
+    if (typeof aadObjectId !== 'string' || aadObjectId.length === 0) {
+      // Only a verified token reaches this point; an absent oid means the
+      // caller was never authenticated, so nothing is ever provisioned.
+      throw new LnbitsGatewayError(
+        'No LNbits user is linked to this account',
+        403,
+      );
+    }
+
+    const existing = await findLinkedUserForCaller(aadObjectId);
+    if (existing) {
+      return { user: existing, provisioned: false, funding: null };
+    }
+
+    let operation = inFlight.get(aadObjectId);
+    if (!operation) {
+      operation = provision(aadObjectId, profile);
+      inFlight.set(aadObjectId, operation);
+      const release = () => {
+        if (inFlight.get(aadObjectId) === operation) {
+          inFlight.delete(aadObjectId);
+        }
+      };
+      operation.then(release, release);
+    }
+
+    try {
+      return await operation;
+    } catch (error) {
+      if (error instanceof LnbitsGatewayError && error.status === 403) {
+        throw error;
+      }
+      console.error('Zaplie provisioning failed:', error.message);
+      throw new LnbitsGatewayError(PROVISIONING_FAILED_MESSAGE, 503, {
+        expose: true,
+      });
+    }
+  };
+};
+
+const ensureCaller = createEnsureCaller();
 
 const requireOwnedWallet = async (walletId, aadObjectId) => {
   const user = await findCaller(aadObjectId);
@@ -557,9 +959,16 @@ const resetCachesForTests = () => {
 
 module.exports = {
   LnbitsGatewayError,
-  assertCaller,
+  PROVISIONING_FAILED_MESSAGE,
+  callerDisplayName,
+  createEnsureCaller,
   createInvoice,
+  createLnbitsUser,
   createSendZap,
+  ensureCaller,
+  ensureProvisionedWallets,
+  fundAllowanceWallet,
+  initialAllowance,
   createOwnedInvoice,
   getAllPayments,
   getInvoicePayment,
@@ -574,6 +983,7 @@ module.exports = {
   listWalletPayments,
   maxZapAmountSats,
   payOwnedInvoice,
+  repairCallerWallets,
   resetCachesForTests,
   redactSensitive,
   sanitizePayment,
