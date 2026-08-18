@@ -13,7 +13,7 @@
   "dependencies": {},
   "devDependencies": {
     "@azure/functions": "^3.0.0",
-    "@types/node": "^20.x",
+    "@types/node": "^26.x",
     "typescript": "^7.0.2",
     "rimraf": "^6.1.3"
   }
