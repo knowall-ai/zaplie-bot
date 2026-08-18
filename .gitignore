@@ -33,6 +33,9 @@ appPackage/manifest.json
 tabs/backend/identities.json
 tabs/backend/pending-rewards.json
 tabs/backend/connections.json
+tabs/backend/lnbits-zap-idempotency.json
+tabs/backend/lnbits-zap-idempotency.json.lock
+tabs/backend/lnbits-zap-idempotency.json.*.tmp
 tabs/backend/webhook-keys.json
 
 # Generated documentation PDF

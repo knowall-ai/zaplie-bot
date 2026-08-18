@@ -217,9 +217,11 @@ const sendZap = async (
   recipientUserId: string,
   amount: number,
   memo: string,
+  idempotencyKey: string = crypto.randomUUID(),
 ): Promise<PaymentResult> =>
   apiRequest<PaymentResult>('/zaps', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify({ recipientUserId, amount, memo }),
   });
 
