@@ -1,6 +1,7 @@
 // lnbitsService.ts
 
 import dotenvFlow from 'dotenv-flow';
+import { isRecord } from '../utils/typeGuards';
 
 dotenvFlow.config({ path: './env' });
 
@@ -123,9 +124,6 @@ interface RawLnbitsWallet {
   balance_msat?: number;
   deleted?: boolean;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
 
 const isRawLnbitsWallet = (value: unknown): value is RawLnbitsWallet =>
   isRecord(value) &&

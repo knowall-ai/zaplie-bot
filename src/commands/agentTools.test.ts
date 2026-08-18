@@ -22,6 +22,7 @@ import {
   jest,
 } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
+import { isRecord } from '../utils/typeGuards';
 
 jest.mock('../services/lnbitsService');
 jest.mock('../services/zapHistoryService');
@@ -74,9 +75,6 @@ const wallet = (overrides: Partial<Wallet>): Wallet => ({
   deleted: false,
   ...overrides,
 });
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
 
 const requireRecord = (value: unknown): Record<string, unknown> => {
   if (!isRecord(value)) {

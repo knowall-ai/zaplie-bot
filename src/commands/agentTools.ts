@@ -15,6 +15,7 @@ import {
 } from './connectCalendarCommand';
 import { createZapCard } from './sendZapCommand';
 import { MAX_ZAP_SATS } from './zapBudget';
+import { isRecord } from '../utils/typeGuards';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -35,9 +36,6 @@ const clampDays = (days?: number): number =>
   typeof days === 'number' && Number.isFinite(days)
     ? Math.min(Math.max(Math.floor(days), 1), 30)
     : 7;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
 
 const getMyBalanceTool: ToolDefinition = {
   name: 'get_my_balance',

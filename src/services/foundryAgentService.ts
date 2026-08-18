@@ -16,6 +16,7 @@ import {
 } from '@azure/ai-projects';
 import { TurnContext } from 'botbuilder';
 import config from '../config';
+import { isRecord } from '../utils/typeGuards';
 
 const AGENT_NAME = 'zaplie-assistant';
 const MAX_TOOL_ROUNDS = 5;
@@ -78,9 +79,6 @@ interface FunctionCallOutput {
   call_id: string;
   output: string;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
 
 const isFunctionCall = (value: unknown): value is FoundryFunctionCall =>
   isRecord(value) &&
