@@ -98,7 +98,6 @@ const ReportsComponent: FunctionComponent = () => {
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, instance]);
 
   if (loading) {

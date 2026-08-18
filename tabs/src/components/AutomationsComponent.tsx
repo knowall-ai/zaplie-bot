@@ -688,7 +688,7 @@ const AutomationsComponent: FunctionComponent = () => {
         <div className={styles.step}>
           <span className={styles.stepNum}>1</span>
           <span className={styles.stepText}>
-            Connect GitHub and deploy the pull-request sample flow.
+            Connect GitHub and deploy the pull-request reward flow.
           </span>
         </div>
         <div className={styles.step}>
@@ -809,7 +809,7 @@ const AutomationsComponent: FunctionComponent = () => {
             </div>
           </div>
           <p className={styles.connDescription}>
-            Create a key for the GitHub pull-request sample flow. Production use
+            Create a key for the GitHub pull-request reward flow. Production use
             remains blocked until durable idempotency and aggregate budget
             controls land.
           </p>
