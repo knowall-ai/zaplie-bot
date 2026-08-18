@@ -2,10 +2,10 @@
 // Person graph: github:providerId (numeric, never the login) <-> personAad (Entra oid).
 // Gitignored — see identities.json.
 const fs = require('fs');
-const path = require('path');
+const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = path.join(__dirname, 'identities.json');
+const STORE_PATH = dataPath('identities.json');
 
 const readStore = () => {
   try {
