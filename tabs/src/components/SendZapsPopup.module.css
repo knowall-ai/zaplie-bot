@@ -90,6 +90,14 @@
   font-weight: 700;
 }
 
+/* ZapIcon.svg is the brand green, which would vanish on the green avatar, so
+   darken it to match the initials rendered in the same placeholder. */
+.avatarIcon {
+  width: 36px;
+  height: 36px;
+  filter: brightness(0);
+}
+
 .popupContent {
   padding: 60px 32px 32px 32px;
   display: flex;
