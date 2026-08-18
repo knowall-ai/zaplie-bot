@@ -26,6 +26,12 @@ import {
   validateSelfZap,
 } from './commands/zapRecipient';
 import { validateZapSubmit } from './commands/zapBudget';
+import {
+  getZapTarget,
+  registerZapTarget,
+  ZAP_REACTION_DEFAULT_SATS,
+  ZAP_REACTION_TYPES,
+} from './services/reactionZapTargets';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
 import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
@@ -83,6 +89,11 @@ export class TeamsBot extends TeamsActivityHandler {
         new ConnectCalendarCommand(),
       );
     }
+
+    this.onReactionsAdded(async (context, next) => {
+      await this.handleZapReaction(context);
+      await next();
+    });
 
     this.onMessage(async (context, next) => {
       console.log('Running onMessage ...');
@@ -469,11 +480,96 @@ export class TeamsBot extends TeamsActivityHandler {
         dialogMemo || htmlToMemoPreview(action.messagePayload?.body?.content),
     });
 
-    await context.sendActivity(
+    const sent = await context.sendActivity(
       MessageFactory.attachment(CardFactory.adaptiveCard(card)),
     );
+    registerZapTarget(context.activity?.conversation?.id, sent?.id, author.id);
 
     return {};
+  }
+
+  // A ⚡ reaction on a zap card the bot sent pays the card's pre-filled
+  // recipient a small default amount. Teams only forwards reactions for the
+  // bot's own messages, so unregistered messages are ignored quietly.
+  async handleZapReaction(context: TurnContext): Promise<void> {
+    const reactions = context.activity.reactionsAdded ?? [];
+    // Spike telemetry: classic Bot Framework docs only list the six legacy
+    // reaction types; log what actually arrives to confirm the expanded
+    // emoji ids in this tenant.
+    console.log(
+      'Reactions received:',
+      reactions.map(reaction => reaction.type).join(', ') || '(none)',
+    );
+
+    const cardId = context.activity.replyToId;
+    const target = getZapTarget(context.activity.conversation?.id, cardId);
+    if (!target) {
+      return;
+    }
+    if (!reactions.some(reaction => ZAP_REACTION_TYPES.has(reaction.type))) {
+      return;
+    }
+
+    const currentUser: User | undefined = context.turnState.get('user');
+    if (!currentUser?.allowanceWallet?.inkey) {
+      return;
+    }
+
+    try {
+      const liveBalance = await getWalletBalance(
+        currentUser.allowanceWallet.inkey,
+      );
+      const amount = validateZapSubmit(
+        ZAP_REACTION_DEFAULT_SATS,
+        1,
+        liveBalance,
+        globalRewardName,
+      );
+      const outcome = await processZapRecipient({
+        ledger: this.zapLedger,
+        entryKey: zapKey({
+          tenantId: context.activity.conversation.tenantId,
+          conversationId: context.activity.conversation.id,
+          cardId: cardId as string,
+          recipientId: target.receiverId,
+        }),
+        recipientId: target.receiverId,
+        getReceiver: () => getUser(adminKey, target.receiverId),
+        validateReceiver: receiver => validateSelfZap(currentUser, receiver),
+        pay: receiver =>
+          SendZap(
+            currentUser,
+            receiver as User,
+            'Zapped with a ⚡ reaction',
+            amount,
+            context,
+            false,
+            globalRewardName,
+          ),
+      });
+
+      if (outcome.status === 'paid') {
+        await context.sendActivity(
+          `⚡ Sent ${amount} ${globalRewardName} to ${outcome.label} for your reaction.`,
+        );
+      } else if (outcome.status !== 'skipped') {
+        // 'skipped' means this card was already paid; stay quiet so piling
+        // extra reactions onto a card does not spam the conversation.
+        await context.sendActivity(
+          `D'oh! Your ⚡ reaction zap to ${outcome.label} could not be completed.`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Reaction zap failed:',
+        error instanceof Error ? error.message : error,
+      );
+      await context.sendActivity(
+        error instanceof Error
+          ? `D'oh! ${error.message}`
+          : "D'oh! Your ⚡ reaction zap could not be completed.",
+      );
+    }
   }
 }
 
