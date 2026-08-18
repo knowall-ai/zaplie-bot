@@ -1,5 +1,6 @@
 // Import required packages
-import * as restify from 'restify';
+import express from 'express';
+import * as fs from 'fs';
 import * as path from 'path';
 import { createHash, timingSafeEqual } from 'crypto';
 import { getWebhookKeyHashes } from './services/fetchWebhookKeys';
@@ -107,11 +108,17 @@ adapter.onTurnError = onTurnErrorHandler;
 // Create the bot that will handle incoming messages.
 const bot = new TeamsBot();
 
-// Create HTTP server.
-const server = restify.createServer();
-server.use(restify.plugins.bodyParser());
-server.listen(process.env.port || process.env.PORT || 3978, () => {
-  console.log(`\nBot Started, ${server.name} listening to ${server.url}`);
+// Create HTTP server. Express instead of restify: restify still requires
+// spdy, whose native http_parser binding no longer exists on Node >= 21.
+const server = express();
+server.disable('x-powered-by');
+server.use(express.json());
+server.get('/healthz', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+const port = Number(process.env.port || process.env.PORT || 3978);
+server.listen(port, () => {
+  console.log(`\nBot Started, express listening on port ${port}`);
 });
 
 // Listen for incoming requests.
@@ -158,16 +165,16 @@ const isAuthorizedRewardKey = async (providedKey: string): Promise<boolean> => {
 server.post('/api/v1/rewards', async (req, res) => {
   try {
     if (!(await isAuthorizedRewardKey(req.header('x-api-key') ?? ''))) {
-      res.send(401, { error: 'invalid API key' });
+      res.status(401).json({ error: 'invalid API key' });
       return;
     }
   } catch (error) {
     if (error instanceof RewardError) {
-      res.send(error.statusCode, { error: error.message });
+      res.status(error.statusCode).json({ error: error.message });
       return;
     }
     console.error('rewards key validation failed:', error);
-    res.send(503, { error: 'rewards endpoint unavailable' });
+    res.status(503).json({ error: 'rewards endpoint unavailable' });
     return;
   }
 
@@ -179,14 +186,14 @@ server.post('/api/v1/rewards', async (req, res) => {
     const amountSats = await resolveAmountSats(request);
     const result = await payReward({ ...request, amountSats });
     if ('pending' in result) {
-      res.send(202, {
+      res.status(202).json({
         status: 'pending',
         recipient: request.recipient,
         amountSats,
       });
       return;
     }
-    res.send(200, {
+    res.status(200).json({
       status: 'paid',
       paymentHash: result.paymentHash,
       recipient: request.recipient,
@@ -194,18 +201,27 @@ server.post('/api/v1/rewards', async (req, res) => {
     });
   } catch (error) {
     if (error instanceof RewardError) {
-      res.send(error.statusCode, { error: error.message });
+      res.status(error.statusCode).json({ error: error.message });
       return;
     }
     // Internals (env names, LNbits ids) must not leak into Logic App run history.
     console.error('rewards payment failed:', error);
-    res.send(500, { error: 'internal error' });
+    res.status(500).json({ error: 'internal error' });
   }
 });
 
-server.get(
-  '/auth-:name(start|end).html',
-  restify.plugins.serveStatic({
-    directory: path.join(__dirname, '../public'),
-  }),
+const authStartPage = fs.readFileSync(
+  path.join(__dirname, '../public/auth-start.html'),
+  'utf8',
 );
+const authEndPage = fs.readFileSync(
+  path.join(__dirname, '../public/auth-end.html'),
+  'utf8',
+);
+
+server.get('/auth-start.html', (_req, res) => {
+  res.type('html').send(authStartPage);
+});
+server.get('/auth-end.html', (_req, res) => {
+  res.type('html').send(authEndPage);
+});

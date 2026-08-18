@@ -21,7 +21,7 @@ flowchart TB
         User[Teams User]
     end
     subgraph Bot["Teams Bot (App Service)"]
-        Restify[restify :3978 /api/messages]
+        Express[Express :3978 /api/messages]
         TB[TeamsBot - TeamsActivityHandler]
         MW[FetchUserMiddleware]
         LNS[lnbitsService]
@@ -58,7 +58,7 @@ flowchart TB
 | Component | Technology
 
 | Teams bot (repo root)
-| Node.js 18, TypeScript, Bot Framework SDK (`botbuilder` 4.x), restify, `@microsoft/teamsfx`
+| Node.js 24, TypeScript, Bot Framework SDK (`botbuilder` 4.x), Express 5, `@microsoft/teamsfx`
 
 | Web tabs (`tabs/`)
 | React 18, Create React App (react-scripts 5), React Router 6, MSAL (`@azure/msal-browser`/`@azure/msal-react`), Fluent UI 8, `@microsoft/teams-js`
@@ -83,7 +83,7 @@ flowchart TB
 
 === Teams Bot
 
-`src/index.ts` starts a restify server (default port 3978) and wires a
+`src/index.ts` starts an Express server (default port 3978) and wires a
 `CloudAdapter` with multi-tenant credentials. All turns pass through
 `FetchUserMiddleware`, which resolves the Teams member and calls
 `UserService.ensureUserSetup()` — creating the LNbits user (keyed by the AAD

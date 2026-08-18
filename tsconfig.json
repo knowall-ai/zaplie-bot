@@ -1,4 +1,7 @@
 {
+  // Load the tsconfig "include" list (src/types/global.d.ts) under ts-node too,
+  // so `npm run dev` sees the same globals as `tsc --build`.
+  "ts-node": { "files": true },
   "compilerOptions": {
     "declaration": true,
     "target": "es2017",
