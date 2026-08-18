@@ -5,11 +5,7 @@
 
 import { TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
-import {
-  getUserWallets,
-  getWallets,
-  getUsers,
-} from '../services/lnbitsService';
+import { getUserWallets, getUsers } from '../services/lnbitsService';
 import { getRecentZaps } from '../services/zapHistoryService';
 import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
 import {
@@ -19,8 +15,13 @@ import {
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
+const ALLOWANCE_WALLET_NAME = 'Allowance';
+const PRIVATE_WALLET_NAME = 'Private';
 
 const toSats = (balanceMsat: number): number => Math.floor(balanceMsat / 1000);
+
+const isBalanceWallet = (wallet: Wallet): boolean =>
+  wallet.name === ALLOWANCE_WALLET_NAME || wallet.name === PRIVATE_WALLET_NAME;
 
 const DAYS_PARAMETER = {
   type: 'number',
@@ -41,7 +42,7 @@ const getMyBalanceTool: ToolDefinition = {
     const wallets = await getUserWallets(adminKey, user.id);
     return {
       rewardLabel,
-      wallets: wallets.map(wallet => ({
+      wallets: wallets.filter(isBalanceWallet).map(wallet => ({
         name: wallet.name,
         balanceSats: toSats(wallet.balance_msat),
       })),
@@ -55,19 +56,28 @@ const getLeaderboardTool: ToolDefinition = {
     "Get the team leaderboard, ranked by each teammate's Private wallet balance.",
   parameters: { type: 'object', properties: {}, required: [] },
   handler: async () => {
-    const [privateWallets, users] = await Promise.all([
-      getWallets(adminKey, 'Private'),
-      getUsers(adminKey, null),
-    ]);
-    const displayNameByUserId = new Map(
-      users.map(user => [user.id, user.displayName]),
+    const users = await getUsers(adminKey, null);
+    const walletsByUser = await Promise.all(
+      users.map(async user => ({
+        user,
+        wallets: await getUserWallets(adminKey, user.id),
+      })),
     );
-    const leaderboard = privateWallets
-      .map(wallet => ({
-        displayName: displayNameByUserId.get(wallet.user) ?? 'Unknown',
-        balanceSats: toSats(wallet.balance_msat),
-      }))
-      .sort((a, b) => b.balanceSats - a.balanceSats);
+
+    const leaderboard: { displayName: string; balanceSats: number }[] = [];
+    for (const { user, wallets } of walletsByUser) {
+      const privateWallet = wallets.find(
+        wallet => wallet.name === PRIVATE_WALLET_NAME,
+      );
+      if (privateWallet) {
+        leaderboard.push({
+          displayName: user.displayName,
+          balanceSats: toSats(privateWallet.balance_msat),
+        });
+      }
+    }
+
+    leaderboard.sort((a, b) => b.balanceSats - a.balanceSats);
     return { rewardLabel, leaderboard };
   },
 };
