@@ -206,11 +206,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
         paymentMemo = `[Anonymous] ${paymentMemo}`;
       }
 
-      const result = await sendZap(
-        recipient.id,
-        zapAmount,
-        paymentMemo,
-      );
+      const result = await sendZap(recipient.id, zapAmount, paymentMemo);
 
       if (result && result.payment_hash) {
         setPaymentHash(result.payment_hash);
