@@ -1,296 +1,269 @@
-import React, { useEffect, useState, useContext } from 'react';
-import styles from './WalletTransactionLog.module.css';
-import {
-  getUsers,
-  getWalletTransactionsSince,
-  getUserWallets,
-} from '../services/lnbitsServiceLocal';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useMsal } from '@azure/msal-react';
 import ArrowIncoming from '../images/ArrowIncoming.svg';
 import ArrowOutgoing from '../images/ArrowOutcoming.svg';
-import moment from 'moment';
-import { useMsal } from '@azure/msal-react';
+import {
+  getUsers,
+  getUserWallets,
+  getWalletTransactionsSince,
+} from '../services/lnbitsServiceLocal';
+import {
+  fetchZapActivity,
+  pairId,
+  transactionTime,
+  ZapTransfer,
+} from '../utils/walletUtilities';
 import { RewardNameContext } from './RewardNameContext';
+import styles from './WalletTransactionLog.module.css';
+
+type HistoryFilter = 'all' | 'sent' | 'received';
 
 interface WalletTransactionLogProps {
-  activeTab?: string;
-  activeWallet?: string;
-  filterZaps?: (activeTab: string) => void;
+  activeTab: HistoryFilter;
+  activeWallet: WalletType;
 }
 
-// Time constants
-const SECONDS_PER_DAY = 86400;
-const MS_PER_SECOND = 1000;
+interface TransactionHistory {
+  currentUser: User;
+  transactions: Transaction[];
+  transfersById: Map<string, ZapTransfer>;
+}
+
+const SECONDS_PER_DAY = 86_400;
 const TRANSACTION_HISTORY_DAYS = 30;
+
+const relativeTime = (transaction: Transaction): string => {
+  const seconds = transactionTime(transaction);
+  if (!Number.isFinite(seconds)) return 'Time unavailable';
+
+  const elapsedSeconds = Math.max(0, Math.floor(Date.now() / 1000 - seconds));
+  if (elapsedSeconds < 60) return `${elapsedSeconds} seconds ago`;
+  if (elapsedSeconds < 3_600) {
+    return `${Math.floor(elapsedSeconds / 60)} minutes ago`;
+  }
+  if (elapsedSeconds < SECONDS_PER_DAY) {
+    return `${Math.floor(elapsedSeconds / 3_600)} hours ago`;
+  }
+  return `${Math.floor(elapsedSeconds / SECONDS_PER_DAY)} days ago`;
+};
+
+const counterpartyName = (
+  transaction: Transaction,
+  currentUser: User,
+  transfer: ZapTransfer | undefined,
+): string => {
+  if (!transfer) return 'Counterparty unavailable';
+
+  if (transaction.amount > 0) {
+    if (transfer.to.id !== currentUser.id) return 'Counterparty unavailable';
+    if (transaction.memo?.startsWith('[Anonymous]')) return 'Anonymous';
+    return (
+      transfer.from.displayName ||
+      transfer.from.email ||
+      'Counterparty unavailable'
+    );
+  }
+
+  if (transaction.amount < 0) {
+    if (transfer.from.id !== currentUser.id) {
+      return 'Counterparty unavailable';
+    }
+    return (
+      transfer.to.displayName || transfer.to.email || 'Counterparty unavailable'
+    );
+  }
+
+  return 'Counterparty unavailable';
+};
 
 const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   activeTab,
   activeWallet,
 }) => {
-  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); // Cache all transactions
-  const [displayedTransactions, setDisplayedTransactions] = useState<
-    Transaction[]
-  >([]); // Filtered transactions to display
+  const { accounts } = useMsal();
+  const accountCount = accounts.length;
+  const accountId =
+    accountCount === 1 ? accounts[0]?.localAccountId : undefined;
+  const {
+    rewardName,
+    isLoading: isRewardNameLoading,
+    error: rewardNameError,
+    retry: retryRewardName,
+  } = useContext(RewardNameContext);
+  const [history, setHistory] = useState<TransactionHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentWallet, setCurrentWallet] = useState<string | undefined>(
-    undefined,
-  ); // Track which wallet data is cached for
+  const [retryToken, setRetryToken] = useState(0);
 
-  const { accounts } = useMsal();
-
-  // Effect to fetch data when wallet changes
   useEffect(() => {
-    // Calculate the timestamp for transaction history period
-    const transactionHistoryStart =
-      Date.now() / MS_PER_SECOND - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+    let cancelled = false;
 
-    const paymentsSinceTimestamp = transactionHistoryStart;
-
-    const account = accounts[0];
-
-    const fetchTransactions = async () => {
-      setLoading(true);
+    const loadTransactions = async () => {
+      setHistory(null);
       setError(null);
 
-      let fetchedTransactions: Transaction[] = [];
-
-      try {
-        // First, fetch all users
-        const allUsers = await getUsers({});
-
-        const currentUserLNbitDetails = await getUsers({
-          aadObjectId: account.localAccountId,
-        });
-
-        if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
-          const user = currentUserLNbitDetails[0];
-
-          // Fetch user's wallets
-          const userWallets = await getUserWallets(user.id);
-
-          // Create a wallet ID to user mapping for ALL users - parallelized
-          const walletToUserMap = new Map<string, User>();
-          let allPayments: Transaction[] = [];
-
-          if (allUsers) {
-            // Parallelize wallet fetches for all users
-            const walletResults = await Promise.all(
-              allUsers.map(async u => {
-                try {
-                  const wallets = await getUserWallets(u.id);
-                  return { user: u, wallets: wallets || [] };
-                } catch (err) {
-                  // Log error but continue - don't fail for one user
-                  return { user: u, wallets: [] };
-                }
-              }),
-            );
-
-            // Build wallet to user mapping
-            walletResults.forEach(({ user, wallets }) => {
-              wallets.forEach(wallet => {
-                walletToUserMap.set(wallet.id, user);
-              });
-            });
-
-            // Collect all wallets and parallelize payment fetches
-            const allWallets = walletResults.flatMap(r => r.wallets);
-            const paymentResults = await Promise.all(
-              allWallets.map(async wallet => {
-                try {
-                  return await getWalletTransactionsSince(
-                    wallet.id,
-                    paymentsSinceTimestamp,
-                    null,
-                  );
-                } catch (err) {
-                  // Log error but continue - don't fail for one wallet
-                  return [];
-                }
-              }),
-            );
-            allPayments = paymentResults.flat();
-          }
-
-          // Create a map of all payments by checking_id for internal transfer matching
-          const paymentsByCheckingId = new Map<string, Transaction[]>();
-          allPayments.forEach(payment => {
-            const cleanId = payment.checking_id?.replace('internal_', '') || '';
-            if (cleanId) {
-              const existing = paymentsByCheckingId.get(cleanId) || [];
-              existing.push(payment);
-              paymentsByCheckingId.set(cleanId, existing);
-            }
-          });
-
-          let walletId: string | undefined;
-
-          if (userWallets && userWallets.length > 0) {
-            if (activeWallet === 'Private') {
-              const privateWallet = userWallets.find(w =>
-                w.name.toLowerCase().includes('private'),
-              );
-              walletId = privateWallet?.id;
-            } else {
-              const allowanceWallet = userWallets.find(w =>
-                w.name.toLowerCase().includes('allowance'),
-              );
-              walletId = allowanceWallet?.id;
-            }
-          } else {
-            console.error('No wallets found for user');
-          }
-
-          if (!walletId) {
-            throw new Error('Selected wallet was not found');
-          }
-
-          const transactions = await getWalletTransactionsSince(
-            walletId,
-            paymentsSinceTimestamp,
-            null,
-          );
-
-          // Don't filter by tab here - we'll cache ALL transactions and filter later
-          for (const transaction of transactions) {
-            const walletOwner = walletToUserMap.get(transaction.wallet_id);
-            const isIncoming = transaction.amount > 0;
-
-            // Initialize extra.from and extra.to
-            if (!transaction.extra) {
-              transaction.extra = {};
-            }
-
-            // Try to find matching internal payment (the other side of the transfer)
-            const cleanCheckingId =
-              transaction.checking_id?.replace('internal_', '') || '';
-            const matchingPayments =
-              paymentsByCheckingId.get(cleanCheckingId) || [];
-            const matchingPayment = matchingPayments.find(
-              p => p.wallet_id !== transaction.wallet_id,
-            );
-
-            let otherUser: User | null = null;
-
-            // First try to find the other party via matching payment
-            if (matchingPayment) {
-              otherUser =
-                walletToUserMap.get(matchingPayment.wallet_id) || null;
-            }
-
-            // If no matching payment found, try to extract from memo
-            if (!otherUser && transaction.memo) {
-              // Try to find user by matching displayName or email in memo
-              const memo = transaction.memo.toLowerCase();
-              const foundUser = allUsers?.find(u => {
-                const displayName = u.displayName?.toLowerCase();
-                const email = u.email?.toLowerCase();
-                const username = u.email?.split('@')[0]?.toLowerCase();
-
-                return (
-                  (displayName && memo.includes(displayName)) ||
-                  (email && memo.includes(email)) ||
-                  (username && memo.includes(username))
-                );
-              });
-
-              if (foundUser) {
-                otherUser = foundUser;
-              }
-            }
-
-            if (isIncoming) {
-              // For incoming: TO = current wallet owner, FROM = other party
-              transaction.extra.to = walletOwner || null;
-              transaction.extra.from = otherUser;
-            } else {
-              // For outgoing: FROM = current wallet owner, TO = other party
-              transaction.extra.from = walletOwner || null;
-              transaction.extra.to = otherUser;
-            }
-          }
-
-          fetchedTransactions = fetchedTransactions.concat(transactions);
-        }
-
-        // Cache all transactions
-        setAllTransactions(fetchedTransactions);
-        setCurrentWallet(activeWallet);
-      } catch (error) {
-        if (error instanceof Error) {
-          setError(`Failed to fetch transactions: ${error.message}`);
-        } else {
-          setError('An unknown error occurred while fetching transactions');
-        }
-        console.error(error);
-      } finally {
+      if (!accountId) {
         setLoading(false);
+        setError(
+          accountCount === 0
+            ? 'Sign in to load your transaction history.'
+            : 'Your Zaplie account could not be identified.',
+        );
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const matchingUsers = await getUsers({ aadObjectId: accountId });
+        if (matchingUsers.length !== 1) {
+          throw new Error('Your Zaplie account could not be identified.');
+        }
+
+        const currentUser = matchingUsers[0];
+        const wallets = await getUserWallets(currentUser.id);
+        const matchingWallets = wallets.filter(
+          candidate =>
+            candidate.name.trim().toLowerCase() === activeWallet.toLowerCase(),
+        );
+        if (matchingWallets.length === 0) {
+          throw new Error(`Your ${activeWallet} wallet could not be found.`);
+        }
+        if (matchingWallets.length > 1) {
+          throw new Error(
+            `Your ${activeWallet} wallet could not be identified uniquely.`,
+          );
+        }
+        const wallet = matchingWallets[0];
+
+        const since =
+          Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+        const [transactions, activity] = await Promise.all([
+          getWalletTransactionsSince(wallet.id, since, null),
+          fetchZapActivity(),
+        ]);
+        const transfersById = new Map(
+          activity.transfers
+            .map(transfer => [pairId(transfer.transaction), transfer] as const)
+            .filter(([id]) => Boolean(id)),
+        );
+
+        if (!cancelled) {
+          setHistory({ currentUser, transactions, transfersById });
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Transaction history could not be loaded.',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
-    // Early return if no accounts available yet
-    if (!accounts || accounts.length === 0) {
-      setLoading(false);
-      return;
-    }
+    void loadTransactions();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountCount, accountId, activeWallet, retryToken]);
 
-    // Only fetch if wallet changed or no data cached
-    if (currentWallet !== activeWallet) {
-      setAllTransactions([]);
-      setDisplayedTransactions([]);
-      fetchTransactions();
-    }
-  }, [activeWallet, accounts, currentWallet]);
+  const displayedTransactions = useMemo(() => {
+    if (!history) return [];
 
-  // Separate effect to filter cached transactions when activeTab changes
-  useEffect(() => {
-    if (allTransactions.length === 0) {
-      setDisplayedTransactions([]);
-      return;
-    }
-
-    let filtered: Transaction[];
-    if (activeTab === 'sent') {
-      filtered = allTransactions.filter(f => f.amount < 0);
-    } else if (activeTab === 'received') {
-      filtered = allTransactions.filter(f => f.amount > 0);
-    } else {
-      filtered = allTransactions;
-    }
-
-    setDisplayedTransactions(filtered);
-  }, [activeTab, allTransactions]);
-
-  const rewardNameContext = useContext(RewardNameContext);
-  if (!rewardNameContext) {
-    return null; // or handle the case where the context is not available
-  }
-  const rewardsName = rewardNameContext.rewardName;
+    return history.transactions
+      .filter(transaction => {
+        if (activeTab === 'sent') return transaction.amount < 0;
+        if (activeTab === 'received') return transaction.amount > 0;
+        return true;
+      })
+      .slice()
+      .sort((left, right) => transactionTime(right) - transactionTime(left));
+  }, [activeTab, history]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className={styles.feedlist} aria-busy="true" role="status">
+        <span className={styles.srOnly}>Loading transactions</span>
+        {[0, 1, 2].map(placeholder => (
+          <div
+            key={placeholder}
+            className={styles.skeletonRow}
+            aria-hidden="true"
+          >
+            <div className={styles.skeletonAvatar} />
+            <div className={styles.skeletonLines}>
+              <div
+                className={`${styles.skeletonLine} ${styles.skeletonLineNarrow}`}
+              />
+              <div
+                className={`${styles.skeletonLine} ${styles.skeletonLineWide}`}
+              />
+            </div>
+            <div className={styles.skeletonAmount} />
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (error) {
-    return <div>{error}</div>;
+    return (
+      <div className={styles.errorState} role="alert">
+        <span>{error}</span>
+        {accountId && (
+          <button
+            type="button"
+            onClick={() => setRetryToken(token => token + 1)}
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    );
   }
+
+  if (isRewardNameLoading) {
+    return (
+      <div className={styles.statusState} aria-busy="true" role="status">
+        Loading reward name…
+      </div>
+    );
+  }
+
+  if (rewardNameError || !rewardName) {
+    return (
+      <div className={styles.errorState} role="alert">
+        <span>
+          {rewardNameError?.message || 'The reward name is unavailable.'}
+        </span>
+        {retryRewardName && (
+          <button type="button" onClick={retryRewardName}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!history) return null;
 
   return (
     <div className={styles.feedlist}>
-      {displayedTransactions
-        ?.sort((a, b) => {
-          // Convert both times to numbers for sorting
-          const timeA =
-            typeof a.time === 'number'
-              ? a.time
-              : new Date(a.time).getTime() / 1000;
-          const timeB =
-            typeof b.time === 'number'
-              ? b.time
-              : new Date(b.time).getTime() / 1000;
-          return timeB - timeA;
-        })
-        .map((transaction, index) => (
+      {displayedTransactions.map((transaction, index) => {
+        const outgoing = transaction.amount < 0;
+        const transfer = history.transfersById.get(pairId(transaction));
+        const counterparty = counterpartyName(
+          transaction,
+          history.currentUser,
+          transfer,
+        );
+        const time = transactionTime(transaction);
+        const memo = transaction.memo?.replace(/^\[Anonymous\]\s*/, '').trim();
+        const amount = transaction.amount / 1000;
+
+        return (
           <div
             key={transaction.checking_id || index}
             className={styles.bodycell}
@@ -300,105 +273,55 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
                 <img
                   className={styles.avatarIcon}
                   alt=""
-                  src={
-                    (transaction.amount as number) < 0
-                      ? ArrowOutgoing
-                      : ArrowIncoming
-                  }
+                  src={outgoing ? ArrowOutgoing : ArrowIncoming}
                 />
-
                 <div className={styles.userName}>
-                  <p className={styles.lightHelightInItems}>
-                    {' '}
+                  <p className={styles.txTitle}>
                     <b>
-                      {transaction.extra?.tag === 'zap'
-                        ? 'Zap!'
-                        : (transaction.extra?.tag ?? 'Regular transaction')}
+                      {transaction.extra?.tag === 'zap' ? 'Zap' : 'Payment'}
                     </b>
+                    {transaction.pending && (
+                      <span className={styles.pending}>Pending</span>
+                    )}
                   </p>
-                  {/* 
-                    Dynamically calculate and display the time difference between the transaction and the current time.
-                    The output format adapts based on the time elapsed:
-                    - Less than 60 seconds: show in seconds.
-                    - Less than 1 hour: show in minutes.
-                    - Less than 1 day: show in hours.
-                    - More than 1 day: show in days.
-                  */}
-                  <div className={styles.lightHelightInItems}>
-                    {(() => {
-                      const now = moment();
-                      // Convert time to milliseconds for moment
-                      const timeInMs =
-                        typeof transaction.time === 'number'
-                          ? transaction.time * 1000
-                          : new Date(transaction.time).getTime();
-                      const transactionTime = moment(timeInMs);
-                      const diffInSeconds = now.diff(
-                        transactionTime,
-                        'seconds',
-                      );
-
-                      if (diffInSeconds < 60) {
-                        return `${diffInSeconds} seconds ago `;
-                      } else if (diffInSeconds < 3600) {
-                        const diffInMinutes = now.diff(
-                          transactionTime,
-                          'minutes',
-                        );
-                        return `${diffInMinutes} minutes ago `;
-                      } else if (diffInSeconds < 86400) {
-                        const diffInHours = now.diff(transactionTime, 'hours');
-                        return `${diffInHours} hours ago `;
-                      } else {
-                        const diffInDays = now.diff(transactionTime, 'days');
-                        return `${diffInDays} days ago `;
+                  <p className={styles.txMeta}>
+                    <time
+                      dateTime={
+                        Number.isFinite(time)
+                          ? new Date(time * 1000).toISOString()
+                          : undefined
                       }
-                    })()}
-                    {(transaction.amount as number) < 0 ? 'to' : 'from'}{' '}
-                    <b>
-                      {(transaction.amount as number) < 0
-                        ? transaction.extra?.to?.displayName ||
-                          transaction.extra?.to?.email ||
-                          'Unknown'
-                        : transaction.extra?.from?.displayName ||
-                          transaction.extra?.from?.email ||
-                          'Unknown'}{' '}
-                    </b>
-                  </div>
-                  <p className={styles.lightHelightInItems}>
-                    {transaction.memo}
+                    >
+                      {relativeTime(transaction)}
+                    </time>
+                    <span aria-hidden="true"> · </span>
+                    {outgoing
+                      ? 'to'
+                      : transaction.amount > 0
+                        ? 'from'
+                        : 'with'}{' '}
+                    <b>{counterparty}</b>
                   </p>
+                  {memo && <p className={styles.txMemo}>{memo}</p>}
                 </div>
               </div>
               <div
-                className={styles.transactionDetailsAllowance}
-                style={{
-                  color:
-                    (transaction.amount as number) < 0 ? '#E75858' : '#00A14B',
-                }}
+                className={`${styles.transactionDetailsAllowance} ${
+                  outgoing ? styles.amountNegative : styles.amountPositive
+                }`}
               >
-                <div className={styles.lightHelightInItems}>
-                  {' '}
-                  <b className={styles.b}>
-                    {transaction.amount < 0
-                      ? transaction.amount / 1000
-                      : '+' + transaction.amount / 1000}
-                  </b>{' '}
-                  {rewardsName}{' '}
-                </div>
-                <div
-                  style={{ display: 'none' }}
-                  className={styles.lightHelightInItems}
-                >
-                  {' '}
-                  about $0.11{' '}
-                </div>
+                <b className={styles.b}>
+                  {transaction.amount > 0 ? '+' : ''}
+                  {amount.toLocaleString()}
+                </b>{' '}
+                {rewardName}
               </div>
             </div>
           </div>
-        ))}
+        );
+      })}
       {displayedTransactions.length === 0 && (
-        <div>No transactions to show.</div>
+        <div className={styles.emptyState}>No transactions to show.</div>
       )}
     </div>
   );
