@@ -52,18 +52,27 @@ export const normalizeRecipientIds = (rawReceiverIds: unknown): string[] => {
   );
 };
 
-export const getPendingRecipientIds = (
+// Both helpers read the whole card's recipients in one store read rather than
+// one read per recipient.
+export const getPendingRecipientIds = async (
   ledger: ZapLedger,
   recipientIds: string[],
   entryKey: (recipientId: string) => string,
-): string[] => recipientIds.filter(id => !ledger.get(entryKey(id)));
+): Promise<string[]> => {
+  const entries = await ledger.getMany(recipientIds.map(id => entryKey(id)));
+  return recipientIds.filter(id => !entries.has(entryKey(id)));
+};
 
-export const hasUnknownRecipientOutcome = (
+export const hasUncertainRecipientOutcome = async (
   ledger: ZapLedger,
   recipientIds: string[],
   entryKey: (recipientId: string) => string,
-): boolean =>
-  recipientIds.some(id => ledger.get(entryKey(id))?.state === 'unknown');
+): Promise<boolean> => {
+  const entries = await ledger.getMany(recipientIds.map(id => entryKey(id)));
+  return Array.from(entries.values()).some(
+    entry => entry.state === 'processing' || entry.state === 'unknown',
+  );
+};
 
 // One recipient of a zap card. Extracted from the submitZaps loop so the
 // ledger transitions are exercised by tests rather than re-implemented in them.
@@ -75,7 +84,7 @@ export async function processZapRecipient({
   validateReceiver,
   pay,
 }: RecipientDeps): Promise<RecipientOutcome> {
-  if (ledger.get(entryKey) || !ledger.tryAcquire(entryKey)) {
+  if (!(await ledger.tryAcquire(entryKey))) {
     return { status: 'skipped' };
   }
 
@@ -84,20 +93,20 @@ export async function processZapRecipient({
     receiver = await getReceiver();
   } catch (error) {
     // Nothing was paid, so the slot must be freed for a retry.
-    ledger.releaseIfProcessing(entryKey);
+    await ledger.releaseIfProcessing(entryKey);
     throw error;
   }
 
   const label = receiver?.displayName || `User ID: ${recipientId}`;
 
   if (!receiver?.privateWallet) {
-    ledger.releaseIfProcessing(entryKey);
+    await ledger.releaseIfProcessing(entryKey);
     return { status: 'failed', label };
   }
 
   const validationError = validateReceiver?.(receiver);
   if (validationError) {
-    ledger.releaseIfProcessing(entryKey);
+    await ledger.releaseIfProcessing(entryKey);
     return { status: 'failed', label: `${label} (${validationError})` };
   }
 
@@ -107,18 +116,18 @@ export async function processZapRecipient({
   } catch (error) {
     if (error instanceof PaymentOutcomeUnknownError) {
       // The payment may already have settled, so a retry is unsafe.
-      ledger.markUnknown(entryKey);
+      await ledger.markUnknown(entryKey);
       console.error(`Zap to ${recipientId} ended in an unknown state.`, error);
       return { status: 'needs-checking', label };
     }
     // Failed before reaching LNbits: safe to retry.
-    ledger.releaseIfProcessing(entryKey);
+    await ledger.releaseIfProcessing(entryKey);
     console.error(`Zap to ${recipientId} failed before payment.`, error);
     return { status: 'failed', label };
   }
 
   // Recorded as soon as the hash is confirmed and before any card update, so a
   // UI failure cannot make a settled payment retryable.
-  ledger.markPaid(entryKey, paid.paymentHash);
+  await ledger.markPaid(entryKey, paid.paymentHash);
   return { status: 'paid', label };
 }

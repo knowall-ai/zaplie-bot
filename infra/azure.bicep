@@ -59,6 +59,14 @@ resource webApp 'Microsoft.Web/sites@2021-02-01' = {
           name: 'RUNNING_ON_AZURE'
           value: '1'
         }
+        {
+          name: 'NODE_ENV'
+          value: 'production'
+        }
+        {
+          name: 'ZAPLIE_DATA_DIR'
+          value: 'D:\\home\\data\\zaplie'
+        }
       ]
       ftpsState: 'FtpsOnly'
     }
@@ -78,6 +86,8 @@ resource webAppSettings 'Microsoft.Web/sites/config@2021-02-01' = {
     AAD_APP_TENANT_ID: aadAppTenantId
     AAD_APP_OAUTH_AUTHORITY_HOST: aadAppOauthAuthorityHost
     RUNNING_ON_AZURE: '1'
+    NODE_ENV: 'production'
+    ZAPLIE_DATA_DIR: 'D:\\home\\data\\zaplie'
   }
 }
 

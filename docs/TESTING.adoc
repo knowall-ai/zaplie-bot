@@ -13,15 +13,24 @@ closing the gaps.
 
 === Unit Tests — Bot (repo root)
 
-- Framework: Jest 29 (`jest.config.ts` — note: only `clearMocks` is configured;
-  the ts-jest transform is not yet wired, and the root `npm test` script is
-  intentionally unwired)
-- Test files: `src/services/lnbitsService.test.ts`
-- Run directly:
+- Framework: Jest 29 with `ts-jest`, coverage floors, and a checked-in coverage
+  ratchet baseline.
+- `src/services/zapLedger.test.ts` covers restart durability, independent
+  instances, two actual Node processes, exclusive-lock timeout after a crash,
+  atomic-write crash leftovers, strict schema/config validation, key scoping,
+  and the absence of raw Teams and wallet identifiers from the store.
+- `src/commands/zapRecipient.test.ts` exercises the production transition path,
+  including safe pre-payment release, persisted unknown outcomes, and a paid
+  duplicate after restart that never invokes the payment dependency.
+- `src/services/lnbitsService.test.ts` mocks `fetch` and exercises the real
+  service logic for wallet, invoice, and payment calls.
+- Run:
 
 [source,bash]
 ----
-npx jest src/services/lnbitsService.test.ts
+npm test
+npm run test:coverage
+npm run coverage:ratchet
 ----
 
 === Unit Tests — Web Tabs (`tabs/`)
@@ -66,6 +75,12 @@ New E2E tests should reference the feature `id` (e.g. `total-zaps`,
 - *Bot:* sideload the app via Teams Toolkit (`teamsapp preview --env local`)
   with a dev tunnel on port 3978; exercise `send zap`, `show my balance`,
   `show leaderboard`.
+- *Bot Zap retries:* use a controlled non-production wallet and a durable test
+  data directory. Submit one card twice and confirm only one LNbits payment.
+  Restart the bot and submit the same card again; it must remain blocked. For a
+  crash exercise, stop after `processing` is durable and confirm the restarted
+  bot does not call LNbits for that recipient. Reconcile LNbits before any
+  record or orphan-lock repair; do not delete a barrier merely to retry.
 - *Tabs:* `cd tabs && npm start` (Express backend on 5000, CRA dev server on
   3000) and verify Feed, Users, Rewards, Wallet, and Settings against a dev
   LNbits instance.
@@ -73,11 +88,5 @@ New E2E tests should reference the feature `id` (e.g. `total-zaps`,
 
 == Gaps and Next Steps
 
-. Wire ts-jest into the root `jest.config.ts` and point the root `npm test`
-  script at Jest.
-. Replace the self-mocking pattern in `src/services/lnbitsService.test.ts`
-  with tests that mock `fetch` and exercise the real service logic.
 . Add Playwright E2E coverage for the scenarios in `docs/requirements.yaml`.
 . Add tests for the three Azure Functions.
-. Run tests in CI — the current GitHub Actions workflows build the tabs app
-  but run no tests.

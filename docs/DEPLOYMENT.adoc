@@ -42,7 +42,8 @@
 . `teamsApp/create` and `botAadApp/create`
 . `arm/deploy` — `infra/azure.bicep` with `infra/azure.parameters.json`:
   App Service plan (B1), Windows web app (httpsOnly, alwaysOn,
-  `WEBSITE_RUN_FROM_PACKAGE=1`, Node `~18`), app settings (BOT_*, AAD_APP_*),
+  `WEBSITE_RUN_FROM_PACKAGE=1`, Node `~24`), app settings (BOT_*, AAD_APP_*,
+  `NODE_ENV=production`, `ZAPLIE_DATA_DIR=D:\home\data\zaplie`),
   and `infra/botRegistration/azurebot.bicep` — Azure Bot Service (F0) with the
   MS Teams channel
 . `aadApp/update`, manifest validation, `zipAppPackage`, `teamsApp/update`
@@ -75,7 +76,9 @@ teamsapp preview --env local
 
 Or press F5 in VS Code ("Debug in Teams (Edge/Chrome)"). The bot itself runs
 with `npm run dev` (nodemon + ts-node, inspector on 9239), reading
-`.localConfigs` via `npm run dev:teamsfx`.
+`.localConfigs` via `npm run dev:teamsfx`. That command explicitly selects
+development mode; if `ZAPLIE_DATA_DIR` is omitted, only this mode uses the
+ignored `.zaplie-data` fallback.
 
 === Web tabs (GitHub Actions)
 
@@ -105,6 +108,41 @@ deploys the whole portal: the React build *and* the Express backend under
 `node backend/server.js` (with `SCM_DO_BUILD_DURING_DEPLOYMENT=false`, since
 the artifact arrives prebuilt). The bot deploys separately via
 `teamsapp deploy`.
+
+=== Persistent application state
+
+The bot keeps mutable state (the weekly allowance run guard and the durable
+Zap ledger `bot-zap-ledger.json`) under `ZAPLIE_DATA_DIR`. Bicep sets
+`ZAPLIE_DATA_DIR=D:\home\data\zaplie` on the Windows App Service, outside
+`wwwroot`, so a clean deployment cannot replace it. Local development falls
+back to the git-ignored `.zaplie-data` directory when the variable is absent;
+every deployed (non-development) runtime must set it to an absolute path or
+the bot refuses to start.
+
+Never include mutable JSON in a deployment artifact: `.webappignore` excludes
+the ledger, its `.lock` file, and `bot-zap-ledger.json.<pid>.<random>.tmp`
+replacements. The bot creates the data directory with mode `0700` and ledger,
+lock, and temporary files with mode `0600` on supporting filesystems.
+
+Back up and restore the data directory as an application-consistent unit:
+
+. Stop or drain every bot process sharing the directory before copying it.
+. Copy the canonical `bot-zap-ledger.json`; never copy `.lock` or `.tmp`
+  artifacts. Keep backups access-controlled: payment hashes are operational
+  metadata.
+. To restore, keep the bot stopped, preserve a copy of the current directory,
+  restore the canonical backup into `ZAPLIE_DATA_DIR`, restore restrictive
+  permissions, and then start the bot.
+. If a restore moves the ledger backward in time, reconcile every potentially
+  affected Zap against the LNbits ledger before accepting submissions. Never
+  delete or rewrite `processing` or `unknown` records merely to make a retry
+  succeed.
+
+The bot deliberately never evicts `bot-zap-ledger.json.lock` by age: ownership
+is uncertain. After an unclean shutdown, stop/drain every bot process, inspect
+the canonical store, reconcile any `processing` or `unknown` record with
+LNbits, and only then remove an orphaned lock. Store corruption, an unreadable
+data directory, or lock acquisition failure prevents payment.
 
 === Azure Functions
 
@@ -144,6 +182,12 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | `LNBITS_ADMINKEY`
 | LNbits admin API key for wallet operations — server-side only, never with a
   `REACT_APP_` prefix
+| Bot
+
+| `ZAPLIE_DATA_DIR`
+| Absolute persistent directory for the bot's mutable stores (weekly allowance
+  run guard and `bot-zap-ledger.json`); Bicep sets `D:\home\data\zaplie` on
+  the App Service, local development defaults to `.zaplie-data`
 | Bot
 
 | `LNBITS_INITIAL_ALLOWANCE`
