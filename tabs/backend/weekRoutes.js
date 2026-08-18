@@ -1,36 +1,10 @@
-// filepath: tabs/backend/weekRoutes.js
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
+const { requireLnbitsConfig, getLnbitsToken } = require('./lnbitsAdmin');
 
 const router = express.Router();
 
 const PAYMENTS_LIMIT = 100;
-
-const requireLnbitsConfig = () => {
-  const nodeUrl = process.env.LNBITS_NODE_URL;
-  const username = process.env.LNBITS_USERNAME;
-  const password = process.env.LNBITS_PASSWORD;
-  if (!nodeUrl || !username || !password) {
-    throw new Error('LNBITS_NODE_URL, LNBITS_USERNAME and LNBITS_PASSWORD must be set');
-  }
-  return { nodeUrl, username, password };
-};
-
-const getLnbitsToken = async ({ nodeUrl, username, password }) => {
-  const response = await fetch(`${nodeUrl}/api/v1/auth`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
-  if (!response.ok) {
-    throw new Error(`LNbits auth failed (status: ${response.status})`);
-  }
-  const data = await response.json();
-  if (!data.access_token) {
-    throw new Error('LNbits auth response missing access_token');
-  }
-  return data.access_token;
-};
 
 const lnbitsGet = async (url, headers) => {
   const response = await fetch(url, {
