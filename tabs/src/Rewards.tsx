@@ -19,7 +19,7 @@ const Rewards: React.FC = () => {
           paddingTop: 0,
         }}
       >
-        <RewardsComponent userId={'2984e3ac627e4fea9fd6dde9c4df83b5'} />
+        <RewardsComponent />
       </div>
     </div>
   );
