@@ -29,6 +29,7 @@ interface NavigationLinksProps {
  */
 const NAV_LINKS: NavLink[] = [
   { path: '/feed', label: 'Feed' },
+  { path: '/week', label: 'Your week' },
   { path: '/users', label: 'Users' },
   { path: '/rewards', label: 'Rewards' },
   { path: '/automations', label: 'Automations' },
