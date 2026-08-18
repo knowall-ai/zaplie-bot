@@ -23,11 +23,8 @@ interface UserAccount {
 
 interface Wallet {
   id: string;
-  admin: string;
   name: string;
   user: string;
-  adminkey: string;
-  inkey: string;
   balance_msat: number;
   deleted: boolean;
 }

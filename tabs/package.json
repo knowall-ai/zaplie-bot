@@ -39,8 +39,8 @@
   "scripts": {
     "prestart": "npm run tailwind:build",
     "start": "concurrently --kill-others-on-fail \"npm run server:dev\" \"npm run tailwind:watch\" \"react-scripts start\"",
-    "server": "node backend/server.js",
-    "server:dev": "node --watch backend/server.js",
+    "server": "node --env-file-if-exists=backend/.env backend/server.js",
+    "server:dev": "node --env-file-if-exists=backend/.env --watch backend/server.js",
     "preclient": "npm run tailwind:build",
     "client": "react-scripts start",
     "prebuild": "npm run tailwind:build:production",

@@ -37,6 +37,11 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
 
   useEffect(() => {
     console.log('walletBalance changed:', walletBalance);
+    return () => {
+      if (intervalId.current !== null) {
+        window.clearInterval(intervalId.current);
+      }
+    };
   }, [walletBalance]);
 
   const handleCancelClick = () => {
@@ -45,53 +50,45 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
 
   const handleNextClick = () => {
     setIsSuccessFailurePopupVisible(true);
-    if (myLNbitDetails) {
-      if (myLNbitDetails) {
-        createInvoice(
-          myLNbitDetails.privateWallet?.inkey || '',
-          myLNbitDetails.privateWallet?.id || '',
-          parseInt(inputValue) || 0,
-          inputNotes,
-        ).then(invoice => {
+    const walletId = myLNbitDetails.privateWallet?.id;
+    if (walletId) {
+      createInvoice(walletId, parseInt(inputValue) || 0, inputNotes).then(
+        invoice => {
           console.log(invoice);
           setInvoice(invoice);
 
           // Start polling for payment
           intervalId.current = setInterval(() => {
-            getWalletPayments(myLNbitDetails.privateWallet?.inkey || '').then(
-              payments => {
-                if (payments.length > 0) {
-                  console.log('Payment received');
-                  if (intervalId.current !== null) {
-                    window.clearInterval(intervalId.current);
-                  }
-
-                  console.log(
-                    'Update the wallet balance in the context balance',
-                  );
-                  // Update the wallet balance in the context balance
-                  getWalletBalance(
-                    myLNbitDetails.privateWallet?.inkey || '',
-                  ).then(balance => {
-                    console.log('getWalletBalance:', balance);
-                    // Use the new function to set the balance
-                    if (balance !== null) {
-                      console.log('setWalletBalance to ', balance);
-                      setWalletBalance(balance);
-                    } else {
-                      // Handle the case when balance is null
-                      // For example, set a default value or show an error message
-                      setWalletBalance(0);
-                    }
-                  });
+            getWalletPayments(walletId).then(payments => {
+              if (payments.length > 0) {
+                console.log('Payment received');
+                if (intervalId.current !== null) {
+                  window.clearInterval(intervalId.current);
                 }
-              },
-            );
+
+                console.log(
+                  'Update the wallet balance in the context balance',
+                );
+                // Update the wallet balance in the context balance
+                getWalletBalance(walletId).then(balance => {
+                  console.log('getWalletBalance:', balance);
+                  // Use the new function to set the balance
+                  if (balance !== null) {
+                    console.log('setWalletBalance to ', balance);
+                    setWalletBalance(balance);
+                  } else {
+                    // Handle the case when balance is null
+                    // For example, set a default value or show an error message
+                    setWalletBalance(0);
+                  }
+                });
+              }
+            });
           }, 5000); // Check every 5 seconds
-        });
-      } else {
-        console.error('Wallet inkey is not defined yet.');
-      }
+        },
+      );
+    } else {
+      console.error('Private wallet is not available yet.');
     }
   };
 

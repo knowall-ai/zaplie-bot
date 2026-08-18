@@ -14,7 +14,7 @@ describe('RewardsComponent', () => {
       <RewardNameContext.Provider
         value={{ rewardName: 'sats', setRewardName: jest.fn() }}
       >
-        <RewardsComponent adminKey="test-admin-key" userId="test-user" />
+        <RewardsComponent userId="test-user" />
       </RewardNameContext.Provider>,
     );
 

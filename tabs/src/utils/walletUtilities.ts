@@ -2,9 +2,7 @@ import { getAllPayments } from '../services/lnbitsServiceLocal';
 
 //import { Wallet, ZapTransaction } from 'path-to-types';
 
-export const fetchAllowanceWalletTransactions = async (
-  adminKey: string,
-): Promise<Transaction[]> => {
+export const fetchAllowanceWalletTransactions = async (): Promise<Transaction[]> => {
   console.log('=== fetchAllowanceWalletTransactions DEBUG ===');
   console.log(
     'Using getAllPayments endpoint to fetch ALL payments from ALL users',

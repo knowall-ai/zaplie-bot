@@ -2,10 +2,10 @@
 // Rewards whose recipient couldn't be resolved to a Zaplie person yet.
 // Gitignored — see pending-rewards.json. Claiming/invitation is Phase 2.
 const fs = require('fs');
-const path = require('path');
+const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = path.join(__dirname, 'pending-rewards.json');
+const STORE_PATH = dataPath('pending-rewards.json');
 
 const readStore = () => {
   try {
