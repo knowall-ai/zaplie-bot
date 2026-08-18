@@ -24,7 +24,11 @@ const findUniqueUserByAadObjectId = (users, aadObjectId) => {
   }
   const matches = users.filter((user) => {
     const extra = parseExtra(user);
-    return user?.aadObjectId === aadObjectId || extra.aadObjectId === aadObjectId;
+    return (
+      user?.external_id === aadObjectId ||
+      user?.aadObjectId === aadObjectId ||
+      extra.aadObjectId === aadObjectId
+    );
   });
   if (matches.length > 1) {
     throw new Error(`More than one LNbits user is linked to Entra id ${aadObjectId}`);
