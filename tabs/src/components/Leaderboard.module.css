@@ -1,253 +1,245 @@
-.string {
-  width: 48px;
-  position: relative;
-  line-height: 16px;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  padding-left: 6px;
-}
-
-.string2 {
-  width: auto;
-  flex: 1;
-  position: relative;
-  line-height: 16px;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0px;
-}
-
-.string3 {
-  position: relative;
-  line-height: 16px;
-  display: flex;
-  align-items: center;
-}
-
-.sortIcon {
-  margin-left: 0px;
-  width: 17px;
-  height: 17px;
-  margin-right: 0px;
-}
-
-.stringWrapper {
-  width: auto;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  font-family: 'Segoe UI';
-}
-
-.headerContents {
-  width: 100%;
-  flex: 1;
-  height: 32px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-
-  box-sizing: border-box;
-  gap: 20px;
-  padding-right: 10px;
-  padding-left: 5px;
-}
-
-.headercell {
-  width: 100% - 20px;
-  align-self: stretch;
-  background-color: #1f1f1f;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  color: #d8d8d8;
-  justify-content: space-between;
-}
-
-.avatarIcon {
-  width: 24px;
-  position: relative;
-  height: 24px;
-  object-fit: cover;
-}
-
-.userName {
-  flex: content;
-  position: relative;
-  margin-left: 5px;
-}
-
-.userRank {
-  flex: content;
-  position: relative;
-  margin-left: 10px;
-}
-
-.personDetails {
-  width: content;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 30px;
-  padding-left: 0px;
-}
-
-.mainContentStack {
-  flex: 1;
-  height: 32px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 20px;
-}
-
-.b {
-  position: relative;
-  font-weight: bold;
-  text-align: right;
-}
-
-.icon {
-  width: 10px;
-  position: relative;
-  height: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.bodyContents {
-  width: 100%;
-  flex: 1;
-  background-color: #1f1f1f;
-  height: 32px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0px;
-  box-sizing: border-box;
-  border-bottom: 1px solid #2d2b2c;
-}
-
-.bodycell {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #222;
-  border-bottom: 1px solid #333;
-  padding: 0px;
-}
-
 .feedlist {
   width: 100%;
-  padding: 0;
   margin: 0;
+  padding: 0;
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1px;
+  align-items: stretch;
   text-align: left;
-  font-size: 12px;
-  color: #fff;
-  font-family: Inter;
-  background-color: #2d2b2c;
-  overflow-y: auto;
-  overflow-x: auto;
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
 }
 
-.bodyContents {
-  display: flex;
-  justify-content: space-between;
+/* ---------- Rows ---------- */
+
+.headRow {
+  display: grid;
+  grid-template-columns: 64px minmax(140px, 1fr) 140px;
   align-items: center;
-  width: 100%;
-  padding-left: 3px;
-  padding-right: 10px;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
 }
 
-.mainContentStack {
+.ranking {
   display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bodyRow {
+  display: grid;
+  grid-template-columns: 64px minmax(140px, 1fr) 140px;
   align-items: center;
+  gap: var(--space-4);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
 }
 
-.personDetails {
-  display: flex;
+.bodyRow:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- Header ---------- */
+
+.headLabel,
+.headSortButton {
+  display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 16px;
+  text-align: left;
 }
 
-.avatarIcon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+.headSortButton {
+  cursor: pointer;
+  justify-content: flex-end;
 }
 
-.b {
-  margin-left: auto;
-  margin-right: 10px;
+.headSortButton:hover {
+  color: var(--text-primary);
 }
 
-.icon {
+.headSortButton:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.sortIcon {
   width: 16px;
   height: 16px;
 }
 
-.horizontalContainer {
-  margin: 0;
-  padding: 0;
-  padding: 0px;
+.amountCol {
+  justify-self: end;
+  text-align: right;
 }
 
-.yellowAmount {
-  color: #84cc16;
-}
+/* ---------- Rank badges: 1-3 filled accent circles, 4+ plain ---------- */
 
-.circleFirstPlace,
-.circleSecondPlace,
-.circleThirdPlace,
-.circleDefaultPlace {
-  width: 24px;
-  height: 24px;
-}
-
-.table {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-ul {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
-}
-
-.rankNumber {
-  position: absolute;
-  left: 49%;
-  top: 18%;
-  transform: translateX(-50%);
-  color: white;
+.rankBadge {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  color: var(--text-body);
+  font-size: var(--font-size-sm);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.blackRank {
-  color: black;
-  font-weight: 700;
-  font-size: 12px;
+.rankBadgeTop {
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
-.firstPlace,
-.secondPlace,
-.thirdPlace,
-.defaultPlace {
-  display: flex;
+/* ---------- User cell ---------- */
+
+.person {
+  display: inline-flex;
+  min-width: 0;
   align-items: center;
+  gap: var(--space-2);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+
+.avatarFallback {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+.personName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Amount ---------- */
+
+.amountCell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.amountValue {
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.zapIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ---------- States ---------- */
+
+.empty {
+  margin: 0;
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.errorBox {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  color: var(--text-body);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeletonRow {
+  height: 56px;
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-page);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .headRow,
+  .bodyRow {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonRow {
+    animation: none;
+  }
 }

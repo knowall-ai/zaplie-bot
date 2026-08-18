@@ -1,275 +1,152 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import styles from './Leaderboard.module.css';
-import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
-import { fetchAllowanceWalletTransactions } from '../utils/walletUtilities';
 import ZapIcon from '../images/ZapIcon.svg';
-import circleFirstPlace from '../images/circleFirstPlace.svg';
-import CircleSecondPlace from '../images/circleSecondPlace.svg';
-import circleThirdPlace from '../images/circleThirdPlace.svg';
-import circleDefaultPlace from '../images/circleDefaultPlace.svg';
 import AscendingIcon from '../images/ascending.svg';
 import DescendingIcon from '../images/descending.svg';
+import { ZapTransfer } from '../utils/walletUtilities';
 
 interface LeaderboardProps {
-  timestamp?: number | null;
+  timestamp: number;
+  transfers: ZapTransfer[];
+  loading: boolean;
+  error: string | null;
 }
 
 interface UserTransactionSummary {
-  userId: string;
-  displayName: string;
-  walletId: string;
+  user: User;
   totalAmountSats: number;
   rank: number;
 }
 
-const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
-  const [userTransactionSummary, setUserTransactionSummary] = useState<
-    UserTransactionSummary[]
-  >([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isAscending, setIsAscending] = useState<boolean>(true);
+const timeInSeconds = (transaction: Transaction): number => {
+  const value =
+    typeof transaction.time === 'number'
+      ? transaction.time
+      : Date.parse(transaction.time) / 1000;
+  return Number.isFinite(value) ? value : 0;
+};
 
-  useEffect(() => {
-    // Use the provided timestamp to 0
-    const paymentsSinceTimestamp =
-      timestamp === null || timestamp === undefined || timestamp === 0
-        ? 0
-        : timestamp;
+const initialsOf = (label: string): string => {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return label.trim().slice(0, 2).toUpperCase();
+};
 
-    const fetchUsersAndPrivateWalletTransactions = async () => {
-      try {
-        console.log('[Leaderboard] Fetching all users...');
-        const usersData = await getUsers(null); // Fetch all users
+const Leaderboard: React.FC<LeaderboardProps> = ({
+  timestamp,
+  transfers,
+  loading,
+  error,
+}) => {
+  const [ascending, setAscending] = useState(false);
+  const summaries = useMemo(() => {
+    const totals = new Map<string, { user: User; total: number }>();
+    transfers
+      .filter(transfer => timeInSeconds(transfer.transaction) >= timestamp)
+      .forEach(({ from, transaction }) => {
+        const current = totals.get(from.id) ?? { user: from, total: 0 };
+        current.total += Math.abs(transaction.amount) / 1000;
+        totals.set(from.id, current);
+      });
 
-        if (!usersData || usersData.length === 0) {
-          throw new Error('No users data returned from API');
-        }
-
-        console.log(`[Leaderboard] Found ${usersData.length} users`);
-
-        // Fetch all transactions using the same method as Feed
-        console.log('[Leaderboard] Fetching all transactions...');
-        const allTransactions = await fetchAllowanceWalletTransactions();
-        console.log(
-          `[Leaderboard] Found ${allTransactions.length} total transactions`,
-        );
-
-        // Create a map of wallet_id to user for quick lookup
-        const walletToUserMap: { [walletId: string]: User } = {};
-
-        await Promise.all(
-          usersData.map(async user => {
-            const wallets = await getUserWallets(user.id);
-            if (wallets) {
-              wallets.forEach(wallet => {
-                walletToUserMap[wallet.id] = user;
-              });
-            }
-          }),
-        );
-
-        console.log(
-          `[Leaderboard] Created wallet map with ${Object.keys(walletToUserMap).length} wallets`,
-        );
-
-        // Filter transactions based on timestamp if provided
-        const filteredTransactions =
-          paymentsSinceTimestamp && paymentsSinceTimestamp > 0
-            ? allTransactions.filter(transaction => {
-                const transactionTime =
-                  typeof transaction.time === 'number'
-                    ? transaction.time
-                    : new Date(transaction.time).getTime() / 1000;
-                return transactionTime >= paymentsSinceTimestamp;
-              })
-            : allTransactions;
-
-        console.log(
-          `[Leaderboard] After timestamp filter: ${filteredTransactions.length} transactions`,
-        );
-
-        // Group and sum amounts by users
-        const transactionSummary: { [key: string]: UserTransactionSummary } =
-          {};
-
-        filteredTransactions.forEach(transaction => {
-          const user = walletToUserMap[transaction.wallet_id];
-
-          if (user && transaction.amount < 0) {
-            // Only count outgoing payments (sent zaps)
-            const userId = user.id;
-            const amountInSats = Math.abs(transaction.amount) / 1000; // Convert msats to sats
-
-            if (!transactionSummary[userId]) {
-              transactionSummary[userId] = {
-                userId,
-                displayName: user.displayName,
-                walletId: transaction.wallet_id,
-                totalAmountSats: 0,
-                rank: 0,
-              };
-            }
-
-            transactionSummary[userId].totalAmountSats += amountInSats;
-          }
-        });
-
-        console.log(
-          `[Leaderboard] Grouped into ${Object.keys(transactionSummary).length} users`,
-        );
-
-        // Convert the summary object to an array and assign ranks
-        const summaryArray = Object.values(transactionSummary);
-
-        summaryArray.sort((a, b) => b.totalAmountSats - a.totalAmountSats); // Sort by amount in descending order
-        summaryArray.forEach((userSummary, index) => {
-          userSummary.rank = index + 1; // Assign ranks based on the sorted order
-        });
-
-        console.log('[Leaderboard] Final summary:', summaryArray);
-        setUserTransactionSummary(summaryArray);
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          setError(`Failed to fetch users: ${error.message}`);
-        } else {
-          setError('An unknown error occurred while fetching users');
-        }
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsersAndPrivateWalletTransactions();
-  }, [timestamp]); // Re-fetch data when the timestamp changes
-
-  const handleSort = () => {
-    const sortedUsers = [...userTransactionSummary].sort((a, b) =>
-      isAscending
-        ? a.totalAmountSats - b.totalAmountSats
-        : b.totalAmountSats - a.totalAmountSats,
-    );
-    setUserTransactionSummary(sortedUsers);
-    setIsAscending(!isAscending);
-  };
-
-  const getTextColorByRank = (rank: number) => {
-    if (rank === 1) return styles.goldAmount;
-    if (rank === 2) return styles.silverAmount;
-    if (rank === 3) return styles.bronzeAmount;
-    return styles.defaultAmount;
-  };
+    const ranked: UserTransactionSummary[] = Array.from(totals.values())
+      .sort((left, right) => right.total - left.total)
+      .map((item, index) => ({
+        user: item.user,
+        totalAmountSats: item.total,
+        rank: index + 1,
+      }));
+    return ascending ? [...ranked].reverse() : ranked;
+  }, [ascending, timestamp, transfers]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className={styles.feedlist} aria-busy="true">
+        <span className={styles.srOnly} role="status">
+          Loading the leaderboard
+        </span>
+        <div className={styles.skeletonList} aria-hidden="true">
+          {[0, 1, 2, 3, 4].map(item => (
+            <div key={item} className={styles.skeletonRow} />
+          ))}
+        </div>
+      </div>
+    );
   }
 
-  if (error) {
-    return <div>{error}</div>;
-  }
+  if (error)
+    return (
+      <div className={styles.errorBox} role="alert">
+        {error}
+      </div>
+    );
 
   return (
     <div className={styles.feedlist}>
-      <div className={styles.headercell}>
-        <div className={styles.headerContents}>
-          <b className={styles.string}>Rank</b>
-          <b className={styles.string2}>User</b>
-          <div
-            className={styles.stringWrapper}
-            onClick={handleSort}
-            style={{ cursor: 'pointer' }}
-          >
-            <b className={`${styles.string3} ${styles.b}`}>Zap amount</b>
-            <img
-              src={isAscending ? AscendingIcon : DescendingIcon}
-              alt={isAscending ? 'Ascending' : 'Descending'}
-              className={styles.sortIcon}
-            />
-          </div>
-        </div>
+      <div className={styles.headRow}>
+        <span className={`${styles.headLabel} ${styles.rankCol}`}>Rank</span>
+        <span className={`${styles.headLabel} ${styles.userCol}`}>User</span>
+        <button
+          type="button"
+          className={`${styles.headSortButton} ${styles.amountCol}`}
+          aria-label={`Zap amount, sorted ${ascending ? 'ascending' : 'descending'}`}
+          onClick={() => setAscending(current => !current)}
+        >
+          Zap amount
+          <img
+            src={ascending ? AscendingIcon : DescendingIcon}
+            alt=""
+            className={styles.sortIcon}
+          />
+        </button>
       </div>
-
-      <div className={`${styles.horizontalContainer} ${styles.table}`}>
-        <ul>
-          {userTransactionSummary.map(summary => (
-            <li key={summary.userId} className={styles.bodycell}>
-              <div className={styles.bodyContents}>
-                <div className={styles.mainContentStack}>
-                  <div className={styles.personDetails}>
-                    <div className={styles.userRank}>
-                      {summary.rank === 1 ? (
-                        <div className={styles.firstPlace}>
-                          <img
-                            src={circleFirstPlace}
-                            alt="First Place"
-                            className={styles.circleFirstPlace}
-                          />
-                          <span
-                            className={`${styles.rankNumber} ${styles.blackRank}`}
-                          >
-                            {summary.rank}
-                          </span>
-                        </div>
-                      ) : summary.rank === 2 ? (
-                        <div className={styles.secondPlace}>
-                          <img
-                            src={CircleSecondPlace}
-                            alt="Second Place"
-                            className={styles.circleSecondPlace}
-                          />
-                          <span
-                            className={`${styles.rankNumber} ${styles.blackRank}`}
-                          >
-                            {summary.rank}
-                          </span>
-                        </div>
-                      ) : summary.rank === 3 ? (
-                        <div className={styles.thirdPlace}>
-                          <img
-                            src={circleThirdPlace}
-                            alt="Third Place"
-                            className={styles.circleThirdPlace}
-                          />
-                          <span
-                            className={`${styles.rankNumber} ${styles.blackRank}`}
-                          >
-                            {summary.rank}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className={styles.defaultPlace}>
-                          <img
-                            src={circleDefaultPlace}
-                            alt="Place"
-                            className={styles.circleDefaultPlace}
-                          />
-                          <span className={`${styles.rankNumber}`}>
-                            {summary.rank}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className={styles.userName}>
-                      {summary.displayName}{' '}
-                    </div>
-                  </div>
-                </div>
-                <b
-                  className={`${styles.b} ${
-                    summary.rank <= 3 ? styles.yellowAmount : ''
-                  } ${getTextColorByRank(summary.rank)}`}
+      {summaries.length ? (
+        <ol className={styles.ranking}>
+          {summaries.map(summary => (
+            <li key={summary.user.id} className={styles.bodyRow}>
+              <span className={styles.rankCol}>
+                <span
+                  className={
+                    summary.rank <= 3
+                      ? `${styles.rankBadge} ${styles.rankBadgeTop}`
+                      : styles.rankBadge
+                  }
                 >
+                  {summary.rank}
+                </span>
+              </span>
+              <span className={`${styles.person} ${styles.userCol}`}>
+                {summary.user.profileImg ? (
+                  <img
+                    className={styles.avatar}
+                    src={summary.user.profileImg}
+                    alt=""
+                  />
+                ) : (
+                  <span className={styles.avatarFallback} aria-hidden="true">
+                    {initialsOf(summary.user.displayName)}
+                  </span>
+                )}
+                <span className={styles.personName}>
+                  {summary.user.displayName}
+                </span>
+              </span>
+              <span className={`${styles.amountCell} ${styles.amountCol}`}>
+                <b className={styles.amountValue}>
                   {new Intl.NumberFormat('en-US').format(
                     summary.totalAmountSats,
                   )}
                 </b>
-                <img className={styles.icon} alt="Zap Icon" src={ZapIcon} />
-              </div>
+                <img className={styles.zapIcon} alt="" src={ZapIcon} />
+              </span>
             </li>
           ))}
-        </ul>
-      </div>
+        </ol>
+      ) : (
+        <p className={styles.empty}>
+          No zaps in this period yet, so there are no leaders to show.
+        </p>
+      )}
     </div>
   );
 };
