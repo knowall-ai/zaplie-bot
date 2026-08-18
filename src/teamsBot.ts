@@ -512,6 +512,9 @@ export class TeamsBot extends TeamsActivityHandler {
 
     const currentUser: User | undefined = context.turnState.get('user');
     if (!currentUser?.allowanceWallet?.inkey) {
+      await context.sendActivity(
+        "D'oh! You need a Zaplie allowance wallet before you can zap by reacting.",
+      );
       return;
     }
 
@@ -519,12 +522,23 @@ export class TeamsBot extends TeamsActivityHandler {
       const liveBalance = await getWalletBalance(
         currentUser.allowanceWallet.inkey,
       );
-      const amount = validateZapSubmit(
-        ZAP_REACTION_DEFAULT_SATS,
-        1,
-        liveBalance,
-        globalRewardName,
-      );
+      let amount: number;
+      try {
+        // validateZapSubmit throws user-facing messages, safe to relay as-is.
+        amount = validateZapSubmit(
+          ZAP_REACTION_DEFAULT_SATS,
+          1,
+          liveBalance,
+          globalRewardName,
+        );
+      } catch (validationError) {
+        await context.sendActivity(
+          validationError instanceof Error
+            ? `D'oh! ${validationError.message}`
+            : "D'oh! Your ⚡ reaction zap could not be completed.",
+        );
+        return;
+      }
       const outcome = await processZapRecipient({
         ledger: this.zapLedger,
         entryKey: zapKey({
@@ -560,14 +574,11 @@ export class TeamsBot extends TeamsActivityHandler {
         );
       }
     } catch (error) {
-      console.error(
-        'Reaction zap failed:',
-        error instanceof Error ? error.message : error,
-      );
+      // Not a validation error, so the message may carry internal details —
+      // log it and answer with a generic line.
+      console.error('Reaction zap failed:', error);
       await context.sendActivity(
-        error instanceof Error
-          ? `D'oh! ${error.message}`
-          : "D'oh! Your ⚡ reaction zap could not be completed.",
+        "D'oh! Your ⚡ reaction zap could not be completed. Please try again later.",
       );
     }
   }

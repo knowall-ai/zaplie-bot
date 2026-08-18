@@ -153,7 +153,7 @@ describe('TeamsBot handleZapReaction', () => {
     expect(second.sendActivity).not.toHaveBeenCalled();
   });
 
-  test('a failed balance read answers with the error, not silence', async () => {
+  test('a failed balance read answers generically without internal details', async () => {
     registerZapTarget('conv-1', 'card-1', receiver.id);
     mockGetWalletBalance.mockRejectedValue(new Error('LNbits unavailable'));
     const errorSpy = jest
@@ -165,9 +165,39 @@ describe('TeamsBot handleZapReaction', () => {
 
     expect(mockSendZap).not.toHaveBeenCalled();
     expect(context.sendActivity).toHaveBeenCalledWith(
-      "D'oh! LNbits unavailable",
+      "D'oh! Your ⚡ reaction zap could not be completed. Please try again later.",
     );
+    expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  test('an insufficient balance relays the validation message', async () => {
+    registerZapTarget('conv-1', 'card-1', receiver.id);
+    mockGetWalletBalance.mockResolvedValue(0);
+    const context = buildReactionContext('26a1_highvoltagesymbol', 'card-1');
+
+    await bot.handleZapReaction(context);
+
+    expect(mockSendZap).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining('your balance is 0'),
+    );
+  });
+
+  test('a reactor without an allowance wallet is told, not ignored', async () => {
+    registerZapTarget('conv-1', 'card-1', receiver.id);
+    const context = buildReactionContext('26a1_highvoltagesymbol', 'card-1');
+    (context.turnState as Map<string, unknown>).set('user', {
+      ...(reactor as unknown as Record<string, unknown>),
+      allowanceWallet: null,
+    });
+
+    await bot.handleZapReaction(context);
+
+    expect(mockSendZap).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      "D'oh! You need a Zaplie allowance wallet before you can zap by reacting.",
+    );
   });
 });
 
