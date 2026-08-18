@@ -131,7 +131,11 @@ const sanitizeWallet = (wallet) => ({
 const sanitizePayment = (payment) => ({
   checking_id: payment.checking_id || payment.payment_hash || payment.id || '',
   payment_hash: payment.payment_hash,
-  pending: payment.pending === true,
+  // LNbits v1 dropped the boolean `pending` field in favour of `status`;
+  // derive it so in-flight payments are not misread as settled.
+  pending:
+    payment.pending === true ||
+    String(payment.status || '').toLowerCase() === 'pending',
   amount: Number(payment.amount || 0),
   fee: Number(payment.fee || 0),
   memo: payment.memo || '',
@@ -289,9 +293,13 @@ const payInvoice = async (wallet, paymentRequest) => {
     walletKey: wallet.adminkey,
     body: { out: true, bolt11: paymentRequest },
   });
+  const paymentId = result.payment_hash || result.checking_id;
+  if (typeof paymentId !== 'string' || paymentId.length === 0) {
+    throw new LnbitsGatewayError('LNbits did not return a payment identifier');
+  }
   return {
-    payment_hash: result.payment_hash || result.checking_id || '',
-    checking_id: result.checking_id || result.payment_hash || '',
+    payment_hash: paymentId,
+    checking_id: result.checking_id || result.payment_hash,
   };
 };
 
@@ -347,11 +355,11 @@ const getNostrRewards = async (stallId) => {
   }));
 };
 
-const getAllPayments = async ({ limit = 1000, offset = 0, sortby = 'time', direction = 'desc' }) => {
+const getAllPayments = async ({ limit = 1000, offset = 0, direction = 'desc' }) => {
   const params = new URLSearchParams({
     limit: String(Math.min(Math.max(Number(limit) || 1000, 1), 10000)),
     offset: String(Math.max(Number(offset) || 0, 0)),
-    sortby: sortby === 'time' ? sortby : 'time',
+    sortby: 'time',
     direction: direction === 'asc' ? direction : 'desc',
   });
   const body = await lnbitsRequest(`/api/v1/payments/all/paginated?${params}`);
@@ -387,6 +395,7 @@ module.exports = {
   payOwnedInvoice,
   resetCachesForTests,
   redactSensitive,
+  sanitizePayment,
   sanitizeWallet,
   sendZap,
 };
