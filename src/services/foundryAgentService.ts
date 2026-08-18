@@ -221,7 +221,11 @@ export async function runConversationalTurn(
         `foundryAgentService: tool "${call.name}" returned undefined, which cannot be sent as function_call_output.`,
       );
     }
-    if (tool.sideEffect && typeof (result as any)?.proposed !== 'boolean') {
+    if (
+      tool.sideEffect &&
+      typeof (result as { proposed?: unknown } | undefined)?.proposed !==
+        'boolean'
+    ) {
       throw new Error(
         `foundryAgentService: side-effect tool "${tool.name}" must return a proposal ({ proposed: boolean }), never an execution result.`,
       );
