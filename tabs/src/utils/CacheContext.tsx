@@ -1,8 +1,15 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  ReactNode,
+} from 'react';
 
 interface CacheContextType {
-  cache: Record<string, any>;
-  setCache: (key: string, value: any) => void;
+  cache: Record<string, unknown>;
+  setCache: (key: string, value: unknown) => void;
 }
 
 const CacheContext = createContext<CacheContextType | undefined>(undefined);
@@ -10,16 +17,16 @@ const CacheContext = createContext<CacheContextType | undefined>(undefined);
 export const CacheProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [cache, setCacheState] = useState<Record<string, any>>({});
+  const [cache, setCacheState] = useState<Record<string, unknown>>({});
 
-  const setCache = (key: string, value: any) => {
+  const setCache = useCallback((key: string, value: unknown) => {
     setCacheState(prevCache => ({ ...prevCache, [key]: value }));
-  };
+  }, []);
+
+  const value = useMemo(() => ({ cache, setCache }), [cache, setCache]);
 
   return (
-    <CacheContext.Provider value={{ cache, setCache }}>
-      {children}
-    </CacheContext.Provider>
+    <CacheContext.Provider value={value}>{children}</CacheContext.Provider>
   );
 };
 
