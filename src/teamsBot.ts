@@ -21,7 +21,6 @@ import {
 } from './commands/zapRecipient';
 import { validateZapSubmit } from './commands/zapBudget';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
-import { WithdrawFundsCommand } from './commands/withdrawFundsCommand';
 import { ShowLeaderboardCommand } from './commands/showLeaderboardCommand';
 import {
   CONNECT_CALENDAR_COMMAND,
@@ -70,7 +69,9 @@ export class TeamsBot extends TeamsActivityHandler {
     // Register commands
     SSOCommandMap.register('send zap', new SendZapCommand());
     SSOCommandMap.register('show my balance', new ShowMyBalanceCommand());
-    SSOCommandMap.register('withdraw my zaps', new WithdrawFundsCommand());
+    // "withdraw my zaps" is deliberately not registered (or listed in the
+    // app manifests) until withdrawals actually work — see issue #293. The
+    // command implementation is kept in commands/withdrawFundsCommand.ts.
     SSOCommandMap.register('show leaderboard', new ShowLeaderboardCommand());
     if (process.env.GRAPH_CONNECTION_NAME) {
       SSOCommandMap.register(

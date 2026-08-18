@@ -21,7 +21,9 @@ deployable components in one repository:
   handled by `CloudAdapter`. `src/teamsBot.ts` extends `TeamsActivityHandler`
   and routes text commands via the `SSOCommandMap` registry
   (`src/commands/SSOCommandMap.ts`). Commands: `send zap`, `show my balance`,
-  `show leaderboard`, `withdraw my zaps` (stub). Adaptive card submits arrive
+  `show leaderboard`. (`withdraw my zaps` exists as a stub in
+  `src/commands/withdrawFundsCommand.ts` but is not registered or listed in the
+  manifests until withdrawals work — issue #293.) Adaptive card submits arrive
   with `activity.value.action === 'submitZaps'`.
 - **Assistant instructions** (`src/services/foundryAgentService.ts`): the
   Foundry agent's instructions are `FIXED_GUARDRAILS` (tool honesty, withdrawals
