@@ -25,6 +25,11 @@ export class ShowLeaderboardCommand extends SSOCommand {
         // Sort wallets by balance_msat in descending order (sorts in place)
         filteredWallets.sort((a, b) => b.balance_msat - a.balance_msat);
 
+        // The portal shares the PORTAL_URL name with tabs/backend (see
+        // env/.env.dev.example). Without it there is no live portal to link
+        // to, so the button is omitted rather than pointing at a dead URL.
+        const portalUrl = process.env.PORTAL_URL;
+
         // Format the sorted wallets into an actionable card response
         const cardResponse = {
           type: 'AdaptiveCard',
@@ -41,13 +46,17 @@ export class ShowLeaderboardCommand extends SSOCommand {
               };
             }),
           ),
-          actions: [
-            {
-              type: 'Action.OpenUrl',
-              title: 'View Wallets',
-              url: 'https://localhost:3000/wallets',
-            },
-          ],
+          ...(portalUrl
+            ? {
+                actions: [
+                  {
+                    type: 'Action.OpenUrl',
+                    title: 'View Wallets',
+                    url: `${portalUrl.replace(/\/+$/, '')}/wallets`,
+                  },
+                ],
+              }
+            : {}),
           $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
           version: '1.2',
         };
