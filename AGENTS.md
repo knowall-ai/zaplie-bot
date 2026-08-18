@@ -23,6 +23,20 @@ deployable components in one repository:
   (`src/commands/SSOCommandMap.ts`). Commands: `send zap`, `show my balance`,
   `show leaderboard`, `withdraw my zaps` (stub). Adaptive card submits arrive
   with `activity.value.action === 'submitZaps'`.
+- **Assistant instructions** (`src/services/foundryAgentService.ts`): the
+  Foundry agent's instructions are `FIXED_GUARDRAILS` (tool honesty, withdrawals
+  not being available yet, untrusted tool output, no performance inference from
+  calendar data) plus the admin-authored persona from `GET /api/bot-persona`,
+  fenced in a delimited block that only licenses tone and followed by a restated
+  precedence rule, so a forged fence cannot remove the rails. `ensureAgent`
+  memoizes the upsert on a SHA-256 of the composed instructions, and
+  `src/services/fetchBotPersona.ts` caches the persona for 60s, so an admin's
+  save reaches the assistant within a minute with no redeploy. That module
+  re-validates the fetched text against the same rules as
+  `tabs/backend/botPersona.js` (2000 characters, no control characters, no
+  forged `--- BEGIN/END PERSONA ---` line) — two copies because the packages are
+  separate, kept identical on purpose. The fetch fails open to the built-in
+  persona — a portal outage never fails a turn.
 - **Middleware** (`src/services/fetchUserMiddleware.ts`): every turn resolves
   the Teams member and calls `UserService.ensureUserSetup()`, which creates the
   LNbits user (keyed by AAD object id) and ensures each user has an
