@@ -15,6 +15,16 @@ interface PaymentResult {
   checking_id?: string;
 }
 
+interface InvoiceResult {
+  paymentRequest: string;
+  invoiceId: string;
+}
+
+interface InvoicePayment {
+  paid?: boolean;
+  status?: string;
+}
+
 const userCache: { value?: CacheEntry<User[]> } = {};
 const walletCache = new Map<string, CacheEntry<Wallet[]>>();
 
@@ -114,12 +124,9 @@ const getUser = async (userId: string): Promise<User | null> => {
   const wallets = await getUserWallets(userId);
   return {
     ...user,
-    privateWallet:
-      wallets.find(wallet => wallet.name.toLowerCase().includes('private')) ||
-      null,
+    privateWallet: wallets.find(wallet => wallet.name === 'Private') || null,
     allowanceWallet:
-      wallets.find(wallet => wallet.name.toLowerCase().includes('allowance')) ||
-      null,
+      wallets.find(wallet => wallet.name === 'Allowance') || null,
   };
 };
 
@@ -160,8 +167,11 @@ const getWalletPayLinks = async (walletId: string) =>
 
 const getWalletId = async (walletId: string) => walletId;
 
-const getInvoicePayment = async (walletId: string, invoice: string) =>
-  apiRequest<unknown>(
+const getInvoicePayment = async (
+  walletId: string,
+  invoice: string,
+): Promise<InvoicePayment> =>
+  apiRequest<InvoicePayment>(
     `/wallets/${encodeURIComponent(walletId)}/payments/${encodeURIComponent(invoice)}`,
   );
 
@@ -190,16 +200,14 @@ const createInvoice = async (
   walletId: string,
   amount: number,
   memo: string,
-): Promise<string> => {
-  const result = await apiRequest<{ paymentRequest: string }>(
+): Promise<InvoiceResult> =>
+  apiRequest<InvoiceResult>(
     `/wallets/${encodeURIComponent(walletId)}/invoices`,
     {
       method: 'POST',
       body: JSON.stringify({ amount, memo }),
     },
   );
-  return result.paymentRequest;
-};
 
 const payInvoice = async (
   walletId: string,
@@ -217,9 +225,11 @@ const sendZap = async (
   recipientUserId: string,
   amount: number,
   memo: string,
+  idempotencyKey: string,
 ): Promise<PaymentResult> =>
   apiRequest<PaymentResult>('/zaps', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify({ recipientUserId, amount, memo }),
   });
 
@@ -230,29 +240,6 @@ const getUserWalletTransactions = async (
   walletId: string,
   filterByExtra: { [key: string]: string } | null,
 ) => getWalletTransactionsSince(walletId, 0, filterByExtra);
-
-const getAllowance = async (_userId: string): Promise<Allowance> => {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const nextPaymentDate = new Date(today);
-  nextPaymentDate.setDate(today.getDate() + ((8 - dayOfWeek) % 7 || 7));
-  const lastPaymentDate = new Date(today);
-  lastPaymentDate.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-  return {
-    id: '123',
-    name: 'Allowance',
-    wallet: '123456789',
-    toWallet: '123456789',
-    amount: 25000,
-    startDate: new Date(),
-    endDate: null,
-    frequency: 'Monthly',
-    nextPaymentDate,
-    lastPaymentDate,
-    memo: "Don't spend it all at once",
-    active: true,
-  };
-};
 
 const getAllPayments = async (
   limit = 1000,
@@ -281,7 +268,6 @@ export {
   getAllPayments,
   getAllUsersFromAPI,
   getAllWallets,
-  getAllowance,
   getInvoicePayment,
   getNostrRewards,
   getUser,

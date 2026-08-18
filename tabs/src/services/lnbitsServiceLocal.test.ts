@@ -5,6 +5,7 @@ import {
   getUserWallets,
   getWallets,
   payInvoice,
+  sendZap,
 } from './lnbitsServiceLocal';
 import { msalInstance } from './msalClient';
 
@@ -68,14 +69,17 @@ describe('LNbits same-origin API client', () => {
 
   test('creates and pays invoices by wallet id', async () => {
     mockFetch
-      .mockResolvedValueOnce(jsonResponse({ paymentRequest: 'lnbc1invoice' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ paymentRequest: 'lnbc1invoice', invoiceId: 'check-1' }),
+      )
       .mockResolvedValueOnce(
         jsonResponse({ payment_hash: 'hash-1', checking_id: 'check-1' }),
       );
 
-    await expect(createInvoice('wallet-1', 10, 'thanks')).resolves.toBe(
-      'lnbc1invoice',
-    );
+    await expect(createInvoice('wallet-1', 10, 'thanks')).resolves.toEqual({
+      paymentRequest: 'lnbc1invoice',
+      invoiceId: 'check-1',
+    });
     await expect(payInvoice('wallet-1', 'lnbc1invoice')).resolves.toEqual({
       payment_hash: 'hash-1',
       checking_id: 'check-1',
@@ -87,5 +91,25 @@ describe('LNbits same-origin API client', () => {
     expect(mockFetch.mock.calls[1][0]).toBe(
       '/api/lnbits/wallets/wallet-1/payments',
     );
+  });
+
+  test('sends a zap with the caller-provided idempotency key', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ payment_hash: 'hash-1' }));
+
+    await sendZap('recipient-1', 20, 'thanks', 'request-1234567890');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/lnbits/zaps', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer entra-id-token',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'request-1234567890',
+      },
+      body: JSON.stringify({
+        recipientUserId: 'recipient-1',
+        amount: 20,
+        memo: 'thanks',
+      }),
+    });
   });
 });

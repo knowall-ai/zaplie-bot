@@ -1,25 +1,25 @@
+/* App chrome bar, styled after the Figma "Zapp.ie" tab bar:
+   app title bold 18, tabs with active bold white + 3px accent underline. */
 .header {
-  position: fixed;
+  position: sticky;
   top: 0;
   width: 100%;
-  background: linear-gradient(
-    180deg,
-    rgba(45, 43, 44, 0.95) 0%,
-    rgba(35, 33, 34, 0.98) 100%
-  );
-  backdrop-filter: blur(10px);
-  color: white;
+  box-sizing: border-box;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
   z-index: 1000;
-  padding: 12px 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  padding: 0 var(--space-6);
 }
 
 .headerContent {
-  max-width: 1200px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-4);
+  min-height: 56px;
 }
 
 .leftSection {
@@ -29,61 +29,68 @@
 
 .logoLink {
   text-decoration: none;
-  color: white;
+  color: var(--text-primary);
+}
+
+.logoLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .appName {
-  font-size: 20px;
+  font-size: var(--font-size-lg);
   font-weight: 700;
-  color: #84cc16;
-  letter-spacing: 0.5px;
-  transition: transform 0.2s ease;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
   display: inline-block;
 }
 
-.logoLink:hover .appName {
-  transform: scale(1.05);
-}
-
 /* ========================================
-   Navigation Styles
+   Navigation Styles (Figma tab bar)
    ======================================== */
 .navigation {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  align-self: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .navLink {
-  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  color: var(--text-body);
   text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 16px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  font-size: var(--font-size-md);
+  font-weight: 400;
+  white-space: nowrap;
+  padding: var(--space-4) var(--space-2) calc(var(--space-4) - 3px);
+  border-bottom: 3px solid transparent;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .navLink:hover {
-  color: #84cc16;
-  background: rgba(132, 204, 22, 0.1);
+  color: var(--text-primary);
 }
 
 .navLinkActive {
-  color: #84cc16;
-  background: rgba(132, 204, 22, 0.15);
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
 }
 
 .navLink:focus {
-  outline: 2px solid #84cc16;
-  outline-offset: 2px;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .rightSection {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .userInfoWrapper {
@@ -93,39 +100,45 @@
 .userInfo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  background: transparent;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
   cursor: pointer;
 }
 
 .userInfo:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(132, 204, 22, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent);
 }
 
 .dropdownArrow {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
-  margin-left: 4px;
-  transition: transform 0.2s ease;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-left: var(--space-1);
 }
 
 .dropdownMenu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + var(--space-2));
   right: 0;
   min-width: 150px;
-  background: rgba(45, 43, 44, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   z-index: 1001;
-  animation: dropdownFadeIn 0.2s ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dropdownMenu {
+    animation: dropdownFadeIn 0.2s ease;
+  }
 }
 
 @keyframes dropdownFadeIn {
@@ -143,19 +156,21 @@
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   background: transparent;
   border: none;
-  color: white;
-  font-size: 14px;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
   text-align: left;
 }
 
 .dropdownItem:hover:not(:disabled) {
   background: rgba(132, 204, 22, 0.15);
-  color: #84cc16;
+  color: var(--accent);
 }
 
 .dropdownItem:disabled {
@@ -164,13 +179,13 @@
 }
 
 .dropdownItem:focus {
-  outline: 2px solid #84cc16;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
 /* Focus styles for keyboard navigation */
 .userInfo:focus {
-  outline: 2px solid #84cc16;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -179,23 +194,22 @@
 }
 
 .userInfo:focus-visible {
-  outline: 2px solid #84cc16;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 14px;
-  color: #1a1a1a;
+  font-size: var(--font-size-md);
+  color: var(--accent-contrast);
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(132, 204, 22, 0.3);
 }
 
 .userDetails {
@@ -206,9 +220,9 @@
 }
 
 .userName {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  color: white;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -218,7 +232,7 @@
 
 .userEmail {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -226,18 +240,50 @@
   line-height: 1.2;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-  .header {
-    padding: 10px 16px;
+/* Responsive design: below 768px the nav wraps to its own full-width row
+   and scrolls horizontally — tabs are never hidden. */
+@media (max-width: 1100px) {
+  .navigation {
+    gap: 0;
   }
 
-  .appName {
-    font-size: 18px;
+  .navLink {
+    font-size: var(--font-size-sm);
+  }
+
+  .userDetails,
+  .dropdownArrow {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 var(--space-4);
+  }
+
+  .headerContent {
+    flex-wrap: wrap;
+    row-gap: 0;
+    min-height: 48px;
+    padding-top: var(--space-2);
   }
 
   .navigation {
-    display: none;
+    order: 3;
+    flex-basis: 100%;
+    align-self: auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .navLink {
+    justify-content: center;
+    min-width: 0;
+    padding-top: var(--space-2);
+    padding-bottom: calc(var(--space-2) - 3px);
+    text-align: center;
   }
 
   .userDetails {
@@ -250,6 +296,7 @@
 
   .userInfo {
     padding: 6px;
+    border-color: transparent;
   }
 
   .dropdownMenu {
@@ -258,6 +305,10 @@
 }
 
 @media (max-width: 480px) {
+  .navigation {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .userName {
     max-width: 120px;
   }
@@ -275,7 +326,7 @@
 .navLinkSkeleton {
   width: 50px;
   height: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.1) 25%,
@@ -283,23 +334,22 @@
     rgba(255, 255, 255, 0.1) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  align-self: center;
 }
 
 .userInfoSkeleton {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
 }
 
 .avatarSkeleton {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.1) 25%,
@@ -307,19 +357,18 @@
     rgba(255, 255, 255, 0.1) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
 }
 
 .detailsSkeleton {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .nameSkeleton {
   width: 100px;
   height: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.1) 25%,
@@ -327,13 +376,12 @@
     rgba(255, 255, 255, 0.1) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
 }
 
 .emailSkeleton {
   width: 140px;
   height: 11px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.1) 25%,
@@ -341,8 +389,19 @@
     rgba(255, 255, 255, 0.1) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  animation-delay: 0.1s;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .navLinkSkeleton,
+  .avatarSkeleton,
+  .nameSkeleton {
+    animation: shimmer 1.5s infinite;
+  }
+
+  .emailSkeleton {
+    animation: shimmer 1.5s infinite;
+    animation-delay: 0.1s;
+  }
 }
 
 @keyframes shimmer {

@@ -10,6 +10,19 @@ export interface WebhookKey {
   revokedAt: string | null;
 }
 
+export const parseWebhookKeys = (value: unknown): WebhookKey[] => {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Webhook keys response is malformed.');
+  }
+
+  const keys = (value as { keys?: unknown }).keys;
+  if (!Array.isArray(keys)) {
+    throw new Error('Webhook keys response is malformed.');
+  }
+
+  return keys as WebhookKey[];
+};
+
 // idToken (not the Graph access token): its audience is this app's own AAD
 // client id, which is what the tab backend validates against the Entra JWKS.
 export const getWebhookKeys = async (
@@ -18,7 +31,7 @@ export const getWebhookKeys = async (
   const response = await axios.get(API_URL, {
     headers: { Authorization: `Bearer ${idToken}` },
   });
-  return response.data.keys;
+  return parseWebhookKeys(response.data);
 };
 
 export const createWebhookKey = async (

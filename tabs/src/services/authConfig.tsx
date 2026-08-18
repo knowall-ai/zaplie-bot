@@ -1,9 +1,22 @@
 import { Configuration, PopupRequest } from '@azure/msal-browser';
-const AADclientid = process.env.REACT_APP_AAD_CLIENT_ID as string;
-const TenantId = process.env.REACT_APP_TENANT_ID as string;
-console.log(AADclientid);
 
-// Config object to be passed to Msal on creation
+const requireConfig = (value: string | undefined, name: string): string => {
+  if (!value) {
+    throw new Error(`${name} is required.`);
+  }
+
+  return value;
+};
+
+const AADclientid = requireConfig(
+  process.env.REACT_APP_AAD_CLIENT_ID,
+  'REACT_APP_AAD_CLIENT_ID',
+);
+const TenantId = requireConfig(
+  process.env.REACT_APP_TENANT_ID,
+  'REACT_APP_TENANT_ID',
+);
+
 export const msalConfig: Configuration = {
   auth: {
     clientId: AADclientid,
@@ -12,16 +25,15 @@ export const msalConfig: Configuration = {
     postLogoutRedirectUri: window.location.origin,
   },
   system: {
-    allowNativeBroker: false, // Disables WAM Broker
-    allowRedirectInIframe: false, // Prevent redirect in iframe
+    allowNativeBroker: false,
+    allowRedirectInIframe: false,
   },
   cache: {
-    cacheLocation: 'localStorage', // This can be 'localStorage' or 'sessionStorage'
-    storeAuthStateInCookie: true, // Set to true if you are having issues on IE11 or Edge
+    cacheLocation: 'localStorage',
+    storeAuthStateInCookie: true,
   },
 };
 
-// Add here scopes for id token to be used at MS Identity Platform endpoints.
 export const loginRequest: PopupRequest = {
   scopes: ['User.Read'],
 };
@@ -31,7 +43,6 @@ export const weekScopesRequest: PopupRequest = {
   scopes: ['User.Read', 'Calendars.Read', 'People.Read'],
 };
 
-// Add here the endpoints for MS Graph API services you would like to use.
 export const graphConfig = {
   graphMeEndpoint: 'https://graph.microsoft.com/v1.0/me',
 };

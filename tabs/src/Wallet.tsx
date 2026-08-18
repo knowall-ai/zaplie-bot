@@ -22,35 +22,27 @@ const Wallet: React.FC = () => {
 
   return (
     <div className={styles.feedcomponent}>
-      <div className={styles.tabs}>
-        <div className={styles.tab}>
-          <div className={styles.base}>
-            <div className={styles.stringBadgeIconStack}>
-              <div
-                className={`${styles.stringTabTitle} ${
-                  showYourWalletTab ? styles.active : ''
-                }`}
-                onClick={handleYourWalletTab}
-              >
-                Your wallet
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className={styles.tab1}>
-          <div className={styles.base1}>
-            <div className={styles.stringBadgeIconStack}>
-              <div
-                className={`${styles.stringTabTitle} ${
-                  !showYourWalletTab ? styles.active : ''
-                }`}
-                onClick={handleAllowanceTab}
-              >
-                Allowance
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className={styles.tabs} aria-label="Wallet views">
+        <button
+          type="button"
+          className={`${styles.stringTabTitle} ${
+            showYourWalletTab ? styles.active : ''
+          }`}
+          onClick={handleYourWalletTab}
+          aria-pressed={showYourWalletTab}
+        >
+          Your wallet
+        </button>
+        <button
+          type="button"
+          className={`${styles.stringTabTitle} ${
+            !showYourWalletTab ? styles.active : ''
+          }`}
+          onClick={handleAllowanceTab}
+          aria-pressed={!showYourWalletTab}
+        >
+          Allowance
+        </button>
       </div>
       {showYourWalletTab ? (
         <div>
