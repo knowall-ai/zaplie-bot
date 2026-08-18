@@ -34,6 +34,8 @@ tabs/backend/identities.json
 tabs/backend/pending-rewards.json
 tabs/backend/connections.json
 tabs/backend/webhook-keys.json
+tabs/backend/data.json
+tabs/backend/lnbits-zap-idempotency.json
 
 # Generated documentation PDF
 docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
