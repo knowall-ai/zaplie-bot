@@ -13,8 +13,6 @@ import { useMsal } from '@azure/msal-react';
 import { RewardNameContext } from './RewardNameContext';
 import SendZapsPopup from './SendZapsPopup';
 
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
-
 // Time constants
 const SECONDS_PER_DAY = 86400;
 const MS_PER_SECOND = 1000;
@@ -42,7 +40,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
     }
 
     const fetchAmountReceived = async () => {
-      const user = await getUsers(adminKey, {
+      const user = await getUsers({
         aadObjectId: account.localAccountId,
       });
 
@@ -50,7 +48,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
         const currentUser = user[0];
 
         // Fetch user's wallets
-        const userWallets = await getUserWallets(adminKey, currentUser.id);
+        const userWallets = await getUserWallets(currentUser.id);
 
         if (userWallets && userWallets.length > 0) {
           // Find the Allowance wallet
@@ -62,7 +60,7 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
             const balance = (allowanceWallet.balance_msat ?? 0) / 1000;
             setBalance(balance);
 
-            const allowanceData = await getAllowance(adminKey, currentUser.id);
+            const allowanceData = await getAllowance(currentUser.id);
 
             if (allowanceData) {
               setAllowance(allowanceData);
@@ -72,13 +70,12 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
               setAllowance(null);
             }
 
-            // Check if inkey exists before fetching transactions
-            if (allowanceWallet.inkey) {
+            if (allowanceWallet.id) {
               const transactionHistoryStart =
                 Date.now() / MS_PER_SECOND -
                 TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
               const transaction = await getWalletTransactionsSince(
-                allowanceWallet.inkey,
+                allowanceWallet.id,
                 transactionHistoryStart,
                 {},
               );
@@ -89,8 +86,6 @@ const WalletAllowanceCard: React.FC<AllowanceCardProps> = () => {
                   .reduce((total, t) => total + Math.abs(t.amount), 0) /
                 MS_PER_SECOND;
               setSpentSats(spent);
-            } else {
-              setSpentSats(0);
             }
           }
         }

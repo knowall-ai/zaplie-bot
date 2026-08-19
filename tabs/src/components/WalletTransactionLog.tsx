@@ -17,8 +17,6 @@ interface WalletTransactionLogProps {
   filterZaps?: (activeTab: string) => void;
 }
 
-const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
-
 // Time constants
 const SECONDS_PER_DAY = 86400;
 const MS_PER_SECOND = 1000;
@@ -58,9 +56,9 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
       try {
         // First, fetch all users
-        const allUsers = await getUsers(adminKey, {});
+        const allUsers = await getUsers({});
 
-        const currentUserLNbitDetails = await getUsers(adminKey, {
+        const currentUserLNbitDetails = await getUsers({
           aadObjectId: account.localAccountId,
         });
 
@@ -68,7 +66,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
           const user = currentUserLNbitDetails[0];
 
           // Fetch user's wallets
-          const userWallets = await getUserWallets(adminKey, user.id);
+          const userWallets = await getUserWallets(user.id);
 
           // Create a wallet ID to user mapping for ALL users - parallelized
           const walletToUserMap = new Map<string, User>();
@@ -79,7 +77,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             const walletResults = await Promise.all(
               allUsers.map(async u => {
                 try {
-                  const wallets = await getUserWallets(adminKey, u.id);
+                  const wallets = await getUserWallets(u.id);
                   return { user: u, wallets: wallets || [] };
                 } catch (err) {
                   // Log error but continue - don't fail for one user
@@ -101,7 +99,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
               allWallets.map(async wallet => {
                 try {
                   return await getWalletTransactionsSince(
-                    wallet.inkey,
+                    wallet.id,
                     paymentsSinceTimestamp,
                     null,
                   );
@@ -125,26 +123,30 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
             }
           });
 
-          let inkey: any = null;
+          let walletId: string | undefined;
 
           if (userWallets && userWallets.length > 0) {
             if (activeWallet === 'Private') {
               const privateWallet = userWallets.find(w =>
                 w.name.toLowerCase().includes('private'),
               );
-              inkey = privateWallet?.inkey;
+              walletId = privateWallet?.id;
             } else {
               const allowanceWallet = userWallets.find(w =>
                 w.name.toLowerCase().includes('allowance'),
               );
-              inkey = allowanceWallet?.inkey;
+              walletId = allowanceWallet?.id;
             }
           } else {
             console.error('No wallets found for user');
           }
 
+          if (!walletId) {
+            throw new Error('Selected wallet was not found');
+          }
+
           const transactions = await getWalletTransactionsSince(
-            inkey,
+            walletId,
             paymentsSinceTimestamp,
             null,
           );

@@ -138,7 +138,7 @@ sequenceDiagram
 
 === LNbits Integration
 
-Three parallel clients speak to the LNbits REST API:
+Three server-side clients speak to the LNbits REST API:
 
 - `src/services/lnbitsService.ts` — bot-side (~20 exported helpers). Auth is
   either an `X-Api-Key` header (admin or wallet invoice key) or a Bearer token
@@ -148,8 +148,12 @@ Three parallel clients speak to the LNbits REST API:
   (`/usermanager/api/v1/users|wallets`). Includes a `scheduledTopup()` routine
   (node-cron) that replenishes all Allowance wallets to
   `LNBITS_INITIAL_ALLOWANCE`.
-- `tabs/src/services/lnbitsServiceLocal.ts` — browser-side equivalent used by
-  the tabs (transactions, balances, allowance, payments).
+- `tabs/backend/lnbitsGatewayService.js` - authenticated Express gateway for
+  the tabs. It keeps the LNbits service account, admin key, invoice keys, and
+  wallet admin keys in the Node process. The React client
+  (`tabs/src/services/lnbitsServiceLocal.ts`) calls only same-origin
+  `/api/lnbits/*` routes with a verified Entra ID token. Payment and invoice
+  writes additionally verify that the requested wallet belongs to the caller.
 - `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
   base URL and credentials arrive with each HTTP request.
 
@@ -181,7 +185,7 @@ to `/login` on failure) — plus `/login`, `/auth-start`, `/auth-end`. Providers
 |===
 
 The reward label is persisted by the Express backend
-(`GET/POST /api/reward-name` → `tabs/backend/data.json`) and consumed by both
+(`GET/POST /api/reward-name` → `data.json` under `ZAPLIE_DATA_DIR`) and consumed by both
 the tabs (`RewardNameContext`) and the bot (`src/services/fetchRewardsName.ts`).
 
 === Azure Functions
@@ -206,8 +210,12 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 | Queried per wallet for feed, history, and leaderboard
 
 | Reward label ("Sats")
-| `tabs/backend/data.json`
-| JSON file on the web server; no database
+| `data.json` under `ZAPLIE_DATA_DIR`
+| JSON file on the web server; set the directory to `/home/data/zaplie` on Azure
+
+| Portal connections, identities, pending rewards, and server-side credentials
+| JSON stores under `ZAPLIE_DATA_DIR`
+| Mutable runtime state is outside the immutable application package
 
 | Bot conversation state
 | `MemoryStorage` (in-process)
@@ -256,6 +264,5 @@ and manifest packaging across local/dev environments.
   file rather than a real datastore.
 - The Azure Functions are anonymous at the platform level and receive LNbits
   credentials per request.
-- The tabs app currently ships LNbits credentials (including an admin key) to
-  the browser via `REACT_APP_*` variables — acceptable only for trusted
-  internal deployments; see `SECURITY.md`.
+- The JSON stores under `ZAPLIE_DATA_DIR` are persistent on a single App
+  Service instance but are not a multi-instance transactional datastore.
