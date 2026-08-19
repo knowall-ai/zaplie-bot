@@ -7,9 +7,10 @@
 // test exists to stop it from silently regressing.
 //
 // projectClient/agentEnsured are cached at module scope in
-// foundryAgentService.ts (intentional — ensureAgent should run once per
-// process, not once per turn), so agents.update is only asserted once, and
-// all tests share one mocked OpenAI client configured via mockResolvedValueOnce.
+// foundryAgentService.ts (intentional — ensureAgent re-runs only when the
+// composed instructions change, not once per turn), so agents.update is
+// asserted sparingly, and all tests share one mocked OpenAI client configured
+// via mockResolvedValueOnce.
 
 import { expect, describe, test, beforeAll, jest } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
@@ -30,6 +31,14 @@ jest.mock('../config', () => ({
 const mockAgentsUpdate = jest
   .fn<() => Promise<any>>()
   .mockResolvedValue(undefined);
+const mockGetBotPersona = jest
+  .fn<() => Promise<string>>()
+  .mockResolvedValue('');
+
+jest.mock('./fetchBotPersona', () => ({
+  getBotPersona: mockGetBotPersona,
+}));
+
 const mockConversationsCreate = jest.fn<() => Promise<any>>();
 const mockResponsesCreate = jest.fn<(...args: any[]) => Promise<any>>();
 
@@ -153,6 +162,87 @@ describe('foundryAgentService.runConversationalTurn', () => {
       name: 'zaplie-assistant',
       type: 'agent_reference',
     });
+  });
+
+  test('composes the admin persona inside the fixed guardrails, and re-upserts only when it changes', async () => {
+    mockGetBotPersona.mockResolvedValue('Be upbeat and celebrate specifics.');
+    mockAgentsUpdate.mockClear();
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
+
+    await runConversationalTurn(
+      'hi',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+
+    expect(mockAgentsUpdate).toHaveBeenCalledTimes(1);
+    const { instructions } = (mockAgentsUpdate.mock.calls[0] as any[])[1];
+    // The rails come first and are restated last; the persona is fenced in
+    // between and framed as configuration, not as instructions.
+    expect(instructions).toMatch(
+      /Never invent numbers[\s\S]*untrusted data[\s\S]*BEGIN PERSONA ---\nBe upbeat and celebrate specifics\.\n--- END PERSONA ---[\s\S]*always take precedence/,
+    );
+
+    // The same persona again must not re-upsert the agent.
+    mockAgentsUpdate.mockClear();
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
+    await runConversationalTurn(
+      'hi',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+    expect(mockAgentsUpdate).not.toHaveBeenCalled();
+
+    // A changed persona re-upserts, so an admin's save lands without a restart.
+    mockGetBotPersona.mockResolvedValue('Be terse and formal.');
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
+    await runConversationalTurn(
+      'hi',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+    expect(mockAgentsUpdate).toHaveBeenCalledTimes(1);
+    expect((mockAgentsUpdate.mock.calls[0] as any[])[1].instructions).toContain(
+      'Be terse and formal.',
+    );
+  });
+
+  test('falls back to the built-in voice when no persona is set', async () => {
+    mockGetBotPersona.mockResolvedValue('');
+    mockAgentsUpdate.mockClear();
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: 'ok',
+    });
+
+    await runConversationalTurn(
+      'hi',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+
+    const { instructions } = (mockAgentsUpdate.mock.calls[0] as any[])[1];
+    expect(instructions).toContain(
+      'Keep replies concise and friendly, suited for a Teams chat.',
+    );
+    expect(instructions).toContain('Never invent numbers');
+    // "Withdraw my zaps" is unlisted and still a stub, but free text about
+    // withdrawing reaches the agent — so the rails say so rather than letting
+    // it improvise a payout route.
+    expect(instructions).toContain('withdrawals are not available yet');
   });
 
   test('names the unregistered tool and the registered ones when the agent drifts', async () => {
