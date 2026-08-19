@@ -76,7 +76,10 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   }, [allZaps, compact, timestamp]);
 
   return (
-    <section className={styles.zapactivitychartbox} aria-busy={isLoading}>
+    <section
+      className={styles.zapactivitychartbox}
+      aria-busy={isLoading && !hasError}
+    >
       <h2 className={styles.zapactivitycharttitle}>Zap activity</h2>
       {hasError ? (
         <p>Activity data is unavailable.</p>

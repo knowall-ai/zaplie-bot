@@ -53,7 +53,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
       .sort((left, right) => right.total - left.total)
       .map((item, index) => ({
         user: item.user,
-        totalAmountSats: item.total,
+        totalAmountSats: Math.floor(item.total),
         rank: index + 1,
       }));
     return ascending ? [...ranked].reverse() : ranked;
