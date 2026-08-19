@@ -10,7 +10,7 @@ export interface WebhookKey {
   revokedAt: string | null;
 }
 
-interface CreatedWebhookKey {
+export interface CreatedWebhookKey {
   key: string;
   id: string;
 }

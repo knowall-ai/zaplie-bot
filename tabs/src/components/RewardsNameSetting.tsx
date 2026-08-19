@@ -12,7 +12,7 @@ import { RewardNameContext } from './RewardNameContext';
 import { useMsal } from '@azure/msal-react';
 import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 
-const CurrencySetting: FunctionComponent = () => {
+const RewardsNameSetting: FunctionComponent = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currency, setCurrency] = useState('');
   const [saving, setSaving] = useState(false);
@@ -183,4 +183,4 @@ const CurrencySetting: FunctionComponent = () => {
   );
 };
 
-export default CurrencySetting;
+export default RewardsNameSetting;

@@ -1,6 +1,6 @@
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import CurrencySetting from './RewardsNameSetting';
+import RewardsNameSetting from './RewardsNameSetting';
 import { RewardNameContext } from './RewardNameContext';
 
 const mockUseMsal = jest.fn();
@@ -36,7 +36,7 @@ let root: Root;
 const mountSetting = (value: React.ContextType<typeof RewardNameContext>) => {
   root.render(
     <RewardNameContext.Provider value={value}>
-      <CurrencySetting />
+      <RewardsNameSetting />
     </RewardNameContext.Provider>,
   );
 };
