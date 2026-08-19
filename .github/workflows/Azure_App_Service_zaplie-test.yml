@@ -19,6 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Scanning the sources instead of the bundle keeps this guard effective
+      # regardless of whether the build ships sourcemaps.
+      - name: Fail if the portal sources read LNbits admin credentials
+        shell: bash
+        run: |
+          test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
+          if grep -REl 'process\.env\.REACT_APP_LNBITS_(ADMINKEY|PASSWORD)' tabs/src; then
+            echo '::error::Portal sources read LNbits admin credentials in browser code. Move privileged LNbits calls behind the backend.'
+            exit 1
+          fi
+
       - name: Set up Node.js version
         uses: actions/setup-node@v7
         with:
@@ -32,6 +43,20 @@ jobs:
           npm install
           npm run build --if-present
       
+      # CRA inlines REACT_APP_* values into public JavaScript, so any LNbits
+      # admin credential reference in the built bundle is a secret leak. The
+      # variable names survive in CRA output even without sourcemaps, so scan
+      # for the names as well as the bare credential identifiers. A missing
+      # build directory is a failure, not a pass: grep would exit 2 there.
+      - name: Fail if the built bundle references LNbits admin credentials
+        shell: bash
+        run: |
+          test -d tabs/build || { echo '::error::No built bundle found to scan'; exit 1; }
+          if grep -RlE 'REACT_APP_LNBITS_(ADMINKEY|PASSWORD)|LNBITS_ADMINKEY|LNBITS_PASSWORD' tabs/build; then
+            echo '::error::LNbits admin credential references found in the built portal bundle. Move privileged LNbits calls behind the backend before deploying.'
+            exit 1
+          fi
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
