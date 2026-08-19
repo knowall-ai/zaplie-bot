@@ -62,6 +62,14 @@ const verifyMsalPayload = async (token) => {
       upn: 'ada@example.com',
     };
   }
+  if (token === 'blank-claims-token') {
+    return {
+      oid: 'blank-claims-oid',
+      name: '   ',
+      preferred_username: ' ',
+      upn: '\t',
+    };
+  }
   if (token === 'unprovisionable-token') return { oid: 'unprovisionable-oid' };
   throw new Error('bad token');
 };
@@ -122,6 +130,20 @@ test('requires a verified token and provisions a first-time caller', async () =>
   const response = await request('/api/lnbits/users', { token: 'valid-token' });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), [{ id: 'user-1' }]);
+});
+
+test('whitespace-only claims never reach provisioning as a value', async () => {
+  const response = await request('/api/lnbits/users', {
+    token: 'blank-claims-token',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(ensureCalls.at(-1), {
+    aadObjectId: 'blank-claims-oid',
+    displayName: '',
+    email: '',
+    userPrincipalName: '',
+  });
 });
 
 test('a failed provisioning explains itself instead of masking a 5xx', async () => {

@@ -43,8 +43,10 @@ const createLnbitsRouter = ({
       if (!claims || typeof claims.oid !== 'string' || claims.oid.length === 0) {
         throw new Error('token is missing the oid claim');
       }
+      // Trimmed: a whitespace-only claim would otherwise count as present and
+      // be persisted as the LNbits email or an AccountName avatar URL.
       const claimString = (value) =>
-        typeof value === 'string' && value.length > 0 ? value : '';
+        typeof value === 'string' ? value.trim() : '';
       // Profile details for first-run provisioning come from the verified
       // token, never from the request body, so they cannot be forged.
       req.auth = {
