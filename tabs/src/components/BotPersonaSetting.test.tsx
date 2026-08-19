@@ -201,6 +201,7 @@ describe('BotPersonaSetting', () => {
     });
     // Fail closed: no textarea means no blind overwrite of the stored persona.
     expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('label')).toBeNull();
 
     mockGetBotPersona.mockResolvedValue({ botPersona: 'Recovered persona.' });
     await act(async () => {

@@ -179,9 +179,13 @@ const BotPersonaSetting: FunctionComponent = () => {
           </p>
         ) : (
           <>
-            <label className={styles.fieldLabel} htmlFor="bot-persona-input">
-              Persona
-            </label>
+            {/* A failed load renders no control at all — unlike the skeleton,
+                which is standing in for one that is on its way. */}
+            {isLoading || persona !== null ? (
+              <label className={styles.fieldLabel} htmlFor="bot-persona-input">
+                Persona
+              </label>
+            ) : null}
 
             {isLoading && persona === null ? (
               <>
