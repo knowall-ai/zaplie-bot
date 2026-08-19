@@ -18,13 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Source-level guard: the portal must never read LNbits admin
-      # credentials from browser code. It runs before the build, so it holds
-      # whether or not the bundle ships sourcemaps.
+      # Scanning the sources instead of the bundle keeps this guard effective
+      # regardless of whether the build ships sourcemaps.
       - name: Fail if the portal sources read LNbits admin credentials
         shell: bash
         run: |
-          test -d tabs/src || { echo '::error::tabs/src not found, nothing to scan'; exit 1; }
+          test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
           if grep -REl 'process\.env\.REACT_APP_LNBITS_(ADMINKEY|PASSWORD)' tabs/src; then
             echo '::error::Portal sources read LNbits admin credentials in browser code. Move privileged LNbits calls behind the backend.'
             exit 1
