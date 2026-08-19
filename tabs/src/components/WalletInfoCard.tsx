@@ -1,148 +1,205 @@
-import React, { useEffect, useState, useContext, useCallback } from 'react';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import './WalletInfoCard.css';
-import ArrowClockwise from '../images/ArrowClockwise.svg';
 import { getUsers, getUserWallets } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import SendPayment from './SendPayment';
 import ReceivePayment from './ReceivePayment';
 import { RewardNameContext } from './RewardNameContext';
 
-const WalletYourWalletInfoCard: React.FC = () => {
-  const [balance, setBalance] = useState<number>();
+type WalletState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; balance: number; user: User };
 
+const walletNameIsPrivate = (wallet: Wallet) =>
+  wallet.name.trim().toLowerCase() === 'private';
+
+const WalletYourWalletInfoCard: React.FC = () => {
+  const { accounts } = useMsal();
+  const aadObjectId = accounts[0]?.localAccountId;
+  const [walletState, setWalletState] = useState<WalletState>({
+    status: 'loading',
+  });
   const [isReceivePopupOpen, setIsReceivePopupOpen] = useState(false);
   const [isSendPopupOpen, setIsSendPopupOpen] = useState(false);
-  const { accounts } = useMsal();
-  const account = accounts[0];
-  const [myLNbitDetails, setMyLNbitDetails] = useState<User>();
+  const requestIdRef = useRef(0);
+  const {
+    rewardName,
+    isLoading: isRewardNameLoading = false,
+    error: rewardNameError = null,
+  } = useContext(RewardNameContext);
 
-  const fetchAmountReceived = useCallback(async () => {
-    if (!account?.localAccountId) return;
+  const loadWallet = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setWalletState({ status: 'loading' });
+    setIsReceivePopupOpen(false);
+    setIsSendPopupOpen(false);
 
-    const currentUserLNbitDetails = await getUsers({
-      aadObjectId: account.localAccountId,
-    });
+    if (!aadObjectId) {
+      setWalletState({
+        status: 'error',
+        message: 'Sign in to load your wallet.',
+      });
+      return;
+    }
 
-    if (currentUserLNbitDetails && currentUserLNbitDetails.length > 0) {
-      const user = currentUserLNbitDetails[0];
+    try {
+      const users = await getUsers({ aadObjectId });
+      const matchingUsers = users.filter(
+        user => user.aadObjectId === aadObjectId,
+      );
 
-      // Fetch user's wallets
-      const userWallets = await getUserWallets(user.id);
+      if (requestId !== requestIdRef.current) return;
+      if (matchingUsers.length !== 1) {
+        setWalletState({
+          status: 'error',
+          message: "We couldn't match your signed-in account to a wallet.",
+        });
+        return;
+      }
 
-      if (userWallets && userWallets.length > 0) {
-        // Find the Private wallet
-        const privateWallet = userWallets.find(w =>
-          w.name.toLowerCase().includes('private'),
-        );
+      const user = matchingUsers[0];
+      const wallets = await getUserWallets(user.id);
+      if (requestId !== requestIdRef.current) return;
 
-        if (privateWallet) {
-          // Update user object with the wallet
-          user.privateWallet = privateWallet;
-          setMyLNbitDetails(user);
+      const privateWallets = wallets.filter(walletNameIsPrivate);
+      if (privateWallets.length !== 1) {
+        setWalletState({
+          status: 'error',
+          message: "We couldn't find your Private wallet.",
+        });
+        return;
+      }
 
-          // Set balance
-          const bal = (privateWallet.balance_msat ?? 0) / 1000;
-          setBalance(bal);
-        }
+      const privateWallet = privateWallets[0];
+      if (privateWallet.user !== user.id) {
+        setWalletState({
+          status: 'error',
+          message: "We couldn't confirm your Private wallet belongs to you.",
+        });
+        return;
+      }
+
+      if (!Number.isFinite(privateWallet.balance_msat)) {
+        setWalletState({
+          status: 'error',
+          message: "We couldn't read your Private wallet balance.",
+        });
+        return;
+      }
+
+      setWalletState({
+        status: 'ready',
+        balance: privateWallet.balance_msat / 1000,
+        user: { ...user, privateWallet },
+      });
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setWalletState({
+          status: 'error',
+          message: "We couldn't load your wallet. Try again.",
+        });
       }
     }
-  }, [account?.localAccountId]);
+  }, [aadObjectId]);
 
   useEffect(() => {
-    fetchAmountReceived();
-  }, [fetchAmountReceived]);
-  const handleOpenReceivePopup = () => {
-    setIsReceivePopupOpen(true);
-  };
+    void loadWallet();
 
-  const handleCloseReceivePopup = () => {
-    setIsReceivePopupOpen(false);
-  };
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [loadWallet]);
 
-  const handleOpenSendPopup = () => {
-    setIsSendPopupOpen(true);
-  };
-
-  const handleCloseSendPopup = () => {
-    setIsSendPopupOpen(false);
-  };
-
-  const rewardNameContext = useContext(RewardNameContext);
-  if (!rewardNameContext) {
-    return null; // or handle the case where the context is not available
-  }
-  const rewardsName = rewardNameContext.rewardName;
-
-  // Buttons should be disabled if balance is undefined (still loading)
-  const isLoading = false; // balance === undefined;
+  const walletReady = walletState.status === 'ready';
+  const currentUser = walletReady ? walletState.user : null;
 
   return (
     <div className="wallet-info">
       <h4>Your wallet</h4>
       <p>Amount received from other users:</p>
-      <div className="horizontal-container">
-        <div className="item">
-          {' '}
-          <h1>{balance?.toLocaleString() ?? '0'}</h1>
-        </div>
-        <div className="item">{rewardsName}</div>
-        <div
-          className="col-md-1 item"
-          style={{ paddingTop: '30px', paddingLeft: '10px' }}
-        >
-          <button style={{ display: 'none' }} className="refreshImageIcon">
-            <img
-              src={ArrowClockwise}
-              alt="icon"
-              style={{ width: 30, height: 30 }}
-            />
-          </button>
-        </div>
-      </div>
-      <div className="wallet-buttons">
-        <div>
-          {' '}
-          <button
-            onClick={handleOpenReceivePopup}
-            className="receive-btn"
-            disabled={isLoading}
-          >
-            Receive
-          </button>
-        </div>
-        <div>
-          <button
-            onClick={handleOpenSendPopup}
-            className="send-btn"
-            disabled={isLoading}
-          >
-            Send
-          </button>
-        </div>
-        {isReceivePopupOpen && (
-          <div className="overlay" onClick={handleCloseReceivePopup}>
-            <div className="popup" onClick={e => e.stopPropagation()}>
-              <ReceivePayment
-                onClose={handleCloseReceivePopup}
-                currentUserLNbitDetails={myLNbitDetails!}
-              />
-            </div>
-          </div>
-        )}
 
-        {isSendPopupOpen && (
-          <div className="overlay" onClick={handleCloseSendPopup}>
-            <div className="popup" onClick={e => e.stopPropagation()}>
-              <SendPayment
-                onClose={handleCloseSendPopup}
-                currentUserLNbitDetails={myLNbitDetails!}
+      <div
+        className="horizontal-container"
+        aria-busy={walletState.status === 'loading'}
+      >
+        {walletState.status === 'loading' ? (
+          <p className="wallet-loading" role="status">
+            Loading wallet...
+          </p>
+        ) : walletState.status === 'error' ? (
+          <div className="wallet-error-state">
+            <p role="alert">{walletState.message}</p>
+            <button
+              type="button"
+              className="wallet-retry-btn"
+              onClick={loadWallet}
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="item">
+              <h1>{walletState.balance.toLocaleString()}</h1>
+            </div>
+            <div className="item">
+              {rewardName ??
+                (isRewardNameLoading
+                  ? 'Loading reward name...'
+                  : rewardNameError
+                    ? 'Reward name unavailable'
+                    : '')}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="wallet-buttons">
+        <button
+          type="button"
+          onClick={() => setIsReceivePopupOpen(true)}
+          className="receive-btn"
+          disabled={!walletReady}
+        >
+          Receive
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsSendPopupOpen(true)}
+          className="send-btn"
+          disabled={!walletReady}
+        >
+          Send
+        </button>
+
+        {isReceivePopupOpen && currentUser ? (
+          <div className="overlay" onClick={() => setIsReceivePopupOpen(false)}>
+            <div className="popup" onClick={event => event.stopPropagation()}>
+              <ReceivePayment
+                onClose={() => setIsReceivePopupOpen(false)}
+                currentUserLNbitDetails={currentUser}
               />
             </div>
           </div>
-        )}
-        <div className="col-md-6">
-          <span></span>
-        </div>
+        ) : null}
+
+        {isSendPopupOpen && currentUser ? (
+          <div className="overlay" onClick={() => setIsSendPopupOpen(false)}>
+            <div className="popup" onClick={event => event.stopPropagation()}>
+              <SendPayment
+                onClose={() => setIsSendPopupOpen(false)}
+                currentUserLNbitDetails={currentUser}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
