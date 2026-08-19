@@ -79,7 +79,7 @@ jobs:
             tabs/backend/lnbits-zap-idempotency.json
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: node-app
           path: tabs
