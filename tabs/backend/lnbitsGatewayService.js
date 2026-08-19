@@ -73,8 +73,13 @@ const lnbitsRequest = async (path, options = {}) => {
     if (!options.walletKey && !options.adminKey && response.status === 401) {
       tokenCache = null;
     }
+    // Only genuine caller mistakes are propagated. An LNbits 401/403 means the
+    // gateway's own credentials failed, which is a 502 for the browser.
+    const status =
+      response.status === 400 || response.status === 404 ? response.status : 502;
     throw new LnbitsGatewayError(
       `LNbits request failed with status ${response.status}`,
+      status,
     );
   }
   return safeJson(response);
