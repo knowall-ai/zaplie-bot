@@ -36,7 +36,7 @@
     "@microsoft/teamsfx": "^2.0.0",
     "botbuilder": "^4.23.3",
     "botbuilder-dialogs": "^4.23.3",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "dotenv-flow": "^4.1.0",
     "express": "^5.2.1",
     "isomorphic-fetch": "^3.0.0",
