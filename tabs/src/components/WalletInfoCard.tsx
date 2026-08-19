@@ -78,6 +78,14 @@ const WalletYourWalletInfoCard: React.FC = () => {
       }
 
       const privateWallet = privateWallets[0];
+      if (privateWallet.user !== user.id) {
+        setWalletState({
+          status: 'error',
+          message: "We couldn't confirm your Private wallet belongs to you.",
+        });
+        return;
+      }
+
       if (!Number.isFinite(privateWallet.balance_msat)) {
         setWalletState({
           status: 'error',

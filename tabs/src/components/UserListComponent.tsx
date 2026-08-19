@@ -69,9 +69,14 @@ const UserListComponent: FunctionComponent = () => {
       fetchUsers();
     }
   }, [fetchUsers]);
-  const rewardNameContext = useContext(RewardNameContext);
-  const rewardsName = rewardNameContext.rewardName;
-  if (loading) {
+  const {
+    rewardName: rewardsName,
+    isLoading: isRewardNameLoading = false,
+    error: rewardNameError = null,
+    retry: retryRewardName,
+  } = useContext(RewardNameContext);
+
+  if (loading || isRewardNameLoading) {
     return (
       <div className={styles.stateMessage} role="status">
         Loading...
@@ -84,6 +89,19 @@ const UserListComponent: FunctionComponent = () => {
       <div className={styles.stateError} role="alert">
         <span>{error}</span>
         <button type="button" onClick={() => void fetchUsers()}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (!rewardsName) {
+    return (
+      <div className={styles.stateError} role="alert">
+        <span>
+          {rewardNameError?.message ?? 'The reward name is unavailable.'}
+        </span>
+        <button type="button" onClick={() => retryRewardName?.()}>
           Try again
         </button>
       </div>

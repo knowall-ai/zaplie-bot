@@ -36,6 +36,7 @@ const PurchasePopup: React.FC<PurchasePopupProps> = ({
     window.location.assign(
       `mailto:${storeOwnerEmail}?subject=${subject}&body=${body}`,
     );
+    onClose();
   };
 
   return (

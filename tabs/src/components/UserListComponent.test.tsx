@@ -119,4 +119,40 @@ describe('UserListComponent', () => {
     expect(mockGetUsers).not.toHaveBeenCalled();
     expect(mockGetUserWallets).toHaveBeenCalledWith(user.id);
   });
+
+  test('fails closed with a retry when the reward name is unavailable', async () => {
+    mockGetUsers.mockResolvedValue([user]);
+    mockGetUserWallets.mockResolvedValue([]);
+    const retry = jest.fn();
+
+    // This test uses React's raw createRoot API, which is not auto-wrapped.
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <CacheProvider>
+          <RewardNameContext.Provider
+            value={{
+              rewardName: null,
+              setRewardName: jest.fn(),
+              error: new Error('The reward name could not be loaded.'),
+              retry,
+            }}
+          >
+            <UserListComponent />
+          </RewardNameContext.Provider>
+        </CacheProvider>,
+      );
+    });
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'The reward name could not be loaded.',
+    );
+    expect(container.textContent).not.toContain('null');
+
+    act(() => {
+      alert?.querySelector('button')?.click();
+    });
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
 });

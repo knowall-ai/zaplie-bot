@@ -191,6 +191,22 @@ describe('WalletInfoCard', () => {
     expect(mockGetUserWallets).toHaveBeenCalledTimes(2);
   });
 
+  test('refuses a Private wallet owned by another user', async () => {
+    mockGetUsers.mockResolvedValue([user]);
+    mockGetUserWallets.mockResolvedValue([
+      { ...exactPrivateWallet, user: 'user-2' },
+    ]);
+
+    await renderWallet();
+    await eventually(() => {
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+        "We couldn't confirm your Private wallet belongs to you.",
+      );
+    });
+    expect(container.querySelector('h1')).toBeNull();
+    expect(getButton('Send').disabled).toBe(true);
+  });
+
   test('does not query wallets without an authenticated account', async () => {
     mockUseMsal.mockReturnValue({ accounts: [] });
 
