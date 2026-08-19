@@ -79,19 +79,32 @@ with `npm run dev` (nodemon + ts-node, inspector on 9239), reading
 
 === Web tabs (GitHub Actions)
 
-`.github/workflows/Azure_App_Service_zappie-test.yml` and
-`Azure_App_Service_zappie-prod.yml` trigger on push to `main` (and manually):
+`.github/workflows/Azure_App_Service_zaplie-test.yml` and
+`Azure_App_Service_zaplie-prod.yml` trigger on push to `main` (and manually):
 
-. Build job (windows-latest, Node 20): `cd tabs && npm install && npm run build`
-  (`CI: false`), upload the `tabs` artifact
-. Deploy job (ubuntu-latest): OIDC `azure/login`, ensure a deployment slot
-  exists (`pr-<number>` for PRs, else `testing`) on app `zappie-dev`, then
-  `azure/webapps-deploy@v3`
+. Build job (windows-latest, Node 24): `cd tabs && npm install && npm run build`
+  (`CI: false`), scan the sources and the built bundle for LNbits admin
+  credentials, drop the mutable backend JSON stores, upload the `tabs` artifact
+. Deploy job (ubuntu-latest): `azure/webapps-deploy@v3`
 
-Required repository secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
-`AZURE_SUBSCRIPTION_ID` (federated OIDC — no publish profiles).
+The two workflows authenticate differently today:
 
-Note: CI deploys only the tabs app; the bot deploys via `teamsapp deploy`.
+Test:: Deploys with federated OIDC — `azure/login` using the repository
+secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`
+(`id-token: write`), then ensures a deployment slot exists (`pr-<number>` for
+pull requests, else `testing`) on app `zaplie-dev` before deploying to it.
+Prod:: Still deploys with a publish profile — the `AZURE_WEBAPP_PUBLISH_PROFILE`
+secret against app `zaplie-prod-webapp`, with no `azure/login` step. Migrating
+production onto the same federated OIDC credential is pending; until then the
+publish profile is a long-lived secret and must be re-downloaded whenever it is
+reset in Azure.
+
+Note: neither workflow has a bot job — CI deploys only the portal, and it
+deploys the whole portal: the React build *and* the Express backend under
+`tabs/backend`. The portal App Service must therefore use the startup command
+`node backend/server.js` (with `SCM_DO_BUILD_DURING_DEPLOYMENT=false`, since
+the artifact arrives prebuilt). The bot deploys separately via
+`teamsapp deploy`.
 
 === Azure Functions
 
@@ -121,15 +134,17 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 
 | `LNBITS_NODE_URL`
 | Base URL of the LNbits instance
-| Bot, Tabs (`REACT_APP_` prefix)
+| Bot, Portal backend, Tabs (`REACT_APP_` prefix)
 
 | `LNBITS_USERNAME`, `LNBITS_PASSWORD`
-| LNbits service-account credentials (`POST /api/v1/auth`)
-| Bot, Tabs
+| LNbits service-account credentials (`POST /api/v1/auth`) — server-side only,
+  never with a `REACT_APP_` prefix
+| Bot, Portal backend
 
 | `LNBITS_ADMINKEY`
-| LNbits admin API key for wallet operations
-| Bot, Tabs
+| LNbits admin API key for wallet operations — server-side only, never with a
+  `REACT_APP_` prefix
+| Bot
 
 | `LNBITS_INITIAL_ALLOWANCE`
 | Sats granted/topped-up to each user's Allowance wallet
@@ -152,12 +167,97 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Manifest
 
 | `WEBSITE_API_URL`
-| Reward-name API base URL used by the bot
+| Portal backend API base URL used by the bot; include the `/api` prefix
+  (`https://<portal-domain>/api`), routes are appended to it verbatim
 | Bot
+
+| `TAB_BACKEND_TOKEN`
+| Shared secret the bot presents when calling the portal backend; generate
+  with `openssl rand -hex 32` and set the same value on both apps
+| Bot, Portal backend
+
+| `REWARDS_API_KEY`
+| Static API key accepted by the bot's rewards endpoint (in addition to
+  portal-managed keys created in Automations)
+| Bot
+
+| `REWARDS_TREASURY_ADMINKEY`
+| Admin key of the LNbits treasury wallet that reward payouts are drawn from
+| Bot
+
+| `REWARDS_MAX_AMOUNT_SATS`
+| Upper bound in sats for a single reward (default 10000)
+| Bot, Portal backend
+
+| `AAD_TENANT_ID`, `AAD_CLIENT_ID`
+| Entra tenant and app client id used to validate MSAL idTokens
+| Portal backend
+
+| `PORTAL_URL`
+| Public base URL of the portal, used in identity/OAuth redirect flows
+| Portal backend
+
+| `TREASURY_USERNAME`
+| LNbits account that owns the treasury wallet used by portal payouts
+| Portal backend
+
+| `IDENTITY_STATE_SECRET`
+| HMAC key that signs the short-lived state token in the GitHub OAuth /
+  identity-linking round trip (`backend/githubOAuthState.js`). If unset the
+  backend generates one and persists it in `secrets.json`, so set it explicitly
+  in production (`openssl rand -hex 32`) — otherwise in-flight links break
+  whenever that file is lost or the app scales out.
+| Portal backend
+
+| `ZAPLIE_DATA_DIR`
+| Durable directory for the mutable JSON stores, set on *both* App Services.
+  REQUIRED in production: without it the stores sit inside the deployment tree
+  and a clean deploy wipes them. The value depends on the App Service OS —
+  `/home/data/zaplie` on Linux, `+D:\home\data\zaplie+` on Windows (the `home`
+  share is the persistent one in both cases). Consumers: the portal backend's
+  `data.json` honours it as of this change; the bot's zap ledger and
+  weekly-allowance guard honour it in the durable bot-state work, and the
+  portal's remaining stores (identities, connections, pending rewards,
+  secrets, webhook keys, GitHub App credentials) follow with the portal work.
+  Set it now on both — a component that does not read it yet simply ignores it.
+| Bot, Portal backend
+
+| `SCM_DO_BUILD_DURING_DEPLOYMENT`
+| Must be `false`: CI ships a prebuilt artifact and Oryx must not rebuild it
+| Portal (App Service setting)
 |===
+
+The portal App Service starts the Express backend with the startup command
+`node backend/server.js`.
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.
+
+== Day One
+
+Complete these once per new environment, right after the first deployment:
+
+. *Assign the admin app role.* The role is declared in `aad.manifest.json`,
+  but it only materialises on the app registration after `teamsapp provision`
+  runs again (the `aadApp/update` step applies the manifest) — re-run it once
+  before looking for the role. Then, in Entra ID → Enterprise applications →
+  the Zaplie app → "Users and groups", assign the "Zaplie Administrator" app
+  role (value `Zaplie.Admin`) to at least one user. The portal's
+  org-configuration endpoints reject every write until a signed-in user
+  carries this role.
+. *Prepare LNbits.* Enable the User Manager extension on the LNbits
+  instance, then create the host (treasury) wallet that funds allowances and
+  rewards. Copy its ids/keys into `LNBITS_HOST_WALLET_ID`,
+  `LNBITS_HOST_USER_ID`, `LNBITS_INKEY` and `REWARDS_TREASURY_ADMINKEY`.
+. *Rotate the burned LNbits credentials.* Historic CI builds injected
+  `REACT_APP_LNBITS_PASSWORD` and `REACT_APP_LNBITS_ADMINKEY` into the
+  portal's public JavaScript bundle, so any admin key or service-account
+  password that ever reached a deployed environment must be treated as
+  compromised. Rotate both in LNbits and update the server-side app settings
+  (`LNBITS_PASSWORD`, `LNBITS_ADMINKEY`) — never reuse the old values.
+. *Provisioning caveat.* A user's LNbits wallets are provisioned the first
+  time the bot sees them: each user must send the bot one message (any
+  message) before opening the tab, or the tab cannot resolve their wallet.
 
 == Manifest and App Package
 
