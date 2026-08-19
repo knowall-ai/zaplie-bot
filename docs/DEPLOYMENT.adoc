@@ -154,10 +154,31 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | `WEBSITE_API_URL`
 | Reward-name API base URL used by the bot
 | Bot
+
+| `BOT_API_RATE_LIMIT`
+| Requests per minute allowed on the bot's `/api/v1/*` routes (positive
+  integer, default 30). Distinct from the tabs backend's `API_RATE_LIMIT`
+| Bot
 |===
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.
+
+== Weekly Allowance Schedule
+
+An external scheduler (Azure Logic App) must POST
+`/api/v1/allowance/topup` once a week with the same `x-api-key` header as
+`/api/v1/rewards`. The run sweeps every Allowance wallet back to the treasury
+and refills it to `LNBITS_INITIAL_ALLOWANCE`; nothing inside the bot fires it.
+
+Weeks are ISO-8601 weeks computed in *UTC*, so schedule the trigger in UTC too
+— a local-time Monday schedule near midnight can land in the previous UTC week.
+A trigger that repeats inside the same UTC ISO week is answered with
+`{"skipped": true}` and moves no funds; concurrent triggers join the single run
+in flight. The guard is a JSON record in `ZAPLIE_DATA_DIR`, written *before*
+the sweep starts, so a crash mid-run leaves the week blocked until an operator
+reconciles the wallets against LNbits. An unreadable or corrupt guard answers
+`503` and sweeps nothing.
 
 == Manifest and App Package
 

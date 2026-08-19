@@ -35,6 +35,10 @@ tabs/backend/pending-rewards.json
 tabs/backend/connections.json
 tabs/backend/webhook-keys.json
 
+# Local bot data directory (weekly allowance run guard); deployed instances
+# point ZAPLIE_DATA_DIR outside the app.
+.zaplie-data/
+
 # Generated documentation PDF
 docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
 docs/.asciidoctor/
