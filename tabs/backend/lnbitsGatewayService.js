@@ -153,21 +153,41 @@ const sanitizeWallet = (wallet) => ({
   deleted: wallet.deleted === true,
 });
 
-const sanitizePayment = (payment) => ({
-  checking_id: payment.checking_id || payment.payment_hash || payment.id || '',
-  payment_hash: payment.payment_hash,
-  // LNbits v1 dropped the boolean `pending` field in favour of `status`;
-  // derive it so in-flight payments are not misread as settled.
-  pending:
-    payment.pending === true ||
-    String(payment.status || '').toLowerCase() === 'pending',
-  amount: Number(payment.amount || 0),
-  fee: Number(payment.fee || 0),
-  memo: payment.memo || '',
-  time: payment.time,
-  extra: redactSensitive(payment.extra || {}),
-  wallet_id: payment.wallet_id,
-});
+const validPaymentId = (value) =>
+  typeof value === 'string' && value.length > 0 && value.length <= 256;
+
+const requirePaymentId = (payment) => {
+  const paymentId = [payment.checking_id, payment.payment_hash, payment.id].find(
+    validPaymentId,
+  );
+  if (!paymentId) {
+    throw new LnbitsGatewayError(
+      'LNbits payment response is missing a stable identifier',
+    );
+  }
+  return paymentId;
+};
+
+const sanitizePayment = (payment) => {
+  const paymentId = requirePaymentId(payment);
+  return {
+    checking_id: paymentId,
+    payment_hash: validPaymentId(payment.payment_hash)
+      ? payment.payment_hash
+      : undefined,
+    // LNbits v1 dropped the boolean `pending` field in favour of `status`;
+    // derive it so in-flight payments are not misread as settled.
+    pending:
+      payment.pending === true ||
+      String(payment.status || '').toLowerCase() === 'pending',
+    amount: Number(payment.amount || 0),
+    fee: Number(payment.fee || 0),
+    memo: payment.memo || '',
+    time: payment.time,
+    extra: redactSensitive(payment.extra || {}),
+    wallet_id: payment.wallet_id,
+  };
+};
 
 const listRawUsers = async () => {
   const body = await lnbitsRequest('/users/api/v1/user');

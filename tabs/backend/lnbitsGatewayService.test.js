@@ -68,6 +68,52 @@ test('payments without the removed pending flag derive it from status', () => {
   assert.equal(sanitizePayment(base).pending, false);
 });
 
+test('payment serialization requires a stable identifier and preserves state', () => {
+  const payment = sanitizePayment({
+    checking_id: 'checking-1',
+    payment_hash: 'hash-1',
+    id: 'legacy-1',
+    pending: true,
+    amount: -20,
+    fee: -1,
+    memo: 'thank you',
+    time: 123,
+    wallet_id: 'wallet-1',
+    extra: { adminkey: 'secret', recipientUserId: 'recipient-1' },
+  });
+
+  assert.deepEqual(payment, {
+    checking_id: 'checking-1',
+    payment_hash: 'hash-1',
+    pending: true,
+    amount: -20,
+    fee: -1,
+    memo: 'thank you',
+    time: 123,
+    wallet_id: 'wallet-1',
+    extra: { recipientUserId: 'recipient-1' },
+  });
+});
+
+test('payment serialization falls back to payment hash and legacy id', () => {
+  assert.equal(
+    sanitizePayment({ payment_hash: 'hash-1' }).checking_id,
+    'hash-1',
+  );
+  assert.equal(sanitizePayment({ id: 'legacy-1' }).checking_id, 'legacy-1');
+});
+
+test('payment serialization rejects records without a stable identifier', () => {
+  assert.throws(
+    () => sanitizePayment({ amount: 20 }),
+    /missing a stable identifier/,
+  );
+  assert.throws(
+    () => sanitizePayment({ checking_id: 'x'.repeat(257) }),
+    /missing a stable identifier/,
+  );
+});
+
 test('invoice creation returns the exact stable invoice identifier', async (t) => {
   const originalFetch = global.fetch;
   const originalEnvironment = {
