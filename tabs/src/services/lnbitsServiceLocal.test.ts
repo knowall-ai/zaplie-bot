@@ -6,15 +6,19 @@ import {
   getWallets,
   payInvoice,
 } from './lnbitsServiceLocal';
-import { msalInstance } from './msalClient';
+import { getMsalInstance } from './msalClient';
 
-jest.mock('./msalClient', () => ({
-  msalInstance: {
+jest.mock('./msalClient', () => {
+  const instance = {
     getActiveAccount: jest.fn(() => ({ localAccountId: 'aad-1' })),
     getAllAccounts: jest.fn(() => []),
     acquireTokenSilent: jest.fn(async () => ({ idToken: 'entra-id-token' })),
-  },
-}));
+  };
+
+  return { getMsalInstance: () => instance };
+});
+
+const msalInstance = getMsalInstance();
 
 global.fetch = jest.fn() as unknown as jest.MockedFunction<typeof fetch>;
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;

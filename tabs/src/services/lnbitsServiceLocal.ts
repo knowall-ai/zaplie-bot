@@ -1,5 +1,5 @@
 import { loginRequest } from './authConfig';
-import { msalInstance } from './msalClient';
+import { getMsalInstance } from './msalClient';
 
 const API_BASE = '/api/lnbits';
 const CACHE_DURATION_USERS_MS = 60_000;
@@ -22,6 +22,7 @@ const cacheValid = <T>(entry: CacheEntry<T> | undefined, ttl: number) =>
   Boolean(entry && Date.now() - entry.timestamp < ttl);
 
 const getIdToken = async () => {
+  const msalInstance = getMsalInstance();
   const account =
     msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
   if (!account) {

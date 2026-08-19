@@ -1,4 +1,12 @@
 import { PublicClientApplication } from '@azure/msal-browser';
-import { msalConfig } from './authConfig';
+import { createMsalConfig } from './authConfig';
 
-export const msalInstance = new PublicClientApplication(msalConfig);
+let instance: PublicClientApplication | undefined;
+
+export const getMsalInstance = (): PublicClientApplication => {
+  if (!instance) {
+    instance = new PublicClientApplication(createMsalConfig());
+  }
+
+  return instance;
+};

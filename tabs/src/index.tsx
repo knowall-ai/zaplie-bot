@@ -4,46 +4,27 @@ import {
   EventType,
   EventMessage,
   AuthenticationResult,
+  PublicClientApplication,
 } from '@azure/msal-browser';
 import { MsalProvider } from '@azure/msal-react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ThemeProvider } from '@fluentui/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { theme } from './styles/Theme'; // Adjust the import path as necessary
-import App from './App'; // Adjust the import path as necessary
-import { msalInstance } from './services/msalClient';
+import { theme } from './styles/Theme';
+import App from './App';
+import { getMsalInstance } from './services/msalClient';
 import { CacheProvider } from './utils/CacheContext';
 import { queryClient } from './query/queryClient';
 
-msalInstance.initialize().then(async () => {
-  // Handle redirect promise BEFORE rendering the app
-  try {
-    const response = await msalInstance.handleRedirectPromise();
-    if (response) {
-      console.log('Login successful, setting active account');
-      msalInstance.setActiveAccount(response.account);
-    } else {
-      // No redirect response, check for existing accounts
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length > 0) {
-        msalInstance.setActiveAccount(accounts[0]);
-      }
-    }
-  } catch (error) {
-    console.error('Error handling redirect:', error);
-  }
+const container = document.getElementById('root');
 
-  msalInstance.addEventCallback((event: EventMessage) => {
-    if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-      const payload = event.payload as AuthenticationResult;
-      const account = payload.account;
-      msalInstance.setActiveAccount(account);
-    }
-  });
+if (!container) {
+  throw new Error('The application root element is missing.');
+}
 
-  // Render app AFTER handling redirect
-  const container = document.getElementById('root');
-  const root = ReactDOM.createRoot(container!);
+const root = ReactDOM.createRoot(container);
+
+const renderApp = (msalInstance: PublicClientApplication) => {
   root.render(
     <QueryClientProvider client={queryClient}>
       <MsalProvider instance={msalInstance}>
@@ -57,4 +38,45 @@ msalInstance.initialize().then(async () => {
       </MsalProvider>
     </QueryClientProvider>,
   );
-});
+};
+
+const renderStartupError = () => {
+  root.render(
+    <main role="alert">
+      <h1>Zaplie could not start</h1>
+      <p>Reload the page to try signing in again.</p>
+      <button type="button" onClick={() => window.location.reload()}>
+        Reload
+      </button>
+    </main>,
+  );
+};
+
+const initializeApp = async () => {
+  try {
+    const msalInstance = getMsalInstance();
+    await msalInstance.initialize();
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      msalInstance.setActiveAccount(response.account);
+    } else {
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        msalInstance.setActiveAccount(accounts[0]);
+      }
+    }
+
+    msalInstance.addEventCallback((event: EventMessage) => {
+      if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
+        const payload = event.payload as AuthenticationResult;
+        msalInstance.setActiveAccount(payload.account);
+      }
+    });
+
+    renderApp(msalInstance);
+  } catch {
+    renderStartupError();
+  }
+};
+
+void initializeApp();

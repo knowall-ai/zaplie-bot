@@ -1,27 +1,43 @@
 import { Configuration, PopupRequest } from '@azure/msal-browser';
-const AADclientid = process.env.REACT_APP_AAD_CLIENT_ID as string;
-const TenantId = process.env.REACT_APP_TENANT_ID as string;
-console.log(AADclientid);
 
-// Config object to be passed to Msal on creation
-export const msalConfig: Configuration = {
-  auth: {
-    clientId: AADclientid,
-    authority: `https://login.microsoftonline.com/${TenantId}`,
-    redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
-  },
-  system: {
-    allowNativeBroker: false, // Disables WAM Broker
-    allowRedirectInIframe: false, // Prevent redirect in iframe
-  },
-  cache: {
-    cacheLocation: 'localStorage', // This can be 'localStorage' or 'sessionStorage'
-    storeAuthStateInCookie: true, // Set to true if you are having issues on IE11 or Edge
-  },
+const requireConfig = (value: string | undefined, name: string): string => {
+  if (!value) {
+    throw new Error(`${name} is required.`);
+  }
+
+  return value;
 };
 
-// Add here scopes for id token to be used at MS Identity Platform endpoints.
+// Built on demand so missing configuration reaches the startup error UI
+// instead of throwing while the bundle is still loading.
+export const createMsalConfig = (): Configuration => {
+  const AADclientid = requireConfig(
+    process.env.REACT_APP_AAD_CLIENT_ID,
+    'REACT_APP_AAD_CLIENT_ID',
+  );
+  const TenantId = requireConfig(
+    process.env.REACT_APP_TENANT_ID,
+    'REACT_APP_TENANT_ID',
+  );
+
+  return {
+    auth: {
+      clientId: AADclientid,
+      authority: `https://login.microsoftonline.com/${TenantId}`,
+      redirectUri: window.location.origin,
+      postLogoutRedirectUri: window.location.origin,
+    },
+    system: {
+      allowNativeBroker: false,
+      allowRedirectInIframe: false,
+    },
+    cache: {
+      cacheLocation: 'localStorage',
+      storeAuthStateInCookie: true,
+    },
+  };
+};
+
 export const loginRequest: PopupRequest = {
   scopes: ['User.Read'],
 };
@@ -29,9 +45,4 @@ export const loginRequest: PopupRequest = {
 // Requested only by the "Your week" page, so signing in never depends on them.
 export const weekScopesRequest: PopupRequest = {
   scopes: ['User.Read', 'Calendars.Read', 'People.Read'],
-};
-
-// Add here the endpoints for MS Graph API services you would like to use.
-export const graphConfig = {
-  graphMeEndpoint: 'https://graph.microsoft.com/v1.0/me',
 };

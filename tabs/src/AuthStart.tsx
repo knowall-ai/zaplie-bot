@@ -1,61 +1,79 @@
-// filepath: /c:/projects/ZapVibes/tabs/src/AuthStart.tsx
-import React, { useEffect } from 'react';
-import {
-  PublicClientApplication,
-  InteractionStatus,
-} from '@azure/msal-browser';
+import React, { useEffect, useState } from 'react';
+import { InteractionStatus } from '@azure/msal-browser';
 import { useMsal } from '@azure/msal-react';
-import { msalConfig } from './services/authConfig';
+import { loginRequest } from './services/authConfig';
+import { AUTH_FLOW_STORAGE_KEY, resolveSameOriginRedirect } from './AuthEnd';
+
+interface StoredAuthFlow {
+  redirectUrl: string;
+  teamsAuth: boolean;
+}
 
 const AuthStart: React.FC = () => {
-  const { inProgress } = useMsal();
+  const { instance, inProgress } = useMsal();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('AuthStart useEffect triggered');
-    const msalInstance = new PublicClientApplication(msalConfig);
+    if (
+      inProgress === InteractionStatus.Startup ||
+      inProgress === InteractionStatus.HandleRedirect
+    ) {
+      return;
+    }
 
-    msalInstance
-      .initialize()
-      .then(() => {
-        console.log('MSAL initialized');
-        const accounts = msalInstance.getAllAccounts();
-        console.log('Accounts:', accounts);
-        if (accounts.length > 0) {
-          // User is already signed in
-          if (
-            inProgress !== InteractionStatus.Startup &&
-            inProgress !== InteractionStatus.HandleRedirect
-          ) {
-            console.log('Redirecting to auth-end');
-            window.location.href = window.location.origin + '/auth-end'; // Redirect to the auth-end page
-          }
-        } else {
-          // Check if an interaction is already in progress
-          if (inProgress === InteractionStatus.None) {
-            console.log('Initiating loginRedirect');
-            // Initiate login
-            msalInstance
-              .loginRedirect({
-                scopes: ['User.Read'],
-                redirectUri: window.location.origin + '/auth-end', // Redirect back to auth-end page
-              })
-              .catch(error => {
-                console.error('Error during loginRedirect:', error);
-              });
-          } else {
-            console.log('Interaction is already in progress.');
-          }
+    let active = true;
+
+    const startAuthentication = async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const flow: StoredAuthFlow = {
+          redirectUrl: resolveSameOriginRedirect(params.get('redirectUrl')),
+          teamsAuth: params.get('teamsAuth') === '1',
+        };
+
+        try {
+          sessionStorage.setItem(AUTH_FLOW_STORAGE_KEY, JSON.stringify(flow));
+        } catch {
+          // AuthEnd safely returns to the app origin when storage is unavailable.
         }
-      })
-      .catch(error => {
-        console.error('Error initializing MSAL:', error);
-      });
-  }, [inProgress]);
+
+        const accounts = instance.getAllAccounts();
+        if (accounts.length > 0) {
+          if (!instance.getActiveAccount()) {
+            instance.setActiveAccount(accounts[0]);
+          }
+          window.location.assign(`${window.location.origin}/auth-end`);
+          return;
+        }
+
+        if (inProgress !== InteractionStatus.None) {
+          return;
+        }
+
+        await instance.loginRedirect({
+          ...loginRequest,
+          redirectUri: `${window.location.origin}/auth-end`,
+        });
+      } catch {
+        if (active) {
+          setError(
+            'We could not start sign-in. Close this window and try again.',
+          );
+        }
+      }
+    };
+
+    void startAuthentication();
+    return () => {
+      active = false;
+    };
+  }, [inProgress, instance]);
 
   return (
-    <div>
-      <h1>Starting Authentication...</h1>
-    </div>
+    <main>
+      <h1>Starting authentication...</h1>
+      {error && <p role="alert">{error}</p>}
+    </main>
   );
 };
 
