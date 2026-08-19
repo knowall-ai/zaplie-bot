@@ -11,7 +11,7 @@ export const onTurnErrorHandler = async (
   // (wallet ids, env names, stack details) into the chat.
   // NOTE: In production environment, you should consider logging this to
   // Azure application insights.
-  console.error(`\n [onTurnError] unhandled error: ${error}`);
+  console.error('\n [onTurnError] unhandled error:', error);
   console.error(
     `User ID: ${context.activity.from?.id}, AAD Object ID: ${context.activity.from?.aadObjectId}, Display Name: ${context.activity.from?.name}`,
   );

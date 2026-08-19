@@ -42,8 +42,10 @@ describe('onTurnErrorHandler', () => {
       expect(message).not.toContain('wallet inkey abc123 leaked');
       expect(message).not.toContain('fix the bot source code');
     }
+    // The error object, not its interpolation: the stack must reach the logs.
     expect(consoleError).toHaveBeenCalledWith(
-      expect.stringContaining('wallet inkey abc123 leaked'),
+      '\n [onTurnError] unhandled error:',
+      error,
     );
   });
 

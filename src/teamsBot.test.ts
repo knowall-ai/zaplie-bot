@@ -25,9 +25,12 @@ jest.mock('./services/zapHistoryService');
 // before the module is required (which is why this is a require, not a
 // hoisted import).
 process.env.LNBITS_POINTS_LABEL = process.env.LNBITS_POINTS_LABEL || 'Sats';
-// The durable zap ledger refuses to construct without a data directory.
-process.env.ZAPLIE_DATA_DIR =
-  process.env.ZAPLIE_DATA_DIR || path.join(os.tmpdir(), 'zaplie-test-ledger');
+// The durable zap ledger refuses to construct without a data directory. The
+// path is per worker because sibling suites set and then delete this one.
+process.env.ZAPLIE_DATA_DIR = path.join(
+  os.tmpdir(),
+  `zaplie-test-ledger-${process.pid}`,
+);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { TeamsBot } = require('./teamsBot') as typeof import('./teamsBot');
 
