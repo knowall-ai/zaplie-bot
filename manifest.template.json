@@ -156,6 +156,7 @@
     ],
     "validDomains": [
         "${{BOT_DOMAIN}}",
+        "${{TAB_DOMAIN}}",
         "*.azurestaticapps.net",
         "*.microsoft.com"
     ],
