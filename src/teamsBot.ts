@@ -168,6 +168,15 @@ export class TeamsBot extends TeamsActivityHandler {
             );
           }
 
+          // The card marks the message required, but that check is client-side
+          // and forgeable, and the message reaches both the invoice and the
+          // receipt card.
+          if (typeof zapMessage !== 'string' || zapMessage.trim() === '') {
+            throw new UserFacingError(
+              'Your zap needs a message, so no zaps were sent.',
+            );
+          }
+
           if (currentUser.id && receiverIds.includes(currentUser.id)) {
             throw new UserFacingError(
               'You cannot zap yourself, so no zaps were sent.',
