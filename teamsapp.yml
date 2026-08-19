@@ -101,6 +101,11 @@ deploy:
       resourceId: ${{BOT_AZURE_APP_SERVICE_RESOURCE_ID}}
 
 publish:
+  # appPackage/manifest.json is generated (and gitignored), so regenerate it
+  # from manifest.template.json before anything validates or zips it.
+  - uses: cli/runNpmCommand
+    with:
+      args: run build-manifest
   # Validate using manifest schema
   - uses: teamsApp/validateManifest
     with:

@@ -56,7 +56,14 @@ const { requireSignedInOrBot } = require('./readAuth');
 
 const defaultRewardAmounts = DEFAULT_REWARD_AMOUNTS;
 
-const dataFilePath = path.join(__dirname, 'data.json');
+// Mutable state must survive a clean deploy, so in production it lives
+// outside the deployment tree: ZAPLIE_DATA_DIR points at a durable directory
+// (for example /home/data/zaplie on Linux App Service). Unset - the local
+// development default - keeps the store next to the code as before.
+const dataDirectory = process.env.ZAPLIE_DATA_DIR
+  ? path.resolve(process.env.ZAPLIE_DATA_DIR)
+  : __dirname;
+const dataFilePath = path.join(dataDirectory, 'data.json');
 
 // Function to read data from the JSON file
 const readData = () => {
@@ -72,6 +79,7 @@ const readData = () => {
 // Function to write data to the JSON file
 const writeData = (data) => {
   try {
+    fs.mkdirSync(dataDirectory, { recursive: true });
     fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {

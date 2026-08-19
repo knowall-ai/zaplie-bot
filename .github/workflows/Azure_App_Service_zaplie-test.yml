@@ -57,6 +57,21 @@ jobs:
             exit 1
           fi
 
+      # Mutable backend state lives next to the code today; never ship local
+      # JSON stores in the artifact or a deploy would overwrite live app data.
+      - name: Exclude mutable backend state from the artifact
+        shell: bash
+        run: |
+          rm -f \
+            tabs/backend/data.json \
+            tabs/backend/identities.json \
+            tabs/backend/connections.json \
+            tabs/backend/pending-rewards.json \
+            tabs/backend/secrets.json \
+            tabs/backend/webhook-keys.json \
+            tabs/backend/github-app-credentials.json \
+            tabs/backend/lnbits-zap-idempotency.json
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
