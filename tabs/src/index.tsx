@@ -4,6 +4,7 @@ import {
   EventType,
   EventMessage,
   AuthenticationResult,
+  PublicClientApplication,
 } from '@azure/msal-browser';
 import { MsalProvider } from '@azure/msal-react';
 import { BrowserRouter as Router } from 'react-router-dom';
@@ -11,7 +12,7 @@ import { ThemeProvider } from '@fluentui/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { theme } from './styles/Theme';
 import App from './App';
-import { msalInstance } from './services/msalClient';
+import { getMsalInstance } from './services/msalClient';
 import { CacheProvider } from './utils/CacheContext';
 import { queryClient } from './query/queryClient';
 
@@ -23,7 +24,7 @@ if (!container) {
 
 const root = ReactDOM.createRoot(container);
 
-const renderApp = () => {
+const renderApp = (msalInstance: PublicClientApplication) => {
   root.render(
     <QueryClientProvider client={queryClient}>
       <MsalProvider instance={msalInstance}>
@@ -53,6 +54,7 @@ const renderStartupError = () => {
 
 const initializeApp = async () => {
   try {
+    const msalInstance = getMsalInstance();
     await msalInstance.initialize();
     const response = await msalInstance.handleRedirectPromise();
     if (response) {
@@ -71,7 +73,7 @@ const initializeApp = async () => {
       }
     });
 
-    renderApp();
+    renderApp(msalInstance);
   } catch {
     renderStartupError();
   }

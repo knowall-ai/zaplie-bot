@@ -56,10 +56,11 @@ const readAuthFlow = (): AuthFlow => {
 
   try {
     const serialized = sessionStorage.getItem(AUTH_FLOW_STORAGE_KEY);
+    // Cleared before parsing so a corrupted entry cannot outlive this read.
+    sessionStorage.removeItem(AUTH_FLOW_STORAGE_KEY);
     if (serialized) {
       stored = JSON.parse(serialized) as StoredAuthFlow;
     }
-    sessionStorage.removeItem(AUTH_FLOW_STORAGE_KEY);
   } catch {
     stored = {};
   }

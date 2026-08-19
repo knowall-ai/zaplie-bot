@@ -8,30 +8,34 @@ const requireConfig = (value: string | undefined, name: string): string => {
   return value;
 };
 
-const AADclientid = requireConfig(
-  process.env.REACT_APP_AAD_CLIENT_ID,
-  'REACT_APP_AAD_CLIENT_ID',
-);
-const TenantId = requireConfig(
-  process.env.REACT_APP_TENANT_ID,
-  'REACT_APP_TENANT_ID',
-);
+// Built on demand so missing configuration reaches the startup error UI
+// instead of throwing while the bundle is still loading.
+export const createMsalConfig = (): Configuration => {
+  const AADclientid = requireConfig(
+    process.env.REACT_APP_AAD_CLIENT_ID,
+    'REACT_APP_AAD_CLIENT_ID',
+  );
+  const TenantId = requireConfig(
+    process.env.REACT_APP_TENANT_ID,
+    'REACT_APP_TENANT_ID',
+  );
 
-export const msalConfig: Configuration = {
-  auth: {
-    clientId: AADclientid,
-    authority: `https://login.microsoftonline.com/${TenantId}`,
-    redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
-  },
-  system: {
-    allowNativeBroker: false,
-    allowRedirectInIframe: false,
-  },
-  cache: {
-    cacheLocation: 'localStorage',
-    storeAuthStateInCookie: true,
-  },
+  return {
+    auth: {
+      clientId: AADclientid,
+      authority: `https://login.microsoftonline.com/${TenantId}`,
+      redirectUri: window.location.origin,
+      postLogoutRedirectUri: window.location.origin,
+    },
+    system: {
+      allowNativeBroker: false,
+      allowRedirectInIframe: false,
+    },
+    cache: {
+      cacheLocation: 'localStorage',
+      storeAuthStateInCookie: true,
+    },
+  };
 };
 
 export const loginRequest: PopupRequest = {
