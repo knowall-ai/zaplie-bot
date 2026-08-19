@@ -77,6 +77,11 @@ export const isoWeekOf = (date: Date): string => {
 const isIsoTimestamp = (value: unknown): value is string =>
   typeof value === 'string' && !Number.isNaN(Date.parse(value));
 
+// A week label we could not have written would read as "a different week" and
+// authorise a second sweep, so anything off-format is corruption.
+const isIsoWeek = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(value);
+
 // A missing file means the guard has never been written and the run may
 // proceed. Anything else — unreadable file, invalid JSON, a record we cannot
 // interpret — must fail closed: treating a corrupt guard as "never ran" is how
@@ -107,10 +112,9 @@ export const readLastRun = (): AllowanceRunRecord | null => {
 
   const record = parsed as Partial<AllowanceRunRecord> | null;
   if (
-    typeof record?.isoWeek !== 'string' ||
-    record.isoWeek.length === 0 ||
-    !isIsoTimestamp(record.startedAt) ||
-    (record.lastSuccessAt !== undefined &&
+    !isIsoWeek(record?.isoWeek) ||
+    !isIsoTimestamp(record?.startedAt) ||
+    (record?.lastSuccessAt !== undefined &&
       !isIsoTimestamp(record.lastSuccessAt))
   ) {
     throw new AllowanceGuardError('allowance run guard is invalid');

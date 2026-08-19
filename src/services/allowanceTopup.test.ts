@@ -118,6 +118,16 @@ describe('allowance run store', () => {
     );
     expect(() => readLastRun()).toThrow(AllowanceGuardError);
 
+    // A week label nothing could have written must not be read back as "some
+    // other week", which would let this week be swept again.
+    for (const isoWeek of ['junk', '2026-34', '2026-W00', '2026-W54']) {
+      fs.writeFileSync(
+        file,
+        JSON.stringify({ isoWeek, startedAt: '2026-08-18T05:59:00.000Z' }),
+      );
+      expect(() => readLastRun()).toThrow(AllowanceGuardError);
+    }
+
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
