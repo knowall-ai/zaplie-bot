@@ -14,7 +14,7 @@ import { InteractionStatus } from '@azure/msal-browser';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { toast } from 'react-toastify';
 import { createQueryClient } from '../query/queryClient';
-import { clearApiCache } from '../services/lnbitsServiceLocal';
+import { clearApiCache } from '../services/lnbits/cache';
 import { teamsContextQueryKey } from '../services/teamsContextService';
 import { useTeamsAuth } from './useTeamsAuth';
 
@@ -34,7 +34,7 @@ jest.mock('react-toastify', () => ({
   toast: { error: require('@jest/globals').jest.fn() },
 }));
 
-jest.mock('../services/lnbitsServiceLocal', () => ({
+jest.mock('../services/lnbits/cache', () => ({
   clearApiCache: require('@jest/globals').jest.fn(),
 }));
 

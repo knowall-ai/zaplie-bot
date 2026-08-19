@@ -3,12 +3,9 @@ import './WalletAllowanceComponent.css'; // Assuming you'll use CSS for styling
 import BatteryImageDisplay from './BatteryImageDisplay';
 import ArrowClockwise from '../images/ArrowClockwise.svg';
 import Calendar from '../images/Calendar.svg';
-import {
-  getAllowance,
-  getUsers,
-  getUserWallets,
-  getWalletTransactionsSince,
-} from '../services/lnbitsServiceLocal';
+import { getWalletTransactionsSince } from '../services/lnbits/payments';
+import { getAllowance, getUsers } from '../services/lnbits/users';
+import { getUserWallets } from '../services/lnbits/wallets';
 import { useMsal } from '@azure/msal-react';
 import { RewardNameContext } from './RewardNameContext';
 import SendZapsPopup from './SendZapsPopup';

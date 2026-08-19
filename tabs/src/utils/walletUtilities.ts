@@ -1,4 +1,4 @@
-import { getAllPayments } from '../services/lnbitsServiceLocal';
+import { getAllPayments } from '../services/lnbits/payments';
 
 //import { Wallet, ZapTransaction } from 'path-to-types';
 

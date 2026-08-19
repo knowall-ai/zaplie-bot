@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import FeedComponent from './components/FeedComponent';
 import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
-import { getUsers } from './services/lnbitsServiceLocal';
+import { getUsers } from './services/lnbits/users';
 import { useCache } from '../src/utils/CacheContext';
 import { fetchAllowanceWalletTransactions } from './utils/walletUtilities';
 

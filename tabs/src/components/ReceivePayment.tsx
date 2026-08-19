@@ -3,11 +3,8 @@ import QRCode from 'react-qr-code';
 import styles from './SendReceivePayment.module.css';
 import copyDoc from '../images/DocumentCopy.svg';
 import copySuccess from '../images/CheckmarkCircleGreen.svg';
-import {
-  createInvoice,
-  getWalletPayments,
-  getWalletBalance,
-} from '../services/lnbitsServiceLocal';
+import { createInvoice, getWalletPayments } from '../services/lnbits/payments';
+import { getWalletBalance } from '../services/lnbits/wallets';
 
 interface ReceivePopupProps {
   onClose: () => void;
@@ -58,8 +55,8 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
 
           // Start polling for payment
           intervalId.current = setInterval(() => {
-            getWalletPayments(myLNbitDetails.privateWallet?.inkey || '').then(
-              payments => {
+            getWalletPayments(myLNbitDetails.privateWallet?.inkey || '')
+              .then(payments => {
                 if (payments.length > 0) {
                   console.log('Payment received');
                   if (intervalId.current !== null) {
@@ -85,8 +82,16 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
                     }
                   });
                 }
-              },
-            );
+              })
+              .catch(error => {
+                console.error(
+                  'Polling wallet payments failed, stopping:',
+                  error,
+                );
+                if (intervalId.current !== null) {
+                  window.clearInterval(intervalId.current);
+                }
+              });
           }, 5000); // Check every 5 seconds
         });
       } else {

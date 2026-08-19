@@ -1,0 +1,220 @@
+import {
+  errorResponse,
+  installFetchMock,
+  jsonResponse,
+} from '../../testUtils/fetchMock';
+import {
+  createInvoice,
+  getAllPayments,
+  getInvoicePayment,
+  getWalletPayments,
+  getWalletTransactionsSince,
+  payInvoice,
+} from './payments';
+
+jest.mock('./auth', () => ({
+  getAccessToken: jest.fn(async () => 'test-token'),
+}));
+
+const rawPayment = (overrides: Record<string, unknown> = {}) => ({
+  checking_id: 'check-1',
+  payment_hash: 'hash-1',
+  bolt11: 'lnbc1...',
+  memo: 'Thanks',
+  amount: 1000,
+  wallet_id: 'w1',
+  time: 1723500000,
+  extra: {},
+  pending: false,
+  fee: 12,
+  ...overrides,
+});
+
+describe('lnbits payments', () => {
+  let mockFetch: jest.MockedFunction<typeof fetch>;
+
+  beforeEach(() => {
+    mockFetch = installFetchMock();
+  });
+
+  describe('createInvoice', () => {
+    test('returns the payment request', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ payment_request: 'lnbc1...' }),
+      );
+
+      await expect(createInvoice('in-key', 'w1', 1000, 'memo')).resolves.toBe(
+        'lnbc1...',
+      );
+    });
+
+    test('throws when LNbits rejects the invoice', async () => {
+      mockFetch.mockResolvedValueOnce(errorResponse(400, 'Bad Request'));
+
+      await expect(createInvoice('in-key', 'w1', 1000, 'memo')).rejects.toThrow(
+        'status: 400',
+      );
+    });
+  });
+
+  describe('payInvoice', () => {
+    test('returns the settled payment', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ payment_hash: 'hash-1' }));
+
+      await expect(payInvoice('admin-key', 'lnbc1...')).resolves.toEqual({
+        payment_hash: 'hash-1',
+      });
+    });
+
+    test('throws when LNbits rejects the payment', async () => {
+      mockFetch.mockResolvedValueOnce(errorResponse(402, 'Payment Required'));
+
+      await expect(payInvoice('admin-key', 'lnbc1...')).rejects.toThrow(
+        'status: 402',
+      );
+    });
+  });
+
+  describe('getAllPayments', () => {
+    test('returns a bare array untouched', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse([rawPayment()]));
+
+      await expect(getAllPayments()).resolves.toHaveLength(1);
+    });
+
+    test.each(['data', 'payments', 'items'])(
+      'unwraps a payload wrapped in %p',
+      async key => {
+        mockFetch.mockResolvedValueOnce(
+          jsonResponse({ [key]: [rawPayment()] }),
+        );
+
+        await expect(getAllPayments()).resolves.toHaveLength(1);
+      },
+    );
+
+    test('throws for an unrecognised payload shape', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ total: 0 }));
+
+      await expect(getAllPayments()).rejects.toThrow('Unexpected payload');
+    });
+
+    test('throws when the endpoint fails', async () => {
+      mockFetch.mockResolvedValueOnce(errorResponse(500));
+
+      await expect(getAllPayments()).rejects.toThrow('status: 500');
+    });
+
+    test('sends the pagination and sorting parameters', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse([]));
+
+      await getAllPayments(10, 20, 'amount', 'asc');
+
+      const requestedUrl = String(mockFetch.mock.calls[0][0]);
+      expect(requestedUrl).toContain('limit=10');
+      expect(requestedUrl).toContain('offset=20');
+      expect(requestedUrl).toContain('sortby=amount');
+      expect(requestedUrl).toContain('direction=asc');
+    });
+  });
+
+  describe('getWalletPayments', () => {
+    test('returns the payments for the wallet', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse([rawPayment()]));
+
+      await expect(getWalletPayments('in-key')).resolves.toHaveLength(1);
+    });
+
+    test('throws when the request fails', async () => {
+      mockFetch.mockResolvedValueOnce(errorResponse(500));
+
+      await expect(getWalletPayments('in-key')).rejects.toThrow('status: 500');
+    });
+  });
+
+  describe('getInvoicePayment', () => {
+    test('throws when the invoice lookup fails', async () => {
+      mockFetch.mockResolvedValueOnce(errorResponse(404, 'Not Found'));
+
+      await expect(getInvoicePayment('ln-key', 'hash-1')).rejects.toThrow(
+        'status: 404',
+      );
+    });
+  });
+
+  describe('getWalletTransactionsSince', () => {
+    test('maps the payload onto the Transaction shape', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse([rawPayment()]));
+
+      const transactions = await getWalletTransactionsSince('in-key', 0, null);
+
+      expect(transactions).toEqual([
+        {
+          checking_id: 'check-1',
+          bolt11: 'lnbc1...',
+          memo: 'Thanks',
+          amount: 1000,
+          wallet_id: 'w1',
+          time: 1723500000,
+          extra: {},
+          pending: false,
+          fee: 12,
+        },
+      ]);
+    });
+
+    test('drops payments older than the timestamp', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse([
+          rawPayment({ checking_id: 'old', time: 1723499999 }),
+          rawPayment({ checking_id: 'recent', time: 1723500000 }),
+        ]),
+      );
+
+      const transactions = await getWalletTransactionsSince(
+        'in-key',
+        1723500000,
+        null,
+      );
+
+      expect(transactions.map(t => t.checking_id)).toEqual(['recent']);
+    });
+
+    test('falls back to payment_hash when checking_id is absent', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse([rawPayment({ checking_id: undefined })]),
+      );
+
+      const transactions = await getWalletTransactionsSince('in-key', 0, null);
+
+      expect(transactions[0].checking_id).toBe('hash-1');
+    });
+
+    test('throws when the payment carries no usable identifier', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse([
+          rawPayment({ checking_id: undefined, payment_hash: undefined }),
+        ]),
+      );
+
+      await expect(
+        getWalletTransactionsSince('in-key', 0, null),
+      ).rejects.toThrow('no checking_id, payment_hash or id');
+    });
+
+    test('filters by the extra field when a filter is given', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse([
+          rawPayment({ checking_id: 'zap', extra: { tag: 'zap' } }),
+          rawPayment({ checking_id: 'other', extra: { tag: 'topup' } }),
+        ]),
+      );
+
+      const transactions = await getWalletTransactionsSince('in-key', 0, {
+        tag: 'zap',
+      });
+
+      expect(transactions.map(t => t.checking_id)).toEqual(['zap']);
+    });
+  });
+});

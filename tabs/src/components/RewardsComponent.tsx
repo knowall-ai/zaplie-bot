@@ -6,10 +6,8 @@ import React, {
   useContext,
 } from 'react';
 import styles from './RewardsComponent.module.css';
-import {
-  getNostrRewards,
-  getUserWallets,
-} from '../services/lnbitsServiceLocal';
+import { getNostrRewards } from '../services/lnbits/rewards';
+import { getUserWallets } from '../services/lnbits/wallets';
 import PurchasePopup from './PurchasePopup';
 import imagePlaceholder from '../images/imagePlaceholderNew.svg';
 import { RewardNameContext } from './RewardNameContext';

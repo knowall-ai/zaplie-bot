@@ -2,12 +2,9 @@ import React, { useState, useEffect, useContext } from 'react';
 import styles from './SendZapsPopup.module.css';
 import { RewardNameContext } from './RewardNameContext';
 import { useCache } from '../utils/CacheContext';
-import {
-  getUserWallets,
-  createInvoice,
-  payInvoice,
-  getUsers,
-} from '../services/lnbitsServiceLocal';
+import { createInvoice, payInvoice } from '../services/lnbits/payments';
+import { getUsers } from '../services/lnbits/users';
+import { getUserWallets } from '../services/lnbits/wallets';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
 import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';

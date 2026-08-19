@@ -1,6 +1,5 @@
 import { FunctionComponent, useState, useEffect, useContext } from 'react';
 import styles from './TotalZapsComponent.module.css';
-//import lnbitsService from '../services/lnbitsServiceLocal';
 /// <reference path = "../global.d.ts" />
 import { RewardNameContext } from './RewardNameContext';
 import { getRewardName } from '../apiService';

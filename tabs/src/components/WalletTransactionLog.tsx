@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useContext } from 'react';
 import styles from './WalletTransactionLog.module.css';
-import {
-  getUsers,
-  getWalletTransactionsSince,
-  getUserWallets,
-} from '../services/lnbitsServiceLocal';
+import { getWalletTransactionsSince } from '../services/lnbits/payments';
+import { getUsers } from '../services/lnbits/users';
+import { getUserWallets } from '../services/lnbits/wallets';
 import ArrowIncoming from '../images/ArrowIncoming.svg';
 import ArrowOutgoing from '../images/ArrowOutcoming.svg';
 import moment from 'moment';

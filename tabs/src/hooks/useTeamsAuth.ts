@@ -3,7 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { clearApiCache } from '../services/lnbitsServiceLocal';
+import { clearApiCache } from '../services/lnbits/cache';
 import { teamsContextQueryOptions } from '../services/teamsContextService';
 
 interface UseTeamsAuthReturn {
