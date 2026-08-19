@@ -1,42 +1,80 @@
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from 'react';
 import { getRewardName } from '../apiService';
 
 interface RewardNameContextProps {
   rewardName: string | null;
-  setRewardName: React.Dispatch<React.SetStateAction<string>>;
+  setRewardName: React.Dispatch<React.SetStateAction<string | null>>;
+  isLoading?: boolean;
+  error?: Error | null;
+  retry?: () => void;
 }
 
-// Create the context
 export const RewardNameContext = createContext<RewardNameContextProps>({
   rewardName: null,
   setRewardName: () => {},
+  isLoading: true,
+  error: null,
+  retry: () => {},
 });
 
 export const RewardNameProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [rewardName, setRewardName] = useState<string>('');
+  const [rewardName, setRewardName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    const fetchRewardName = async () => {
-      try {
-        const data = await getRewardName();
-        console.log('Fetched Reward Name:', data); // Debugging log
-        setRewardName(data?.rewardName || 'sats'); // Fallback in case of missing data
-      } catch (error) {
-        console.error('Error fetching reward name:', error);
+  const loadRewardName = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const data = await getRewardName();
+      if (requestId === requestIdRef.current) {
+        setRewardName(data.rewardName);
       }
-    };
-
-    fetchRewardName();
+    } catch (loadError) {
+      if (requestId === requestIdRef.current) {
+        setError(
+          loadError instanceof Error
+            ? loadError
+            : new Error('The reward name could not be loaded.'),
+        );
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
   }, []);
 
-  if (!rewardName) {
-    return null; // Return null if rewardName is not set yet
-  }
+  useEffect(() => {
+    void loadRewardName();
+
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [loadRewardName]);
 
   return (
-    <RewardNameContext.Provider value={{ rewardName, setRewardName }}>
+    <RewardNameContext.Provider
+      value={{
+        rewardName,
+        setRewardName,
+        isLoading,
+        error,
+        retry: loadRewardName,
+      }}
+    >
       {children}
     </RewardNameContext.Provider>
   );

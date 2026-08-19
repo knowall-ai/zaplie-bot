@@ -1,4 +1,4 @@
-import CurrencySetting from './components/RewardsNameSetting';
+import RewardsNameSetting from './components/RewardsNameSetting';
 import ConnectionsSetting from './components/ConnectionsSetting';
 import styles from './components/setting.module.css';
 import { KNOWALL_CONSTANTS } from './constants/branding';
@@ -14,7 +14,7 @@ const Settings: React.FC = () => {
       </div>
       <div style={{ width: '100%' }}>
         {' '}
-        <CurrencySetting />{' '}
+        <RewardsNameSetting />{' '}
       </div>
       <div style={{ width: '100%' }}>
         {' '}
