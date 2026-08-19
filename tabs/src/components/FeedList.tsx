@@ -70,7 +70,12 @@ const FeedList: React.FC<FeedListProps> = ({
           ],
           from: [left.from.displayName, right.from.displayName],
           to: [left.to.displayName, right.to.displayName],
-          amount: [left.transaction.amount, right.transaction.amount],
+          // Transfers are outgoing payments (negative msats); sort on the
+          // absolute value so the order matches the amount shown.
+          amount: [
+            Math.abs(left.transaction.amount),
+            Math.abs(right.transaction.amount),
+          ],
         };
         const [a, b] = values[sortField];
         const result =

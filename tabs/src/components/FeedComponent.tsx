@@ -1,4 +1,4 @@
-import { FunctionComponent, lazy, Suspense, useState } from 'react';
+import { FunctionComponent, lazy, Suspense, useMemo, useState } from 'react';
 import styles from './FeedComponent.module.css';
 import FeedList from './FeedList';
 import { ZapTransfer } from '../utils/walletUtilities';
@@ -18,7 +18,12 @@ const FeedComponent: FunctionComponent<FeedComponentProps> = ({
 }) => {
   const [activePeriod, setActivePeriod] = useState(7);
   const [showFeed, setShowFeed] = useState(true);
-  const timestamp = Math.floor(Date.now() / 1000 - activePeriod * 24 * 60 * 60);
+  // Pinned to the period: a timestamp that moved every render would reset the
+  // feed back to page one on any interaction.
+  const timestamp = useMemo(
+    () => Math.floor(Date.now() / 1000 - activePeriod * 24 * 60 * 60),
+    [activePeriod],
+  );
 
   return (
     <section className={styles.feedcomponent}>
