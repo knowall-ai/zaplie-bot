@@ -52,7 +52,7 @@ export class ShowLeaderboardCommand extends SSOCommand {
                   {
                     type: 'Action.OpenUrl',
                     title: 'View Wallets',
-                    url: `${portalUrl.replace(/\/+$/, '')}/wallets`,
+                    url: `${portalUrl.replace(/\/+$/, '')}/wallet`,
                   },
                 ],
               }

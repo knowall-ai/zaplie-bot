@@ -85,7 +85,7 @@ describe('showLeaderboardCommand', () => {
       {
         type: 'Action.OpenUrl',
         title: 'View Wallets',
-        url: 'https://portal.example.test/wallets',
+        url: 'https://portal.example.test/wallet',
       },
     ]);
   });
@@ -97,7 +97,7 @@ describe('showLeaderboardCommand', () => {
     await new ShowLeaderboardCommand().execute(context);
 
     expect(sentCard(sendActivity).actions[0].url).toBe(
-      'https://portal.example.test/wallets',
+      'https://portal.example.test/wallet',
     );
   });
 
