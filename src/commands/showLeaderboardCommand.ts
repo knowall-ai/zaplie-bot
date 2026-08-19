@@ -9,7 +9,7 @@ const adminKey = process.env.LNBITS_ADMINKEY as string;
 // user who has spent or withdrawn from their Private wallet.
 export const LEADERBOARD_TITLE = 'Current leaders (Private wallet balance):';
 export const LEADERBOARD_EMPTY_MESSAGE =
-  'No zaps received yet — be the first to send one!';
+  'No Private wallet balances to rank yet. Send a zap to get things started!';
 export const LEADERBOARD_UNAVAILABLE_MESSAGE =
   'Sorry, I could not load the leaderboard just now. Please try again in a moment.';
 export const LEADERBOARD_LIMIT = 10;
@@ -100,8 +100,10 @@ export class ShowLeaderboardCommand extends SSOCommand {
 
       const globalRewardName = process.env.LNBITS_POINTS_LABEL as string;
 
-      const wallets = await getWallets(adminKey, 'Private');
-      const users = await getUsers(adminKey, null);
+      const [wallets, users] = await Promise.all([
+        getWallets(adminKey, 'Private'),
+        getUsers(adminKey, null),
+      ]);
       // Silence is the wrong answer to a failed lookup: the user typed a
       // command and must be told it did not work.
       if (!wallets || !users) {

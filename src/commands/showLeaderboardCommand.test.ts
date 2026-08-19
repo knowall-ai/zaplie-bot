@@ -129,6 +129,8 @@ describe('buildLeaderboardCard', () => {
       type: 'TextBlock',
       text: LEADERBOARD_EMPTY_MESSAGE,
     });
+    // The card ranks balances, so the empty state must not promise zaps received.
+    expect(LEADERBOARD_EMPTY_MESSAGE).not.toMatch(/zaps? received/i);
   });
 });
 
@@ -207,6 +209,25 @@ describe('showLeaderboardCommand', () => {
     expect(rowText(rows[0])).toBe(`#1 Bob | ${(2000).toLocaleString()} Sats`);
     expect(rowText(rows[1])).toBe(`#2 Alice | ${(1000).toLocaleString()} Sats`);
     expect(mockGetUsers).toHaveBeenCalledTimes(1);
+  });
+
+  test('fetches wallets and users in parallel', async () => {
+    let releaseWallets: (wallets: Wallet[]) => void = () => undefined;
+    mockGetWallets.mockReturnValue(
+      new Promise<Wallet[] | null>(resolve => {
+        releaseWallets = resolve;
+      }),
+    );
+    const { context } = makeContext();
+
+    const executed = new ShowLeaderboardCommand().execute(context);
+    await Promise.resolve();
+    // Awaiting the two calls in sequence would leave getUsers uncalled while
+    // the wallet request is still pending.
+    expect(mockGetUsers).toHaveBeenCalledTimes(1);
+
+    releaseWallets([wallet({ id: 'w1', user: 'user-1' })]);
+    await executed;
   });
 
   test('orders equal balances by name so the card is stable', async () => {
