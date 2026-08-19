@@ -8,6 +8,7 @@ const fs = require('fs');
 const authMiddleware = require('./authMiddleware'); // Import the authentication middleware
 const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
+const weekRoutes = require('./weekRoutes');
 const identityRoutes = require('./identityRoutes');
 const pendingRewardsStore = require('./pendingRewardsStore');
 const {
@@ -45,6 +46,10 @@ app.get('/healthz', (_req, res) => {
 // All browser access to LNbits goes through this authenticated same-origin
 // gateway. Wallet and service-account keys stay in the Node process.
 app.use('/api/lnbits', require('./lnbitsRoutes'));
+
+// Mounted before the generic authMiddleware below: it authenticates with a
+// real MSAL token, not the placeholder API token.
+app.use('/api/week', weekRoutes);
 
 // Mounted before the generic authMiddleware below: its user-facing routes
 // (authorize-url, mine) authenticate with a real MSAL token, not the

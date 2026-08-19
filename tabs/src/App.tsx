@@ -18,6 +18,7 @@ import { RewardNameProvider } from './components/RewardNameContext';
 // Import the pages
 import Login from './Login';
 import Feed from './Feed';
+import Week from './Week';
 import Users from './Users';
 import './App.css';
 import Rewards from './Rewards';
@@ -39,6 +40,7 @@ function TitleUpdater() {
   useEffect(() => {
     const titles: { [key: string]: string } = {
       '/feed': 'Feed - Zaplie',
+      '/week': 'Your Week - Zaplie',
       '/users': 'Users - Zaplie',
       '/rewards': 'Rewards - Zaplie',
       '/wallet': 'Wallet - Zaplie',
@@ -79,6 +81,14 @@ function App({ pca }: AppProps) {
                 element={
                   <RequireAuth>
                     <Feed />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/week"
+                element={
+                  <RequireAuth>
+                    <Week />
                   </RequireAuth>
                 }
               />

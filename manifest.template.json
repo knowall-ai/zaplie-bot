@@ -76,11 +76,25 @@
                 "personalTab",
                 "channelTab"
             ], 
-            "name": "Feed", 
-            "contentUrl": "{{CONTENT_URL}}", 
+            "name": "Feed",
+            "contentUrl": "{{CONTENT_URL}}",
             "websiteUrl": "{{WEBSITE_URL}}"
-        }, 
-        { 
+        },
+        {
+            "entityId": "weekTab",
+            "scopes": [
+                "team",
+                "personal"
+            ],
+            "context": [
+                "personalTab",
+                "channelTab"
+            ],
+            "name": "Your week",
+            "contentUrl": "{{CONTENT_URL}}/week",
+            "websiteUrl": "{{WEBSITE_URL}}/week"
+        },
+        {
             "entityId": "usersTab", 
             "scopes": [       
                 "team",

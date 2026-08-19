@@ -14,6 +14,7 @@ import dismissIcon from '../images/DismissCircleRed.svg';
 
 interface SendZapsPopupProps {
   onClose: () => void;
+  initialUserId?: string;
 }
 
 // Extended User type with wallet information for this component
@@ -21,7 +22,17 @@ type UserWithWallet = User & { privateWallet: Wallet | null };
 
 const PRESET_AMOUNTS = [5000, 10000, 25000];
 
-const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
+// Prioritize the Private wallet, then any non-allowance wallet
+const pickTargetWallet = (wallets: Wallet[] | null): Wallet | null =>
+  wallets?.find(w => w.name.toLowerCase().includes('private')) ??
+  wallets?.find(w => !w.name.toLowerCase().includes('allowance')) ??
+  wallets?.[0] ??
+  null;
+
+const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
+  onClose,
+  initialUserId,
+}) => {
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [memo, setMemo] = useState<string>('');
@@ -102,6 +113,23 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
         }));
 
         setUsers(usersWithoutWallets);
+
+        // Preselect a recipient (e.g. from the "Your week" page) and fetch their wallet up front
+        if (
+          initialUserId &&
+          usersWithoutWallets.some(u => u.id === initialUserId)
+        ) {
+          setSelectedUser(initialUserId);
+          const wallets = await getUserWallets(initialUserId);
+          const targetWallet = pickTargetWallet(wallets);
+          setUsers(prev =>
+            prev.map(u =>
+              u.id === initialUserId
+                ? { ...u, privateWallet: targetWallet }
+                : u,
+            ),
+          );
+        }
       } catch (err) {
         setError('Failed to load users');
       } finally {
@@ -111,7 +139,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
 
     loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts]); // cache and setCache are from context and are stable, intentionally excluded
+  }, [accounts, initialUserId]); // cache and setCache are from context and are stable, intentionally excluded
 
   // Fetch wallet for selected user on demand
   const handleUserSelect = async (userId: string) => {
@@ -124,23 +152,10 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
 
     try {
       const wallets = await getUserWallets(userId);
-      // Prioritize "private" wallet, then any non-allowance wallet
-      let targetWallet = wallets?.find(w =>
-        w.name.toLowerCase().includes('private'),
-      );
-      if (!targetWallet) {
-        targetWallet = wallets?.find(
-          w => !w.name.toLowerCase().includes('allowance'),
-        );
-      }
-      if (!targetWallet && wallets && wallets.length > 0) {
-        targetWallet = wallets[0];
-      }
-
-      // Update user with wallet data
+      const targetWallet = pickTargetWallet(wallets);
       setUsers(prev =>
         prev.map(u =>
-          u.id === userId ? { ...u, privateWallet: targetWallet || null } : u,
+          u.id === userId ? { ...u, privateWallet: targetWallet } : u,
         ),
       );
     } catch {
