@@ -50,7 +50,10 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({
     hasError ? 'Unavailable' : isLoading ? 'Loading…' : amount.toLocaleString();
 
   return (
-    <section className={styles.sentcomponent} aria-busy={isLoading}>
+    <section
+      className={styles.sentcomponent}
+      aria-busy={isLoading && !hasError}
+    >
       <h2 className={styles.title}>Total Zaps sent</h2>
       <div className={styles.zapsSentContainer}>
         <span className={styles.bigNumber}>{value(stats.total)}</span>
