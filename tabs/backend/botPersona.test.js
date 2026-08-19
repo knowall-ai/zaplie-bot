@@ -40,6 +40,11 @@ test('a persona longer than the limit is rejected, measured after trimming', () 
   const overLimit = validateBotPersona('a'.repeat(MAX_BOT_PERSONA_LENGTH + 1));
   assert.equal(overLimit.valid, false);
   assert.match(overLimit.message, /at most 2000 characters/);
+
+  // Each emoji is two UTF-16 units, so counting units would reject this.
+  const emojiAtLimit = '🎉'.repeat(MAX_BOT_PERSONA_LENGTH);
+  assert.equal(validateBotPersona(emojiAtLimit).valid, true);
+  assert.equal(validateBotPersona(`${emojiAtLimit}🎉`).valid, false);
 });
 
 test('control characters are rejected so the value stays prose', () => {

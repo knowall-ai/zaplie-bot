@@ -44,7 +44,9 @@ const validateBotPersona = value => {
   }
 
   const botPersona = normalizeBotPersona(value);
-  if (botPersona.length > MAX_BOT_PERSONA_LENGTH) {
+  // Code points, not UTF-16 units, so an emoji is not billed twice against a
+  // limit the message states in characters.
+  if ([...botPersona].length > MAX_BOT_PERSONA_LENGTH) {
     return {
       valid: false,
       message: `botPersona must be at most ${MAX_BOT_PERSONA_LENGTH} characters`,
