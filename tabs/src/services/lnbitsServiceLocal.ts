@@ -15,10 +15,82 @@ interface PaymentResult {
   checking_id?: string;
 }
 
+interface InvoiceResult {
+  paymentRequest: string;
+  invoiceId: string;
+}
+
+interface InvoicePayment {
+  paid?: boolean;
+  status?: string;
+}
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const parseInvoiceResult = (value: unknown): InvoiceResult => {
+  if (!value || typeof value !== 'object') {
+    throw new Error('The invoice service returned an invalid response.');
+  }
+
+  const candidate = value as Partial<InvoiceResult>;
+  if (
+    !isNonEmptyString(candidate.paymentRequest) ||
+    !isNonEmptyString(candidate.invoiceId)
+  ) {
+    throw new Error('The invoice service returned an invalid response.');
+  }
+
+  return {
+    paymentRequest: candidate.paymentRequest,
+    invoiceId: candidate.invoiceId,
+  };
+};
+
+const parsePaymentResult = (value: unknown): PaymentResult => {
+  if (!value || typeof value !== 'object') {
+    throw new Error('The payment service returned an invalid response.');
+  }
+
+  const candidate = value as Partial<PaymentResult>;
+  if (!isNonEmptyString(candidate.payment_hash)) {
+    throw new Error('The payment service returned an invalid response.');
+  }
+
+  return {
+    payment_hash: candidate.payment_hash,
+    checking_id: isNonEmptyString(candidate.checking_id)
+      ? candidate.checking_id
+      : undefined,
+  };
+};
+
+const parseInvoicePayment = (value: unknown): InvoicePayment => {
+  if (!value || typeof value !== 'object') {
+    throw new Error('The invoice status response was invalid.');
+  }
+
+  const candidate = value as InvoicePayment;
+  if (
+    typeof candidate.paid !== 'boolean' &&
+    !isNonEmptyString(candidate.status)
+  ) {
+    throw new Error('The invoice status response was invalid.');
+  }
+
+  return {
+    paid: candidate.paid,
+    status: isNonEmptyString(candidate.status) ? candidate.status : undefined,
+  };
+};
+
 const userCache: { value?: CacheEntry<User[]> } = {};
 const walletCache = new Map<string, CacheEntry<Wallet[]>>();
 
-const cacheValid = <T>(entry: CacheEntry<T> | undefined, ttl: number) =>
+const cacheValid = <T>(
+  entry: CacheEntry<T> | undefined,
+  ttl: number,
+): entry is CacheEntry<T> =>
   Boolean(entry && Date.now() - entry.timestamp < ttl);
 
 const getIdToken = async () => {
@@ -53,12 +125,10 @@ const apiRequest = async <T>(
   });
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
-    try {
-      const body = (await response.json()) as { error?: string };
-      if (body.error) message = body.error;
-    } catch {
-      // Keep the status-only message for a non-JSON response.
-    }
+    const body = (await response.json().catch(() => null)) as {
+      error?: unknown;
+    } | null;
+    if (typeof body?.error === 'string' && body.error) message = body.error;
     throw new Error(message);
   }
   return response.json() as Promise<T>;
@@ -78,8 +148,9 @@ const getUsers = async (
   filterByExtra: { [key: string]: string } | null = null,
 ): Promise<User[]> => {
   let users: User[];
-  if (cacheValid(userCache.value, CACHE_DURATION_USERS_MS)) {
-    users = userCache.value!.data;
+  const cachedUsers = userCache.value;
+  if (cacheValid(cachedUsers, CACHE_DURATION_USERS_MS)) {
+    users = cachedUsers.data;
   } else {
     users = await apiRequest<User[]>('/users');
     userCache.value = { data: users, timestamp: Date.now() };
@@ -99,7 +170,7 @@ const getUsers = async (
 const getUserWallets = async (userId: string): Promise<Wallet[]> => {
   const cached = walletCache.get(userId);
   if (cacheValid(cached, CACHE_DURATION_WALLETS_MS)) {
-    return cached!.data;
+    return cached.data;
   }
   const wallets = await apiRequest<Wallet[]>(
     `/users/${encodeURIComponent(userId)}/wallets`,
@@ -113,14 +184,16 @@ const getUser = async (userId: string): Promise<User | null> => {
   const user = users.find(candidate => candidate.id === userId);
   if (!user) return null;
   const wallets = await getUserWallets(userId);
+  const privateWallets = wallets.filter(
+    wallet => wallet.name.trim().toLowerCase() === 'private',
+  );
+  const allowanceWallets = wallets.filter(
+    wallet => wallet.name.trim().toLowerCase() === 'allowance',
+  );
   return {
     ...user,
-    privateWallet:
-      wallets.find(wallet => wallet.name.toLowerCase().includes('private')) ||
-      null,
-    allowanceWallet:
-      wallets.find(wallet => wallet.name.toLowerCase().includes('allowance')) ||
-      null,
+    privateWallet: privateWallets.length === 1 ? privateWallets[0] : null,
+    allowanceWallet: allowanceWallets.length === 1 ? allowanceWallets[0] : null,
   };
 };
 
@@ -161,9 +234,14 @@ const getWalletPayLinks = async (walletId: string) =>
 
 const getWalletId = async (walletId: string) => walletId;
 
-const getInvoicePayment = async (walletId: string, invoice: string) =>
-  apiRequest<unknown>(
-    `/wallets/${encodeURIComponent(walletId)}/payments/${encodeURIComponent(invoice)}`,
+const getInvoicePayment = async (
+  walletId: string,
+  invoice: string,
+): Promise<InvoicePayment> =>
+  parseInvoicePayment(
+    await apiRequest<unknown>(
+      `/wallets/${encodeURIComponent(walletId)}/payments/${encodeURIComponent(invoice)}`,
+    ),
   );
 
 const getWalletTransactionsSince = async (
@@ -191,40 +269,44 @@ const createInvoice = async (
   walletId: string,
   amount: number,
   memo: string,
-): Promise<string> => {
-  const result = await apiRequest<{ paymentRequest: string }>(
-    `/wallets/${encodeURIComponent(walletId)}/invoices`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ amount, memo }),
-    },
+): Promise<InvoiceResult> =>
+  parseInvoiceResult(
+    await apiRequest<unknown>(
+      `/wallets/${encodeURIComponent(walletId)}/invoices`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ amount, memo }),
+      },
+    ),
   );
-  return result.paymentRequest;
-};
 
 const payInvoice = async (
   walletId: string,
   paymentRequest: string,
 ): Promise<PaymentResult> =>
-  apiRequest<PaymentResult>(
-    `/wallets/${encodeURIComponent(walletId)}/payments`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ paymentRequest }),
-    },
+  parsePaymentResult(
+    await apiRequest<unknown>(
+      `/wallets/${encodeURIComponent(walletId)}/payments`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ paymentRequest }),
+      },
+    ),
   );
 
 const sendZap = async (
   recipientUserId: string,
   amount: number,
   memo: string,
-  idempotencyKey: string = crypto.randomUUID(),
+  idempotencyKey: string,
 ): Promise<PaymentResult> =>
-  apiRequest<PaymentResult>('/zaps', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ recipientUserId, amount, memo }),
-  });
+  parsePaymentResult(
+    await apiRequest<unknown>('/zaps', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({ recipientUserId, amount, memo }),
+    }),
+  );
 
 const getNostrRewards = async (stallId: string): Promise<Reward[]> =>
   apiRequest<Reward[]>(`/rewards/${encodeURIComponent(stallId)}`);
@@ -233,29 +315,6 @@ const getUserWalletTransactions = async (
   walletId: string,
   filterByExtra: { [key: string]: string } | null,
 ) => getWalletTransactionsSince(walletId, 0, filterByExtra);
-
-const getAllowance = async (_userId: string): Promise<Allowance> => {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const nextPaymentDate = new Date(today);
-  nextPaymentDate.setDate(today.getDate() + ((8 - dayOfWeek) % 7 || 7));
-  const lastPaymentDate = new Date(today);
-  lastPaymentDate.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-  return {
-    id: '123',
-    name: 'Allowance',
-    wallet: '123456789',
-    toWallet: '123456789',
-    amount: 25000,
-    startDate: new Date(),
-    endDate: null,
-    frequency: 'Monthly',
-    nextPaymentDate,
-    lastPaymentDate,
-    memo: "Don't spend it all at once",
-    active: true,
-  };
-};
 
 const getAllPayments = async (
   limit = 1000,
@@ -284,7 +343,6 @@ export {
   getAllPayments,
   getAllUsersFromAPI,
   getAllWallets,
-  getAllowance,
   getInvoicePayment,
   getNostrRewards,
   getUser,

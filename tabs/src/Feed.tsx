@@ -6,9 +6,14 @@ import { getUsers } from './services/lnbitsServiceLocal';
 import { useCache } from '../src/utils/CacheContext';
 import { fetchAllowanceWalletTransactions } from './utils/walletUtilities';
 
+const ACTIVITY_HISTORY_MONTHS = 8.5;
+
 const Home: React.FC = () => {
   const [timestamp] = useState(() => {
-    return Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 365 * (8.5 / 12); // Last 8.5 months
+    return (
+      Math.floor(Date.now() / 1000) -
+      60 * 60 * 24 * 365 * (ACTIVITY_HISTORY_MONTHS / 12)
+    );
   });
   const { cache, setCache } = useCache();
   const [loading, setLoading] = useState<boolean>(true);
@@ -23,16 +28,13 @@ const Home: React.FC = () => {
       setError(null);
 
       try {
-        if (!cache['allUsers']) {
+        const cachedUsers = cache['allUsers'];
+        if (!Array.isArray(cachedUsers)) {
           const allUsers = await getUsers({});
-          console.log('allUsers', allUsers);
-          if (allUsers) {
-            setCache('allUsers', allUsers);
-            setUsers(allUsers);
-          }
+          setCache('allUsers', allUsers);
+          setUsers(allUsers);
         } else {
-          console.log('Loading Users from cache....');
-          setUsers(cache['allUsers']);
+          setUsers(cachedUsers as User[]);
         }
       } catch (error) {
         if (error instanceof Error) {
@@ -40,18 +42,16 @@ const Home: React.FC = () => {
         } else {
           setError('An unknown error occurred while fetching users');
         }
-        console.error(error);
       }
-      // Load zaps and set in cache.
+
       try {
-        if (!cache['allZaps']) {
+        const cachedZaps = cache['allZaps'];
+        if (!Array.isArray(cachedZaps)) {
           const allZaps = await fetchAllowanceWalletTransactions();
-          console.log('allZaps', allZaps);
           setCache('allZaps', allZaps);
           setZaps(allZaps);
         } else {
-          console.log('Loading Zaps from cache:', cache['allZaps']);
-          setZaps(cache['allZaps']);
+          setZaps(cachedZaps as Transaction[]);
         }
       } catch (err) {
         setError(
@@ -62,9 +62,8 @@ const Home: React.FC = () => {
       }
     };
 
-    fetchZaps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // cache and setCache are from context and are stable, intentionally excluded
+    void fetchZaps();
+  }, [cache, setCache]);
 
   return (
     <div
@@ -82,7 +81,6 @@ const Home: React.FC = () => {
           width: '100%',
           height: '100%',
           padding: 20,
-          //background: '#1F1F1F',
           justifyContent: 'flex-start',
           alignItems: 'flex-start',
           display: 'flex',
