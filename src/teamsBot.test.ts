@@ -154,3 +154,26 @@ describe('TeamsBot onMessage error hygiene', () => {
     );
   });
 });
+
+describe('TeamsBot withdraw command', () => {
+  test('neither runs nor advertises the unlisted withdraw command', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      text: 'withdraw my zaps',
+      conversation: {
+        id: 'conv-2',
+        conversationType: 'channel',
+        tenantId: 'tenant-1',
+      },
+    });
+
+    await bot.run(context);
+
+    // The stub would have replied "coming soon", so a lone unrecognized
+    // command reply proves it was not invoked.
+    expect(sendActivity).toHaveBeenCalledTimes(1);
+    const [reply] = sendActivity.mock.calls[0] as unknown as [string];
+    expect(reply).toContain("D'oh!");
+    expect(reply).not.toContain('withdraw');
+  });
+});
