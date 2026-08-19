@@ -12,10 +12,14 @@ const service = {
       throw error;
     }
   },
+  maxZapAmountSats: () => 5_000,
   listUsers: async () => [{ id: 'user-1' }],
   createOwnedInvoice: async (input) => {
     calls.push(['invoice', input]);
-    return 'lnbc1invoice';
+    return {
+      paymentRequest: 'lnbc1invoice',
+      invoiceId: 'invoice-1',
+    };
   },
   payOwnedInvoice: async (input) => {
     calls.push(['payment', input]);
@@ -69,6 +73,7 @@ const request = (path, options = {}) =>
         ? { Authorization: `Bearer ${options.token}` }
         : {}),
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options.headers,
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
@@ -92,6 +97,10 @@ test('derives wallet-write authorization from the verified oid', async () => {
   });
 
   assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    paymentRequest: 'lnbc1invoice',
+    invoiceId: 'invoice-1',
+  });
   assert.deepEqual(calls.at(-1), [
     'invoice',
     {
@@ -103,12 +112,41 @@ test('derives wallet-write authorization from the verified oid', async () => {
   ]);
 });
 
-test('rejects malformed or excessive zap amounts before calling LNbits', async () => {
+test('requires an idempotency key and passes it with authenticated zap data', async () => {
+  const missingKey = await request('/api/lnbits/zaps', {
+    method: 'POST',
+    token: 'valid-token',
+    body: { recipientUserId: 'user-2', amount: 20, memo: 'thank you' },
+  });
+  assert.equal(missingKey.status, 400);
+
+  const response = await request('/api/lnbits/zaps', {
+    method: 'POST',
+    token: 'valid-token',
+    headers: { 'Idempotency-Key': 'zap-request-00000001' },
+    body: { recipientUserId: 'user-2', amount: 20, memo: 'thank you' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.at(-1), [
+    'zap',
+    {
+      recipientUserId: 'user-2',
+      amount: 20,
+      memo: 'thank you',
+      aadObjectId: 'caller-oid',
+      idempotencyKey: 'zap-request-00000001',
+    },
+  ]);
+});
+
+test('rejects zap amounts above the cap reported by the injected service', async () => {
   const callsBefore = calls.length;
   const response = await request('/api/lnbits/zaps', {
     method: 'POST',
     token: 'valid-token',
-    body: { recipientUserId: 'user-2', amount: 1000001, memo: 'too much' },
+    headers: { 'Idempotency-Key': 'zap-request-00000002' },
+    body: { recipientUserId: 'user-2', amount: 5001, memo: 'too much' },
   });
 
   assert.equal(response.status, 400);
