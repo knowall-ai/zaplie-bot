@@ -134,7 +134,7 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 
 | `LNBITS_NODE_URL`
 | Base URL of the LNbits instance
-| Bot, Tabs (`REACT_APP_` prefix)
+| Bot, Portal backend, Tabs (`REACT_APP_` prefix)
 
 | `LNBITS_USERNAME`, `LNBITS_PASSWORD`
 | LNbits service-account credentials (`POST /api/v1/auth`) — server-side only,
@@ -167,7 +167,8 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Manifest
 
 | `WEBSITE_API_URL`
-| Reward-name API base URL used by the bot
+| Portal backend API base URL used by the bot; include the `/api` prefix
+  (`https://<portal-domain>/api`), routes are appended to it verbatim
 | Bot
 
 | `TAB_BACKEND_TOKEN`
