@@ -9,6 +9,7 @@ import {
 } from '../services/lnbitsServiceLocal';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
+import ZapIcon from '../images/ZapIcon.svg';
 import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';
 import dismissIcon from '../images/DismissCircleRed.svg';
 
@@ -275,7 +276,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({
                 </div>
               ) : (
                 <div className={styles.avatarPlaceholder}>
-                  <span>⚡</span>
+                  <img src={ZapIcon} alt="" className={styles.avatarIcon} />
                 </div>
               )}
             </div>
