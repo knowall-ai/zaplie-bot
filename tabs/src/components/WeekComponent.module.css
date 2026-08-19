@@ -110,6 +110,9 @@
 
 .calendarScroll {
   min-width: 0;
+  /* Below 1024px the day columns keep a 160px floor, so the band scrolls
+     inside the card instead of widening the page. */
+  overflow-x: auto;
 }
 
 .calendar {

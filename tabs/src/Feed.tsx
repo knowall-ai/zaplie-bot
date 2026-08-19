@@ -12,6 +12,7 @@ const Home: React.FC = () => {
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [transfers, setTransfers] = useState<ZapTransfer[]>([]);
+  const [retryToken, setRetryToken] = useState(0);
   const [timestamp] = useState(
     () => Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 259,
   );
@@ -50,7 +51,7 @@ const Home: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [setCache]);
+  }, [setCache, retryToken]);
 
   return (
     <div
@@ -64,9 +65,34 @@ const Home: React.FC = () => {
       }}
     >
       {error && (
-        <p role="alert" style={{ margin: '20px 20px 0', color: '#ffb4ab' }}>
-          {error}
-        </p>
+        <div
+          role="alert"
+          style={{
+            margin: '20px 20px 0',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            color: '#ffb4ab',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setRetryToken(token => token + 1)}
+            style={{
+              padding: '6px 16px',
+              border: '1px solid var(--accent)',
+              borderRadius: 'var(--radius-full)',
+              background: 'none',
+              color: 'var(--accent)',
+              font: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
       )}
       <div
         style={{
