@@ -12,10 +12,9 @@ const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]{16,128}$/;
 
 const validId = (value) => typeof value === 'string' && ID_PATTERN.test(value);
 
-const parseAmount = (value) => {
+const parseAmount = (value, maxSats) => {
   const amount = Number(value);
-  const max = defaultService.maxZapAmountSats();
-  return Number.isSafeInteger(amount) && amount > 0 && amount <= max
+  return Number.isSafeInteger(amount) && amount > 0 && amount <= maxSats
     ? amount
     : null;
 };
@@ -134,7 +133,7 @@ const createLnbitsRouter = ({
   }));
 
   router.post('/wallets/:walletId/invoices', asyncRoute(async (req, res) => {
-    const amount = parseAmount(req.body?.amount);
+    const amount = parseAmount(req.body?.amount, service.maxZapAmountSats());
     const memo = parseMemo(req.body?.memo);
     if (!validId(req.params.walletId) || amount === null || memo === null) {
       res.status(400).json({ error: 'invalid invoice request' });
@@ -170,7 +169,7 @@ const createLnbitsRouter = ({
   }));
 
   router.post('/zaps', asyncRoute(async (req, res) => {
-    const amount = parseAmount(req.body?.amount);
+    const amount = parseAmount(req.body?.amount, service.maxZapAmountSats());
     const memo = parseMemo(req.body?.memo);
     const idempotencyKey = req.get('Idempotency-Key');
     if (

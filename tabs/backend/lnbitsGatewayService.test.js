@@ -114,6 +114,22 @@ test('invoice creation returns the exact stable invoice identifier', async (t) =
     await createInvoice({ inkey: 'invoice-key' }, 20, 'thank you'),
     { paymentRequest: 'lnbc1invoice', invoiceId: 'invoice-1' },
   );
+
+  global.fetch = async () => ({
+    ok: true,
+    status: 201,
+    headers: { get: () => 'application/json' },
+    json: async () => ({
+      payment_request: 'lnbc1invoice',
+      checking_id: 'x'.repeat(257),
+      payment_hash: 'invoice-2',
+    }),
+  });
+
+  assert.deepEqual(
+    await createInvoice({ inkey: 'invoice-key' }, 20, 'thank you'),
+    { paymentRequest: 'lnbc1invoice', invoiceId: 'invoice-2' },
+  );
 });
 
 const createTestZapDependencies = (store, onPay = async () => ({

@@ -12,6 +12,7 @@ const service = {
       throw error;
     }
   },
+  maxZapAmountSats: () => 5_000,
   listUsers: async () => [{ id: 'user-1' }],
   createOwnedInvoice: async (input) => {
     calls.push(['invoice', input]);
@@ -139,12 +140,13 @@ test('requires an idempotency key and passes it with authenticated zap data', as
   ]);
 });
 
-test('rejects malformed or excessive zap amounts before calling LNbits', async () => {
+test('rejects zap amounts above the cap reported by the injected service', async () => {
   const callsBefore = calls.length;
   const response = await request('/api/lnbits/zaps', {
     method: 'POST',
     token: 'valid-token',
-    body: { recipientUserId: 'user-2', amount: 1000001, memo: 'too much' },
+    headers: { 'Idempotency-Key': 'zap-request-00000002' },
+    body: { recipientUserId: 'user-2', amount: 5001, memo: 'too much' },
   });
 
   assert.equal(response.status, 400);

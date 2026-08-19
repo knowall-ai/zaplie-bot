@@ -292,6 +292,9 @@ const getWalletPayLinks = async (walletId) => {
   );
 };
 
+const validPaymentId = (value) =>
+  typeof value === 'string' && value.length > 0 && value.length <= 256;
+
 const createInvoice = async (wallet, amount, memo) => {
   const result = await lnbitsRequest('/api/v1/payments', {
     method: 'POST',
@@ -299,14 +302,14 @@ const createInvoice = async (wallet, amount, memo) => {
     body: { out: false, amount, memo },
   });
   const paymentRequest = result.payment_request;
-  const invoiceId = result.checking_id || result.payment_hash;
+  const invoiceId = validPaymentId(result.checking_id)
+    ? result.checking_id
+    : result.payment_hash;
   if (
     typeof paymentRequest !== 'string' ||
     paymentRequest.length === 0 ||
     paymentRequest.length > 4096 ||
-    typeof invoiceId !== 'string' ||
-    invoiceId.length === 0 ||
-    invoiceId.length > 256
+    !validPaymentId(invoiceId)
   ) {
     throw new LnbitsGatewayError(
       'LNbits did not return a complete invoice',
@@ -324,8 +327,6 @@ const payInvoice = async (wallet, paymentRequest) => {
     walletKey: wallet.adminkey,
     body: { out: true, bolt11: paymentRequest },
   });
-  const validPaymentId = (value) =>
-    typeof value === 'string' && value.length > 0 && value.length <= 256;
   const paymentId = validPaymentId(result.payment_hash)
     ? result.payment_hash
     : result.checking_id;
