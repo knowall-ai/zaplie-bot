@@ -14,7 +14,19 @@
 | Add `"overrides": { "@azure/msal-node": "^2.6.0" }` to `package.json` (see README.md), or use Node 18
 
 | Users have no wallets / "Failed Receivers" when sending a Zap
-| The recipient has not interacted with the app yet, so `ensureUserSetup` never ran. Ask them to message the bot once; verify the LNbits User Manager extension is enabled
+| The recipient has never opened the app, so neither the bot's `ensureUserSetup` nor the portal's `ensureCaller` has run. Ask them to open the Zaplie tab or message the bot once — either provisions the account; verify the LNbits User Manager extension is enabled
+
+| A new user opens the portal and every tab fails with "We could not create your Zaplie wallet yet"
+| First-run provisioning (`tabs/backend/lnbitsGatewayService.js` `ensureCaller`) could not reach LNbits. Check `LNBITS_NODE_URL`/`LNBITS_USERNAME`/`LNBITS_PASSWORD` on the tab backend and the server log line prefixed `Zaplie provisioning:`
+
+| A new user has wallets but a zero Allowance balance
+| `LNBITS_INITIAL_ALLOWANCE` is unset (logged as a warning — the deployment simply grants no opening balance) or set to something that is not a positive integer (logged with `console.error` as a configuration error). Either way the account is usable; look for `Zaplie provisioning: allowance wallet <id> left unfunded (...)`
+
+| An existing user has only one of the two wallets
+| Provisioning was interrupted after the LNbits user was created. Listing that user's own wallets from the portal recreates the missing one — look for `Zaplie provisioning: repairing half-provisioned LNbits user <id>`. If the log instead shows `More than one LNbits user is linked to Entra id ...`, two instances raced and the duplicate could not be deleted: remove the extra user in LNbits User Manager
+
+| Portal-provisioned users show no avatar
+| `PROFILE_PHOTO_HOST` is unset on the tab backend. This is deliberate — there is no default, because guessing another tenant's SharePoint host produces a broken image for everyone
 
 | `send zap` card submits but payment fails
 | Check `LNBITS_ADMINKEY` and `LNBITS_NODE_URL`; confirm the sender's Allowance wallet has sufficient balance and the LNbits instance is reachable from the bot
