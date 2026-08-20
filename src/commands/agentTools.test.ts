@@ -455,6 +455,17 @@ describe('agentTools', () => {
       expect(mockGetUserWallets).not.toHaveBeenCalled();
     });
 
+    test('refuses non-object arguments instead of throwing on the destructure', async () => {
+      const context = makeTurnContext(sender);
+
+      for (const args of [null, 'bob', 7]) {
+        const result = requireRecord(await tool().handler(args, context));
+        expect(result.proposed).toBe(false);
+        expect(result.reason).toContain('recipientName');
+      }
+      expect(context.sendActivity).not.toHaveBeenCalled();
+    });
+
     test('throws when there is no current user in turn state', async () => {
       await expect(
         tool().handler(
@@ -507,15 +518,24 @@ describe('agentTools', () => {
       expect(mockGetRecentMeetings).toHaveBeenCalledWith('graph-token', 30);
     });
 
+    test('falls back to the default window when the arguments are not an object', async () => {
+      mockGetRecentMeetings.mockResolvedValue([]);
+      const tool = createAgentTools().find(
+        item => item.name === 'get_recent_meetings',
+      )!;
+
+      await expect(
+        tool.handler(null, makeGraphContext('graph-token')),
+      ).resolves.toEqual({ connected: true, periodDays: 7, meetings: [] });
+      expect(mockGetRecentMeetings).toHaveBeenCalledWith('graph-token', 7);
+    });
+
     test('returns a connection instruction instead of calling Graph without a token', async () => {
       const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
-      const result = (await tool.handler({}, makeGraphContext())) as {
-        connected: boolean;
-        message: string;
-      };
+      const result = requireRecord(await tool.handler({}, makeGraphContext()));
 
       expect(result).toMatchObject({ connected: false });
       expect(result.message).toMatch(/connect calendar/);

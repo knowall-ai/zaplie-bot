@@ -125,11 +125,14 @@ interface RawLnbitsWallet {
   deleted?: boolean;
 }
 
-const isRawLnbitsWallet = (value: unknown): value is RawLnbitsWallet =>
-  isRecord(value) &&
-  typeof value.id === 'string' &&
-  typeof value.name === 'string' &&
-  typeof value.user === 'string';
+// LNbits declares id, name and user required on every wallet route this file
+// reads, so a missing one is a broken contract, not a wallet worth skipping.
+const REQUIRED_WALLET_FIELDS = ['id', 'name', 'user'] as const;
+
+const missingWalletFields = (value: unknown): string[] =>
+  isRecord(value)
+    ? REQUIRED_WALLET_FIELDS.filter(field => typeof value[field] !== 'string')
+    : [...REQUIRED_WALLET_FIELDS];
 
 const toRawLnbitsWallets = (
   value: unknown,
@@ -138,11 +141,14 @@ const toRawLnbitsWallets = (
   if (!Array.isArray(value)) {
     throw new Error(`${source}: LNbits did not return a wallet array`);
   }
-  if (!value.every(isRawLnbitsWallet)) {
-    throw new Error(
-      `${source}: LNbits returned a wallet without a string id, name, or user`,
-    );
-  }
+  value.forEach((wallet, index) => {
+    const missing = missingWalletFields(wallet);
+    if (missing.length > 0) {
+      throw new Error(
+        `${source}: LNbits wallet at index ${index} is missing string ${missing.join(', ')}`,
+      );
+    }
+  });
   return value;
 };
 
@@ -447,7 +453,7 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
     return data;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -475,7 +481,7 @@ const getWalletBalance = async (inKey: string) => {
     return data.balance / 1000; // return in Sats (not millisatoshis)
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -500,7 +506,7 @@ const getWalletName = async (inKey: string) => {
     return data.name;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -557,7 +563,7 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
     return data;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -659,7 +665,7 @@ const getWalletIdFromKey = async (inKey: string) => {
     return wallet.id;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -685,7 +691,7 @@ const getInvoicePayment = async (inKey: string, invoice: string) => {
     return data;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -728,7 +734,7 @@ const getPaymentsSince = async (lnKey: string, timestamp: number) => {
     return paymentsSince;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 

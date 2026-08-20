@@ -296,7 +296,7 @@ describe('getWallets', () => {
     );
 
     await expect(service.getWallets('admin-key')).rejects.toThrow(
-      'getWallets: LNbits returned a wallet without a string id, name, or user',
+      'getWallets: LNbits wallet at index 0 is missing string user',
     );
     expect(
       fetchMock.mock.calls.some(call =>
@@ -399,14 +399,17 @@ describe('getUserWallets', () => {
     );
   });
 
-  test('rejects a wallet without a string name', async () => {
+  test('names the offending wallet position and fields', async () => {
     stubAuth();
     fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([{ id: 'w-1', user: 'u-1' }]),
+      jsonResponse([
+        { id: 'w-1', name: 'Alice - Private', user: 'u-1' },
+        { id: 'w-2' },
+      ]),
     );
 
     await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-      'getUserWallets: LNbits returned a wallet without a string id, name, or user',
+      'getUserWallets: LNbits wallet at index 1 is missing string name, user',
     );
   });
 });
@@ -456,5 +459,26 @@ describe('payInvoice', () => {
     await expect(
       service.payInvoice('admin-key', 'lnbc1invoice', {}),
     ).rejects.toThrow('fetch failed');
+  });
+});
+
+// These read helpers used to `return error`, so a failed call resolved with an
+// Error object that callers spent as a balance or pasted into a query string.
+describe('read helpers rethrow instead of resolving with the Error', () => {
+  const cases: Array<[string, () => Promise<unknown>]> = [
+    ['getWalletDetails', () => service.getWalletDetails('in-key', 'w-1')],
+    ['getWalletBalance', () => service.getWalletBalance('in-key')],
+    ['getWalletName', () => service.getWalletName('in-key')],
+    ['getWalletPayLinks', () => service.getWalletPayLinks('in-key', 'w-1')],
+    ['getInvoicePayment', () => service.getInvoicePayment('in-key', 'inv-1')],
+    ['getPaymentsSince', () => service.getPaymentsSince('in-key', 0)],
+  ];
+
+  test.each(cases)('%s rejects on a network error', async (_name, call) => {
+    fetchMock.mockImplementation(async () => {
+      throw new TypeError('fetch failed');
+    });
+
+    await expect(call()).rejects.toThrow('fetch failed');
   });
 });

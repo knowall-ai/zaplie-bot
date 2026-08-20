@@ -100,20 +100,18 @@ const parseFoundryResponse = (
     );
   }
 
-  const malformedFunctionCall = value.output.some(
-    item =>
-      isRecord(item) && item.type === 'function_call' && !isFunctionCall(item),
-  );
-  if (malformedFunctionCall) {
-    throw new Error(
-      'foundryAgentService: Foundry returned an invalid function_call payload.',
-    );
+  const functionCalls: FoundryFunctionCall[] = [];
+  for (const item of value.output) {
+    if (!isRecord(item) || item.type !== 'function_call') continue;
+    if (!isFunctionCall(item)) {
+      throw new Error(
+        'foundryAgentService: Foundry returned an invalid function_call payload.',
+      );
+    }
+    functionCalls.push(item);
   }
 
-  return {
-    functionCalls: value.output.filter(isFunctionCall),
-    outputText: value.output_text,
-  };
+  return { functionCalls, outputText: value.output_text };
 };
 
 const isNotFoundError = (error: unknown): boolean =>
@@ -212,6 +210,13 @@ export async function runConversationalTurn(
           `${call.arguments} (${error instanceof Error ? error.message : String(error)})`,
       );
     }
+    // "null" and other JSON primitives parse fine but break handlers that
+    // destructure, so reject them here rather than inside every tool.
+    if (!isRecord(args)) {
+      throw new Error(
+        `foundryAgentService: the arguments for tool "${call.name}" are not a JSON object: ${call.arguments}`,
+      );
+    }
 
     const result = await tool.handler(args, context);
     if (result === undefined) {
@@ -221,8 +226,7 @@ export async function runConversationalTurn(
     }
     if (
       tool.sideEffect &&
-      typeof (result as { proposed?: unknown } | undefined)?.proposed !==
-        'boolean'
+      (!isRecord(result) || typeof result.proposed !== 'boolean')
     ) {
       throw new Error(
         `foundryAgentService: side-effect tool "${tool.name}" must return a proposal ({ proposed: boolean }), never an execution result.`,

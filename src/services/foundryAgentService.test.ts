@@ -230,6 +230,31 @@ describe('foundryAgentService.runConversationalTurn', () => {
     );
   });
 
+  test('rejects JSON arguments that are not an object, so handlers never destructure null', async () => {
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [
+        {
+          type: 'function_call',
+          name: noopTool.name,
+          call_id: 'call_null',
+          arguments: 'null',
+        },
+      ],
+      output_text: '',
+    });
+
+    await expect(
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [noopTool],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(
+      'foundryAgentService: the arguments for tool "noop_tool" are not a JSON object: null',
+    );
+  });
+
   test('rejects a malformed function_call response from Foundry', async () => {
     mockResponsesCreate.mockResolvedValueOnce({
       output: [
