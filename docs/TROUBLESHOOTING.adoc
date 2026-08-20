@@ -22,6 +22,12 @@
 | Tabs show a blank page or bounce to `/login`
 | `acquireTokenSilent` failed — verify `REACT_APP_AAD_CLIENT_ID` / `REACT_APP_TENANT_ID` and that the redirect URI `<origin>/auth-end` is registered on the AAD app
 
+| Tab fails in Teams because a public page tried to connect to the local network
+| Chrome and Edge block `teams.microsoft.com` from framing `localhost`. Start the normal F5 debug session: the tunnel task forwards port 3000 and writes `TAB_ENDPOINT` and `TAB_DOMAIN`, which the Entra and Teams manifests consume. Do not point the Teams manifest directly at `localhost`
+
+| Values containing `#` or `$` are truncated when read from a `.env` file
+| `#` starts a comment and CRA expands `$`. Quote the complete value in `env/.env.*`; in `tabs/.env.development`, escape a literal `$` as `\$`
+
 | Reward name does not load / defaults to "Sats"
 | The Express backend (`tabs/backend/server.js`, port 5000) is not running, or `WEBSITE_API_URL` (bot side) points to the wrong host
 
