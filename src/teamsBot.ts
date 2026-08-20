@@ -29,7 +29,7 @@ import { validateZapSubmit } from './commands/zapBudget';
 import {
   getZapTarget,
   registerZapTarget,
-  ZAP_REACTION_DEFAULT_SATS,
+  zapReactionSats,
   ZAP_REACTION_TYPES,
 } from './services/reactionZapTargets';
 import { ShowMyBalanceCommand } from './commands/showMyBalanceCommand';
@@ -489,8 +489,8 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   // A ⚡ reaction on a zap card the bot sent pays the card's pre-filled
-  // recipient a small default amount. Teams only forwards reactions for the
-  // bot's own messages, so unregistered messages are ignored quietly.
+  // recipient the configured reaction amount. Teams only forwards reactions
+  // for the bot's own messages, so unregistered messages are ignored quietly.
   async handleZapReaction(context: TurnContext): Promise<void> {
     const reactions = context.activity.reactionsAdded ?? [];
     // Spike telemetry: classic Bot Framework docs only list the six legacy
@@ -519,6 +519,9 @@ export class TeamsBot extends TeamsActivityHandler {
     }
 
     try {
+      // Outside the inner catch on purpose: a bad ZAP_REACTION_SATS is an
+      // operator error, so it is logged, not relayed to the reactor.
+      const configuredAmount = zapReactionSats();
       const liveBalance = await getWalletBalance(
         currentUser.allowanceWallet.inkey,
       );
@@ -526,7 +529,7 @@ export class TeamsBot extends TeamsActivityHandler {
       try {
         // validateZapSubmit throws user-facing messages, safe to relay as-is.
         amount = validateZapSubmit(
-          ZAP_REACTION_DEFAULT_SATS,
+          configuredAmount,
           1,
           liveBalance,
           globalRewardName,

@@ -1,3 +1,5 @@
+import { MAX_ZAP_SATS } from '../commands/zapBudget';
+
 // Maps bot-sent zap cards to their pre-filled recipient so a ⚡ reaction on
 // the card can pay that recipient. Teams only forwards reactions for messages
 // the bot itself sent, so this registry is the entire phase-1 surface.
@@ -12,8 +14,25 @@ const MAX_TARGETS = 500;
 // logging shows something else arriving.
 export const ZAP_REACTION_TYPES = new Set(['26a1_highvoltagesymbol', '⚡']);
 
-// Prefill only: a reaction is a one-tap gesture, so keep the amount small.
+// A reaction is a one-tap gesture with no card to edit, so the default stays
+// small; operators raise it with ZAP_REACTION_SATS.
 export const ZAP_REACTION_DEFAULT_SATS = 21;
+
+// Read per reaction rather than at import so a misconfigured value surfaces on
+// the next zap instead of silently paying the default forever.
+export function zapReactionSats(): number {
+  const configured = process.env.ZAP_REACTION_SATS;
+  if (configured === undefined || configured.trim() === '') {
+    return ZAP_REACTION_DEFAULT_SATS;
+  }
+  const amount = Number(configured);
+  if (!Number.isInteger(amount) || amount < 1 || amount > MAX_ZAP_SATS) {
+    throw new Error(
+      `ZAP_REACTION_SATS must be a whole number between 1 and ${MAX_ZAP_SATS}, received: ${configured}`,
+    );
+  }
+  return amount;
+}
 
 interface ZapTarget {
   receiverId: string;

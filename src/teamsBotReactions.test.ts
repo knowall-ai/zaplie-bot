@@ -10,6 +10,7 @@ import {
 
 const originalPointsLabel = process.env.LNBITS_POINTS_LABEL;
 const originalAdminKey = process.env.LNBITS_ADMINKEY;
+const originalReactionSats = process.env.ZAP_REACTION_SATS;
 
 process.env.LNBITS_POINTS_LABEL = 'Sats';
 process.env.LNBITS_ADMINKEY = 'admin-key';
@@ -90,6 +91,7 @@ describe('TeamsBot handleZapReaction', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetZapTargetsForTests();
+    delete process.env.ZAP_REACTION_SATS;
     bot = new TeamsBot();
     mockGetWalletBalance.mockResolvedValue(1000);
     mockGetUser.mockResolvedValue(receiver);
@@ -99,6 +101,7 @@ describe('TeamsBot handleZapReaction', () => {
   afterAll(() => {
     restoreEnv('LNBITS_POINTS_LABEL', originalPointsLabel);
     restoreEnv('LNBITS_ADMINKEY', originalAdminKey);
+    restoreEnv('ZAP_REACTION_SATS', originalReactionSats);
   });
 
   test('a zap reaction on a registered card pays and confirms', async () => {
@@ -120,6 +123,45 @@ describe('TeamsBot handleZapReaction', () => {
     expect(context.sendActivity).toHaveBeenCalledWith(
       `⚡ Sent ${ZAP_REACTION_DEFAULT_SATS} Sats to Receiver for your reaction.`,
     );
+  });
+
+  test('the configured ZAP_REACTION_SATS is paid and confirmed', async () => {
+    process.env.ZAP_REACTION_SATS = '50';
+    registerZapTarget('conv-1', 'card-1', receiver.id);
+    const context = buildReactionContext('26a1_highvoltagesymbol', 'card-1');
+
+    await bot.handleZapReaction(context);
+
+    expect(mockSendZap).toHaveBeenCalledWith(
+      reactor,
+      receiver,
+      'Zapped with a ⚡ reaction',
+      50,
+      context,
+      false,
+      'Sats',
+    );
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      '⚡ Sent 50 Sats to Receiver for your reaction.',
+    );
+  });
+
+  test('a misconfigured ZAP_REACTION_SATS pays nothing and hides the config detail', async () => {
+    process.env.ZAP_REACTION_SATS = 'lots';
+    registerZapTarget('conv-1', 'card-1', receiver.id);
+    const errorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const context = buildReactionContext('26a1_highvoltagesymbol', 'card-1');
+
+    await bot.handleZapReaction(context);
+
+    expect(mockSendZap).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      "D'oh! Your ⚡ reaction zap could not be completed. Please try again later.",
+    );
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   test('non-zap reaction types do not pay', async () => {
