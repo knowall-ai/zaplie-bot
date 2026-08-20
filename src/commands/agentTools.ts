@@ -5,12 +5,11 @@
 
 import { TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
+import { getUserWallets } from '../services/lnbitsService';
 import {
-  getUserWallets,
-  getWallets,
-  getUsers,
-} from '../services/lnbitsService';
-import { getRecentZaps } from '../services/zapHistoryService';
+  getRecentZaps,
+  getZapLeaderboard,
+} from '../services/zapHistoryService';
 import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
 import {
   CONNECT_CALENDAR_COMMAND,
@@ -19,8 +18,13 @@ import {
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
+const ALLOWANCE_WALLET_NAME = 'Allowance';
+const PRIVATE_WALLET_NAME = 'Private';
 
 const toSats = (balanceMsat: number): number => Math.floor(balanceMsat / 1000);
+
+const isBalanceWallet = (wallet: Wallet): boolean =>
+  wallet.name === ALLOWANCE_WALLET_NAME || wallet.name === PRIVATE_WALLET_NAME;
 
 const DAYS_PARAMETER = {
   type: 'number',
@@ -41,7 +45,7 @@ const getMyBalanceTool: ToolDefinition = {
     const wallets = await getUserWallets(adminKey, user.id);
     return {
       rewardLabel,
-      wallets: wallets.map(wallet => ({
+      wallets: wallets.filter(isBalanceWallet).map(wallet => ({
         name: wallet.name,
         balanceSats: toSats(wallet.balance_msat),
       })),
@@ -52,23 +56,18 @@ const getMyBalanceTool: ToolDefinition = {
 const getLeaderboardTool: ToolDefinition = {
   name: 'get_leaderboard',
   description:
-    "Get the team leaderboard, ranked by each teammate's Private wallet balance.",
+    'Get the team leaderboard, ranked by the sats each teammate has zapped to others ' +
+    'out of their Allowance wallet. Private wallet balances are never ranked.',
   parameters: { type: 'object', properties: {}, required: [] },
   handler: async () => {
-    const [privateWallets, users] = await Promise.all([
-      getWallets(adminKey, 'Private'),
-      getUsers(adminKey, null),
-    ]);
-    const displayNameByUserId = new Map(
-      users.map(user => [user.id, user.displayName]),
-    );
-    const leaderboard = privateWallets
-      .map(wallet => ({
-        displayName: displayNameByUserId.get(wallet.user) ?? 'Unknown',
-        balanceSats: toSats(wallet.balance_msat),
-      }))
-      .sort((a, b) => b.balanceSats - a.balanceSats);
-    return { rewardLabel, leaderboard };
+    const entries = await getZapLeaderboard();
+    return {
+      rewardLabel,
+      leaderboard: entries.map(entry => ({
+        displayName: entry.user.displayName,
+        zappedSats: entry.zappedSats,
+      })),
+    };
   },
 };
 

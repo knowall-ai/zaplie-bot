@@ -184,3 +184,36 @@ export async function getRecentZaps(
 
   return activity.slice(0, limit);
 }
+
+export interface ZapLeaderboardEntry {
+  user: User;
+  zappedSats: number;
+}
+
+// Ranks recognition given, not money held: a Private wallet is the owner's own
+// balance (and may one day be an external wallet we cannot read), so only zaps
+// sent out of Allowance wallets count. Matches tabs/src/components/Leaderboard.tsx.
+export async function getZapLeaderboard(): Promise<ZapLeaderboardEntry[]> {
+  const zaps = await getRecentZaps({ limit: Number.MAX_SAFE_INTEGER });
+
+  const totalsByUserId = new Map<string, ZapLeaderboardEntry>();
+  for (const zap of zaps) {
+    // A sending wallet that resolves to no user cannot be ranked.
+    if (!zap.from) continue;
+    const entry = totalsByUserId.get(zap.from.id);
+    if (entry) {
+      entry.zappedSats += zap.amountSats;
+    } else {
+      totalsByUserId.set(zap.from.id, {
+        user: zap.from,
+        zappedSats: zap.amountSats,
+      });
+    }
+  }
+
+  return Array.from(totalsByUserId.values()).sort(
+    (a, b) =>
+      b.zappedSats - a.zappedSats ||
+      a.user.displayName.localeCompare(b.user.displayName),
+  );
+}

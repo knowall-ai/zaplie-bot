@@ -4,7 +4,7 @@
 // zapHistoryService itself — the matching/filtering logic being tested here
 // lives entirely in zapHistoryService.
 
-import { getRecentZaps } from './zapHistoryService';
+import { getRecentZaps, getZapLeaderboard } from './zapHistoryService';
 import { getUsers, getUserWallets, getPayments } from './lnbitsService';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 
@@ -358,5 +358,141 @@ describe('zapHistoryService', () => {
     const result = await getRecentZaps();
 
     expect(result).toEqual([]);
+  });
+});
+
+describe('getZapLeaderboard', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    for (const key of Object.keys(walletsByInkey)) {
+      delete walletsByInkey[key];
+    }
+    setupUsersAndWallets();
+  });
+
+  test('sums every zap a teammate sent out of their Allowance wallet, highest first', async () => {
+    walletsByInkey[aliceAllowance.inkey] = [
+      tx({
+        checking_id: 'a1',
+        amount: -100000,
+        time: 1750000000,
+        wallet_id: aliceAllowance.id,
+      }),
+      tx({
+        checking_id: 'a2',
+        amount: -20000,
+        time: 1750000001,
+        wallet_id: aliceAllowance.id,
+      }),
+    ];
+    walletsByInkey[bobAllowance.inkey] = [
+      tx({
+        checking_id: 'b1',
+        amount: -50000,
+        time: 1750000002,
+        wallet_id: bobAllowance.id,
+      }),
+    ];
+    walletsByInkey[bobPrivate.inkey] = [
+      tx({
+        checking_id: 'internal_a1',
+        amount: 100000,
+        time: 1750000000,
+        wallet_id: bobPrivate.id,
+      }),
+      tx({
+        checking_id: 'internal_a2',
+        amount: 20000,
+        time: 1750000001,
+        wallet_id: bobPrivate.id,
+      }),
+    ];
+    walletsByInkey[alicePrivate.inkey] = [
+      tx({
+        checking_id: 'internal_b1',
+        amount: 50000,
+        time: 1750000002,
+        wallet_id: alicePrivate.id,
+      }),
+    ];
+
+    const result = await getZapLeaderboard();
+
+    expect(
+      result.map(entry => [entry.user.displayName, entry.zappedSats]),
+    ).toEqual([
+      ['Alice', 120],
+      ['Bob', 50],
+    ]);
+  });
+
+  test('ignores sats received into a Private wallet', async () => {
+    // Bob's Private wallet is his own money: a payment in from anywhere other
+    // than a teammate's Allowance wallet must not put him on the leaderboard.
+    walletsByInkey[bobPrivate.inkey] = [
+      tx({
+        checking_id: 'coffee-money',
+        amount: 900000,
+        memo: 'Sold a coffee',
+        time: 1750000000,
+        wallet_id: bobPrivate.id,
+      }),
+    ];
+    walletsByInkey[aliceAllowance.inkey] = [
+      tx({
+        checking_id: 'a1',
+        amount: -10000,
+        time: 1750000001,
+        wallet_id: aliceAllowance.id,
+      }),
+    ];
+    walletsByInkey[alicePrivate.inkey] = [];
+    walletsByInkey[bobAllowance.inkey] = [];
+
+    const result = await getZapLeaderboard();
+
+    expect(result).toEqual([]);
+  });
+
+  test('breaks ties on display name so equal totals keep a stable order', async () => {
+    walletsByInkey[bobAllowance.inkey] = [
+      tx({
+        checking_id: 'b1',
+        amount: -10000,
+        time: 1750000002,
+        wallet_id: bobAllowance.id,
+      }),
+    ];
+    walletsByInkey[aliceAllowance.inkey] = [
+      tx({
+        checking_id: 'a1',
+        amount: -10000,
+        time: 1750000001,
+        wallet_id: aliceAllowance.id,
+      }),
+    ];
+    walletsByInkey[alicePrivate.inkey] = [
+      tx({
+        checking_id: 'internal_b1',
+        amount: 10000,
+        time: 1750000002,
+        wallet_id: alicePrivate.id,
+      }),
+    ];
+    walletsByInkey[bobPrivate.inkey] = [
+      tx({
+        checking_id: 'internal_a1',
+        amount: 10000,
+        time: 1750000001,
+        wallet_id: bobPrivate.id,
+      }),
+    ];
+
+    const result = await getZapLeaderboard();
+
+    expect(result.map(entry => entry.user.displayName)).toEqual([
+      'Alice',
+      'Bob',
+    ]);
   });
 });
