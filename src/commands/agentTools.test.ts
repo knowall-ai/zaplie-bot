@@ -4,8 +4,11 @@
 // agentTools itself.
 
 import { createReadOnlyTools } from './agentTools';
-import { getUserWallets, getUsers } from '../services/lnbitsService';
-import { getRecentZaps } from '../services/zapHistoryService';
+import { getUserWallets } from '../services/lnbitsService';
+import {
+  getRecentZaps,
+  getZapLeaderboard,
+} from '../services/zapHistoryService';
 import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
 import {
   afterEach,
@@ -24,9 +27,11 @@ jest.mock('../services/graphService');
 const mockGetUserWallets = getUserWallets as jest.MockedFunction<
   typeof getUserWallets
 >;
-const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
 const mockGetRecentZaps = getRecentZaps as jest.MockedFunction<
   typeof getRecentZaps
+>;
+const mockGetZapLeaderboard = getZapLeaderboard as jest.MockedFunction<
+  typeof getZapLeaderboard
 >;
 const mockGetRecentMeetings = getRecentMeetings as jest.MockedFunction<
   typeof getRecentMeetings
@@ -89,36 +94,17 @@ describe('agentTools', () => {
   });
 
   describe('get_leaderboard', () => {
-    test('enumerates every user and ranks their Private wallets', async () => {
-      mockGetUsers.mockResolvedValue([
-        { ...currentUser, id: 'user-bob', displayName: 'Bob' },
-        { ...currentUser, id: 'user-alice', displayName: 'Alice' },
-        { ...currentUser, id: 'user-charlie', displayName: 'Charlie' },
+    test('reports sats zapped out of Allowance wallets, never wallet balances', async () => {
+      mockGetZapLeaderboard.mockResolvedValue([
+        {
+          user: { ...currentUser, id: 'user-alice', displayName: 'Alice' },
+          zappedSats: 1500,
+        },
+        {
+          user: { ...currentUser, id: 'user-bob', displayName: 'Bob' },
+          zappedSats: 500,
+        },
       ]);
-      mockGetUserWallets.mockImplementation(async (_adminKey, userId) => {
-        if (userId === 'user-bob') {
-          return [
-            wallet({
-              id: 'w-bob',
-              name: 'Private',
-              user: userId,
-              balance_msat: 500000,
-            }),
-          ];
-        }
-        if (userId === 'user-alice') {
-          return [
-            wallet({ name: 'Allowance', user: userId }),
-            wallet({
-              id: 'w-alice',
-              name: 'Private',
-              user: userId,
-              balance_msat: 1500000,
-            }),
-          ];
-        }
-        return [wallet({ name: 'LNbits wallet', user: userId })];
-      });
 
       const tool = createReadOnlyTools().find(
         t => t.name === 'get_leaderboard',
@@ -126,12 +112,10 @@ describe('agentTools', () => {
       const result: any = await tool.handler({}, makeTurnContext(currentUser));
 
       expect(result.leaderboard).toEqual([
-        { displayName: 'Alice', balanceSats: 1500 },
-        { displayName: 'Bob', balanceSats: 500 },
+        { displayName: 'Alice', zappedSats: 1500 },
+        { displayName: 'Bob', zappedSats: 500 },
       ]);
-      expect(mockGetUserWallets.mock.calls.map(([, userId]) => userId)).toEqual(
-        ['user-bob', 'user-alice', 'user-charlie'],
-      );
+      expect(mockGetUserWallets).not.toHaveBeenCalled();
     });
   });
 

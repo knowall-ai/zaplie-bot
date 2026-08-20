@@ -5,8 +5,11 @@
 
 import { TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
-import { getUserWallets, getUsers } from '../services/lnbitsService';
-import { getRecentZaps } from '../services/zapHistoryService';
+import { getUserWallets } from '../services/lnbitsService';
+import {
+  getRecentZaps,
+  getZapLeaderboard,
+} from '../services/zapHistoryService';
 import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
 import {
   CONNECT_CALENDAR_COMMAND,
@@ -53,32 +56,18 @@ const getMyBalanceTool: ToolDefinition = {
 const getLeaderboardTool: ToolDefinition = {
   name: 'get_leaderboard',
   description:
-    "Get the team leaderboard, ranked by each teammate's Private wallet balance.",
+    'Get the team leaderboard, ranked by the sats each teammate has zapped to others ' +
+    'out of their Allowance wallet. Private wallet balances are never ranked.',
   parameters: { type: 'object', properties: {}, required: [] },
   handler: async () => {
-    const users = await getUsers(adminKey, null);
-    const walletsByUser = await Promise.all(
-      users.map(async user => ({
-        user,
-        wallets: await getUserWallets(adminKey, user.id),
+    const entries = await getZapLeaderboard();
+    return {
+      rewardLabel,
+      leaderboard: entries.map(entry => ({
+        displayName: entry.user.displayName,
+        zappedSats: entry.zappedSats,
       })),
-    );
-
-    const leaderboard: { displayName: string; balanceSats: number }[] = [];
-    for (const { user, wallets } of walletsByUser) {
-      const privateWallet = wallets.find(
-        wallet => wallet.name === PRIVATE_WALLET_NAME,
-      );
-      if (privateWallet) {
-        leaderboard.push({
-          displayName: user.displayName,
-          balanceSats: toSats(privateWallet.balance_msat),
-        });
-      }
-    }
-
-    leaderboard.sort((a, b) => b.balanceSats - a.balanceSats);
-    return { rewardLabel, leaderboard };
+    };
   },
 };
 
