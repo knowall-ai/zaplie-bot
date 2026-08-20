@@ -94,7 +94,7 @@
    darken it to match the initials rendered in the same placeholder. */
 .avatarIcon {
   width: 36px;
-  height: 36px;
+  height: auto;
   filter: brightness(0);
 }
 

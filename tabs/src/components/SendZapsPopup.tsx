@@ -277,7 +277,12 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
                 </div>
               ) : (
                 <div className={styles.avatarPlaceholder}>
-                  <img src={ZapIcon} alt="" className={styles.avatarIcon} />
+                  <img
+                    src={ZapIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className={styles.avatarIcon}
+                  />
                 </div>
               )}
             </div>
