@@ -147,6 +147,10 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Default reward-unit label (renamable in Settings)
 | Bot, Tabs
 
+| `ZAP_REACTION_SATS`
+| Sats paid when someone reacts to a zap card with ⚡. Optional, defaults to 21; must be a whole number between 1 and 10,000 or the reaction zap fails closed
+| Bot
+
 | `REACT_APP_AAD_CLIENT_ID`, `REACT_APP_TENANT_ID`
 | MSAL configuration for the tabs SPA
 | Tabs

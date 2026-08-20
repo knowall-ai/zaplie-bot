@@ -15,6 +15,7 @@ import {
 } from './connectCalendarCommand';
 import { createZapCard } from './sendZapCommand';
 import { MAX_ZAP_SATS } from './zapBudget';
+import { registerZapTarget } from '../services/reactionZapTargets';
 import { isRecord } from '../utils/typeGuards';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
@@ -298,8 +299,13 @@ const proposeZapTool: ToolDefinition = {
       message: memo,
       amountSats,
     });
-    await turnContext.sendActivity(
+    const sent = await turnContext.sendActivity(
       MessageFactory.attachment(CardFactory.adaptiveCard(card)),
+    );
+    registerZapTarget(
+      turnContext.activity?.conversation?.id,
+      sent?.id,
+      recipient.id,
     );
 
     return {
