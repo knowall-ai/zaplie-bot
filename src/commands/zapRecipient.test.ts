@@ -1,12 +1,22 @@
 // Exercises the production processZapRecipient used by the submitZaps loop,
 // so a regression in the ledger transitions shows up here.
-import { expect, describe, test, jest, beforeEach } from '@jest/globals';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import {
+  expect,
+  describe,
+  test,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { ZapLedger, zapKey } from '../services/zapLedger';
 import { PaymentOutcomeUnknownError } from './sendZapCommand';
 import { validateZapSubmit } from './zapBudget';
 import {
   getPendingRecipientIds,
-  hasUnknownRecipientOutcome,
+  hasUncertainRecipientOutcome,
   normalizeRecipientIds,
   processZapRecipient,
   validateSelfZap,
@@ -17,6 +27,7 @@ const ENTRY_KEY = zapKey({
   conversationId: 'conv-1',
   cardId: 'card-1',
   recipientId: 'alice',
+  action: 'submitZaps',
 });
 
 const receiverOk = { displayName: 'Alice', privateWallet: { id: 'w1' } };
@@ -37,8 +48,15 @@ const run = (
 
 describe('processZapRecipient', () => {
   let ledger: ZapLedger;
+  let dataDirectory: string;
+  let storePath: string;
   beforeEach(() => {
-    ledger = new ZapLedger();
+    dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-recipient-'));
+    storePath = path.join(dataDirectory, 'ledger.json');
+    ledger = new ZapLedger({ storePath });
+  });
+  afterEach(() => {
+    fs.rmSync(dataDirectory, { recursive: true, force: true });
   });
 
   test('a confirmed payment records the hash', async () => {
@@ -46,7 +64,7 @@ describe('processZapRecipient', () => {
       status: 'paid',
       label: 'Alice',
     });
-    expect(ledger.get(ENTRY_KEY)).toMatchObject({
+    await expect(ledger.get(ENTRY_KEY)).resolves.toMatchObject({
       state: 'paid',
       paymentHash: 'hash-1',
     });
@@ -61,7 +79,7 @@ describe('processZapRecipient', () => {
       }),
     ).rejects.toThrow('LNbits unreachable');
 
-    expect(ledger.get(ENTRY_KEY)).toBeUndefined();
+    await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
     await expect(run(ledger)).resolves.toMatchObject({ status: 'paid' });
   });
 
@@ -72,14 +90,14 @@ describe('processZapRecipient', () => {
       status: 'failed',
       label: 'User ID: alice',
     });
-    expect(ledger.get(ENTRY_KEY)).toBeUndefined();
+    await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
   });
 
   test('a missing private wallet frees the slot', async () => {
     await expect(
       run(ledger, { getReceiver: async () => ({ displayName: 'Alice' }) }),
     ).resolves.toEqual({ status: 'failed', label: 'Alice' });
-    expect(ledger.get(ENTRY_KEY)).toBeUndefined();
+    await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
   });
 
   test('a forged self-zap is rejected before the payment call', async () => {
@@ -98,7 +116,7 @@ describe('processZapRecipient', () => {
     });
 
     expect(pay).not.toHaveBeenCalled();
-    expect(ledger.get(ENTRY_KEY)).toBeUndefined();
+    await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
     expect(
       validateSelfZap(
         { aadObjectId: 'aad-sender' },
@@ -116,7 +134,7 @@ describe('processZapRecipient', () => {
       }),
     ).resolves.toMatchObject({ status: 'failed' });
 
-    expect(ledger.get(ENTRY_KEY)).toBeUndefined();
+    await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
     await expect(run(ledger)).resolves.toMatchObject({ status: 'paid' });
   });
 
@@ -131,10 +149,12 @@ describe('processZapRecipient', () => {
       }),
     ).resolves.toMatchObject({ status: 'needs-checking' });
 
-    expect(ledger.get(ENTRY_KEY)?.state).toBe('unknown');
-    expect(hasUnknownRecipientOutcome(ledger, ['alice'], () => ENTRY_KEY)).toBe(
-      true,
-    );
+    await expect(ledger.get(ENTRY_KEY)).resolves.toMatchObject({
+      state: 'unknown',
+    });
+    await expect(
+      hasUncertainRecipientOutcome(ledger, ['alice'], () => ENTRY_KEY),
+    ).resolves.toBe(true);
 
     const retryPay = jest.fn(okPay);
     await expect(run(ledger, { pay: retryPay })).resolves.toEqual({
@@ -153,6 +173,22 @@ describe('processZapRecipient', () => {
     expect(secondPay).not.toHaveBeenCalled();
   });
 
+  test('a paid duplicate after restart never calls the payment dependency', async () => {
+    await run(ledger);
+    const afterRestart = new ZapLedger({ storePath });
+    const secondPay = jest.fn(okPay);
+
+    await expect(run(afterRestart, { pay: secondPay })).resolves.toEqual({
+      status: 'skipped',
+    });
+
+    expect(secondPay).not.toHaveBeenCalled();
+    await expect(afterRestart.get(ENTRY_KEY)).resolves.toMatchObject({
+      state: 'paid',
+      paymentHash: 'hash-1',
+    });
+  });
+
   test('a partial retry budgets only recipients that are still pending', async () => {
     await run(ledger);
     const entryKey = (recipientId: string) =>
@@ -161,9 +197,14 @@ describe('processZapRecipient', () => {
         conversationId: 'conv-1',
         cardId: 'card-1',
         recipientId,
+        action: 'submitZaps',
       });
 
-    const pending = getPendingRecipientIds(ledger, ['alice', 'bob'], entryKey);
+    const pending = await getPendingRecipientIds(
+      ledger,
+      ['alice', 'bob'],
+      entryKey,
+    );
 
     expect(pending).toEqual(['bob']);
     expect(validateZapSubmit('100', pending.length, 100, 'Sats')).toBe(100);
@@ -183,8 +224,12 @@ describe('processZapRecipient', () => {
     }
 
     expect(retryPay).toHaveBeenCalledTimes(1);
-    expect(ledger.get(entryKey('alice'))?.paymentHash).toBe('hash-1');
-    expect(ledger.get(entryKey('bob'))?.paymentHash).toBe('hash-bob');
+    await expect(ledger.get(entryKey('alice'))).resolves.toMatchObject({
+      paymentHash: 'hash-1',
+    });
+    await expect(ledger.get(entryKey('bob'))).resolves.toMatchObject({
+      paymentHash: 'hash-bob',
+    });
   });
 
   test('normalizes and de-duplicates untrusted card recipient ids', () => {
@@ -201,13 +246,15 @@ describe('processZapRecipient', () => {
 
     // updateActivity throwing is handled outside this function; the entry must
     // survive a release attempt untouched.
-    ledger.releaseIfProcessing(ENTRY_KEY);
+    await ledger.releaseIfProcessing(ENTRY_KEY);
 
     const secondPay = jest.fn(okPay);
     await expect(run(ledger, { pay: secondPay })).resolves.toEqual({
       status: 'skipped',
     });
     expect(secondPay).not.toHaveBeenCalled();
-    expect(ledger.get(ENTRY_KEY)?.paymentHash).toBe('hash-1');
+    await expect(ledger.get(ENTRY_KEY)).resolves.toMatchObject({
+      paymentHash: 'hash-1',
+    });
   });
 });

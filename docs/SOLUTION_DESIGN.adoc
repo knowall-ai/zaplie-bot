@@ -25,6 +25,7 @@ flowchart TB
         TB[TeamsBot - TeamsActivityHandler]
         MW[FetchUserMiddleware]
         LNS[lnbitsService]
+        BZL[(Durable Bot Zap Ledger)]
     end
     subgraph Tabs["Web App (tabs/)"]
         CRA[React SPA - MSAL auth]
@@ -40,6 +41,7 @@ flowchart TB
 
     User -->|messages, adaptive cards| Restify --> TB
     TB --> MW --> LNS
+    TB --> BZL
     User -->|static tabs| CRA
     CRA -->|X-Api-Key / Bearer| LN
     CRA --> BE
@@ -153,6 +155,38 @@ Three parallel clients speak to the LNbits REST API:
 - `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
   base URL and credentials arrive with each HTTP request.
 
+=== Bot Zap Submission Ledger
+
+Before resolving a recipient or calling LNbits, the bot durably acquires one
+recipient slot in `${ZAPLIE_DATA_DIR}/bot-zap-ledger.json`. The slot key is a
+SHA-256 digest over the Teams tenant, conversation, card activity, recipient,
+and `submitZaps` action. Those Teams identifiers are never stored in plaintext;
+records contain only the digest, state, timestamp, and, for a confirmed
+payment, its bounded payment hash. Wallet objects and wallet keys are not
+persisted.
+
+The first submit writes `processing` before any LNbits payment can begin. A
+confirmed payment becomes `paid`; a failure after the outgoing payment request
+becomes `unknown`. A failure known to occur before that request removes the
+`processing` record so the recipient can be tried again. `processing`,
+`unknown`, and `paid` records have no time-to-live: all survive restart, and a
+duplicate submit is blocked without another LNbits payment. Operators may
+repair an uncertain record only after reconciling it against the LNbits ledger.
+
+Every read/transition takes the exclusive `bot-zap-ledger.json.lock` lock, with
+an owner token and a five-second timeout, so processes sharing the same durable
+directory cannot acquire the same recipient concurrently. The bot does not
+automatically delete an old lock because lock ownership is uncertain. Lock,
+schema, startup-read, and persistence failures all fail closed. Writes use a
+unique mode-`0600` `bot-zap-ledger.json.<pid>.<random>.tmp` file in the same
+directory, sync it, and atomically rename it over the canonical store.
+
+`ZAPLIE_DATA_DIR` must be an absolute path outside explicit development mode,
+including Azure runtimes detected without `NODE_ENV`. `npm run dev` explicitly
+uses development mode and falls back to the ignored `.zaplie-data` directory
+when no override is configured. This fallback is never selected by a deployed
+bot.
+
 === Web Tabs
 
 Routes (`tabs/src/App.tsx`): `/feed`, `/users`, `/rewards`, `/wallet`,
@@ -209,6 +243,10 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 | `tabs/backend/data.json`
 | JSON file on the web server; no database
 
+| Bot Zap submission records
+| `bot-zap-ledger.json` under the bot's `ZAPLIE_DATA_DIR`
+| Hashed per-recipient processing, uncertain, and paid barriers used to prevent another LNbits payment across retries, restarts, and bot processes
+
 | Bot conversation state
 | `MemoryStorage` (in-process)
 | Ephemeral — lost on restart, not multi-instance safe
@@ -259,3 +297,8 @@ and manifest packaging across local/dev environments.
 - The tabs app currently ships LNbits credentials (including an admin key) to
   the browser via `REACT_APP_*` variables — acceptable only for trusted
   internal deployments; see `SECURITY.md`.
+- The bot's durable ledger depends on a shared, durable filesystem within its
+  App Service; it is not a cross-App-Service or cross-region database.
+- Recovery of a bot Zap left `processing` or `unknown` requires manual
+  reconciliation with the LNbits payment ledger. The application deliberately
+  does not guess the payment outcome.

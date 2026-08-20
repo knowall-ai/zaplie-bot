@@ -18,3 +18,7 @@ tsconfig.json
 /node_modules/typescript
 /appPackage/
 /infra/
+/.zaplie-data/
+bot-zap-ledger.json
+bot-zap-ledger.json.lock
+bot-zap-ledger.json.*.tmp

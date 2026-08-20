@@ -10,7 +10,7 @@
   "main": "./lib/src/index.js",
   "scripts": {
     "dev:teamsfx": "env-cmd --silent -f .localConfigs npm run dev",
-    "dev": "nodemon --exec node --inspect=9239 --signal SIGINT -r ts-node/register ./src/index.ts",
+    "dev": "cross-env NODE_ENV=development nodemon --exec node --inspect=9239 --signal SIGINT -r ts-node/register ./src/index.ts",
     "build-manifest": "node build.js",
     "build": "tsc --build && shx rm -rf lib/public && shx cp -r public lib/public",
     "write-env": "cross-env TEAMSFX_ENV=$TEAMSFX_ENV node scripts/writeEnv.js",

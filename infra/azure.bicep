@@ -46,25 +46,13 @@ resource webApp 'Microsoft.Web/sites@2021-02-01' = {
     httpsOnly: true
     siteConfig: {
       alwaysOn: true
-      appSettings: [
-        {
-          name: 'WEBSITE_NODE_DEFAULT_VERSION'
-          value: '~24' // Set NodeJS version to 24.x for your site
-        }
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: '1'
-        }
-        {
-          name: 'RUNNING_ON_AZURE'
-          value: '1'
-        }
-      ]
       ftpsState: 'FtpsOnly'
     }
   }
 }
 
+// Sole source of app settings: this child resource replaces the site's entire
+// appSettings collection on deploy, so anything declared inline above is lost.
 resource webAppSettings 'Microsoft.Web/sites/config@2021-02-01' = {
   name: '${webAppName}/appsettings'
   properties: {
@@ -78,6 +66,10 @@ resource webAppSettings 'Microsoft.Web/sites/config@2021-02-01' = {
     AAD_APP_TENANT_ID: aadAppTenantId
     AAD_APP_OAUTH_AUTHORITY_HOST: aadAppOauthAuthorityHost
     RUNNING_ON_AZURE: '1'
+    NODE_ENV: 'production'
+    // Windows App Service persistent share, outside wwwroot so a clean deploy
+    // cannot wipe the zap ledger and reintroduce double payments.
+    ZAPLIE_DATA_DIR: 'D:\\home\\data\\zaplie'
   }
 }
 
