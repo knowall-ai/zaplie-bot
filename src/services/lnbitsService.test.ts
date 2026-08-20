@@ -334,6 +334,17 @@ describe('getWallets', () => {
       'Error getting wallets response (status: 500)',
     );
   });
+
+  test('rejects when LNbits does not return a wallet array', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({ not: 'an array' }),
+    );
+
+    await expect(service.getWallets('admin-key')).rejects.toThrow(
+      'getWallets: LNbits did not return a wallet array',
+    );
+  });
 });
 
 describe('getUserWallets', () => {
@@ -412,6 +423,15 @@ describe('getUserWallets', () => {
       'getUserWallets: LNbits wallet at index 1 is missing string name, user',
     );
   });
+
+  test('rejects when LNbits does not return a wallet array', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () => jsonResponse(null));
+
+    await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
+      'getUserWallets: LNbits did not return a wallet array',
+    );
+  });
 });
 
 describe('payInvoice', () => {
@@ -459,6 +479,91 @@ describe('payInvoice', () => {
     await expect(
       service.payInvoice('admin-key', 'lnbc1invoice', {}),
     ).rejects.toThrow('fetch failed');
+  });
+});
+
+describe('getWalletById', () => {
+  test('returns the matching non-deleted wallet from the per-user route', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse([
+        {
+          id: 'w-1',
+          admin: 'admin-1',
+          name: 'Alice - Allowance',
+          user: 'u-1',
+          adminkey: 'ak-1',
+          inkey: 'ik-1',
+          balance_msat: 21000,
+          deleted: false,
+        },
+        {
+          id: 'w-2',
+          name: 'Alice - Old',
+          user: 'u-1',
+          deleted: true,
+        },
+      ]),
+    );
+
+    const wallet = await service.getWalletById('u-1', 'w-1');
+
+    expect(wallet).toEqual({
+      id: 'w-1',
+      admin: 'admin-1',
+      name: 'Alice - Allowance',
+      user: 'u-1',
+      adminkey: 'ak-1',
+      inkey: 'ik-1',
+      balance_msat: 21000,
+      deleted: false,
+    });
+  });
+
+  test('returns null when the wallet ID is not found among non-deleted wallets', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse([
+        { id: 'w-2', name: 'Alice - Old', user: 'u-1', deleted: true },
+      ]),
+    );
+
+    await expect(service.getWalletById('u-1', 'w-1')).resolves.toBeNull();
+  });
+
+  test('rejects when a wallet from the per-user route is missing required string fields', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse([{ id: 'w-1', user: 'u-1' }]),
+    );
+
+    await expect(service.getWalletById('u-1', 'w-1')).rejects.toThrow(
+      'getWalletById: LNbits wallet at index 0 is missing string name',
+    );
+  });
+
+  test('rejects when LNbits does not return a wallet array', async () => {
+    stubAuth();
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({ unexpected: 'shape' }),
+    );
+
+    await expect(service.getWalletById('u-1', 'w-1')).rejects.toThrow(
+      'getWalletById: LNbits did not return a wallet array',
+    );
+  });
+});
+
+describe('getPaymentsSince', () => {
+  // getPaymentsSince resolves the wallet ID via the unexported
+  // getWalletIdFromKey, which shares the same wallet-shape validation — a
+  // malformed /api/v1/wallets response must reject the whole call.
+  test('propagates the wallet validation error from the underlying wallet lookup', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({}));
+
+    await expect(service.getPaymentsSince('in-key', 0)).rejects.toThrow(
+      'getWalletIdFromKey: LNbits did not return a wallet array',
+    );
   });
 });
 

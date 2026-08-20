@@ -277,6 +277,40 @@ describe('foundryAgentService.runConversationalTurn', () => {
     ).rejects.toThrow(/invalid function_call payload/);
   });
 
+  test('rejects a top-level response payload that is missing output or output_text', async () => {
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: 'not-an-array',
+      output_text: 'hi',
+    } as unknown as MockFoundryResponse);
+
+    await expect(
+      runConversationalTurn(
+        'do something',
+        'conv_existing',
+        [noopTool],
+        makeTurnContext(),
+      ),
+    ).rejects.toThrow(
+      'foundryAgentService: Foundry returned an invalid response payload.',
+    );
+  });
+
+  test('ignores non-function-call items in the output array instead of rejecting them', async () => {
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [{ type: 'message', content: 'thinking out loud' }],
+      output_text: 'All done, no tools needed.',
+    });
+
+    const result = await runConversationalTurn(
+      'hello',
+      'conv_existing',
+      [noopTool],
+      makeTurnContext(),
+    );
+
+    expect(result.replyText).toBe('All done, no tools needed.');
+  });
+
   test('rejects a handler that returns undefined instead of sending a non-string output', async () => {
     const undefinedTool: ToolDefinition = {
       ...noopTool,

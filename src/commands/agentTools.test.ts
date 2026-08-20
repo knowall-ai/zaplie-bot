@@ -220,6 +220,19 @@ describe('agentTools', () => {
         userAadObjectId: undefined,
       });
     });
+
+    test('falls back to the defaults when the arguments are not an object', async () => {
+      mockGetRecentZaps.mockResolvedValue([]);
+      const tool = createAgentTools().find(
+        t => t.name === 'get_recent_activity',
+      )!;
+
+      await tool.handler(null, makeTurnContext(currentUser));
+      expect(mockGetRecentZaps).toHaveBeenLastCalledWith({
+        limit: 20,
+        userAadObjectId: undefined,
+      });
+    });
   });
 
   describe('propose_zap', () => {
