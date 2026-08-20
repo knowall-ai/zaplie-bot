@@ -2,7 +2,6 @@
 const express = require('express');
 const { rateLimit } = require('express-rate-limit');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('./authMiddleware'); // Import the authentication middleware
@@ -35,7 +34,7 @@ app.use(cors());
 // Mounted app-wide, not on /api: CodeQL also flags the sendFile catch-all
 // below (js/missing-rate-limiting), and every route does file or network work.
 app.use(apiRateLimiter);
-app.use(bodyParser.json());
+app.use(express.json());
 
 // Deployment smoke tests need a dependency-free liveness signal. Readiness of
 // authenticated LNbits operations is exercised separately by the API tests.
@@ -242,7 +241,9 @@ app.post('/api/pending-rewards', (req, res) => {
 // Serve the React app
 app.use(express.static(path.join(__dirname, '../build')));
 
-app.get('*', (req, res) => {
+// A regular expression works with both Express 4 and path-to-regexp v8 in
+// Express 5. Bare wildcard strings such as '*' throw during Express 5 startup.
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../build', 'index.html'));
 });
 

@@ -121,6 +121,10 @@ jobs:
           CI: true
         run: npm test -- --watchAll=false
 
+      - name: Run backend tests
+        working-directory: tabs
+        run: npm run test:backend
+
   build-check:
     name: Build Verification
     runs-on: ubuntu-latest

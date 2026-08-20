@@ -8,9 +8,15 @@ import {
   StatePropertyAccessor,
   CardFactory,
   MessageFactory,
+  MessagingExtensionAction,
+  MessagingExtensionActionResponse,
 } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
-import { SendZapCommand, SendZap } from './commands/sendZapCommand';
+import {
+  SendZapCommand,
+  SendZap,
+  createZapCard,
+} from './commands/sendZapCommand';
 import { ZapLedger, zapKey } from './services/zapLedger';
 import {
   getPendingRecipientIds,
@@ -30,7 +36,7 @@ import {
 } from './commands/connectCalendarCommand';
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createAgentTools } from './commands/agentTools';
-import { getUser, getWalletBalance } from './services/lnbitsService';
+import { getUser, getUsers, getWalletBalance } from './services/lnbitsService';
 
 const UNRECOGNIZED_COMMAND_MESSAGE =
   "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
@@ -407,4 +413,104 @@ export class TeamsBot extends TeamsActivityHandler {
       console.error('Error in handleTeamsSigninTokenExchange:', error);
     }
   }
+
+  // "Zap a message" action command: right-click a message -> pre-fill a zap card for its author.
+  async handleTeamsMessagingExtensionSubmitAction(
+    context: TurnContext,
+    action: MessagingExtensionAction,
+  ): Promise<MessagingExtensionActionResponse> {
+    // FetchUserMiddleware guarantees 'user' is set (or the turn already threw).
+    const currentUser = context.turnState.get('user');
+
+    const authorUser = action.messagePayload?.from?.user;
+    if (!authorUser?.id) {
+      await context.sendActivity(
+        "D'oh! I couldn't tell who sent that message, so I can't zap them.",
+      );
+      return {};
+    }
+
+    let author: User | undefined;
+    try {
+      const users = await getUsers(adminKey, { aadObjectId: authorUser.id });
+      author = users[0];
+    } catch (error) {
+      console.error(
+        'Unable to resolve the message author in Zaplie:',
+        error instanceof Error ? error.message : error,
+      );
+      await context.sendActivity(
+        "D'oh! I couldn't check that teammate's Zaplie account right now. Please try again later.",
+      );
+      return {};
+    }
+    if (!author) {
+      await context.sendActivity(
+        `D'oh! ${authorUser.displayName || 'That person'} doesn't have a Zaplie account yet.`,
+      );
+      return {};
+    }
+
+    if (author.aadObjectId === currentUser.aadObjectId) {
+      await context.sendActivity(
+        "D'oh! You can't zap yourself - the allowance is for recognising others.",
+      );
+      return {};
+    }
+
+    // 'memo' comes from the static-parameter dialog Teams shows before this
+    // invoke (manifest zapMessage command); empty means "use the message text".
+    const dialogMemo =
+      typeof action.data?.memo === 'string' ? action.data.memo.trim() : '';
+    const card = await createZapCard(currentUser, globalRewardName, {
+      receiverId: author.id,
+      amountSats: ZAP_MESSAGE_DEFAULT_SATS,
+      message:
+        dialogMemo || htmlToMemoPreview(action.messagePayload?.body?.content),
+    });
+
+    await context.sendActivity(
+      MessageFactory.attachment(CardFactory.adaptiveCard(card)),
+    );
+
+    return {};
+  }
+}
+
+// Prefill only: the user can still edit the amount on the card, whose input
+// regex enforces 1..10,000.
+const ZAP_MESSAGE_DEFAULT_SATS = 1000;
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+// The memo is a plain-text Adaptive Card value, never rendered as HTML, so we
+// extract text (strip tags, decode entities) instead of sanitizing. Entities
+// are decoded after tag removal so "&lt;b&gt;" stays the literal text "<b>".
+function htmlToMemoPreview(html: string | undefined): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(
+      /&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g,
+      (entity, body: string) => {
+        if (body[0] === '#') {
+          const code =
+            body[1] === 'x' || body[1] === 'X'
+              ? parseInt(body.slice(2), 16)
+              : parseInt(body.slice(1), 10);
+          return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+        }
+        return HTML_ENTITIES[body.toLowerCase()] ?? entity;
+      },
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
 }

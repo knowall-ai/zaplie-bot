@@ -63,7 +63,31 @@
             ]
         }
     ],
-    "composeExtensions": [],
+    "composeExtensions": [
+        {
+            "botId": "${{BOT_ID}}",
+            "commands": [
+                {
+                    "id": "zapMessage",
+                    "type": "action",
+                    "context": [
+                        "message"
+                    ],
+                    "title": "Zap ⚡",
+                    "description": "Send sats to the author of this message",
+                    "fetchTask": false,
+                    "parameters": [
+                        {
+                            "name": "memo",
+                            "inputType": "text",
+                            "title": "Memo",
+                            "description": "Optional memo; leave empty to use the message text"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
     "configurableTabs": [],
     "staticTabs": [
         { 
