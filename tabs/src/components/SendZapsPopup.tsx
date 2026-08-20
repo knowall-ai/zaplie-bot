@@ -7,6 +7,7 @@ import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
+import ZapIcon from '../images/ZapIcon.svg';
 import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';
 import dismissIcon from '../images/DismissCircleRed.svg';
 
@@ -276,7 +277,12 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
                 </div>
               ) : (
                 <div className={styles.avatarPlaceholder}>
-                  <span>⚡</span>
+                  <img
+                    src={ZapIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className={styles.avatarIcon}
+                  />
                 </div>
               )}
             </div>
