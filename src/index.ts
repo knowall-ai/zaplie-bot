@@ -13,11 +13,11 @@ import {
   ConfigurationBotFrameworkAuthentication,
   MemoryStorage,
   TeamsSSOTokenExchangeMiddleware,
-  TurnContext,
 } from 'botbuilder';
 
 // This bot's main dialog.
 import { TeamsBot } from './teamsBot';
+import { onTurnErrorHandler } from './onTurnError';
 import config from './config';
 import { UserService } from './services/userService';
 import { FetchUserMiddleware } from './services/fetchUserMiddleware';
@@ -67,40 +67,6 @@ if (process.env.GRAPH_CONNECTION_NAME) {
 
 // Add FetchUserMiddleware and pass the userService instance
 adapter.use(new FetchUserMiddleware(userService));
-
-// Catch-all for errors.
-const onTurnErrorHandler = async (context: TurnContext, error: Error) => {
-  // Retrieve user information
-  const userId = context.activity.from.id;
-  const aadObjectId = context.activity.from.aadObjectId;
-  const userName = context.activity.from.name;
-
-  // Log user information
-  console.log(`User ID: ${userId}`);
-  console.log(`User AAD Object ID: ${aadObjectId}`);
-  console.log(`User Display Name: ${userName}`);
-
-  // This check writes out errors to console log .vs. app insights.
-  // NOTE: In production environment, you should consider logging this to Azure
-  //       application insights.
-  console.error(`\n [onTurnError] unhandled error: ${error}`);
-
-  // Send a trace activity, which will be displayed in Bot Framework Emulator
-  await context.sendTraceActivity(
-    'OnTurnError Trace',
-    `${error}`,
-    'https://www.botframework.com/schemas/error',
-    'TurnError',
-  );
-
-  // Send a message to the user
-  await context.sendActivity(
-    `The bot encountered unhandled error:\n ${error.message}`,
-  );
-  await context.sendActivity(
-    'To continue to run this bot, please fix the bot source code.',
-  );
-};
 
 // Set the onTurnError for the singleton CloudAdapter
 adapter.onTurnError = onTurnErrorHandler;
