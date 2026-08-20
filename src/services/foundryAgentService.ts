@@ -51,6 +51,11 @@ export interface RunTurnResult {
 
 let projectClient: AIProjectClient | null = null;
 
+/**
+ * Gets the lazily initialized Azure AI Foundry project client.
+ *
+ * @returns The cached project client.
+ */
 function getProjectClient(): AIProjectClient {
   if (!projectClient) {
     if (!config.foundryProjectEndpoint) {
@@ -120,6 +125,12 @@ const isNotFoundError = (error: unknown): boolean =>
 
 let openAIClient: ProjectOpenAIClient | null = null;
 
+/**
+ * Gets the cached OpenAI-compatible client for the project.
+ *
+ * @param project - The Azure AI Foundry project client used to create the client
+ * @returns The project's OpenAI-compatible client
+ */
 function getOpenAIClient(project: AIProjectClient): ProjectOpenAIClient {
   if (!openAIClient) {
     openAIClient = project.getOpenAIClient();
@@ -131,6 +142,12 @@ function getOpenAIClient(project: AIProjectClient): ProjectOpenAIClient {
 // deployment/tool set is picked up on the next cold start.
 let agentEnsured: Promise<void> | null = null;
 
+/**
+ * Ensures the configured Foundry agent exists with the supplied tool definitions.
+ *
+ * @param tools - Tools to register with the agent
+ * @throws If the Foundry model is not configured or agent provisioning fails
+ */
 function ensureAgent(tools: ToolDefinition[]): Promise<void> {
   if (!agentEnsured) {
     agentEnsured = (async () => {
@@ -167,6 +184,15 @@ function ensureAgent(tools: ToolDefinition[]): Promise<void> {
   return agentEnsured;
 }
 
+/**
+ * Runs a conversational turn through the configured Foundry agent, executing requested tools until the agent produces a final reply.
+ *
+ * @param userText - The user's message
+ * @param existingFoundryConversationId - The Foundry conversation to continue, or `undefined` to start a new conversation
+ * @param tools - Tools available to the agent during the turn
+ * @param turnContext - Context passed to tool handlers
+ * @returns The assistant's reply and the Foundry conversation ID
+ */
 export async function runConversationalTurn(
   userText: string,
   existingFoundryConversationId: string | undefined,

@@ -32,7 +32,16 @@ let accessToken = null;
 // https://demo.lnbits.com/docs/
 
 // Store token in localStorage (persists between page reloads)
-let accessTokenPromise: Promise<string> | null = null; // To cache the pending token request
+let accessTokenPromise: Promise<string> | null = null; /**
+ * Retrieves and caches an LNbits access token.
+ *
+ * Reuses an in-progress authentication request when multiple callers request a
+ * token concurrently. Authentication failures result in an error.
+ *
+ * @param username - The LNbits username.
+ * @param password - The LNbits password.
+ * @returns The authenticated access token.
+ */
 
 export async function getAccessToken(
   username: string,
