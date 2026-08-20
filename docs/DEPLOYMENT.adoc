@@ -16,15 +16,15 @@
 | `env/.env.dev` (tracked, non-secret values) + `teamsapp.yml`
 | Shared development deployment in Azure
 
-| test / prod (CI)
-| GitHub environments `Test` and `Prod`
-| GitHub Actions deploys the tabs app to App Service `zappie-dev` (resource group `rg-Zappie-dev`) slots
+| test / production (CI)
+| Protected GitHub environments `Test` and `Production`
+| GitHub Actions deploys prebuilt Linux artifacts to dedicated App Services; deployment slots are not used on the B1 Test plan
 |===
 
 == Prerequisites
 
-- Node.js 18 (App Service is pinned to `~18`; CI builds with Node 20 — see the
-  MSAL override note in README.md)
+- Node.js 24 (the version declared in both `package.json` files and used by CI
+  and the Linux App Services)
 - Teams Toolkit VS Code extension ≥ 5.0.0 or the TeamsFx CLI (`teamsapp`)
 - An M365 tenant with permission to upload custom Teams apps
 - An LNbits 0.12+ instance with the User Manager extension
@@ -77,34 +77,119 @@ Or press F5 in VS Code ("Debug in Teams (Edge/Chrome)"). The bot itself runs
 with `npm run dev` (nodemon + ts-node, inspector on 9239), reading
 `.localConfigs` via `npm run dev:teamsfx`.
 
-=== Web tabs (GitHub Actions)
+=== Test deployment (GitHub Actions)
 
-`.github/workflows/Azure_App_Service_zaplie-test.yml` and
-`Azure_App_Service_zaplie-prod.yml` trigger on push to `main` (and manually):
+`.github/workflows/Azure_App_Service_zaplie-test.yml` deploys both components:
 
-. Build job (windows-latest, Node 24): `cd tabs && npm install && npm run build`
-  (`CI: false`), scan the sources and the built bundle for LNbits admin
-  credentials, drop the mutable backend JSON stores, upload the `tabs` artifact
-. Deploy job (ubuntu-latest): `azure/webapps-deploy@v3`
+* portal -> `zaplie-test-webapp`
+* bot -> `zaplie-test-bot-uk`
 
-The two workflows authenticate differently today:
+The workflow runs on Ubuntu with Node 24 after `Code Quality Checks` succeeds
+on `main`, or by an explicit manual dispatch. A fixed concurrency group allows
+only one Test deployment at a time and does not cancel a deployment already in
+progress. Both artifacts are compiled on the runner, reduced to runtime
+dependencies and sent self-contained because Oryx/App Service build automation
+is disabled. Both apps must return HTTP 200 from `/healthz` after deployment.
 
-Test:: Deploys with federated OIDC — `azure/login` using the repository
-secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`
-(`id-token: write`), then ensures a deployment slot exists (`pr-<number>` for
-pull requests, else `testing`) on app `zaplie-dev` before deploying to it.
-Prod:: Still deploys with a publish profile — the `AZURE_WEBAPP_PUBLISH_PROFILE`
-secret against app `zaplie-prod-webapp`, with no `azure/login` step. Migrating
-production onto the same federated OIDC credential is pending; until then the
-publish profile is a long-lived secret and must be re-downloaded whenever it is
-reset in Azure.
+The bot artifact imports Express under Node 24 before Azure login, so a package
+that cannot start on the runner never reaches the running App Service.
 
-Note: neither workflow has a bot job — CI deploys only the portal, and it
-deploys the whole portal: the React build *and* the Express backend under
-`tabs/backend`. The portal App Service must therefore use the startup command
-`node backend/server.js` (with `SCM_DO_BUILD_DURING_DEPLOYMENT=false`, since
-the artifact arrives prebuilt). The bot deploys separately via
-`teamsapp deploy`.
+Authentication uses GitHub OIDC. The protected `Test` environment must contain
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`; publish
+profiles are not used. Its federated credential must trust the `Test`
+environment subject. Restrict the environment's deployment branches to
+`main`; a manual dispatch still requires a successful `Code Quality Checks`
+run for the exact selected commit.
+
+The portal deploy is intentionally skipped until these prerequisites
+are satisfied:
+
+. All privileged LNbits operations have moved behind the Express backend. CRA
+  must not reference `REACT_APP_LNBITS_PASSWORD`,
+  `REACT_APP_LNBITS_ADMINKEY`, `REACT_APP_LNBITS_USERNAME` or
+  `REACT_APP_LNBITS_INKEY`; CRA embeds their values in public JavaScript.
+. Mutable JSON state has moved outside `/home/site/wwwroot` to durable storage.
+  Set `ZAPLIE_DATA_DIR=/home/data/zaplie` before the first clean deployment and
+  migrate any existing JSON there. Artifact staging excludes all eight mutable
+  JSON files, and clean deployment removes only stale code under `wwwroot`.
+  Keep `WEBSITE_RUN_FROM_PACKAGE` disabled until that operating mode has been
+  validated with the external data directory.
+. The portal and bot application changes that implement unauthenticated,
+  side-effect-free `GET /healthz` endpoints have been merged. Artifact staging
+  checks for each route before Azure login, so a missing health check cannot
+  overwrite a running app.
+
+Non-secret browser configuration is stored as GitHub `Test` environment
+variables: `REACT_APP_LNBITS_NODE_URL`, `REACT_APP_LNBITS_STORE_ID`,
+`REACT_APP_LNBITS_STORE_OWNER_EMAIL`, `REACT_APP_LNBITS_POINTS_LABEL`,
+`REACT_APP_TENANT_ID` and `REACT_APP_AAD_CLIENT_ID`. Server-side LNbits
+credentials belong only in App Service settings with the `LNBITS_` prefix.
+
+The public values currently stored as GitHub secrets cannot be read back. Set
+the corresponding environment variables interactively; `gh` reads each value
+without printing it:
+
+[source,powershell]
+----
+gh variable set REACT_APP_LNBITS_NODE_URL --env Test
+gh variable set REACT_APP_LNBITS_STORE_ID --env Test
+gh variable set REACT_APP_LNBITS_STORE_OWNER_EMAIL --env Test
+gh variable set REACT_APP_LNBITS_POINTS_LABEL --env Test
+gh variable set REACT_APP_TENANT_ID --env Test
+gh variable set REACT_APP_AAD_CLIENT_ID --env Test
+----
+
+Do not create variables for the LNbits username, password, admin key or invoice
+key. Those values remain server-side App Service settings and must be rotated
+after the browser migration.
+
+An Azure subscription Owner (or a principal with
+`Microsoft.Authorization/roleAssignments/write`) must grant the OIDC service
+principal Website Contributor on the Test resource group. The commands below
+resolve the known `0279863b...` application without echoing its identifiers:
+
+[source,powershell]
+----
+$oidcMatches = az ad sp list --all `
+  --query "[?starts_with(appId, '0279863b')].[id,appId]" `
+  --output json | ConvertFrom-Json
+if (@($oidcMatches).Count -ne 1) {
+  throw 'Expected exactly one OIDC service principal matching 0279863b...'
+}
+$subscriptionId = az account show --query id --output tsv
+$testScope = "/subscriptions/$subscriptionId/resourceGroups/ka-zaplie-test"
+az role assignment create `
+  --assignee-object-id $oidcMatches[0][0] `
+  --assignee-principal-type ServicePrincipal `
+  --role 'Website Contributor' `
+  --scope $testScope `
+  --output none
+----
+
+This workflow was manually disabled in the Actions UI on 17 August 2026 so the
+earlier version could not overwrite Test. Once the role above is granted,
+re-enable it:
+
+[source,powershell]
+----
+gh workflow enable Azure_App_Service_zaplie-test.yml
+----
+
+After the first successful OIDC deployment, remove the unused long-lived Test
+credentials (these commands remove secret records but never reveal values):
+
+[source,powershell]
+----
+gh secret delete AZURE_CLIENT_SECRET --env Test
+gh secret delete AZURE_CREDENTIALS --env Test
+gh secret delete ZAPLIE_TEST_BOT_PUBLISH_PROFILE --env Test
+gh secret delete ZAPLIE_TEST_WEBAPP_PUBLISH_PROFILE --env Test
+----
+
+`Azure_App_Service_zaplie-prod.yml` is unchanged and still deploys the portal
+to `zaplie-prod-webapp` from a publish profile on every push to `main`. It does
+not race this workflow because Test deploys the bot only, but production still
+needs its own protected OIDC promotion built on a revision that passed Test.
 
 === Azure Functions
 
