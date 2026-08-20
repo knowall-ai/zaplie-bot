@@ -1,135 +1,332 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Deploy to Azure App Service Test
 
+# Main is deployed only after the repository quality workflow succeeds. A
+# manual run is also available for an explicitly selected ref once this
+# workflow exists on the default branch.
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Code Quality Checks
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
 
+# Never interrupt an App Service deployment halfway through. This also keeps a
+# newer run from racing an older package into the shared Test environment.
+concurrency:
+  group: zaplie-test-deployment
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  NODE_VERSION: '24.x'
+  PORTAL_APP_NAME: zaplie-test-webapp
+  BOT_APP_NAME: zaplie-test-bot-uk
+  AZURE_CORE_OUTPUT: none
+
 jobs:
-  build:
-    runs-on: windows-latest
-    environment: Test
-    permissions:
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - uses: actions/checkout@v7
-
-      # Scanning the sources instead of the bundle keeps this guard effective
-      # regardless of whether the build ships sourcemaps.
-      - name: Fail if the portal sources read LNbits admin credentials
-        shell: bash
-        run: |
-          test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
-          if grep -REl 'process\.env\.REACT_APP_LNBITS_(ADMINKEY|PASSWORD)' tabs/src; then
-            echo '::error::Portal sources read LNbits admin credentials in browser code. Move privileged LNbits calls behind the backend.'
-            exit 1
-          fi
-
-      - name: Set up Node.js version
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24.x'
-
-      - name: npm install, build, and test
-        env:
-          CI: false
-        run: |
-          cd tabs
-          npm install
-          npm run build --if-present
-      
-      # CRA inlines REACT_APP_* values into public JavaScript, so any LNbits
-      # admin credential reference in the built bundle is a secret leak. The
-      # variable names survive in CRA output even without sourcemaps, so scan
-      # for the names as well as the bare credential identifiers. A missing
-      # build directory is a failure, not a pass: grep would exit 2 there.
-      - name: Fail if the built bundle references LNbits admin credentials
-        shell: bash
-        run: |
-          test -d tabs/build || { echo '::error::No built bundle found to scan'; exit 1; }
-          if grep -RlE 'REACT_APP_LNBITS_(ADMINKEY|PASSWORD)|LNBITS_ADMINKEY|LNBITS_PASSWORD' tabs/build; then
-            echo '::error::LNbits admin credential references found in the built portal bundle. Move privileged LNbits calls behind the backend before deploying.'
-            exit 1
-          fi
-
-      # Mutable backend state lives next to the code today; never ship local
-      # JSON stores in the artifact or a deploy would overwrite live app data.
-      - name: Exclude mutable backend state from the artifact
-        shell: bash
-        run: |
-          rm -f \
-            tabs/backend/data.json \
-            tabs/backend/identities.json \
-            tabs/backend/connections.json \
-            tabs/backend/pending-rewards.json \
-            tabs/backend/secrets.json \
-            tabs/backend/webhook-keys.json \
-            tabs/backend/github-app-credentials.json \
-            tabs/backend/lnbits-zap-idempotency.json
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v7
-        with:
-          name: node-app
-          path: tabs
-
-  deploy:
+  validated-ref:
+    name: Resolve a revision that passed CI
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    needs: build
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    steps:
+      - name: Require successful quality checks for the exact revision
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${WORKFLOW_RUN_SHA:-$DISPATCH_SHA}"
+          successful_runs=$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci-quality-checks.yml/runs" \
+            -f head_sha="$sha" \
+            -f status=completed \
+            -f per_page=100 \
+            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
+          if [[ "$successful_runs" -lt 1 ]]; then
+            echo "::error::Revision ${sha} has no successful Code Quality Checks run."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Deploying the exact CI-validated revision ${sha}." >> "$GITHUB_STEP_SUMMARY"
+
+  portal-policy:
+    name: Check portal deployment prerequisites
+    needs: validated-ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      allowed: ${{ steps.policy.outputs.allowed }}
+    steps:
+      - name: Check out the validated revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validated-ref.outputs.sha }}
+          persist-credentials: false
+
+      # CRA substitutes every REACT_APP_* value into public JavaScript. The
+      # portal must not be deployed until privileged LNbits calls have moved to
+      # the Express backend. Mutable JSON must also move outside wwwroot before
+      # automated code deployments can safely preserve it.
+      - name: Enforce browser-secret and mutable-state boundary
+        id: policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          privileged_refs=$(grep -RIlE \
+            'REACT_APP_LNBITS_(ADMINKEY|PASSWORD|USERNAME|INKEY)' \
+            tabs/src || true)
+          mutable_refs=$(grep -RIlE \
+            --exclude='*.test.js' \
+            "path\.join\(__dirname, '(data|identities|connections|pending-rewards|webhook-keys|github-app-credentials|secrets)\.json'\)" \
+            tabs/backend || true)
+
+          if [[ -n "$privileged_refs" || -n "$mutable_refs" ]]; then
+            echo 'allowed=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '## Portal deployment blocked'
+              echo
+              if [[ -n "$privileged_refs" ]]; then
+                echo 'Privileged LNbits configuration is still referenced by browser code:'
+                echo '```text'
+                echo "$privileged_refs"
+                echo '```'
+                echo 'Move these operations behind the Express backend first.'
+                echo
+              fi
+              if [[ -n "$mutable_refs" ]]; then
+                echo 'Mutable backend JSON is still stored inside the deployment tree:'
+                echo '```text'
+                echo "$mutable_refs"
+                echo '```'
+                echo 'Move it to durable storage outside `/home/site/wwwroot` first.'
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo '::warning::Portal deploy skipped: security prerequisites are not complete.'
+          else
+            echo 'allowed=true' >> "$GITHUB_OUTPUT"
+            echo 'Portal security prerequisites passed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  portal:
+    name: Deploy portal
+    needs:
+      - validated-ref
+      - portal-policy
+    if: needs.portal-policy.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
     environment:
       name: Test
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+      url: https://zaplie-test-webapp.azurewebsites.net
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+      contents: read
+      id-token: write
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v8
+      - name: Check out the validated revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          name: node-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
+          ref: ${{ needs.validated-ref.outputs.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tabs/package-lock.json
+
+      - name: Validate public build configuration
+        working-directory: tabs
+        env:
+          REACT_APP_LNBITS_NODE_URL: ${{ vars.REACT_APP_LNBITS_NODE_URL }}
+          REACT_APP_LNBITS_STORE_ID: ${{ vars.REACT_APP_LNBITS_STORE_ID }}
+          REACT_APP_LNBITS_STORE_OWNER_EMAIL: ${{ vars.REACT_APP_LNBITS_STORE_OWNER_EMAIL }}
+          REACT_APP_LNBITS_POINTS_LABEL: ${{ vars.REACT_APP_LNBITS_POINTS_LABEL }}
+          REACT_APP_TENANT_ID: ${{ vars.REACT_APP_TENANT_ID }}
+          REACT_APP_AAD_CLIENT_ID: ${{ vars.REACT_APP_AAD_CLIENT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            REACT_APP_LNBITS_NODE_URL \
+            REACT_APP_LNBITS_STORE_ID \
+            REACT_APP_LNBITS_STORE_OWNER_EMAIL \
+            REACT_APP_LNBITS_POINTS_LABEL \
+            REACT_APP_TENANT_ID \
+            REACT_APP_AAD_CLIENT_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing Test environment variable: ${name}"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Build the portal
+        working-directory: tabs
+        env:
+          CI: true
+          GENERATE_SOURCEMAP: false
+          REACT_APP_LNBITS_NODE_URL: ${{ vars.REACT_APP_LNBITS_NODE_URL }}
+          REACT_APP_LNBITS_STORE_ID: ${{ vars.REACT_APP_LNBITS_STORE_ID }}
+          REACT_APP_LNBITS_STORE_OWNER_EMAIL: ${{ vars.REACT_APP_LNBITS_STORE_OWNER_EMAIL }}
+          REACT_APP_LNBITS_POINTS_LABEL: ${{ vars.REACT_APP_LNBITS_POINTS_LABEL }}
+          REACT_APP_TENANT_ID: ${{ vars.REACT_APP_TENANT_ID }}
+          REACT_APP_AAD_CLIENT_ID: ${{ vars.REACT_APP_AAD_CLIENT_ID }}
+        run: |
+          npm ci
+          npm run build
+          npm ci --omit=dev
+
+      - name: Stage a self-contained Linux artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir portal-artifact
+          cp -R tabs/build tabs/backend tabs/node_modules \
+            tabs/package.json tabs/package-lock.json portal-artifact/
+          rm -f portal-artifact/backend/.env*
+          rm -f portal-artifact/backend/*.test.js
+          rm -f \
+            portal-artifact/backend/data.json \
+            portal-artifact/backend/identities.json \
+            portal-artifact/backend/connections.json \
+            portal-artifact/backend/pending-rewards.json \
+            portal-artifact/backend/webhook-keys.json \
+            portal-artifact/backend/github-app-credentials.json \
+            portal-artifact/backend/secrets.json \
+            portal-artifact/backend/lnbits-zap-idempotency.json
+
+          test -f portal-artifact/build/index.html
+          test -f portal-artifact/backend/server.js
+          test -f portal-artifact/node_modules/express/package.json
+          if ! grep -REq "(app|server)\.get\(['\"]/healthz['\"]" portal-artifact/backend; then
+            echo '::error::Portal artifact does not implement GET /healthz.'
+            exit 1
+          fi
+          if find portal-artifact -name '.env*' -print -quit | grep -q .; then
+            echo '::error::An environment file entered the portal artifact.'
+            exit 1
+          fi
+          if find portal-artifact/build -type f -name '*.map' -print -quit | grep -q .; then
+            echo '::error::Source maps entered the portal artifact.'
+            exit 1
+          fi
+          if find portal-artifact/backend -type f \( \
+            -name 'data.json' -o \
+            -name 'identities.json' -o \
+            -name 'connections.json' -o \
+            -name 'pending-rewards.json' -o \
+            -name 'webhook-keys.json' -o \
+            -name 'github-app-credentials.json' -o \
+            -name 'secrets.json' -o \
+            -name 'lnbits-zap-idempotency.json' \
+          \) -print -quit | grep -q .; then
+            echo '::error::Mutable backend state entered the portal artifact.'
+            exit 1
+          fi
+          node -e "for (const dep of ['body-parser','cors','express','express-rate-limit','jose']) require('./portal-artifact/node_modules/' + dep)"
+
+      - name: Log in to Azure with OIDC
+        uses: azure/login@d54469830ea7d513b7371e02a077c3ee5cb7b112 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: 'Ensure Slot Exists'
-        run: |
-          if [[ -n "${{ github.event.pull_request.number }}" ]]; then
-                SLOT_NAME="pr-${{ github.event.pull_request.number }}"
-              else
-                SLOT_NAME="testing"
-              fi
-          RESOURCE_GROUP="rg-zaplie-dev"
-          APP_NAME="zaplie-dev"
-          echo "Using slot: $SLOT_NAME"
-    
-          # Check if the slot exists
-          SLOT_EXISTS=$(az webapp deployment slot list --resource-group $RESOURCE_GROUP --name $APP_NAME --query "[?name=='$SLOT_NAME']" -o tsv)
-    
-          # If the slot doesn't exist, create it
-          if [[ -z "$SLOT_EXISTS" ]]; then
-            echo "Slot $SLOT_NAME does not exist. Creating..."
-            az webapp deployment slot create --resource-group $RESOURCE_GROUP --name $APP_NAME --slot $SLOT_NAME
-          else
-            echo "Slot $SLOT_NAME already exists."
-          fi
-        shell: bash
 
-      - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
+      # Mutable backend state lives under ZAPLIE_DATA_DIR outside wwwroot, so
+      # a clean deployment can remove stale code without deleting app data.
+      - name: Deploy the prebuilt portal
+        uses: azure/webapps-deploy@b686016b4de8820a23519503685d8d03fbfa03a6 # v3
         with:
-          app-name: 'zaplie-dev'
-          slot-name: ${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || 'testing' }}
-          package: .
+          app-name: ${{ env.PORTAL_APP_NAME }}
+          package: portal-artifact
+          clean: true
+          restart: true
 
-          
-          
+      - name: Smoke test portal health
+        shell: bash
+        run: bash scripts/smoke-health.sh "${PORTAL_APP_NAME}" Portal
+
+  bot:
+    name: Deploy bot
+    needs: validated-ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment:
+      name: Test
+      url: https://zaplie-test-bot-uk.azurewebsites.net/healthz
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the validated revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validated-ref.outputs.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build the bot
+        run: |
+          npm ci
+          npm run build
+          npm ci --omit=dev
+
+      - name: Stage and validate a self-contained Linux artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir bot-artifact
+          cp -R lib node_modules package.json package-lock.json bot-artifact/
+          rm -rf bot-artifact/lib/public
+          cp -R public bot-artifact/lib/public
+          test -f bot-artifact/lib/src/index.js
+          test -f bot-artifact/lib/public/auth-end.html
+          if ! grep -Eq "(app|server)\.get\(['\"]/healthz['\"]" bot-artifact/lib/src/index.js; then
+            echo '::error::Bot artifact does not implement GET /healthz.'
+            exit 1
+          fi
+
+          # Importing the HTTP framework on the runner catches a package that
+          # cannot start on Node 24 before it replaces the running bot.
+          node -e "require('./bot-artifact/node_modules/express')"
+
+      - name: Log in to Azure with OIDC
+        uses: azure/login@d54469830ea7d513b7371e02a077c3ee5cb7b112 # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy the prebuilt bot
+        uses: azure/webapps-deploy@b686016b4de8820a23519503685d8d03fbfa03a6 # v3
+        with:
+          app-name: ${{ env.BOT_APP_NAME }}
+          package: bot-artifact
+          clean: true
+          restart: true
+
+      - name: Smoke test bot health
+        shell: bash
+        run: bash scripts/smoke-health.sh "${BOT_APP_NAME}" Bot
