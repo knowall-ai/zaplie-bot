@@ -31,7 +31,12 @@ import {
   ConnectCalendarCommand,
   getStoredGraphToken,
 } from './commands/connectCalendarCommand';
-import { GENERIC_ERROR_MESSAGE, UserFacingError } from './messages';
+import {
+  GENERIC_ERROR_MESSAGE,
+  UserFacingError,
+  unrecognizedCommandGuide,
+  welcomeMessage,
+} from './messages';
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createReadOnlyTools } from './commands/agentTools';
 import { getUser, getWalletBalance } from './services/lnbitsService';
@@ -294,22 +299,26 @@ export class TeamsBot extends TeamsActivityHandler {
           );
         }
 
-        // Trigger command by IM text
+        // Trigger command by IM text. Matching is tolerant: whitespace is
+        // collapsed and a message that starts with a known command (e.g.
+        // "send zap to bob") runs that command.
         if (textMessage) {
-          const command = SSOCommandMap.get(textMessage.toLowerCase());
+          const command = SSOCommandMap.match(textMessage);
           if (command) {
             await command.execute(context);
           } else if (
             context.activity.conversation.conversationType === 'personal'
           ) {
-            // Free text with no exact command match falls back to the
+            // Free text with no command match falls back to the
             // conversational agent, but only in 1:1 chats: ConversationState
             // (and therefore the Foundry conversation) is keyed per
             // conversation, so a team or groupchat would otherwise share one
             // agent thread across unrelated teammates.
             await this.replyConversationally(context, textMessage);
           } else {
-            await context.sendActivity(UNRECOGNIZED_COMMAND_MESSAGE);
+            await context.sendActivity(
+              unrecognizedCommandGuide(SSOCommandMap.commandNames()),
+            );
           }
         }
       } catch (error) {
@@ -321,6 +330,19 @@ export class TeamsBot extends TeamsActivityHandler {
         );
       }
 
+      await next();
+    });
+
+    // Welcome message when the bot itself is installed/added to a chat,
+    // team or group conversation.
+    this.onMembersAdded(async (context, next) => {
+      const botId = context.activity.recipient?.id;
+      const membersAdded = context.activity.membersAdded ?? [];
+      if (membersAdded.some(member => member.id === botId)) {
+        await context.sendActivity(
+          welcomeMessage(SSOCommandMap.commandNames()),
+        );
+      }
       await next();
     });
   }
