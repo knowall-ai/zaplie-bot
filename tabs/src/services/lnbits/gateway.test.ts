@@ -94,11 +94,13 @@ describe('lnbits gateway', () => {
         }),
     );
 
-    await expect(apiRequest('/wallets/w1/payments')).rejects.toThrow(
-      'Request timed out after 30000ms',
-    );
-
-    jest.useRealTimers();
+    try {
+      await expect(apiRequest('/wallets/w1/payments')).rejects.toThrow(
+        'Request timed out after 30000ms',
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('falls back to the status when the gateway sends no JSON', async () => {

@@ -26,12 +26,16 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   const [buttonText, setButtonText] = useState('Copy');
   const [isSuccessFailurePopupVisible, setIsSuccessFailurePopupVisible] =
     useState(false);
-  const isSendDisabled = !inputValue || !inputNotes;
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const isSendDisabled = !inputValue || !inputNotes || isCreatingInvoice;
   const myLNbitDetails = currentUserLNbitDetails;
   const [invoice, setInvoice] = useState('');
   const [invoiceError, setInvoiceError] = useState('');
   const [walletBalance, setWalletBalance] = useState(0);
   const intervalId = useRef<NodeJS.Timeout | null>(null);
+  // The button state only settles on the next render, so the ref is what stops
+  // two rapid clicks from each creating an invoice and a poller.
+  const invoicePending = useRef(false);
 
   useEffect(() => {
     console.log('walletBalance changed:', walletBalance);
@@ -47,14 +51,20 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   };
 
   const handleNextClick = () => {
+    if (invoicePending.current) {
+      return;
+    }
     setIsSuccessFailurePopupVisible(true);
     const walletId = myLNbitDetails.privateWallet?.id;
-    const amount = Number.parseInt(inputValue, 10);
+    const amountText = inputValue.trim();
+    // A number input still accepts 1.5 and 1e3, and parseInt would quietly
+    // invoice a different amount than the one on screen.
+    const amount = /^\d+$/.test(amountText) ? Number(amountText) : NaN;
     if (!walletId) {
       setInvoiceError('Your private wallet is not available yet.');
       return;
     }
-    if (!Number.isInteger(amount) || amount <= 0) {
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
       setInvoiceError('Enter a whole amount greater than zero.');
       return;
     }
@@ -65,6 +75,8 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
       window.clearInterval(intervalId.current);
       intervalId.current = null;
     }
+    invoicePending.current = true;
+    setIsCreatingInvoice(true);
 
     createInvoice(walletId, amount, inputNotes)
       .then(invoice => {
@@ -108,6 +120,10 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
       .catch(error => {
         console.error('Creating the invoice failed:', error);
         setInvoiceError('Creating the invoice failed. Close and try again.');
+      })
+      .finally(() => {
+        invoicePending.current = false;
+        setIsCreatingInvoice(false);
       });
   };
 
