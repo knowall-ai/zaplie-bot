@@ -48,7 +48,12 @@ try {
   // override the source version explicitly; normal local builds stay stable.
   const newVersion = envConfig.APP_VERSION || manifest.version;
   if (!/^\d+\.\d+\.\d+$/.test(newVersion)) {
-    throw new Error('APP_VERSION must use numeric major.minor.patch format.');
+    const source = envConfig.APP_VERSION
+      ? 'APP_VERSION'
+      : 'manifest.template.json';
+    throw new Error(
+      `Version from ${source} must use numeric major.minor.patch format.`,
+    );
   }
 
   // Update the version number in the manifest
@@ -64,9 +69,9 @@ try {
   fs.writeFileSync(outputPath, updatedManifest, 'utf8');
 
   console.log('manifest.json has been generated successfully.');
-} catch {
-  // Environment-derived values may contain secrets, so never include the
-  // caught error or manifest inputs in build logs.
-  console.error('Error generating manifest.json.');
+} catch (error) {
+  // Log the message only: manifest inputs are environment-derived and may
+  // contain secrets, so they must never reach build logs.
+  console.error(`Error generating manifest.json: ${error.message}`);
   process.exit(1);
 }
