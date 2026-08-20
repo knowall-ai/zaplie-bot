@@ -5,8 +5,21 @@
 const fs = require('fs');
 const path = require('path');
 
+const ensureSecureDir = (dir) => {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // mkdirSync applies the mode only when it creates the directory, so an
+  // existing store would keep whatever permissions it was given. Windows has no
+  // POSIX mode to correct, so the check there would fire on every write.
+  if (process.platform === 'win32') {
+    return;
+  }
+  if ((fs.statSync(dir).mode & 0o777) !== 0o700) {
+    fs.chmodSync(dir, 0o700);
+  }
+};
+
 const writeJsonSecure = (filePath, data) => {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  ensureSecureDir(path.dirname(filePath));
   const tempPath = `${filePath}.${process.pid}.tmp`;
   try {
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 });
@@ -19,4 +32,4 @@ const writeJsonSecure = (filePath, data) => {
   }
 };
 
-module.exports = { writeJsonSecure };
+module.exports = { ensureSecureDir, writeJsonSecure };

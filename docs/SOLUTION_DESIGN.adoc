@@ -155,8 +155,13 @@ Three server-side clients speak to the LNbits REST API:
   wallet admin keys in the Node process. The React client
   (`tabs/src/services/lnbits/`, split per concern into `gateway`, `cache`,
   `users`, `wallets`, `payments`, `rewards`) calls only same-origin
-  `/api/lnbits/*` routes with a verified Entra ID token. Payment and invoice
-  writes additionally verify that the requested wallet belongs to the caller.
+  `/api/lnbits/*` routes with a verified Entra ID token. Wallet routes resolve
+  the wallet through the caller's own LNbits user, so a wallet id on its own
+  grants neither reads nor writes. Four reads are deliberately tenant-wide
+  because the product is built on them: the user directory, the wallet list with
+  balances (leaderboard), the aggregate payment feed, and per-wallet payment
+  history, which the team feed and the transaction log read across every
+  teammate.
 - `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
   base URL and credentials arrive with each HTTP request.
 

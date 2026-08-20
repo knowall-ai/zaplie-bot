@@ -1,6 +1,6 @@
 import { clearApiCache } from './cache';
 import { apiRequest } from './gateway';
-import { getAllUsersFromAPI, getUser, getUsers } from './users';
+import { getAllUsersFromAPI, getAllowance, getUser, getUsers } from './users';
 import { getUserWallets } from './wallets';
 
 jest.mock('./gateway', () => ({
@@ -130,6 +130,13 @@ describe('lnbits users', () => {
 
     test('returns null without calling the gateway for an empty id', async () => {
       await expect(getUser('')).resolves.toBeNull();
+      expect(mockApiRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getAllowance', () => {
+    test('reports no allowance rather than inventing one', async () => {
+      await expect(getAllowance('user-1')).resolves.toBeNull();
       expect(mockApiRequest).not.toHaveBeenCalled();
     });
   });

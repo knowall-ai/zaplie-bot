@@ -13,6 +13,26 @@ const service = {
     }
   },
   listUsers: async () => [{ id: 'user-1' }],
+  getWalletBalance: async (walletId, aadObjectId) => {
+    calls.push(['balance', { walletId, aadObjectId }]);
+    return 42;
+  },
+  getWalletDetails: async (walletId, aadObjectId) => {
+    calls.push(['details', { walletId, aadObjectId }]);
+    return { id: walletId };
+  },
+  getWalletPayLinks: async (walletId, aadObjectId) => {
+    calls.push(['paylinks', { walletId, aadObjectId }]);
+    return [];
+  },
+  getInvoicePayment: async (walletId, invoiceId, aadObjectId) => {
+    calls.push(['invoice-lookup', { walletId, invoiceId, aadObjectId }]);
+    return {};
+  },
+  listWalletPayments: async (walletId, limit) => {
+    calls.push(['payments', { walletId, limit }]);
+    return [];
+  },
   createOwnedInvoice: async (input) => {
     calls.push(['invoice', input]);
     return 'lnbc1invoice';
@@ -100,6 +120,34 @@ test('derives wallet-write authorization from the verified oid', async () => {
       memo: 'thank you',
       aadObjectId: 'caller-oid',
     },
+  ]);
+});
+
+test('wallet reads carry the verified oid so a wallet id alone grants nothing', async () => {
+  const reads = [
+    ['/api/lnbits/wallets/wallet-9', 'details'],
+    ['/api/lnbits/wallets/wallet-9/balance', 'balance'],
+    ['/api/lnbits/wallets/wallet-9/paylinks', 'paylinks'],
+    ['/api/lnbits/wallets/wallet-9/payments/invoice-9', 'invoice-lookup'],
+  ];
+
+  for (const [path, kind] of reads) {
+    const response = await request(path, { token: 'valid-token' });
+    assert.equal(response.status, 200);
+    assert.equal(calls.at(-1)[0], kind);
+    assert.equal(calls.at(-1)[1].aadObjectId, 'caller-oid');
+  }
+});
+
+test('wallet payment history stays tenant-wide for the feed', async () => {
+  const response = await request('/api/lnbits/wallets/wallet-9/payments', {
+    token: 'valid-token',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.at(-1), [
+    'payments',
+    { walletId: 'wallet-9', limit: undefined },
   ]);
 });
 

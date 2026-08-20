@@ -8,6 +8,7 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-data-paths-'));
 process.env.ZAPLIE_DATA_DIR = tempDir;
 
 const { dataPath, getDataDir } = require('./dataPaths');
+const { writeJsonSecure } = require('./secureJsonStore');
 const { setInstallation, getInstallation } = require('./connectionsStore');
 
 after(() => {
@@ -25,4 +26,18 @@ test('mutable stores honor ZAPLIE_DATA_DIR and create it when needed', () => {
 
   assert.equal(getInstallation('aad-1'), 'installation-1');
   assert.equal(fs.existsSync(path.join(tempDir, 'connections.json')), true);
+});
+
+// Windows has no POSIX mode to assert on.
+const posixOnly = { skip: process.platform === 'win32' };
+
+test('a data directory that already exists is narrowed to owner-only', posixOnly, () => {
+  const permissiveDir = path.join(tempDir, 'permissive');
+  fs.mkdirSync(permissiveDir, { mode: 0o755 });
+  fs.chmodSync(permissiveDir, 0o755);
+  assert.equal(fs.statSync(permissiveDir).mode & 0o777, 0o755);
+
+  writeJsonSecure(path.join(permissiveDir, 'store.json'), { ok: true });
+
+  assert.equal(fs.statSync(permissiveDir).mode & 0o777, 0o700);
 });

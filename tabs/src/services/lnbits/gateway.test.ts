@@ -38,6 +38,7 @@ describe('lnbits gateway', () => {
     await expect(apiRequest('/wallets')).resolves.toEqual([{ id: 'wallet-1' }]);
 
     expect(mockFetch).toHaveBeenCalledWith('/api/lnbits/wallets', {
+      signal: expect.any(AbortSignal),
       headers: { Authorization: 'Bearer entra-id-token' },
     });
     expect(JSON.stringify(mockFetch.mock.calls)).not.toMatch(/X-Api-Key/i);
@@ -77,6 +78,27 @@ describe('lnbits gateway', () => {
     await expect(apiRequest('/wallets/w1/payments')).rejects.toThrow(
       'Wallet does not belong to this account',
     );
+  });
+
+  test('aborts a stalled request instead of leaving the caller loading', async () => {
+    jest.useFakeTimers();
+    mockFetch.mockImplementationOnce(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          const { signal } = init as RequestInit;
+          signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+          // Advancing here guarantees the timeout was already scheduled.
+          jest.advanceTimersByTime(30_000);
+        }),
+    );
+
+    await expect(apiRequest('/wallets/w1/payments')).rejects.toThrow(
+      'Request timed out after 30000ms',
+    );
+
+    jest.useRealTimers();
   });
 
   test('falls back to the status when the gateway sends no JSON', async () => {

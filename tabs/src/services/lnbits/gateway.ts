@@ -5,6 +5,10 @@ import { msalInstance } from '../msalClient';
 // same-origin Express gateway, which holds the credentials server-side.
 const API_BASE = '/api/lnbits';
 
+// Long enough for a Lightning payment, short enough that a stalled gateway
+// cannot leave a payment caller loading with neither success nor failure.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 const getIdToken = async (): Promise<string> => {
   const account =
     msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
@@ -26,14 +30,27 @@ export const apiRequest = async <T>(
   init: RequestInit = {},
 ): Promise<T> => {
   const token = await getIdToken();
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers,
+      },
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     try {

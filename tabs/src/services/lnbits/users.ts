@@ -73,29 +73,8 @@ const getUser = async (userId: string): Promise<User | null> => {
   };
 };
 
-// TODO: Implement the actual API call to fetch the allowance.
-const getAllowance = async (_userId: string): Promise<Allowance> => {
-  const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 (Sunday) to 6 (Saturday)
-  const nextPaymentDate = new Date(today);
-  nextPaymentDate.setDate(today.getDate() + ((8 - dayOfWeek) % 7 || 7));
-  const lastPaymentDate = new Date(today);
-  lastPaymentDate.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-
-  return {
-    id: '123',
-    name: 'Allowance',
-    wallet: '123456789',
-    toWallet: '123456789',
-    amount: 25000,
-    startDate: new Date(),
-    endDate: null,
-    frequency: 'Monthly',
-    nextPaymentDate,
-    lastPaymentDate,
-    memo: "Don't spend it all at once",
-    active: true,
-  };
-};
+// The allowance schedule lives in the bot's top-up job and the gateway exposes
+// no route for it, so reporting none beats inventing an amount and a date.
+const getAllowance = async (_userId: string): Promise<Allowance | null> => null;
 
 export { getAllUsersFromAPI, getUsers, getUser, getAllowance };

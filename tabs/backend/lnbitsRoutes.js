@@ -62,9 +62,9 @@ const createLnbitsRouter = ({
     }
   });
 
-  // Directory, team feed, leaderboard, and rewards are intentionally visible
-  // to any linked Zaplie user in this tenant. Wallet mutations below additionally
-  // enforce ownership in lnbitsGatewayService.
+  // Directory, feed, leaderboard, rewards and per-wallet payment history are
+  // intentionally tenant-visible. Every other wallet route resolves the wallet
+  // through the caller's own LNbits user, so a wallet id alone grants nothing.
 
   const asyncRoute = (handler) => async (req, res, next) => {
     try {
@@ -95,7 +95,7 @@ const createLnbitsRouter = ({
       res.status(400).json({ error: 'invalid wallet id' });
       return;
     }
-    res.json(await service.getWalletDetails(req.params.walletId));
+    res.json(await service.getWalletDetails(req.params.walletId, req.auth.oid));
   }));
 
   router.get('/wallets/:walletId/balance', asyncRoute(async (req, res) => {
@@ -103,7 +103,9 @@ const createLnbitsRouter = ({
       res.status(400).json({ error: 'invalid wallet id' });
       return;
     }
-    res.json({ balance: await service.getWalletBalance(req.params.walletId) });
+    res.json({
+      balance: await service.getWalletBalance(req.params.walletId, req.auth.oid),
+    });
   }));
 
   router.get('/wallets/:walletId/payments', asyncRoute(async (req, res) => {
@@ -123,7 +125,11 @@ const createLnbitsRouter = ({
       return;
     }
     res.json(
-      await service.getInvoicePayment(req.params.walletId, req.params.invoiceId),
+      await service.getInvoicePayment(
+        req.params.walletId,
+        req.params.invoiceId,
+        req.auth.oid,
+      ),
     );
   }));
 
@@ -132,7 +138,7 @@ const createLnbitsRouter = ({
       res.status(400).json({ error: 'invalid wallet id' });
       return;
     }
-    res.json(await service.getWalletPayLinks(req.params.walletId));
+    res.json(await service.getWalletPayLinks(req.params.walletId, req.auth.oid));
   }));
 
   router.post('/wallets/:walletId/invoices', asyncRoute(async (req, res) => {

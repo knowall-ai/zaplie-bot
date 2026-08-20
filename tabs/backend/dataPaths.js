@@ -1,5 +1,5 @@
-const fs = require('fs');
 const path = require('path');
+const { ensureSecureDir } = require('./secureJsonStore');
 
 const getDataDir = () => {
   const configured = process.env.ZAPLIE_DATA_DIR;
@@ -8,7 +8,7 @@ const getDataDir = () => {
 
 const ensureDataDir = () => {
   const dataDir = getDataDir();
-  fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  ensureSecureDir(dataDir);
   return dataDir;
 };
 

@@ -13,6 +13,7 @@ const SENSITIVE_FIELD = /(adminkey|inkey|admin.?key|invoice.?key|password|preima
 
 let tokenCache = null;
 const walletCache = new Map();
+let walletIndex = null;
 
 class LnbitsGatewayError extends Error {
   constructor(message, status = 502) {
@@ -184,6 +185,33 @@ const listUserWalletsWithKeys = async (userId) => {
 const listUserWallets = async (userId) =>
   (await listUserWalletsWithKeys(userId)).map(sanitizeWallet);
 
+const buildWalletIndex = async () => {
+  const index = new Map();
+  for (const user of await listRawUsers()) {
+    for (const wallet of await listUserWalletsWithKeys(user.id)) {
+      index.set(wallet.id, wallet);
+    }
+  }
+  return index;
+};
+
+// The feed reads every teammate's wallet at once, so one shared walk per cache
+// window replaces a per-request walk costing an upstream call per user.
+const getWalletIndex = () => {
+  if (walletIndex && walletIndex.expiresAt > Date.now()) {
+    return walletIndex.entries;
+  }
+  const entry = { expiresAt: Date.now() + WALLET_CACHE_MS };
+  entry.entries = buildWalletIndex().catch((error) => {
+    if (walletIndex === entry) {
+      walletIndex = null;
+    }
+    throw error;
+  });
+  walletIndex = entry;
+  return entry.entries;
+};
+
 const getWalletWithKeys = async (walletId) => {
   const cached = walletCache.get(walletId);
   if (cached && cached.expiresAt > Date.now()) {
@@ -191,14 +219,11 @@ const getWalletWithKeys = async (walletId) => {
   }
   walletCache.delete(walletId);
 
-  for (const user of await listRawUsers()) {
-    const wallets = await listUserWalletsWithKeys(user.id);
-    const match = wallets.find((wallet) => wallet.id === walletId);
-    if (match) {
-      return match;
-    }
+  const wallet = (await getWalletIndex()).get(walletId);
+  if (!wallet) {
+    throw new LnbitsGatewayError('Wallet not found', 404);
   }
-  throw new LnbitsGatewayError('Wallet not found', 404);
+  return wallet;
 };
 
 const listAllWallets = async () => {
@@ -232,20 +257,24 @@ const requireOwnedWallet = async (walletId, aadObjectId) => {
   return wallet;
 };
 
-const getWalletDetails = async (walletId) => {
-  const wallet = await getWalletWithKeys(walletId);
+const getWalletDetails = async (walletId, aadObjectId) => {
+  const wallet = await requireOwnedWallet(walletId, aadObjectId);
   const details = await lnbitsRequest(`/api/v1/wallets/${encodeURIComponent(walletId)}`, {
     walletKey: wallet.inkey,
   });
   return sanitizeWallet({ ...wallet, ...details });
 };
 
-const getWalletBalance = async (walletId) => {
-  const wallet = await getWalletWithKeys(walletId);
+const walletBalanceSats = async (wallet) => {
   const details = await lnbitsRequest('/api/v1/wallet', { walletKey: wallet.inkey });
   return Number(details.balance || 0) / 1000;
 };
 
+const getWalletBalance = async (walletId, aadObjectId) =>
+  walletBalanceSats(await requireOwnedWallet(walletId, aadObjectId));
+
+// Deliberately tenant-wide: the team feed and the transaction log build their
+// history from every teammate's wallet, so this read cannot be owner-only.
 const listWalletPayments = async (walletId, limit = 100) => {
   const wallet = await getWalletWithKeys(walletId);
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 1000);
@@ -258,8 +287,8 @@ const listWalletPayments = async (walletId, limit = 100) => {
   return payments.map(sanitizePayment);
 };
 
-const getInvoicePayment = async (walletId, invoiceId) => {
-  const wallet = await getWalletWithKeys(walletId);
+const getInvoicePayment = async (walletId, invoiceId, aadObjectId) => {
+  const wallet = await requireOwnedWallet(walletId, aadObjectId);
   return redactSensitive(
     await lnbitsRequest(`/api/v1/payments/${encodeURIComponent(invoiceId)}`, {
       walletKey: wallet.inkey,
@@ -267,8 +296,8 @@ const getInvoicePayment = async (walletId, invoiceId) => {
   );
 };
 
-const getWalletPayLinks = async (walletId) => {
-  const wallet = await getWalletWithKeys(walletId);
+const getWalletPayLinks = async (walletId, aadObjectId) => {
+  const wallet = await requireOwnedWallet(walletId, aadObjectId);
   return redactSensitive(
     await lnbitsRequest(
       `/lnurlp/api/v1/links?all_wallets=false&wallet=${encodeURIComponent(walletId)}`,
@@ -329,7 +358,7 @@ const sendZap = async ({ recipientUserId, amount, memo, aadObjectId }) => {
     throw new LnbitsGatewayError('Recipient private wallet not found', 409);
   }
 
-  const senderBalance = await getWalletBalance(senderWallet.id);
+  const senderBalance = await walletBalanceSats(senderWallet);
   if (senderBalance < amount) {
     throw new LnbitsGatewayError('Insufficient allowance balance', 409);
   }
@@ -380,6 +409,7 @@ const getAllPayments = async ({ limit = 1000, offset = 0, direction = 'desc' }) 
 const resetCachesForTests = () => {
   tokenCache = null;
   walletCache.clear();
+  walletIndex = null;
 };
 
 module.exports = {
