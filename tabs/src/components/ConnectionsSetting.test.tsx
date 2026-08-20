@@ -208,6 +208,39 @@ describe('ConnectionsSetting', () => {
     expect(mockGetMyIdentities).toHaveBeenCalledTimes(2);
   });
 
+  test('ignores a previous account response that resolves last', async () => {
+    let resolvePreviousAccount: (identities: TestIdentity[]) => void = () =>
+      undefined;
+    mockGetMyIdentities
+      .mockReturnValueOnce(
+        new Promise<TestIdentity[]>(resolve => {
+          resolvePreviousAccount = resolve;
+        }),
+      )
+      .mockResolvedValueOnce([
+        { ...githubIdentity, providerId: '921004', providerHandle: 'hubot' },
+      ]);
+
+    await renderConnections();
+
+    mockUseMsal.mockReturnValue({
+      instance: { acquireTokenSilent: mockAcquireTokenSilent },
+      accounts: [{ homeAccountId: 'account-2' }],
+    });
+    await renderConnections();
+    await eventually(() =>
+      expect(container.textContent).toContain('Connected as @hubot'),
+    );
+
+    await act(async () => {
+      resolvePreviousAccount([githubIdentity]);
+    });
+    await settle();
+
+    expect(container.textContent).toContain('Connected as @hubot');
+    expect(container.textContent).not.toContain('octocat');
+  });
+
   test('restores the connect action and reports an authorize failure', async () => {
     mockGetMyIdentities.mockResolvedValue([]);
     mockGetGithubAuthorizeUrl.mockRejectedValue(

@@ -2,6 +2,7 @@ import React, {
   FunctionComponent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import { useMsal } from '@azure/msal-react';
@@ -53,10 +54,15 @@ const ConnectionsSetting: FunctionComponent = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const latestRequestRef = useRef(0);
 
   useGithubReturnStatus();
 
   const loadIdentities = useCallback(async () => {
+    // Only the newest request may write state, so a slower response for a
+    // previously signed-in account cannot show its handle to the current one.
+    const requestId = latestRequestRef.current + 1;
+    latestRequestRef.current = requestId;
     setLoadError(false);
     if (!account) {
       setIdentities([]);
@@ -73,12 +79,20 @@ const ConnectionsSetting: FunctionComponent = () => {
         forceRefresh: true,
       });
       const mine = await getMyIdentities(tokenResponse.idToken);
+      if (requestId !== latestRequestRef.current) {
+        return;
+      }
       setIdentities(mine);
     } catch (error) {
       console.error('Error fetching connections:', error);
+      if (requestId !== latestRequestRef.current) {
+        return;
+      }
       setLoadError(true);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestRef.current) {
+        setLoading(false);
+      }
     }
   }, [account, instance]);
 
