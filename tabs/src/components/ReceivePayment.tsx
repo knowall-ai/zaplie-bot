@@ -55,6 +55,9 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
       return;
     }
     setIsSuccessFailurePopupVisible(true);
+    // A retry must not leave the previous invoice payable behind an error.
+    setInvoice('');
+    setButtonText('Copy');
     const walletId = myLNbitDetails.privateWallet?.id;
     const amountText = inputValue.trim();
     // A number input still accepts 1.5 and 1e3, and parseInt would quietly
@@ -196,7 +199,9 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
             </p>
             <div className={styles.sendQrCodeContainer}>
               <div className={styles.qrCode}>
-                {invoice && <QRCode value={invoice} size={200} />}
+                {invoice && !invoiceError && (
+                  <QRCode value={invoice} size={200} />
+                )}
               </div>
               <div className={styles.txtContainer}>
                 <div className={styles.title}>Lightning invoice</div>
@@ -210,7 +215,7 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
                 </div>
                 {(invoice || invoiceError) && (
                   <div className={styles.receiveButtonContainer}>
-                    {invoice && (
+                    {invoice && !invoiceError && (
                       <button
                         className={styles.copyButton}
                         onClick={handleCopyClick}
