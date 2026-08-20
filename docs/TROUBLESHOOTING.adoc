@@ -14,7 +14,7 @@
 | Add `"overrides": { "@azure/msal-node": "^2.6.0" }` to `package.json` (see README.md), or use Node 18
 
 | Users have no wallets / "Failed Receivers" when sending a Zap
-| The recipient has not interacted with the app yet, so `ensureUserSetup` never ran. Ask them to message the bot once; verify the LNbits User Manager extension is enabled
+| The recipient has not interacted with the app yet, so `ensureUserSetup` never ran. Ask them to message the bot once; verify `LNBITS_ADMINKEY` belongs to an admin account that can reach the core Users API (`/users/api/v1/user`)
 
 | `send zap` card submits but payment fails
 | Check `LNBITS_ADMINKEY` and `LNBITS_NODE_URL`; confirm the sender's Allowance wallet has sufficient balance and the LNbits instance is reachable from the bot

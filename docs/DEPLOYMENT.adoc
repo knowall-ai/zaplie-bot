@@ -27,7 +27,8 @@
   MSAL override note in README.md)
 - Teams Toolkit VS Code extension ≥ 5.0.0 or the TeamsFx CLI (`teamsapp`)
 - An M365 tenant with permission to upload custom Teams apps
-- An LNbits 0.12+ instance with the User Manager extension
+- An LNbits 1.0+ instance (the shared test instance runs 1.5.6); the core Users
+  API replaced the User Manager extension, so no extension is required
 - Azure subscription (for dev/prod provisioning)
 
 == Provisioning (Teams Toolkit)
@@ -245,10 +246,11 @@ Complete these once per new environment, right after the first deployment:
   role (value `Zaplie.Admin`) to at least one user. The portal's
   org-configuration endpoints reject every write until a signed-in user
   carries this role.
-. *Prepare LNbits.* Enable the User Manager extension on the LNbits
-  instance, then create the host (treasury) wallet that funds allowances and
-  rewards. Copy its ids/keys into `LNBITS_HOST_WALLET_ID`,
-  `LNBITS_HOST_USER_ID`, `LNBITS_INKEY` and `REWARDS_TREASURY_ADMINKEY`.
+. *Prepare LNbits.* No extension is needed: the bot provisions users through
+  the core Users API, which requires an LNbits admin account. Create the host
+  (treasury) wallet that funds allowances and rewards. Copy its ids/keys into
+  `LNBITS_HOST_WALLET_ID`, `LNBITS_HOST_USER_ID`, `LNBITS_INKEY` and
+  `REWARDS_TREASURY_ADMINKEY`.
 . *Rotate the burned LNbits credentials.* Historic CI builds injected
   `REACT_APP_LNBITS_PASSWORD` and `REACT_APP_LNBITS_ADMINKEY` into the
   portal's public JavaScript bundle, so any admin key or service-account
