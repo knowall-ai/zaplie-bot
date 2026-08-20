@@ -170,7 +170,7 @@ intentionally has no references to `REACT_APP_LNBITS_PASSWORD` or
 == Manifest and App Package
 
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
-into `manifest.template.json`, auto-increments the patch version for Test/Prod,
-and writes `appPackage/manifest.json` (gitignored). The manifest declares the
+into `manifest.template.json`, takes the version from `APP_VERSION` when set
+(otherwise the template), and writes `appPackage/manifest.json` (gitignored). The manifest declares the
 bot (personal/team/groupchat scopes with the four commands) and five static
 tabs (Feed, Users, Rewards, Wallet, Settings).
