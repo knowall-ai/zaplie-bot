@@ -15,6 +15,7 @@ import {
 } from './connectCalendarCommand';
 import { createZapCard } from './sendZapCommand';
 import { MAX_ZAP_SATS } from './zapBudget';
+import { isRecord } from '../utils/typeGuards';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -31,7 +32,7 @@ const DAYS_PARAMETER = {
   description: 'Look-back window in days. Defaults to 7, capped at 30.',
 };
 
-const clampDays = (days?: number): number =>
+const clampDays = (days: unknown): number =>
   typeof days === 'number' && Number.isFinite(days)
     ? Math.min(Math.max(Math.floor(days), 1), 30)
     : 7;
@@ -106,18 +107,17 @@ const getRecentActivityTool: ToolDefinition = {
     },
     required: [],
   },
-  handler: async (
-    args: { limit?: number; onlyInvolvingMe?: boolean },
-    turnContext: TurnContext,
-  ) => {
+  handler: async (args: unknown, turnContext: TurnContext) => {
+    const options = isRecord(args) ? args : {};
     const user = turnContext.turnState.get('user') as User;
     const limit =
-      typeof args.limit === 'number'
-        ? Math.min(Math.max(args.limit, 1), 50)
+      typeof options.limit === 'number'
+        ? Math.min(Math.max(options.limit, 1), 50)
         : 20;
     const activity = await getRecentZaps({
       limit,
-      userAadObjectId: args.onlyInvolvingMe ? user.aadObjectId : undefined,
+      userAadObjectId:
+        options.onlyInvolvingMe === true ? user.aadObjectId : undefined,
     });
     return {
       rewardLabel,
@@ -142,7 +142,7 @@ const getRecentMeetingsTool: ToolDefinition = {
     properties: { days: DAYS_PARAMETER },
     required: [],
   },
-  handler: async (args: { days?: number }, turnContext: TurnContext) => {
+  handler: async (args: unknown, turnContext: TurnContext) => {
     const token = await getStoredGraphToken(turnContext);
     if (!token) {
       return {
@@ -150,7 +150,7 @@ const getRecentMeetingsTool: ToolDefinition = {
         message: `Ask the user to type "${CONNECT_CALENDAR_COMMAND}" before using work signals.`,
       };
     }
-    const periodDays = clampDays(args.days);
+    const periodDays = clampDays(isRecord(args) ? args.days : undefined);
     return {
       connected: true,
       periodDays,
@@ -208,10 +208,7 @@ const proposeZapTool: ToolDefinition = {
     required: ['recipientName', 'amountSats', 'memo'],
   },
   sideEffect: true,
-  handler: async (
-    args: { recipientName: unknown; amountSats: unknown; memo: unknown },
-    turnContext: TurnContext,
-  ) => {
+  handler: async (args: unknown, turnContext: TurnContext) => {
     const sender = turnContext.turnState.get('user') as User | undefined;
     if (!sender) {
       throw new Error(
@@ -219,7 +216,8 @@ const proposeZapTool: ToolDefinition = {
       );
     }
 
-    const { recipientName, amountSats, memo } = args;
+    const options: Record<string, unknown> = isRecord(args) ? args : {};
+    const { recipientName, amountSats, memo } = options;
     if (typeof recipientName !== 'string' || recipientName.trim() === '') {
       return {
         proposed: false,

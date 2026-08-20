@@ -348,7 +348,11 @@ export async function createZapCard(
   };
 }
 
-// Function to populate choices
+/**
+ * Builds selectable wallet choices from available users.
+ *
+ * @returns Wallet choices containing each user's display name and ID, excluding the current user when available.
+ */
 async function populateWalletChoices() {
   console.log('Populating wallet choices ...');
   const users = await getUsers(adminKey, null);
@@ -365,7 +369,7 @@ async function populateWalletChoices() {
   }
 
   if (filteresUsers) {
-    return filteresUsers.map((user: any) => ({
+    return filteresUsers.map(user => ({
       title: user.displayName,
       value: user.id,
     }));

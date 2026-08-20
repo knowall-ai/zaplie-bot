@@ -1,6 +1,7 @@
 // lnbitsService.ts
 
 import dotenvFlow from 'dotenv-flow';
+import { isRecord } from '../utils/typeGuards';
 
 dotenvFlow.config({ path: './env' });
 
@@ -31,7 +32,16 @@ let accessToken = null;
 // https://demo.lnbits.com/docs/
 
 // Store token in localStorage (persists between page reloads)
-let accessTokenPromise: Promise<string> | null = null; // To cache the pending token request
+let accessTokenPromise: Promise<string> | null = null; /**
+ * Retrieves and caches an LNbits access token.
+ *
+ * Reuses an in-progress authentication request when multiple callers request a
+ * token concurrently. Authentication failures result in an error.
+ *
+ * @param username - The LNbits username.
+ * @param password - The LNbits password.
+ * @returns The authenticated access token.
+ */
 
 export async function getAccessToken(
   username: string,
@@ -113,6 +123,44 @@ export async function getAccessToken(
   return accessTokenPromise;
 }
 
+interface RawLnbitsWallet {
+  id: string;
+  admin?: string;
+  name: string;
+  user: string;
+  adminkey?: string;
+  inkey?: string;
+  balance_msat?: number;
+  deleted?: boolean;
+}
+
+// LNbits declares id, name and user required on every wallet route this file
+// reads, so a missing one is a broken contract, not a wallet worth skipping.
+const REQUIRED_WALLET_FIELDS = ['id', 'name', 'user'] as const;
+
+const missingWalletFields = (value: unknown): string[] =>
+  isRecord(value)
+    ? REQUIRED_WALLET_FIELDS.filter(field => typeof value[field] !== 'string')
+    : [...REQUIRED_WALLET_FIELDS];
+
+const toRawLnbitsWallets = (
+  value: unknown,
+  source: string,
+): RawLnbitsWallet[] => {
+  if (!Array.isArray(value)) {
+    throw new Error(`${source}: LNbits did not return a wallet array`);
+  }
+  value.forEach((wallet, index) => {
+    const missing = missingWalletFields(wallet);
+    if (missing.length > 0) {
+      throw new Error(
+        `${source}: LNbits wallet at index ${index} is missing string ${missing.join(', ')}`,
+      );
+    }
+  });
+  return value;
+};
+
 const getWallets = async (
   adminKey: string,
   filterByName?: string,
@@ -139,7 +187,7 @@ const getWallets = async (
       );
     }
 
-    const data = await response.json();
+    const data = toRawLnbitsWallets(await response.json(), 'getWallets');
 
     // If filter is provided, filter the wallets by name and/or id
     let filteredData = data;
@@ -155,19 +203,21 @@ const getWallets = async (
 
     // Map the wallets to match the Wallet interface
     let walletData: Wallet[] = await Promise.all(
-      filteredData.map(async (filteredData: any) => ({
-        id: filteredData.id,
-        admin: filteredData.admin,
-        name: filteredData.name,
-        adminkey: filteredData.adminkey,
-        user: filteredData.user,
-        inkey: filteredData.inkey,
+      filteredData.map(async rawWallet => {
         // See: https://github.com/lnbits/lnbits/issues/2690
-        deleted: (await getWalletById(filteredData.user, filteredData.id))
-          ?.deleted,
-        balance_msat: (await getWalletById(filteredData.user, filteredData.id))
-          ?.balance_msat,
-      })),
+        const walletDetails = await getWalletById(rawWallet.user, rawWallet.id);
+
+        return {
+          id: rawWallet.id,
+          admin: rawWallet.admin,
+          name: rawWallet.name,
+          adminkey: rawWallet.adminkey,
+          user: rawWallet.user,
+          inkey: rawWallet.inkey,
+          deleted: walletDetails?.deleted,
+          balance_msat: walletDetails?.balance_msat,
+        };
+      }),
     );
 
     // Now remove the deleted wallets.
@@ -176,7 +226,7 @@ const getWallets = async (
     return walletData;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -207,10 +257,10 @@ const getUserWallets = async (
       );
     }
 
-    const data: Wallet[] = await response.json();
+    const data = toRawLnbitsWallets(await response.json(), 'getUserWallets');
 
     // Map the wallets to match the Wallet interface
-    const walletData: Wallet[] = data.map((wallet: any) => ({
+    const walletData: Wallet[] = data.map(wallet => ({
       id: wallet.id,
       admin: null, // TODO: To be implemented. Ref: https://t.me/lnbits/90188
       name: wallet.name,
@@ -412,7 +462,7 @@ const getWalletDetails = async (inKey: string, walletId: string) => {
     return data;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -440,7 +490,7 @@ const getWalletBalance = async (inKey: string) => {
     return data.balance / 1000; // return in Sats (not millisatoshis)
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -465,7 +515,7 @@ const getWalletName = async (inKey: string) => {
     return data.name;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -522,7 +572,7 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
     return data;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -555,15 +605,11 @@ const getWalletById = async (
       return null;
     }
 
-    const data = await response.json();
+    const data = toRawLnbitsWallets(await response.json(), 'getWalletById');
 
     // Find the wallet with a matching inkey that are not deleted.
-    const filteredWallets = data.filter(
-      (wallet: any) => wallet.deleted !== true,
-    );
-    const matchingWallet = filteredWallets.find(
-      (wallet: any) => wallet.id === id,
-    );
+    const filteredWallets = data.filter(wallet => wallet.deleted !== true);
+    const matchingWallet = filteredWallets.find(wallet => wallet.id === id);
     //console.log('matchingWallet: ', matchingWallet);
 
     if (!matchingWallet) {
@@ -611,10 +657,13 @@ const getWalletIdFromKey = async (inKey: string) => {
       return null;
     }
 
-    const data = await response.json();
+    const data = toRawLnbitsWallets(
+      await response.json(),
+      'getWalletIdFromKey',
+    );
 
     // Find the wallet with a matching inkey
-    const wallet = data.find((wallet: any) => wallet.inkey === inKey);
+    const wallet = data.find(rawWallet => rawWallet.inkey === inKey);
 
     if (!wallet) {
       console.error('No wallet found for this inKey.');
@@ -625,7 +674,7 @@ const getWalletIdFromKey = async (inKey: string) => {
     return wallet.id;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -651,7 +700,7 @@ const getInvoicePayment = async (inKey: string, invoice: string) => {
     return data;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 
@@ -694,7 +743,7 @@ const getPaymentsSince = async (lnKey: string, timestamp: number) => {
     return paymentsSince;
   } catch (error) {
     console.error(error);
-    return error;
+    throw error;
   }
 };
 

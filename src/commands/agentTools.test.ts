@@ -22,6 +22,7 @@ import {
   jest,
 } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
+import { isRecord } from '../utils/typeGuards';
 
 jest.mock('../services/lnbitsService');
 jest.mock('../services/zapHistoryService');
@@ -59,7 +60,7 @@ const makeTurnContext = (user: User | undefined): TurnContext => {
   if (user) turnState.set('user', user);
   return {
     turnState,
-    sendActivity: jest.fn<() => Promise<any>>().mockResolvedValue(undefined),
+    sendActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   } as unknown as TurnContext;
 };
 
@@ -75,6 +76,13 @@ const wallet = (overrides: Partial<Wallet>): Wallet => ({
   ...overrides,
 });
 
+const requireRecord = (value: unknown): Record<string, unknown> => {
+  if (!isRecord(value)) {
+    throw new Error('Expected the tool to return an object.');
+  }
+  return value;
+};
+
 describe('agentTools', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -89,7 +97,9 @@ describe('agentTools', () => {
       ]);
 
       const tool = createAgentTools().find(t => t.name === 'get_my_balance')!;
-      const result: any = await tool.handler({}, makeTurnContext(currentUser));
+      const result = requireRecord(
+        await tool.handler({}, makeTurnContext(currentUser)),
+      );
 
       expect(result.wallets).toEqual([
         { name: 'Allowance', balanceSats: 900 },
@@ -131,7 +141,9 @@ describe('agentTools', () => {
       });
 
       const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
-      const result: any = await tool.handler({}, makeTurnContext(currentUser));
+      const result = requireRecord(
+        await tool.handler({}, makeTurnContext(currentUser)),
+      );
 
       expect(result.leaderboard).toEqual([
         { displayName: 'Alice', balanceSats: 1500 },
@@ -158,9 +170,11 @@ describe('agentTools', () => {
       const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
-      const result: any = await tool.handler(
-        { limit: 10, onlyInvolvingMe: true },
-        makeTurnContext(currentUser),
+      const result = requireRecord(
+        await tool.handler(
+          { limit: 10, onlyInvolvingMe: true },
+          makeTurnContext(currentUser),
+        ),
       );
 
       expect(mockGetRecentZaps).toHaveBeenCalledWith({
@@ -206,6 +220,19 @@ describe('agentTools', () => {
         userAadObjectId: undefined,
       });
     });
+
+    test('falls back to the defaults when the arguments are not an object', async () => {
+      mockGetRecentZaps.mockResolvedValue([]);
+      const tool = createAgentTools().find(
+        t => t.name === 'get_recent_activity',
+      )!;
+
+      await tool.handler(null, makeTurnContext(currentUser));
+      expect(mockGetRecentZaps).toHaveBeenLastCalledWith({
+        limit: 20,
+        userAadObjectId: undefined,
+      });
+    });
   });
 
   describe('propose_zap', () => {
@@ -225,9 +252,11 @@ describe('agentTools', () => {
 
     const tool = () => createAgentTools().find(t => t.name === 'propose_zap')!;
 
-    const sentCard = (context: TurnContext): any => {
-      const activity: any = (context.sendActivity as jest.Mock).mock
-        .calls[0][0];
+    type CardElement = { id?: string; value?: unknown };
+    const sentCard = (context: TurnContext) => {
+      const activity = (context.sendActivity as jest.Mock).mock.calls[0][0] as {
+        attachments: Array<{ content: { body: CardElement[] } }>;
+      };
       return activity.attachments[0].content;
     };
 
@@ -245,9 +274,11 @@ describe('agentTools', () => {
 
     test('posts a card pre-filled with recipient, amount and memo, and returns a proposal, not a payment', async () => {
       const context = makeTurnContext(sender);
-      const result: any = await tool().handler(
-        { recipientName: 'bob', amountSats: 100, memo: 'for the demo' },
-        context,
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 100, memo: 'for the demo' },
+          context,
+        ),
       );
 
       expect(result).toEqual({
@@ -258,10 +289,10 @@ describe('agentTools', () => {
       });
       expect(context.sendActivity).toHaveBeenCalledTimes(1);
 
-      const inputs = new Map<string, any>(
+      const inputs = new Map(
         sentCard(context)
-          .body.filter((el: any) => el.id)
-          .map((el: any) => [el.id, el]),
+          .body.filter(el => el.id)
+          .map(el => [el.id as string, el] as const),
       );
       expect(inputs.get('zapReceiverId').value).toBe('user-bob');
       expect(inputs.get('zapMessage').value).toBe('for the demo');
@@ -270,9 +301,11 @@ describe('agentTools', () => {
 
     test('refuses 901 sats against a live Allowance balance of 900, ignoring the stale snapshot', async () => {
       const context = makeTurnContext(sender);
-      const result: any = await tool().handler(
-        { recipientName: 'bob', amountSats: 901, memo: 'Thanks' },
-        context,
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 901, memo: 'Thanks' },
+          context,
+        ),
       );
 
       expect(result).toEqual({
@@ -285,9 +318,11 @@ describe('agentTools', () => {
 
     test('proposes exactly the full live balance (900 of 900 sats)', async () => {
       const context = makeTurnContext(sender);
-      const result: any = await tool().handler(
-        { recipientName: 'bob', amountSats: 900, memo: 'all in' },
-        context,
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 900, memo: 'all in' },
+          context,
+        ),
       );
 
       expect(result.proposed).toBe(true);
@@ -311,9 +346,11 @@ describe('agentTools', () => {
 
     test('refuses a self-zap with its own reason, without posting a card', async () => {
       const context = makeTurnContext(sender);
-      const result: any = await tool().handler(
-        { recipientName: 'alice', amountSats: 100, memo: 'me' },
-        context,
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'alice', amountSats: 100, memo: 'me' },
+          context,
+        ),
       );
 
       expect(result).toEqual({
@@ -337,16 +374,17 @@ describe('agentTools', () => {
       ]);
       const context = makeTurnContext(sender);
 
-      const result: any = await tool().handler(
-        { recipientName: 'Bob', amountSats: 100, memo: 'thanks' },
-        context,
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'Bob', amountSats: 100, memo: 'thanks' },
+          context,
+        ),
       );
 
       expect(result.proposed).toBe(true);
       expect(result.recipient).toBe('Bob');
       expect(
-        sentCard(context).body.find((el: any) => el.id === 'zapReceiverId')
-          .value,
+        sentCard(context).body.find(el => el.id === 'zapReceiverId').value,
       ).toBe('user-bob2');
     });
 
@@ -363,16 +401,20 @@ describe('agentTools', () => {
       ]);
       const context = makeTurnContext(sender);
 
-      const ambiguous: any = await tool().handler(
-        { recipientName: 'bob', amountSats: 100, memo: 'x' },
-        context,
+      const ambiguous = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 100, memo: 'x' },
+          context,
+        ),
       );
       expect(ambiguous.proposed).toBe(false);
       expect(ambiguous.candidates).toEqual(['Bob Smith', 'Bobby Jones']);
 
-      const unknown: any = await tool().handler(
-        { recipientName: 'zoe', amountSats: 100, memo: 'x' },
-        context,
+      const unknown = requireRecord(
+        await tool().handler(
+          { recipientName: 'zoe', amountSats: 100, memo: 'x' },
+          context,
+        ),
       );
       expect(unknown.proposed).toBe(false);
       expect(unknown.reason).toBe('No teammate matches "zoe".');
@@ -402,11 +444,13 @@ describe('agentTools', () => {
       // Foundry sends whatever the model wrote — a stringified number must
       // be refused, not coerced.
       for (const amountSats of ['100', 0, MAX_ZAP_SATS + 1]) {
-        const result: any = await run({
-          recipientName: 'bob',
-          amountSats,
-          memo: 'x',
-        });
+        const result = requireRecord(
+          await run({
+            recipientName: 'bob',
+            amountSats,
+            memo: 'x',
+          }),
+        );
         expect(result.proposed).toBe(false);
         expect(result.reason).toContain('amountSats');
         expect(result.reason).toContain(JSON.stringify(amountSats));
@@ -422,6 +466,17 @@ describe('agentTools', () => {
 
       expect(context.sendActivity).not.toHaveBeenCalled();
       expect(mockGetUserWallets).not.toHaveBeenCalled();
+    });
+
+    test('refuses non-object arguments instead of throwing on the destructure', async () => {
+      const context = makeTurnContext(sender);
+
+      for (const args of [null, 'bob', 7]) {
+        const result = requireRecord(await tool().handler(args, context));
+        expect(result.proposed).toBe(false);
+        expect(result.reason).toContain('recipientName');
+      }
+      expect(context.sendActivity).not.toHaveBeenCalled();
     });
 
     test('throws when there is no current user in turn state', async () => {
@@ -476,12 +531,24 @@ describe('agentTools', () => {
       expect(mockGetRecentMeetings).toHaveBeenCalledWith('graph-token', 30);
     });
 
+    test('falls back to the default window when the arguments are not an object', async () => {
+      mockGetRecentMeetings.mockResolvedValue([]);
+      const tool = createAgentTools().find(
+        item => item.name === 'get_recent_meetings',
+      )!;
+
+      await expect(
+        tool.handler(null, makeGraphContext('graph-token')),
+      ).resolves.toEqual({ connected: true, periodDays: 7, meetings: [] });
+      expect(mockGetRecentMeetings).toHaveBeenCalledWith('graph-token', 7);
+    });
+
     test('returns a connection instruction instead of calling Graph without a token', async () => {
       const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
-      const result: any = await tool.handler({}, makeGraphContext());
+      const result = requireRecord(await tool.handler({}, makeGraphContext()));
 
       expect(result).toMatchObject({ connected: false });
       expect(result.message).toMatch(/connect calendar/);
