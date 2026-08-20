@@ -44,6 +44,125 @@ export interface SendZapResult {
   paymentHash: string;
 }
 
+export interface ZapReceipt {
+  recipients: string[];
+  failedRecipients?: string[];
+  // Recipients whose payment was sent but never confirmed. They are NOT
+  // failures: the money may already have moved, so they get their own section
+  // instead of an invitation to retry.
+  uncertainRecipients?: string[];
+  message: string;
+  amount: number;
+  remainingBalance: number;
+  rewardName: string;
+}
+
+// One key/value row of the receipt: bold label on the left, value on the
+// right. Kept flat — a ColumnSet must only ever contain Columns.
+const receiptRow = (label: string, value: string) => ({
+  type: 'ColumnSet',
+  columns: [
+    {
+      type: 'Column',
+      width: 'auto',
+      items: [
+        {
+          type: 'TextBlock',
+          text: label,
+          weight: 'Bolder',
+        },
+      ],
+    },
+    {
+      type: 'Column',
+      width: 'stretch',
+      items: [
+        {
+          type: 'TextBlock',
+          text: value,
+          wrap: true,
+        },
+      ],
+    },
+  ],
+});
+
+// The read-only receipt a zap card turns into once a submit finishes. It
+// reports the recipients this submit processed — recipients already settled by
+// an earlier submit of the same card are not repeated here.
+export function buildZapReceiptCard(receipt: ZapReceipt) {
+  const {
+    recipients,
+    failedRecipients = [],
+    uncertainRecipients = [],
+    message,
+    amount,
+    remainingBalance,
+    rewardName,
+  } = receipt;
+
+  const receiverLabel = recipients.length > 1 ? 'Receivers:' : 'Receiver:';
+  const totalAmountSent = recipients.length * amount;
+  const bulletList = (names: string[]): string =>
+    names.map(name => `- ${name}`).join('\n');
+
+  return {
+    type: 'AdaptiveCard',
+    body: [
+      {
+        type: 'TextBlock',
+        text: 'Zap sent!',
+        weight: 'Bolder',
+        size: 'Large',
+        color: 'Good',
+      },
+      receiptRow(receiverLabel, recipients.join(', ')),
+      ...(failedRecipients.length > 0
+        ? [
+            {
+              type: 'TextBlock',
+              text: `**Failed Receivers:**\n${bulletList(failedRecipients)}`,
+              wrap: true,
+              color: 'Attention',
+            },
+          ]
+        : []),
+      // Kept apart from the failures on purpose: these payments were sent and
+      // may well have settled, so listing them as failed would invite a retry
+      // that pays the same person twice.
+      ...(uncertainRecipients.length > 0
+        ? [
+            {
+              type: 'TextBlock',
+              text:
+                `**Needs checking:**\n${bulletList(uncertainRecipients)}\n` +
+                'Payment outcome uncertain — an admin should verify before ' +
+                'retrying.',
+              wrap: true,
+              color: 'Warning',
+            },
+          ]
+        : []),
+      receiptRow('Message:', message),
+      receiptRow(`Amount (${rewardName}):`, amount.toLocaleString()),
+      ...(recipients.length > 1
+        ? [
+            receiptRow(
+              `Total Sent (${rewardName}):`,
+              totalAmountSent.toLocaleString(),
+            ),
+          ]
+        : []),
+      receiptRow(
+        `Remaining Amount (${rewardName}):`,
+        remainingBalance.toLocaleString(),
+      ),
+    ],
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    version: '1.5',
+  };
+}
+
 // Thrown only once payInvoice has been called: at that point the payment may
 // have settled even though we failed to confirm it, so a retry is unsafe.
 export class PaymentOutcomeUnknownError extends Error {
@@ -121,124 +240,13 @@ export async function SendZap(
       );
       console.log('Remaining Balance:', remainingBalance);
 
-      const updatedCard = {
-        type: 'AdaptiveCard',
-        body: [
-          {
-            type: 'TextBlock',
-            text: `Zap sent!`,
-            weight: 'Bolder',
-            size: 'Large',
-            color: 'Good',
-          },
-          {
-            type: 'ColumnSet',
-            columns: [
-              {
-                type: 'Column',
-                width: 'auto',
-                items: [
-                  {
-                    type: 'TextBlock',
-                    text: `Receiver:`,
-                    weight: 'Bolder',
-                  },
-                ],
-              },
-              {
-                type: 'Column',
-                width: 'stretch',
-                items: [
-                  {
-                    type: 'TextBlock',
-                    text: `${receiver.displayName}`,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            type: 'ColumnSet',
-            columns: [
-              {
-                type: 'Column',
-                width: 'auto',
-                items: [
-                  {
-                    type: 'TextBlock',
-                    text: `Message:`,
-                    weight: 'Bolder',
-                  },
-                ],
-              },
-              {
-                type: 'Column',
-                width: 'stretch',
-                items: [
-                  {
-                    type: 'TextBlock',
-                    text: `${zapMessage}`,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            type: 'ColumnSet',
-            columns: [
-              {
-                type: 'Column',
-                width: 'auto',
-                items: [
-                  {
-                    type: 'TextBlock',
-                    text: `Amount (${globalRewardName}):`,
-                    weight: 'Bolder',
-                  },
-                ],
-              },
-              {
-                type: 'Column',
-                width: 'stretch',
-                items: [
-                  {
-                    type: 'TextBlock',
-                    text: `${zapAmount}`,
-                  },
-                ],
-              },
-              {
-                type: 'ColumnSet',
-                columns: [
-                  {
-                    type: 'Column',
-                    width: 'auto',
-                    items: [
-                      {
-                        type: 'TextBlock',
-                        text: `Remaining Amount (${globalRewardName}):`,
-                        weight: 'Bolder',
-                      },
-                    ],
-                  },
-                  {
-                    type: 'Column',
-                    width: 'stretch',
-                    items: [
-                      {
-                        type: 'TextBlock',
-                        text: `${remainingBalance}`,
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-        version: '1.2',
-      };
+      const updatedCard = buildZapReceiptCard({
+        recipients: [receiver.displayName],
+        message: zapMessage,
+        amount: zapAmount,
+        remainingBalance,
+        rewardName: globalRewardName,
+      });
 
       // Update responsive card in message
       const updatedMessage = MessageFactory.attachment(

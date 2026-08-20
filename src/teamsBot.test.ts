@@ -177,3 +177,35 @@ describe('TeamsBot withdraw command', () => {
     expect(reply).not.toContain('withdraw');
   });
 });
+
+describe('TeamsBot submitZaps message validation', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('rejects a submit with no message instead of building a receipt from it', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      replyToId: 'card-1',
+      value: {
+        action: 'submitZaps',
+        zapReceiverId: 'recipient-1',
+        zapAmount: '10',
+      },
+    });
+    (context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      aadObjectId: 'aad-user-1',
+      allowanceWallet: { id: 'wallet-1', inkey: 'inkey', adminkey: 'adminkey' },
+    });
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      "D'oh! Your zap needs a message, so no zaps were sent.",
+    );
+    expect(context.updateActivity).not.toHaveBeenCalled();
+  });
+});
