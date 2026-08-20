@@ -15,9 +15,8 @@ import { RewardNameContext } from './RewardNameContext';
 const stallID = process.env.REACT_APP_LNBITS_STORE_ID as string;
 
 const RewardsComponent: FunctionComponent<{
-  adminKey: string;
   userId: string;
-}> = ({ adminKey, userId }) => {
+}> = ({ userId }) => {
   const [rewards, setRewards] = useState<Reward[]>([]); // Initialize as an empty array
   const [isDragging, setIsDragging] = useState(false);
   const [startPosition, setStartPosition] = useState(0);
@@ -33,30 +32,20 @@ const RewardsComponent: FunctionComponent<{
       const stallId = stallID;
 
       try {
-        const rewardsData = await getNostrRewards(adminKey, stallId);
+        const rewardsData = await getNostrRewards(stallId);
 
         if (!rewardsData) {
           throw new Error('No data returned from API');
         }
 
-        // Map API data to Rewards format
-        const transformedRewards = rewardsData.map((product: any) => ({
-          id: product.id,
-          image: product.images[0],
-          name: product.name,
-          shortDescription: product.config.description,
-          link: product.categories,
-          price: product.price,
-        }));
-
-        setRewards(transformedRewards); // Update state with transformed rewards
+        setRewards(rewardsData);
       } catch (error) {
         console.error('Error fetching rewards:', error);
       }
     };
 
     fetchRewards();
-  }, [adminKey]);
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (carouselRef.current) {
@@ -88,7 +77,7 @@ const RewardsComponent: FunctionComponent<{
 
   const handleBuyClick = async (price: number, reward: Reward) => {
     try {
-      const wallets = await getUserWallets(adminKey, userId);
+      const wallets = await getUserWallets(userId);
       console.log('wallets:-', wallets);
       const privateWallet = wallets?.find(wallet => wallet.name === 'Private');
       console.log('privateWallet:-', privateWallet);

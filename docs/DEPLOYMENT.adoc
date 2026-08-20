@@ -135,7 +135,7 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 
 | `LNBITS_NODE_URL`
 | Base URL of the LNbits instance
-| Bot, Portal backend, Tabs (`REACT_APP_` prefix)
+| Bot, Portal backend
 
 | `LNBITS_USERNAME`, `LNBITS_PASSWORD`
 | LNbits service-account credentials (`POST /api/v1/auth`) — server-side only,
@@ -145,7 +145,7 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | `LNBITS_ADMINKEY`
 | LNbits admin API key for wallet operations — server-side only, never with a
   `REACT_APP_` prefix
-| Bot
+| Bot, Portal backend
 
 | `LNBITS_INITIAL_ALLOWANCE`
 | Sats granted/topped-up to each user's Allowance wallet
@@ -215,12 +215,12 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
   REQUIRED in production: without it the stores sit inside the deployment tree
   and a clean deploy wipes them. The value depends on the App Service OS —
   `/home/data/zaplie` on Linux, `+D:\home\data\zaplie+` on Windows (the `home`
-  share is the persistent one in both cases). Consumers: the portal backend's
-  `data.json` honours it as of this change; the bot's zap ledger and
-  weekly-allowance guard honour it in the durable bot-state work, and the
-  portal's remaining stores (identities, connections, pending rewards,
-  secrets, webhook keys, GitHub App credentials) follow with the portal work.
-  Set it now on both — a component that does not read it yet simply ignores it.
+  share is the persistent one in both cases). Consumers: every portal backend
+  store honours it (`data.json`, identities, connections, pending rewards,
+  secrets, webhook keys, GitHub App credentials, the LNbits user directory);
+  the bot's zap ledger and weekly-allowance guard honour it in the durable
+  bot-state work. Set it now on both — a component that does not read it yet
+  simply ignores it.
 | Bot, Portal backend
 
 | `SCM_DO_BUILD_DURING_DEPLOYMENT`
@@ -233,6 +233,10 @@ The portal App Service starts the Express backend with the startup command
 
 Secrets belong in `env/.env.*.user` files (gitignored) or Azure app settings —
 never in tracked files.
+
+`REACT_APP_*` is a public compile-time namespace, not a secret store. The
+portal has no references to `REACT_APP_LNBITS_PASSWORD` or
+`REACT_APP_LNBITS_ADMINKEY`; build workflows must not supply them.
 
 == Day One
 

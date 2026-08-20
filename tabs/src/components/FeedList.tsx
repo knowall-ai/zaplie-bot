@@ -60,29 +60,19 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   );
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Get admin key from environment
-  const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY;
-
   useEffect(() => {
     const fetchZapsStepByStep = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        // Validate adminKey is configured
-        if (!adminKey) {
-          setError('Configuration error: Admin key not set.');
-          setLoading(false);
-          return;
-        }
-
         const paymentsSinceTimestamp =
           timestamp === null || timestamp === undefined || timestamp === 0
             ? 0
             : timestamp;
 
         // Step 1: Get all users
-        const fetchedUsers = await getUsers(adminKey, {});
+        const fetchedUsers = await getUsers({});
         if (!fetchedUsers || fetchedUsers.length === 0) {
           setError(
             'Unable to load users. Please check your connection and try again.',
@@ -94,7 +84,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
         // Step 2: Parallelize wallet fetches for all users
         const walletPromises = fetchedUsers.map(async user => {
           try {
-            const userWallets = await getUserWallets(adminKey, user.id);
+            const userWallets = await getUserWallets(user.id);
             return { userId: user.id, wallets: userWallets || [] };
           } catch (err) {
             // Log error but continue - don't fail entire feed for one user
@@ -133,7 +123,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
         // Fetch all wallet transactions in parallel for better performance
         const paymentPromises = allRelevantWallets.map(wallet =>
           getWalletTransactionsSince(
-            wallet.inkey,
+            wallet.id,
             paymentsSinceTimestamp,
             null,
           ).catch(err => {
@@ -298,7 +288,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
     } else {
       fetchZapsStepByStep();
     }
-  }, [timestamp, adminKey]);
+  }, [timestamp]);
 
   const handleSort = (field: 'time' | 'from' | 'to' | 'amount') => {
     if (sortField === field) {

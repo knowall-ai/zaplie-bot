@@ -9,13 +9,21 @@ import {
 
 const wallet = (id: string): Wallet => ({
   id,
-  admin: '',
   name: `${id} - Private`,
   user: 'user-1',
-  adminkey: 'admin-key',
-  inkey: 'in-key',
   balance_msat: 0,
   deleted: false,
+});
+
+const user = (id: string): User => ({
+  id,
+  displayName: id,
+  profileImg: '',
+  aadObjectId: `aad-${id}`,
+  email: `${id}@example.com`,
+  type: 'Teammate',
+  privateWallet: null,
+  allowanceWallet: null,
 });
 
 describe('lnbits cache', () => {
@@ -44,7 +52,7 @@ describe('lnbits cache', () => {
 
   describe('clearApiCache', () => {
     test('drops cached users and wallets plus both pending registries', () => {
-      apiCache.rawUsers = { data: [{ id: 'user-1' }], timestamp: Date.now() };
+      apiCache.users = { data: [user('user-1')], timestamp: Date.now() };
       apiCache.userWallets.set('user-1', {
         data: [wallet('wallet-1')],
         timestamp: Date.now(),
@@ -54,7 +62,7 @@ describe('lnbits cache', () => {
 
       clearApiCache();
 
-      expect(apiCache.rawUsers).toBeUndefined();
+      expect(apiCache.users).toBeUndefined();
       expect(apiCache.userWallets.size).toBe(0);
       expect(pendingRequests.users).toBeNull();
       expect(pendingRequests.userWallets.size).toBe(0);
@@ -87,11 +95,11 @@ describe('lnbits cache', () => {
     });
 
     test('leaves the cached users list alone', () => {
-      apiCache.rawUsers = { data: [{ id: 'user-1' }], timestamp: Date.now() };
+      apiCache.users = { data: [user('user-1')], timestamp: Date.now() };
 
       invalidateWalletCache();
 
-      expect(apiCache.rawUsers).toBeDefined();
+      expect(apiCache.users).toBeDefined();
     });
   });
 });

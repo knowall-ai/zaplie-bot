@@ -26,14 +26,24 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   const [buttonText, setButtonText] = useState('Copy');
   const [isSuccessFailurePopupVisible, setIsSuccessFailurePopupVisible] =
     useState(false);
-  const isSendDisabled = !inputValue || !inputNotes;
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const isSendDisabled = !inputValue || !inputNotes || isCreatingInvoice;
   const myLNbitDetails = currentUserLNbitDetails;
   const [invoice, setInvoice] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
   const [walletBalance, setWalletBalance] = useState(0);
   const intervalId = useRef<NodeJS.Timeout | null>(null);
+  // The button state only settles on the next render, so the ref is what stops
+  // two rapid clicks from each creating an invoice and a poller.
+  const invoicePending = useRef(false);
 
   useEffect(() => {
     console.log('walletBalance changed:', walletBalance);
+    return () => {
+      if (intervalId.current !== null) {
+        window.clearInterval(intervalId.current);
+      }
+    };
   }, [walletBalance]);
 
   const handleCancelClick = () => {
@@ -41,63 +51,83 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   };
 
   const handleNextClick = () => {
+    if (invoicePending.current) {
+      return;
+    }
     setIsSuccessFailurePopupVisible(true);
-    if (myLNbitDetails) {
-      if (myLNbitDetails) {
-        createInvoice(
-          myLNbitDetails.privateWallet?.inkey || '',
-          myLNbitDetails.privateWallet?.id || '',
-          parseInt(inputValue) || 0,
-          inputNotes,
-        ).then(invoice => {
-          console.log(invoice);
-          setInvoice(invoice);
+    // A retry must not leave the previous invoice payable behind an error.
+    setInvoice('');
+    setButtonText('Copy');
+    const walletId = myLNbitDetails.privateWallet?.id;
+    const amountText = inputValue.trim();
+    // A number input still accepts 1.5 and 1e3, and parseInt would quietly
+    // invoice a different amount than the one on screen.
+    const amount = /^\d+$/.test(amountText) ? Number(amountText) : NaN;
+    if (!walletId) {
+      setInvoiceError('Your private wallet is not available yet.');
+      return;
+    }
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setInvoiceError('Enter a whole amount greater than zero.');
+      return;
+    }
+    setInvoiceError('');
 
-          // Start polling for payment
-          intervalId.current = setInterval(() => {
-            getWalletPayments(myLNbitDetails.privateWallet?.inkey || '')
-              .then(payments => {
-                if (payments.length > 0) {
-                  console.log('Payment received');
-                  if (intervalId.current !== null) {
-                    window.clearInterval(intervalId.current);
-                  }
+    // A second Next click must not strand the poller the first one started.
+    if (intervalId.current !== null) {
+      window.clearInterval(intervalId.current);
+      intervalId.current = null;
+    }
+    invoicePending.current = true;
+    setIsCreatingInvoice(true);
 
-                  console.log(
-                    'Update the wallet balance in the context balance',
-                  );
-                  // Update the wallet balance in the context balance
-                  getWalletBalance(
-                    myLNbitDetails.privateWallet?.inkey || '',
-                  ).then(balance => {
-                    console.log('getWalletBalance:', balance);
-                    // Use the new function to set the balance
-                    if (balance !== null) {
-                      console.log('setWalletBalance to ', balance);
-                      setWalletBalance(balance);
-                    } else {
-                      // Handle the case when balance is null
-                      // For example, set a default value or show an error message
-                      setWalletBalance(0);
-                    }
-                  });
-                }
-              })
-              .catch(error => {
-                console.error(
-                  'Polling wallet payments failed, stopping:',
-                  error,
-                );
+    createInvoice(walletId, amount, inputNotes)
+      .then(invoice => {
+        console.log(invoice);
+        setInvoice(invoice);
+
+        // Start polling for payment
+        intervalId.current = setInterval(() => {
+          getWalletPayments(walletId)
+            .then(payments => {
+              if (payments.length > 0) {
+                console.log('Payment received');
                 if (intervalId.current !== null) {
                   window.clearInterval(intervalId.current);
                 }
-              });
-          }, 5000); // Check every 5 seconds
-        });
-      } else {
-        console.error('Wallet inkey is not defined yet.');
-      }
-    }
+
+                console.log('Update the wallet balance in the context balance');
+                // Update the wallet balance in the context balance
+                getWalletBalance(walletId).then(balance => {
+                  console.log('getWalletBalance:', balance);
+                  // Use the new function to set the balance
+                  if (balance !== null) {
+                    console.log('setWalletBalance to ', balance);
+                    setWalletBalance(balance);
+                  } else {
+                    // Handle the case when balance is null
+                    // For example, set a default value or show an error message
+                    setWalletBalance(0);
+                  }
+                });
+              }
+            })
+            .catch(error => {
+              console.error('Polling wallet payments failed, stopping:', error);
+              if (intervalId.current !== null) {
+                window.clearInterval(intervalId.current);
+              }
+            });
+        }, 5000); // Check every 5 seconds
+      })
+      .catch(error => {
+        console.error('Creating the invoice failed:', error);
+        setInvoiceError('Creating the invoice failed. Close and try again.');
+      })
+      .finally(() => {
+        invoicePending.current = false;
+        setIsCreatingInvoice(false);
+      });
   };
 
   const handleCopyClick = () => {
@@ -169,32 +199,37 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
             </p>
             <div className={styles.sendQrCodeContainer}>
               <div className={styles.qrCode}>
-                {invoice && <QRCode value={invoice} size={200} />}
+                {invoice && !invoiceError && (
+                  <QRCode value={invoice} size={200} />
+                )}
               </div>
               <div className={styles.txtContainer}>
                 <div className={styles.title}>Lightning invoice</div>
                 <div className={styles.txtContainer}>
-                  {!invoice
-                    ? 'Loading...'
-                    : invoice.length > 140
-                      ? `${invoice.substring(0, 140)}...`
-                      : invoice}
+                  {invoiceError ||
+                    (!invoice
+                      ? 'Loading...'
+                      : invoice.length > 140
+                        ? `${invoice.substring(0, 140)}...`
+                        : invoice)}
                 </div>
-                {invoice && (
+                {(invoice || invoiceError) && (
                   <div className={styles.receiveButtonContainer}>
-                    <button
-                      className={styles.copyButton}
-                      onClick={handleCopyClick}
-                    >
-                      <img
-                        src={buttonText === 'Copy' ? copyDoc : copySuccess}
-                        alt={
-                          buttonText === 'Copy' ? 'Copy Code' : 'Copy Success'
-                        }
-                        className={styles.copyIcon}
-                      />
-                      {buttonText}
-                    </button>
+                    {invoice && !invoiceError && (
+                      <button
+                        className={styles.copyButton}
+                        onClick={handleCopyClick}
+                      >
+                        <img
+                          src={buttonText === 'Copy' ? copyDoc : copySuccess}
+                          alt={
+                            buttonText === 'Copy' ? 'Copy Code' : 'Copy Success'
+                          }
+                          className={styles.copyIcon}
+                        />
+                        {buttonText}
+                      </button>
+                    )}
                     <button
                       className={styles.closeButton}
                       onClick={handleCloseClick}

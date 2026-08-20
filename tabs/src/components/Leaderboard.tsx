@@ -40,13 +40,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
     const fetchUsersAndPrivateWalletTransactions = async () => {
       try {
-        const adminKey = process.env.REACT_APP_LNBITS_ADMINKEY as string;
-        if (!adminKey) {
-          throw new Error('Admin key is missing');
-        }
-
         console.log('[Leaderboard] Fetching all users...');
-        const usersData = await getUsers(adminKey, null); // Fetch all users
+        const usersData = await getUsers(null); // Fetch all users
 
         if (!usersData || usersData.length === 0) {
           throw new Error('No users data returned from API');
@@ -56,8 +51,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
         // Fetch all transactions using the same method as Feed
         console.log('[Leaderboard] Fetching all transactions...');
-        const allTransactions =
-          await fetchAllowanceWalletTransactions(adminKey);
+        const allTransactions = await fetchAllowanceWalletTransactions();
         console.log(
           `[Leaderboard] Found ${allTransactions.length} total transactions`,
         );
@@ -67,7 +61,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
         await Promise.all(
           usersData.map(async user => {
-            const wallets = await getUserWallets(adminKey, user.id);
+            const wallets = await getUserWallets(user.id);
             if (wallets) {
               wallets.forEach(wallet => {
                 walletToUserMap[wallet.id] = user;
