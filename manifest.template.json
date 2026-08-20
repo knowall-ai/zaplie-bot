@@ -53,10 +53,6 @@
                         {
                             "title": "Show Leaderboard",
                             "description": "Show the leaderboard of users private wallets"
-                        },
-                        {
-                            "title": "Withdraw my Zaps",
-                            "description": "Withdraw funds from your private wallet to your own personal wallet"
                         }
                     ]
                 }

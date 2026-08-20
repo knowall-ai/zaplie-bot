@@ -109,10 +109,12 @@ in a static `SSOCommandMap` keyed by lower-case message text:
 | `src/commands/showLeaderboardCommand.ts`
 | Ranks users by Private wallet balance in an Adaptive Card
 
-| `withdraw my zaps`
-| `src/commands/withdrawFundsCommand.ts`
-| Stub — "coming soon"
 |===
+
+`withdraw my zaps` is implemented as a stub in
+`src/commands/withdrawFundsCommand.ts` but is deliberately *not* registered in
+`SSOCommandMap` and not listed in the Teams manifests, so the bot never
+advertises a command that cannot complete. See issue #293.
 
 The bot also implements Teams SSO handlers (`handleTeamsSigninVerifyState`,
 `handleTeamsSigninTokenExchange`). Conversation and user state use in-memory
