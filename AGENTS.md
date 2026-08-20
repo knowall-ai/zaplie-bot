@@ -48,7 +48,7 @@ deployable components in one repository:
   `tabs/src/services/lnbits/` (browser: `auth`, `cache`, `users`, `wallets`,
   `payments`, `rewards`), and
   `functions/services/lnbitsService.ts` (request-scoped) are three parallel
-  clients for the LNbits REST API (`/api/v1/*`, `/usermanager/api/v1/*`).
+  clients for the LNbits REST API (`/api/v1/*`, `/users/api/v1/*`).
   Auth is either `X-Api-Key` (admin/invoice key) or a Bearer token from
   `POST /api/v1/auth`. A Zap = `createInvoice` on the receiver's Private wallet
   then `payInvoice` from the sender's Allowance wallet.

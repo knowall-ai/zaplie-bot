@@ -46,7 +46,9 @@ from your *Allowance* wallet, which is periodically topped up.
 
 === Which LNbits version is required?
 
-LNbits 0.12 or higher, with the User Manager extension enabled.
+LNbits 1.0 or higher; the shared test instance runs 1.5.6. Users and wallets
+are provisioned through the core Users API (`/users/api/v1/user`), which
+replaced the User Manager extension, so no extension needs to be enabled.
 
 === How are Teams users mapped to wallets?
 

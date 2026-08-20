@@ -70,7 +70,7 @@ flowchart TB
 | Azure Functions v3 programming model (function.json), TypeScript, extension bundle 4.x
 
 | Wallet layer
-| LNbits 0.12+ (User Manager extension) on the Bitcoin Lightning Network
+| LNbits 1.0+ (core Users API) on the Bitcoin Lightning Network
 
 | Identity
 | Microsoft Entra ID (AAD) — multi-tenant bot registration, SSO, MSAL in the tabs
@@ -146,8 +146,8 @@ Three parallel clients speak to the LNbits REST API:
   either an `X-Api-Key` header (admin or wallet invoice key) or a Bearer token
   obtained from `POST /api/v1/auth` (cached at module level with concurrent
   request de-duplication). Uses the core API (`/api/v1/wallet`, `/payments`,
-  `/wallets/{id}`) and the User Manager extension
-  (`/usermanager/api/v1/users|wallets`). Includes a `scheduledTopup()` routine
+  `/wallets/{id}`) and the core Users API (`/users/api/v1/user`,
+  `/users/api/v1/user/{id}/wallet`). Includes a `scheduledTopup()` routine
   (node-cron) that replenishes all Allowance wallets to
   `LNBITS_INITIAL_ALLOWANCE`.
 - `tabs/src/services/lnbits/` — browser-side equivalent used by the tabs, split
@@ -200,7 +200,7 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 | Data | Where it lives | Notes
 
 | Users and wallets
-| LNbits (User Manager extension)
+| LNbits (core Users API)
 | Keyed by AAD object id in an extra field; one Allowance + one Private wallet per user
 
 | Transactions / Zaps
@@ -223,7 +223,7 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 *Context:* The system needs per-user custodial Lightning wallets with an
 admin API.
 
-*Decision:* Use LNbits with the User Manager extension rather than building a
+*Decision:* Use LNbits with its core Users API rather than building a
 ledger.
 
 *Rationale:* Open source, self-hostable, proven Lightning integration, and a
