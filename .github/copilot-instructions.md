@@ -17,9 +17,9 @@ on the payment path as high severity.
 - **Fail closed.** Auth or config that cannot be resolved must return an error,
   never fall back to a permissive default. A hardcoded fallback API key or
   shared secret is always a blocking finding.
-- **Nothing privileged in the browser bundle.** Anything reaching `tabs/` at
-  build time is public. Privileged LNbits operations belong behind the backend
-  proxy in `tabs/backend/`.
+- **Nothing privileged in the browser bundle.** Anything reaching `tabs/src/`
+  at build time is public. Privileged LNbits operations belong behind the
+  server-side proxy in `tabs/backend/`.
 - **`.env.*.example` files** carry dev-only, public-safe placeholders, and must
   never invite real values to be filled in.
 - **Secret removal must sweep the whole tracked tree** — including fixtures,
@@ -38,8 +38,12 @@ sender's Allowance wallet.
 
 - **The Private wallet is private.** Members may use it for their own payments.
   Do not surface its balance or rank users by what lands in it.
-- **Leaderboards measure zaps sent OUT of Allowance wallets**, using the
-  metadata attached to those payments — never receipts into Private wallets.
+- **Leaderboards measure zaps sent OUT of Allowance wallets**. A payment
+  counts as a zap only if it originates from an Allowance wallet, excludes
+  "Weekly Allowance cleared" sweep transactions, and correlates to a receiving
+  payment on a Private wallet. Future external self-custodial destinations will
+  need equivalent verified attribution so top-ups and other non-zap movements
+  don't count.
 - **Scheduled top-ups belong to the LNbits allowance extension**, not the bot.
   Prefer the extension and a lightning address per wallet over reimplementing
   that logic here.
