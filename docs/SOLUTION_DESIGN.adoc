@@ -194,6 +194,16 @@ The reward label is persisted by the Express backend
 (`GET/POST /api/reward-name` → `data.json` under `ZAPLIE_DATA_DIR`) and consumed by both
 the tabs (`RewardNameContext`) and the bot (`src/services/fetchRewardsName.ts`).
 
+The assistant persona follows the same route: `GET /api/bot-persona` is readable
+by any signed-in user or the bot's shared token, `POST /api/bot-persona`
+requires the `Zaplie.Admin` app role, and the value lands in the same
+`data.json`. It is a fragment of the assistant's system prompt, so
+`tabs/backend/botPersona.js` caps it at 2000 characters of plain text (no
+control characters, no line that forges the `--- BEGIN/END PERSONA ---` fence)
+and the bot keeps its safety rules outside the editable part — they are stated
+before the fenced persona and restated after it, so a forged fence cannot
+remove them.
+
 === Azure Functions
 
 Three anonymous HTTP triggers under `functions/` (compiled to `dist/`):
