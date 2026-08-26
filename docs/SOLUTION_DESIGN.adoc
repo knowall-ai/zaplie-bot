@@ -181,7 +181,8 @@ to `/login` on failure) — plus `/login`, `/auth-start`, `/auth-end`. Providers
 | Private and Allowance wallet tabs: balance card, transaction history, allowance status
 
 | Settings
-| Administrator setting to rename "Sats" (the reward label)
+| Administrator settings to rename "Sats" (the reward label) and to set the
+  assistant's persona; both are visible read-only to non-admins
 |===
 
 The reward label is persisted by the Express backend
