@@ -7,6 +7,7 @@ interface ZapContributionsChartProps {
   timestamp: number;
   allZaps: Transaction[];
   isLoading: boolean;
+  hasError?: boolean;
 }
 
 const toDateKey = (value: number | string): string =>
@@ -47,6 +48,7 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   timestamp,
   allZaps,
   isLoading,
+  hasError = false,
 }) => {
   const { rewardName } = useContext(RewardNameContext);
   const [compact, setCompact] = useState(
@@ -74,9 +76,14 @@ const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
   }, [allZaps, compact, timestamp]);
 
   return (
-    <section className={styles.zapactivitychartbox} aria-busy={isLoading}>
+    <section
+      className={styles.zapactivitychartbox}
+      aria-busy={isLoading && !hasError}
+    >
       <h2 className={styles.zapactivitycharttitle}>Zap activity</h2>
-      {isLoading ? (
+      {hasError ? (
+        <p>Activity data is unavailable.</p>
+      ) : isLoading ? (
         <p>Loading activity data…</p>
       ) : allZaps.length ? (
         <ActivityCalendar

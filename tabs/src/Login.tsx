@@ -12,14 +12,11 @@ import KnowAllLogo from './images/KnowAllAI_Logo.png';
 
 const centeredImageStyle: IRawStyle = {
   display: 'block',
-  maxWidth: '100%',
-  height: '42px',
-  top: '100px',
-  objectFit: 'cover',
-  overflow: 'hidden',
+  maxWidth: '160px',
+  height: 'auto',
+  objectFit: 'contain',
   flexShrink: 0,
-  margin: 'auto',
-  paddingBottom: '80px',
+  margin: '0 auto 24px',
   filter: 'brightness(0) invert(1)',
 };
 
@@ -41,7 +38,6 @@ export function Login() {
           src={KnowAllLogo}
           styles={{ root: centeredImageStyle }}
           alt="KnowAll AI"
-          width="10%"
         />
         <AuthenticatedTemplate>
           <Text styles={{ root: { color: 'white' } }}>Opening your feed…</Text>

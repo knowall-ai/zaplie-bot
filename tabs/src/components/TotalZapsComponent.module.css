@@ -27,15 +27,15 @@
 }
 
 .bigNumber {
-  color: #84cc16;
+  color: var(--text-primary);
   font-size: clamp(36px, 7vw, 48px);
   font-weight: 500;
   line-height: 1.1;
 }
 
 .sats {
-  color: #d8d8d8;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
 }
 
 .statsList {
