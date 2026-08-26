@@ -1,145 +1,103 @@
-import React, { useEffect, useState, useContext } from 'react';
-import { ActivityCalendar, Activity } from 'react-activity-calendar';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { Activity, ActivityCalendar } from 'react-activity-calendar';
 import styles from './ZapActivityChartComponent.module.css';
 import { RewardNameContext } from './RewardNameContext';
 
 interface ZapContributionsChartProps {
-  lnKey: string;
-  timestamp: number; // Timestamp in seconds since the epoch
+  timestamp: number;
   allZaps: Transaction[];
-  allUsers: User[];
   isLoading: boolean;
 }
 
-function generateDateRange(fromDate: string, toDate: string): string[] {
-  const dates = [];
-  const currentDate = new Date(fromDate);
-  const endDate = new Date(toDate);
+const toDateKey = (value: number | string): string =>
+  new Date(typeof value === 'number' ? value * 1000 : value)
+    .toISOString()
+    .slice(0, 10);
 
-  while (currentDate <= endDate) {
-    dates.push(currentDate.toISOString().split('T')[0]);
-    currentDate.setDate(currentDate.getDate() + 1);
-    console.log('Current date: ', currentDate);
-  }
-
-  return dates;
-}
-
-const transformZapsToActivities = (
+const buildActivities = (
   transactions: Transaction[],
   fromDate: string,
   toDate: string,
 ): Activity[] => {
-  const dateAmounts: { [date: string]: number } = {};
+  const totals = transactions.reduce<Record<string, number>>(
+    (result, transaction) => {
+      if (!transaction.time) return result;
+      const date = toDateKey(transaction.time);
+      result[date] = (result[date] ?? 0) + Math.abs(transaction.amount) / 1000;
+      return result;
+    },
+    {},
+  );
+  const activities: Activity[] = [];
+  const cursor = new Date(`${fromDate}T00:00:00Z`);
+  const end = new Date(`${toDate}T00:00:00Z`);
 
-  transactions.forEach(transaction => {
-    if (transaction.time) {
-      // Handle both Unix timestamp (number) and ISO date string
-      let date: string;
-      if (typeof transaction.time === 'number') {
-        // Unix timestamp in seconds
-        date = new Date(transaction.time * 1000).toISOString().split('T')[0];
-      } else {
-        // ISO date string
-        date = new Date(transaction.time).toISOString().split('T')[0];
-      }
-      const amount = Math.abs(transaction.amount / 1000); // Convert from msats to Sats
-      dateAmounts[date] = (dateAmounts[date] || 0) + amount;
-    }
-  });
-
-  // Generate the full date range
-  const dateRange = generateDateRange(fromDate, toDate);
-
-  // Create activities for all dates
-  const activities: Activity[] = dateRange.map(date => {
-    const totalAmount = dateAmounts[date] || 0;
-
-    let level = 0;
-    if (totalAmount > 0 && totalAmount < 1000) {
-      level = 1;
-    } else if (totalAmount >= 1000 && totalAmount < 2000) {
-      level = 2;
-    } else if (totalAmount >= 2000 && totalAmount < 3000) {
-      level = 3;
-    } else if (totalAmount >= 3000) {
-      level = 4;
-    }
-    return { date, count: totalAmount, level };
-  });
-
-  console.log('Activities: ', activities);
+  while (cursor <= end) {
+    const date = cursor.toISOString().slice(0, 10);
+    const count = totals[date] ?? 0;
+    const level = count === 0 ? 0 : Math.min(4, Math.ceil(count / 1000));
+    activities.push({ date, count, level });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
 
   return activities;
 };
 
 const ZapContributionsChart: React.FC<ZapContributionsChartProps> = ({
-  lnKey,
   timestamp,
   allZaps,
-  allUsers,
   isLoading,
 }) => {
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const { rewardName } = useContext(RewardNameContext);
+  const [compact, setCompact] = useState(
+    () => window.matchMedia('(max-width: 600px)').matches,
+  );
+
   useEffect(() => {
-    const fetchActivities = async () => {
-      try {
-        if (allZaps.length === 0) {
-          console.log('No transactions available');
-          return;
-        }
+    const query = window.matchMedia('(max-width: 600px)');
+    const update = () => setCompact(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
-        console.log('Chart transactions: ', allZaps);
-        const fromDate = new Date(timestamp * 1000).toISOString().split('T')[0];
-        const toDate = new Date().toISOString().split('T')[0];
-        const activitiesData = transformZapsToActivities(
-          allZaps,
-          fromDate,
-          toDate,
-        );
-        setActivities(activitiesData);
-        console.log('Activities data: ', activitiesData);
-      } catch (error) {
-        console.error('Error fetching zaps:', error);
-      }
-    };
+  const activities = useMemo(() => {
+    const end = new Date().toISOString().slice(0, 10);
+    const configuredStart = new Date(timestamp * 1000);
+    const compactStart = new Date();
+    compactStart.setUTCDate(compactStart.getUTCDate() - 83);
+    const start =
+      compact && compactStart > configuredStart
+        ? compactStart
+        : configuredStart;
 
-    fetchActivities();
-  }, [lnKey, timestamp, allZaps]);
-
-  const rewardNameContext = useContext(RewardNameContext);
-  if (!rewardNameContext) {
-    return null; // or handle the case where the context is not available
-  }
-  const rewardsName = rewardNameContext.rewardName;
+    return buildActivities(allZaps, start.toISOString().slice(0, 10), end);
+  }, [allZaps, compact, timestamp]);
 
   return (
-    <div className={styles.zapactivitychartbox}>
+    <section className={styles.zapactivitychartbox} aria-busy={isLoading}>
       <h2 className={styles.zapactivitycharttitle}>Zap activity</h2>
       {isLoading ? (
-        <div style={{ marginLeft: 0, marginRight: 'auto' }}>
-          Loading activity data ...
-        </div>
-      ) : activities.length > 0 ? (
+        <p>Loading activity data…</p>
+      ) : allZaps.length ? (
         <ActivityCalendar
           data={activities}
-          blockSize={12}
-          blockMargin={5}
-          fontSize={14}
+          blockSize={compact ? 10 : 12}
+          blockMargin={compact ? 3 : 5}
+          fontSize={compact ? 12 : 14}
           theme={{
             light: ['#1F1F1F', '#3a5e09', '#4d7a0c', '#6ba513', '#84cc16'],
             dark: ['#1F1F1F', '#3a5e09', '#4d7a0c', '#6ba513', '#84cc16'],
           }}
           labels={{
-            totalCount: `{{count}} ${rewardsName} zapped (up until yesterday)`,
+            totalCount: `{{count}} ${rewardName} zapped${
+              compact ? ' in the last 12 weeks' : ''
+            }`,
           }}
         />
       ) : (
-        <div style={{ marginLeft: 0, marginRight: 'auto' }}>
-          No activity data available
-        </div>
+        <p>No activity data available.</p>
       )}
-    </div>
+    </section>
   );
 };
 

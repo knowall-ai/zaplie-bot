@@ -8,7 +8,6 @@ import { fetchRelevantPeople } from '../services/peopleService';
 import { fetchZapHistory } from '../services/zapHistoryService';
 import SendZapsPopup from './SendZapsPopup';
 import ZapIcon from '../images/ZapIcon.svg';
-import CalendarIcon from '../images/Calendar.svg';
 
 const DAYS_BACK = 7;
 
@@ -185,55 +184,42 @@ const WeekComponent: React.FC = () => {
     setReloadCount(count => count + 1);
   };
 
-  const pageHeader = (
+  const renderHeader = (subtitle: React.ReactNode) => (
     <header className={styles.header}>
-      <span className={styles.eyebrow}>Weekly pulse</span>
       <h1 id="week-title" className={styles.title}>
         Your week
       </h1>
-      <p className={styles.subtitle}>
-        Recent meetings and the teammates worth recognising.
-      </p>
+      <p className={styles.subtitle}>{subtitle}</p>
     </header>
   );
 
+  const defaultSubtitle = `Your meetings and the people you met in the last ${DAYS_BACK} days.`;
+
   if (loading) {
     return (
-      <section
+      <div
         className={styles.weekcomponent}
         aria-labelledby="week-title"
         aria-busy="true"
       >
-        {pageHeader}
+        {renderHeader(defaultSubtitle)}
         <span className={styles.srOnly} role="status">
           Loading your week
         </span>
-        <div className={styles.skeletonStats} aria-hidden="true">
-          {[0, 1, 2].map(item => (
-            <div
-              key={item}
-              className={`${styles.shimmer} ${styles.skeletonStat}`}
-            />
-          ))}
+        <div className={styles.skeletonGroup} aria-hidden="true">
+          <div className={`${styles.shimmer} ${styles.skeletonStripCard}`} />
+          <div className={`${styles.shimmer} ${styles.skeletonListCard}`} />
         </div>
-        <div className={styles.skeletonList} aria-hidden="true">
-          {[0, 1, 2].map(item => (
-            <div
-              key={item}
-              className={`${styles.shimmer} ${styles.skeletonRow}`}
-            />
-          ))}
-        </div>
-      </section>
+      </div>
     );
   }
 
   if (needsConsent) {
     return (
-      <section className={styles.weekcomponent} aria-labelledby="week-title">
-        {pageHeader}
-        <div className={styles.stateCard}>
-          <h2 className={styles.stateTitle}>Calendar access needed</h2>
+      <div className={styles.weekcomponent} aria-labelledby="week-title">
+        {renderHeader(defaultSubtitle)}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>Calendar access needed</h2>
           <p className={styles.stateText}>
             Zaplie needs permission to read your calendar and relevant contacts
             to show recent meetings and the people you work with.
@@ -245,16 +231,16 @@ const WeekComponent: React.FC = () => {
             Grant calendar access
           </button>
         </div>
-      </section>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <section className={styles.weekcomponent} aria-labelledby="week-title">
-        {pageHeader}
-        <div className={styles.stateCard} role="alert">
-          <h2 className={styles.stateTitle}>We couldn&apos;t load your week</h2>
+      <div className={styles.weekcomponent} aria-labelledby="week-title">
+        {renderHeader(defaultSubtitle)}
+        <div className={styles.card} role="alert">
+          <h2 className={styles.cardTitle}>We couldn&apos;t load your week</h2>
           <p className={styles.stateText}>{error}</p>
           <button
             className={`${styles.button} ${styles.secondaryButton}`}
@@ -263,15 +249,86 @@ const WeekComponent: React.FC = () => {
             Try again
           </button>
         </div>
-      </section>
+      </div>
     );
   }
 
   const attendeesToZap = metAttendees.filter(
     a => a.matchedUser && !a.alreadyZapped,
   );
-  const topSuggestion = attendeesToZap[0];
   const onZaplie = metAttendees.filter(a => a.matchedUser);
+  const thankedCount = onZaplie.length - attendeesToZap.length;
+
+  const pulseSentence =
+    meetings.length === 0
+      ? `No meetings in the last ${DAYS_BACK} days.`
+      : `You joined ${meetings.length} meeting${
+          meetings.length !== 1 ? 's' : ''
+        } and met ${metAttendees.length} ${
+          metAttendees.length === 1 ? 'person' : 'people'
+        } this week${
+          attendeesToZap.length > 0
+            ? ` — ${attendeesToZap.length} teammate${
+                attendeesToZap.length !== 1 ? 's' : ''
+              } still to thank.`
+            : '.'
+        }`;
+
+  // Calendar-style week strip: one column per day that has meetings,
+  // oldest day on the left, meetings in chronological order within a day.
+  const sortedMeetings = [...meetings].sort(
+    (a, b) =>
+      asUtc(a.start.dateTime).getTime() - asUtc(b.start.dateTime).getTime(),
+  );
+  // Calendar band: every consecutive day of the displayed window gets a
+  // column, with or without meetings. The window ends today (the component
+  // fetches the last DAYS_BACK days), so the last column is today.
+  const eventsByDayKey = new Map<string, GraphEvent[]>();
+  sortedMeetings.forEach(event => {
+    const key = asUtc(event.start.dateTime).toDateString();
+    const existing = eventsByDayKey.get(key);
+    if (existing) {
+      existing.push(event);
+    } else {
+      eventsByDayKey.set(key, [event]);
+    }
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const firstDay = new Date(today);
+  firstDay.setDate(firstDay.getDate() - (DAYS_BACK - 1));
+  // A meeting fetched at the very edge of the rolling window can fall on the
+  // calendar day before the first column; widen the band so nothing is hidden.
+  if (sortedMeetings.length > 0) {
+    const earliest = asUtc(sortedMeetings[0].start.dateTime);
+    earliest.setHours(0, 0, 0, 0);
+    while (earliest < firstDay) {
+      firstDay.setDate(firstDay.getDate() - 1);
+    }
+  }
+  const calendarDays: Array<{ date: Date; events: GraphEvent[] }> = [];
+  for (
+    const cursor = new Date(firstDay);
+    cursor <= today;
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    const date = new Date(cursor);
+    calendarDays.push({
+      date,
+      events: eventsByDayKey.get(date.toDateString()) || [],
+    });
+  }
+
+  const firstDate = calendarDays[0].date;
+  const lastDate = calendarDays[calendarDays.length - 1].date;
+  const shortMonth = (d: Date) =>
+    d.toLocaleDateString('en-GB', { month: 'short' });
+  const rangeLabel =
+    firstDate.getMonth() === lastDate.getMonth()
+      ? `${firstDate.getDate()}–${lastDate.getDate()} ${shortMonth(lastDate)}`
+      : `${firstDate.getDate()} ${shortMonth(firstDate)} – ${lastDate.getDate()} ${shortMonth(lastDate)}`;
+  const todayKey = new Date().toDateString();
 
   const renderPerson = (
     key: string,
@@ -280,17 +337,15 @@ const WeekComponent: React.FC = () => {
     matchedUser: User | null,
     alreadyZapped: boolean,
   ) => (
-    <div key={key} className={styles.row}>
+    <li key={key} className={styles.row}>
       {renderAvatar(name, matchedUser)}
       <div className={styles.rowInfo}>
         <span className={styles.rowTitle}>{name}</span>
         <span className={styles.rowMeta}>{meta}</span>
       </div>
-      {!matchedUser && (
-        <span className={styles.noAccountBadge}>Not on Zaplie</span>
-      )}
+      {!matchedUser && <span className={styles.rowState}>Not on Zaplie</span>}
       {matchedUser && alreadyZapped && (
-        <span className={styles.zappedBadge}>
+        <span className={styles.rowState}>
           Zapped <img src={ZapIcon} alt="" className={styles.inlineIcon} />
         </span>
       )}
@@ -299,138 +354,187 @@ const WeekComponent: React.FC = () => {
           className={`${styles.button} ${styles.primaryButton}`}
           onClick={() => setZapTarget(matchedUser)}
         >
-          Zap
+          Send a zap
         </button>
       )}
-    </div>
+    </li>
+  );
+
+  const renderPeopleCard = (
+    id: string,
+    title: string,
+    count: number,
+    rows: React.ReactNode,
+    footer?: React.ReactNode,
+  ) => (
+    <section className={styles.card} aria-labelledby={id}>
+      <div className={styles.cardHeader}>
+        <h2 id={id} className={styles.cardTitle}>
+          {title}
+        </h2>
+        <span className={styles.count}>{count}</span>
+      </div>
+      {rows}
+      {footer}
+    </section>
   );
 
   return (
-    <section className={styles.weekcomponent} aria-labelledby="week-title">
-      {pageHeader}
+    <div className={styles.weekcomponent} aria-labelledby="week-title">
+      {renderHeader(pulseSentence)}
 
-      <div
-        className={styles.stats}
-        aria-label={`Summary for the last ${DAYS_BACK} days`}
-      >
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Meetings</span>
-          <span className={styles.statNum}>{meetings.length}</span>
-          <span className={styles.statHint}>last {DAYS_BACK} days</span>
+      <section className={styles.card} aria-labelledby="week-meetings">
+        <div className={styles.cardHeader}>
+          <h2 id="week-meetings" className={styles.cardTitle}>
+            This week&apos;s meetings
+          </h2>
+          <span className={styles.count}>{meetings.length}</span>
+          <span className={styles.rangeLabel}>{rangeLabel}</span>
+          {onZaplie.length > 0 && (
+            <div className={styles.progressInline}>
+              <span className={styles.progressText}>
+                {thankedCount} of {onZaplie.length} teammate
+                {onZaplie.length !== 1 ? 's' : ''} thanked
+              </span>
+              <span
+                className={styles.progressTrack}
+                role="img"
+                aria-label={`${thankedCount} of ${onZaplie.length} teammates thanked`}
+              >
+                <span
+                  className={styles.progressFill}
+                  style={{
+                    width: `${Math.round((thankedCount / onZaplie.length) * 100)}%`,
+                  }}
+                />
+              </span>
+            </div>
+          )}
         </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>To recognise</span>
-          <span className={styles.statNum}>{attendeesToZap.length}</span>
-          <span className={styles.statHint}>not zapped yet</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>On Zaplie</span>
-          <span className={styles.statNum}>{onZaplie.length}</span>
-          <span className={styles.statHint}>of the people you met</span>
-        </div>
-      </div>
-
-      {topSuggestion && (
-        <div className={styles.suggestionRow}>
-          <span className={styles.suggestionText}>
-            You met <strong>{topSuggestion.name}</strong>{' '}
-            {topSuggestion.meetingCount === 1
-              ? 'this week'
-              : `${topSuggestion.meetingCount} times this week`}{' '}
-            and haven't recognised them yet.
-          </span>
-          <button
-            className={`${styles.button} ${styles.primaryButton}`}
-            onClick={() => setZapTarget(topSuggestion.matchedUser)}
-          >
-            Zap {topSuggestion.name.split(' ')[0]}{' '}
-            <img src={ZapIcon} alt="" className={styles.inlineIcon} />
-          </button>
-        </div>
-      )}
-
-      <div className={styles.sectionHeader}>
-        <h2 className={styles.sectionHeading}>Recent meetings</h2>
-        <span className={styles.count}>{meetings.length}</span>
-      </div>
-      <div className={styles.section}>
-        {meetings.length === 0 && (
+        {meetings.length === 0 ? (
           <p className={styles.emptyText}>
             No meetings found in the last {DAYS_BACK} days.
           </p>
+        ) : (
+          <div className={styles.calendarScroll}>
+            <ol
+              className={styles.calendar}
+              style={
+                { '--cal-days': calendarDays.length } as React.CSSProperties
+              }
+            >
+              {calendarDays.map(day => {
+                const isToday = day.date.toDateString() === todayKey;
+                return (
+                  <li
+                    key={day.date.toDateString()}
+                    className={styles.calDay}
+                    aria-label={day.date.toLocaleDateString('en-GB', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                    })}
+                  >
+                    <div className={styles.calDayHeader}>
+                      <span className={styles.calWeekday}>
+                        {day.date.toLocaleDateString('en-GB', {
+                          weekday: 'short',
+                        })}
+                      </span>
+                      <span
+                        className={
+                          isToday
+                            ? `${styles.calDayNum} ${styles.calDayNumToday}`
+                            : styles.calDayNum
+                        }
+                      >
+                        {day.date.getDate()}
+                      </span>
+                    </div>
+                    <ol className={styles.calDayEvents}>
+                      {day.events.map(event => {
+                        const start = asUtc(event.start.dateTime);
+                        return (
+                          <li key={event.id} className={styles.meetingChip}>
+                            <span className={styles.meetingTime}>
+                              {start.toLocaleTimeString('en-GB', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                            <span className={styles.meetingTitle}>
+                              {event.subject}
+                            </span>
+                            <span className={styles.meetingMeta}>
+                              {event.attendees.length} attendee
+                              {event.attendees.length !== 1 ? 's' : ''}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         )}
-        {meetings.map(event => {
-          const start = asUtc(event.start.dateTime);
-          return (
-            <div key={event.id} className={styles.row}>
-              <div className={`${styles.rowMedia} ${styles.meetingIcon}`}>
-                <img src={CalendarIcon} alt="" className={styles.glyph} />
-              </div>
-              <div className={styles.rowInfo}>
-                <span className={styles.rowTitle}>{event.subject}</span>
-                <span className={styles.rowMeta}>
-                  {start.toLocaleString('en-GB', {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                  })}
-                  {' · '}
-                  {event.attendees.length} attendee
-                  {event.attendees.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      </section>
 
-      <div className={styles.sectionHeader}>
-        <h2 className={styles.sectionHeading}>People you met</h2>
-        <span className={styles.count}>{metAttendees.length}</span>
-      </div>
-      <div className={styles.section}>
-        {metAttendees.length === 0 && (
-          <p className={styles.emptyText}>No other attendees in this period.</p>
-        )}
-        {metAttendees.map(attendee =>
-          renderPerson(
-            attendee.email,
-            attendee.name,
-            `Met ${attendee.meetingCount === 1 ? 'once' : `${attendee.meetingCount} times`} · ${attendee.email}`,
-            attendee.matchedUser,
-            attendee.alreadyZapped,
+      <div className={styles.peopleGrid}>
+        {renderPeopleCard(
+          'week-people',
+          'People you met',
+          metAttendees.length,
+          metAttendees.length === 0 ? (
+            <p className={styles.emptyText}>
+              No other attendees in this period.
+            </p>
+          ) : (
+            <ul className={styles.rows}>
+              {metAttendees.map(attendee =>
+                renderPerson(
+                  attendee.email,
+                  attendee.name,
+                  `Met ${attendee.meetingCount === 1 ? 'once' : `${attendee.meetingCount} times`} · ${attendee.email}`,
+                  attendee.matchedUser,
+                  attendee.alreadyZapped,
+                ),
+              )}
+            </ul>
           ),
-        )}
-      </div>
-      {metAttendees.length > 0 && onZaplie.length === 0 && (
-        <p className={styles.summaryText}>
-          None of the people you met are on Zaplie yet.
-        </p>
-      )}
-      {onZaplie.length > 0 && attendeesToZap.length === 0 && (
-        <p className={styles.summaryText}>
-          You have recognised everyone you met this week.
-        </p>
-      )}
-
-      {collaborators.length > 0 && (
-        <>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionHeading}>People you work with most</h2>
-            <span className={styles.count}>{collaborators.length}</span>
-          </div>
-          <div className={styles.section}>
-            {collaborators.map(person =>
-              renderPerson(
-                person.email,
-                person.name,
-                person.email,
-                person.matchedUser,
-                person.alreadyZapped,
-              ),
+          <>
+            {metAttendees.length > 0 && onZaplie.length === 0 && (
+              <p className={styles.summaryText}>
+                None of the people you met are on Zaplie yet.
+              </p>
             )}
-          </div>
-        </>
-      )}
+            {onZaplie.length > 0 && attendeesToZap.length === 0 && (
+              <p className={styles.summaryText}>
+                You have recognised everyone you met this week.
+              </p>
+            )}
+          </>,
+        )}
+
+        {collaborators.length > 0 &&
+          renderPeopleCard(
+            'week-collaborators',
+            'People you work with most',
+            collaborators.length,
+            <ul className={styles.rows}>
+              {collaborators.map(person =>
+                renderPerson(
+                  person.email,
+                  person.name,
+                  person.email,
+                  person.matchedUser,
+                  person.alreadyZapped,
+                ),
+              )}
+            </ul>,
+          )}
+      </div>
 
       {zapTarget && (
         <SendZapsPopup
@@ -438,7 +542,7 @@ const WeekComponent: React.FC = () => {
           onClose={() => setZapTarget(null)}
         />
       )}
-    </section>
+    </div>
   );
 };
 
