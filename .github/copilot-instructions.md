@@ -33,8 +33,12 @@ domain error here:
 - an **Allowance** wallet — their budget to give away, and
 - a **Private** wallet — what they receive.
 
-A zap creates an invoice on the receiver's Private wallet and pays it from the
-sender's Allowance wallet.
+**Internal user-to-user zaps** create an invoice on the receiver's Private
+wallet and pay it from the sender's Allowance wallet. This is the only flow with
+verified attribution today, because both sides land in LNbits and can be
+correlated. A zap to an external, self-custodial destination has no Private
+wallet to correlate against, so it needs its own verified attribution rule
+before it can count — never assume the internal flow's guarantees carry over.
 
 - **The Private wallet is private.** Members may use it for their own payments.
   Do not surface its balance or rank users by what lands in it.
