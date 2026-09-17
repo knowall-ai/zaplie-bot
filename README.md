@@ -1,5 +1,7 @@
 ![CoverImage](CoverImage.png)
 
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/knowall-ai/zaplie-bot?label=CodeRabbit+Reviews&labelColor=171717&color=FF570A)](https://coderabbit.ai)
+
 # Overview
 
 Zaplie is an innovative solution that seamlessly integrates into Microsoft Teams and leverages Microsoft Copilot to create a dynamic, value-driven ecosystem of collaboration. Through a combination of AI automation and Bitcoin micro-transactions, Zaplie enables users, copilots (AI agents), and even customers to engage in meaningful interactions that drive success.
