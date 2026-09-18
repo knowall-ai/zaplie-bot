@@ -4,17 +4,19 @@ import {
   jsonResponse,
 } from '../../testUtils/fetchMock';
 import { apiRequest } from './gateway';
-import { msalInstance } from '../msalClient';
+import { getMsalInstance } from '../msalClient';
 
-jest.mock('../msalClient', () => ({
-  msalInstance: {
+jest.mock('../msalClient', () => {
+  const instance = {
     getActiveAccount: jest.fn(),
     getAllAccounts: jest.fn(),
     acquireTokenSilent: jest.fn(),
-  },
-}));
+  };
 
-const mockMsal = msalInstance as unknown as {
+  return { getMsalInstance: () => instance };
+});
+
+const mockMsal = getMsalInstance() as unknown as {
   getActiveAccount: jest.Mock;
   getAllAccounts: jest.Mock;
   acquireTokenSilent: jest.Mock;

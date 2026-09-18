@@ -1,5 +1,5 @@
 import { loginRequest } from '../authConfig';
-import { msalInstance } from '../msalClient';
+import { getMsalInstance } from '../msalClient';
 
 // LNbits is never reached from the browser: every call below goes to the
 // same-origin Express gateway, which holds the credentials server-side.
@@ -10,6 +10,7 @@ const API_BASE = '/api/lnbits';
 const REQUEST_TIMEOUT_MS = 30_000;
 
 const getIdToken = async (): Promise<string> => {
+  const msalInstance = getMsalInstance();
   const account =
     msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
   if (!account) {
