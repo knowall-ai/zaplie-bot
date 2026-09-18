@@ -87,14 +87,23 @@ jobs:
     outputs:
       allowed: ${{ steps.policy.outputs.allowed }}
     steps:
-      # The ref is spelled straight from the trigger contexts rather than
-      # routed through a job output, so a manual dispatch can only ever check
-      # out the revision it was dispatched on. The assertion below proves the
-      # checkout is the same revision validated-ref cleared.
-      - name: Check out the validated revision
+      # Two checkouts rather than one ref expression. A manual dispatch can
+      # write the default branch's Actions cache scope, so it must not be able
+      # to name a revision at all: it takes the ref it was dispatched on and
+      # nothing else. The quality-run trigger, which only has read access to
+      # that scope, is the one that names a head_sha. Both are then asserted
+      # against the revision validated-ref cleared.
+      - name: Check out the revision that passed quality checks
+        if: github.event_name == 'workflow_run'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Check out the dispatched revision
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
           persist-credentials: false
 
       - name: Assert the checkout is the validated revision
@@ -168,14 +177,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The ref is spelled straight from the trigger contexts rather than
-      # routed through a job output, so a manual dispatch can only ever check
-      # out the revision it was dispatched on. The assertion below proves the
-      # checkout is the same revision validated-ref cleared.
-      - name: Check out the validated revision
+      # Two checkouts rather than one ref expression. A manual dispatch can
+      # write the default branch's Actions cache scope, so it must not be able
+      # to name a revision at all: it takes the ref it was dispatched on and
+      # nothing else. The quality-run trigger, which only has read access to
+      # that scope, is the one that names a head_sha. Both are then asserted
+      # against the revision validated-ref cleared.
+      - name: Check out the revision that passed quality checks
+        if: github.event_name == 'workflow_run'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Check out the dispatched revision
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
           persist-credentials: false
 
       - name: Assert the checkout is the validated revision
@@ -369,14 +387,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The ref is spelled straight from the trigger contexts rather than
-      # routed through a job output, so a manual dispatch can only ever check
-      # out the revision it was dispatched on. The assertion below proves the
-      # checkout is the same revision validated-ref cleared.
-      - name: Check out the validated revision
+      # Two checkouts rather than one ref expression. A manual dispatch can
+      # write the default branch's Actions cache scope, so it must not be able
+      # to name a revision at all: it takes the ref it was dispatched on and
+      # nothing else. The quality-run trigger, which only has read access to
+      # that scope, is the one that names a head_sha. Both are then asserted
+      # against the revision validated-ref cleared.
+      - name: Check out the revision that passed quality checks
+        if: github.event_name == 'workflow_run'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Check out the dispatched revision
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
           persist-credentials: false
 
       - name: Assert the checkout is the validated revision
