@@ -6,6 +6,7 @@ import {
   afterEach,
   jest,
 } from '@jest/globals';
+import { USER_LIST_PAGE_SIZE } from './lnbitsService';
 
 const BASE = 'https://lnbits.test';
 const USERNAME = 'lnbits-admin';
@@ -506,5 +507,129 @@ describe('payment reads', () => {
     const error = await service.getAllPaymentsPage(10, 0).catch(e => e);
     expect(error).not.toBeInstanceOf(service.PaginatedPaymentsUnsupportedError);
     expect(String(error)).toContain('500');
+  });
+});
+
+describe('getUsers', () => {
+  const PAGE = USER_LIST_PAGE_SIZE;
+  const rawUser = (n: number) => ({
+    id: `u-${String(n).padStart(4, '0')}`,
+    external_id: `aad-${n}`,
+    email: `person.${n}@acme.test`,
+    extra: null,
+  });
+  const usersPage = (from: number, count: number) =>
+    Array.from({ length: count }, (_, i) => rawUser(from + i));
+  const listUrl = (offset: number, extra = '') =>
+    `${BASE}/users/api/v1/user?limit=${PAGE}&offset=${offset}&sortby=id&direction=asc${extra}`;
+
+  const stubUserPages = (
+    pages: Record<string, Response | (() => Response)>,
+  ) => {
+    fetchMock.mockImplementation(async input => {
+      const url = String(input);
+      if (url === `${BASE}/api/v1/auth`)
+        return jsonResponse({ access_token: 'tok-1' });
+      const page = pages[url];
+      if (page) return typeof page === 'function' ? page() : page;
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+  };
+  const listCalls = () =>
+    fetchMock.mock.calls
+      .map(c => String(c[0]))
+      .filter(u => u.includes('/users/api/v1/user?'));
+
+  test('reads every page of the user list until total is reached, not just the first', async () => {
+    const total = PAGE + 15;
+    stubUserPages({
+      [listUrl(0)]: jsonResponse({ data: usersPage(1, PAGE), total }),
+      [listUrl(PAGE)]: jsonResponse({ data: usersPage(PAGE + 1, 15), total }),
+    });
+
+    const users = await service.getUsers('admin-key', null);
+
+    expect(users).toHaveLength(total);
+    expect(users[0]).toMatchObject({
+      id: 'u-0001',
+      aadObjectId: 'aad-1',
+      displayName: 'Person 1',
+    });
+    expect(users[total - 1]).toMatchObject({ id: 'u-0115' });
+    expect(listCalls()).toEqual([listUrl(0), listUrl(PAGE)]);
+  });
+
+  test('advances offset by the rows received when the server caps the page size', async () => {
+    const total = 120;
+    stubUserPages({
+      [listUrl(0)]: jsonResponse({ data: usersPage(1, 50), total }),
+      [listUrl(50)]: jsonResponse({ data: usersPage(51, 50), total }),
+      [listUrl(100)]: jsonResponse({ data: usersPage(101, 20), total }),
+    });
+
+    const users = await service.getUsers('admin-key', null);
+
+    expect(users).toHaveLength(total);
+    expect(listCalls()).toEqual([listUrl(0), listUrl(50), listUrl(100)]);
+  });
+
+  test('keeps the external_id filter on the paged, ordered request', async () => {
+    stubUserPages({
+      [listUrl(0, '&external_id=aad-7')]: jsonResponse({
+        data: [rawUser(7)],
+        total: 1,
+      }),
+    });
+
+    const users = await service.getUsers('admin-key', { aadObjectId: 'aad-7' });
+
+    expect(users.map(u => u.id)).toEqual(['u-0007']);
+    expect(lastRequest().url).toBe(listUrl(0, '&external_id=aad-7'));
+  });
+
+  test('returns an empty list when the instance has no users', async () => {
+    stubUserPages({ [listUrl(0)]: jsonResponse({ data: [], total: 0 }) });
+
+    await expect(service.getUsers('admin-key', null)).resolves.toEqual([]);
+    expect(listCalls()).toEqual([listUrl(0)]);
+  });
+
+  test('surfaces a failed page with its number instead of returning a partial list', async () => {
+    stubUserPages({
+      [listUrl(0)]: jsonResponse({ data: usersPage(1, PAGE), total: 150 }),
+      [listUrl(PAGE)]: jsonResponse({ detail: 'boom' }, { status: 500 }),
+    });
+
+    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
+      /status: 500, page 2/,
+    );
+  });
+
+  test('stops and reports when the server ignores offset', async () => {
+    const samePage = () =>
+      jsonResponse({ data: usersPage(1, PAGE), total: 150 });
+    stubUserPages({ [listUrl(0)]: samePage, [listUrl(PAGE)]: samePage });
+
+    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
+      /ignored offset on page 2/,
+    );
+  });
+
+  test('rejects a page without a data array instead of treating it as empty', async () => {
+    stubUserPages({ [listUrl(0)]: jsonResponse({ total: 15 }) });
+
+    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
+      /page 1 has no data array/,
+    );
+  });
+
+  test('rejects a page whose total is not a non-negative integer', async () => {
+    stubUserPages({
+      [listUrl(0)]: jsonResponse({ data: usersPage(1, 5), total: -1 }),
+    });
+
+    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
+      /page 1 has an invalid total/,
+    );
   });
 });

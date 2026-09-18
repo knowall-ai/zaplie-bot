@@ -151,7 +151,11 @@ Three server-side clients speak to the LNbits REST API:
   obtained from `POST /api/v1/auth` (cached at module level with concurrent
   request de-duplication). Uses the core API (`/api/v1/wallet`, `/payments`,
   `/wallets/{id}`) and the core Users API (`/users/api/v1/user`,
-  `/users/api/v1/user/{id}/wallet`). Attempts a one-off grant of
+  `/users/api/v1/user/{id}/wallet`). The user list is read page by page
+  (`sortby=id`, `limit`/`offset`, 100 per request, until `total` is reached
+  or a page comes back empty) because LNbits 1.6 returns ten accounts per
+  request by default and orders nothing unless `sortby` is set. Attempts a
+  one-off grant of
   `LNBITS_INITIAL_ALLOWANCE` to a new user's Allowance wallet (`topUpWallet`,
   called from `UserService`); the grant is skipped when the setting is missing
   or not a positive integer, and a failed LNbits request is logged rather than

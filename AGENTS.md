@@ -156,6 +156,11 @@ table):
 - The GitHub Actions workflows (`.github/workflows/`) build only `tabs/` and
   deploy to the `zappie-dev` App Service (slot per PR / `testing`); the bot is
   deployed via `teamsapp deploy`, not CI.
+- `getUsers` pages the LNbits Users API (`sortby=id`, 100 per request, until
+  `total` is reached or a page comes back empty). LNbits 1.6 returns ten
+  accounts per request by default, orders nothing unless `sortby` is set, and
+  reports `total: 0` once `offset` is past the end, so never read the list in
+  one request.
 
 ## Documentation
 
