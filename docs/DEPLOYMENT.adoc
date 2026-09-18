@@ -136,8 +136,12 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Tabs backend
 
 | `LNBITS_INITIAL_ALLOWANCE`
-| Sats granted/topped-up to each user's Allowance wallet
-| Bot
+| Sats granted/topped-up to each user's Allowance wallet. Unset on the tab backend, first-run portal provisioning still creates the account but leaves the Allowance wallet empty and logs the reason
+| Bot, Tabs backend
+
+| `PROFILE_PHOTO_HOST`
+| SharePoint host serving tenant profile photos (for example `contoso.sharepoint.com`). Unset, portal-provisioned accounts are created without an avatar rather than with a URL pointing at another tenant
+| Tabs backend
 
 | `LNBITS_HOST_WALLET_ID`, `LNBITS_HOST_USER_ID`, `LNBITS_INKEY`
 | Source wallet for the scheduled allowance top-up

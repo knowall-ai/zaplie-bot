@@ -27,7 +27,9 @@ deployable components in one repository:
   the Teams member and calls `UserService.ensureUserSetup()`, which creates the
   LNbits user (keyed by AAD object id) and ensures each user has an
   **Allowance** wallet (spending budget) and a **Private** wallet (received
-  Zaps).
+  Zaps). The tab backend mirrors this in `ensureCaller`
+  (`tabs/backend/lnbitsGatewayService.js`), so opening the portal provisions
+  the account too — messaging the bot first is not required.
 - **LNbits integration**: `src/services/lnbitsService.ts` (bot),
   `tabs/src/services/lnbitsServiceLocal.ts` (browser), and
   `functions/services/lnbitsService.ts` (request-scoped) are three parallel

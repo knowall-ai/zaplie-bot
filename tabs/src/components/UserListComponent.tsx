@@ -33,8 +33,12 @@ const UserListComponent: FunctionComponent = () => {
         setCache('allUsers', allUsers);
       }
 
+      // Service and test accounts have no linked Entra identity; the
+      // directory only lists teammates who can actually use Teams.
+      const linkedUsers = allUsers.filter(user => user.aadObjectId);
+
       const usersWithWallets = await Promise.all(
-        allUsers.map(async user => {
+        linkedUsers.map(async user => {
           const wallets = await getUserWallets(user.id);
           const exactWallet = (name: string) => {
             const matches = wallets.filter(

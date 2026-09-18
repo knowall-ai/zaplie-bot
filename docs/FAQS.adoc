@@ -29,9 +29,10 @@ the result and your remaining balance.
 
 === Why did sending to a colleague fail?
 
-Recipients must have interacted with the app at least once so their wallets
-exist. Failed recipients are listed on the result card — ask them to message
-the bot, then try again.
+Recipients must have opened the app at least once so their wallets exist —
+either by messaging the bot or by opening the Zaplie tab, both of which
+provision the account. Failed recipients are listed on the result card — ask
+them to open Zaplie, then try again.
 
 === Where do received Zaps go?
 
@@ -50,9 +51,11 @@ LNbits 0.12 or higher, with the User Manager extension enabled.
 
 === How are Teams users mapped to wallets?
 
-By the Entra ID (AAD) object id, stored as an extra field on the LNbits user.
-`FetchUserMiddleware` ensures the user and both wallets exist on every bot
-interaction.
+By the Entra ID (AAD) object id, stored as the LNbits user's `external_id`
+(and mirrored in an extra field). `FetchUserMiddleware` ensures the user and
+both wallets exist on every bot interaction, and the tab backend's
+`ensureCaller` does the same on the first authenticated portal request, so
+neither entry point depends on the other.
 
 === How do I report a security issue?
 

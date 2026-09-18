@@ -115,7 +115,11 @@ const RewardsComponent: FunctionComponent = () => {
         <div className={styles.error} role="alert">
           <span>{error}</span>
           {storeId && (
-            <button type="button" onClick={() => void loadRewards()}>
+            <button
+              type="button"
+              className={styles.retryButton}
+              onClick={() => void loadRewards()}
+            >
               Try again
             </button>
           )}

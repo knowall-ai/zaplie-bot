@@ -178,6 +178,35 @@
   border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.retryButton {
+  min-width: 96px;
+  padding: 9px var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--accent);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.retryButton:hover {
+  background-color: var(--surface-page);
+  border-color: var(--accent);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 
 @media (max-width: 480px) {

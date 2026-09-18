@@ -115,11 +115,13 @@ const Home: React.FC = () => {
             isLoading={loading}
             allZaps={zaps}
             allUsers={users}
+            hasError={Boolean(error)}
           />
           <ZapActivityChartComponent
             isLoading={loading}
             timestamp={timestamp}
             allZaps={zaps}
+            hasError={Boolean(error)}
           />
         </div>
       </div>
