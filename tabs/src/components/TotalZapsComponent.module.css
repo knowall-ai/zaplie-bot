@@ -27,7 +27,7 @@
 }
 
 .bigNumber {
-  color: var(--text-primary);
+  color: var(--accent);
   font-size: clamp(36px, 7vw, 48px);
   font-weight: 500;
   line-height: 1.1;
