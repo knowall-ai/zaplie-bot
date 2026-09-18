@@ -130,14 +130,18 @@ a successful `Code Quality Checks` run of its own and is reachable from
 `main`, and each job asserts that what it checked out is that exact
 revision.
 
-The portal deploy is intentionally skipped until these prerequisites
-are satisfied:
+`portal-policy` gates the portal deploy on two prerequisites. Both are
+satisfied on `main` today, so the portal builds and deploys; the job stays in
+place as a regression guard, and a change that reintroduces either condition
+skips `portal-build` and `portal-deploy` and reports the offending files in
+the run summary.
 
-. All privileged LNbits operations have moved behind the Express backend. CRA
-  must not reference `REACT_APP_LNBITS_PASSWORD`,
+. All privileged LNbits operations stay behind the Express backend. Browser
+  code under `tabs/src` must not reference `REACT_APP_LNBITS_PASSWORD`,
   `REACT_APP_LNBITS_ADMINKEY`, `REACT_APP_LNBITS_USERNAME` or
   `REACT_APP_LNBITS_INKEY`; CRA embeds their values in public JavaScript.
 . Mutable JSON state has moved outside `/home/site/wwwroot` to durable storage.
+  `tabs/backend/dataPaths.js` resolves every store under `ZAPLIE_DATA_DIR`.
   Set `ZAPLIE_DATA_DIR=/home/data/zaplie` before the first clean deployment and
   migrate any existing JSON there. Artifact staging excludes all eight mutable
   JSON files, and clean deployment removes only stale code under `wwwroot`.
@@ -215,21 +219,16 @@ gh secret delete ZAPLIE_TEST_BOT_PUBLISH_PROFILE --env Test
 gh secret delete ZAPLIE_TEST_WEBAPP_PUBLISH_PROFILE --env Test
 ----
 
-`Azure_App_Service_zaplie-prod.yml` is unchanged by this workflow. It still
-runs on every push to `main` and would deploy the portal to
-`zaplie-prod-webapp` from a publish profile, but in practice it does not
-deploy anything today: its `build` job fails on the source scan for
-`process.env.REACT_APP_LNBITS_(ADMINKEY|PASSWORD)` in `tabs/src`, and `deploy`
-depends on `build`. Production still needs its own protected OIDC promotion
-built on a revision that passed Test.
+`Azure_App_Service_zaplie-prod.yml` is unchanged by this workflow. It runs on
+every push to `main` and deploys the portal — the CRA bundle plus the Express
+backend that serves it — to `zaplie-prod-webapp` from a publish profile. Its
+own admin-credential scan passes on `main` today, so it does deploy. Production
+still needs its own protected OIDC promotion built on a revision that passed
+Test.
 
-The two workflows cannot race each other in any case. The Test workflow's
-portal and bot jobs target their own Test App Services (`zaplie-test-webapp`
-and `zaplie-test-bot-uk`) and never touch a production one. On the Test side
-only the bot deploys today: `portal-build` is skipped whenever `portal-policy`
-finds privileged `REACT_APP_LNBITS_*` references in `tabs/src` or mutable JSON
-stores under `tabs/backend`, which it does on `main` at present, and
-`portal-deploy` is skipped with it.
+The two workflows cannot race each other. The Test workflow's portal and bot
+jobs target their own Test App Services (`zaplie-test-webapp` and
+`zaplie-test-bot-uk`) and never touch a production one.
 
 === Persistent application state
 
