@@ -162,8 +162,10 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: tabs/package-lock.json
+          # No npm cache. A dispatch can build any revision reachable from
+          # main, and a cache write from such a job can poison the cache the
+          # default branch later restores (CodeQL actions/cache-poisoning).
+          # These jobs run once per deployment, so the saving is not worth it.
 
       - name: Validate public build configuration
         working-directory: tabs
@@ -345,8 +347,8 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: package-lock.json
+          # No npm cache, for the same cache-poisoning reason as the portal
+          # build job above.
 
       - name: Build the bot
         run: |
