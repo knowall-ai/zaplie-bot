@@ -37,8 +37,8 @@
 
 . `aadApp/create` — AAD app registration ("Zapp.ie", single-tenant sign-in
   audience, generates a client secret)
-. `cli/runNpmCommand` — `npm run write-env` (copies LNBITS_*/URL values into
-  the env file) and `npm run build-manifest` (renders
+. `cli/runNpmCommand` — `npm run write-env` (copies the LNBITS_*, LEADERBOARD_*
+  and URL values into the env file) and `npm run build-manifest` (renders
   `manifest.template.json` → `appPackage/manifest.json` via `build.js`)
 . `teamsApp/create` and `botAadApp/create`
 . `arm/deploy` — `infra/azure.bicep` with `infra/azure.parameters.json`:
@@ -155,6 +155,13 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | `LNBITS_POINTS_LABEL`
 | Default reward-unit label (renamable in Settings)
 | Bot, Tabs
+
+| `LEADERBOARD_WINDOW_DAYS`, `LEADERBOARD_TOP_N`
+| `show leaderboard` window in days (default `7` like the portal) and rows
+  shown (default `10`); each accepts a whole number from `1` to
+  `999999999`; an invalid value makes the command reply "unavailable" and
+  log the variable name
+| Bot
 
 | `REACT_APP_AAD_CLIENT_ID`, `REACT_APP_TENANT_ID`
 | MSAL configuration for the tabs SPA

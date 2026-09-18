@@ -1,54 +1,58 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory } from 'botbuilder';
-import { getWallets, getUsers } from '../services/lnbitsService';
+import { getRecentZaps } from '../services/zapHistoryService';
+import {
+  leaderboardEmptyMessage,
+  leaderboardTitle,
+  rankZapSenders,
+  readLeaderboardSettings,
+  windowStartSeconds,
+} from '../services/zapLeaderboard';
 
-const adminKey = process.env.LNBITS_ADMINKEY as string;
-
-// Names what the numbers actually are. LNbits exposes a wallet balance, not a
-// received-zaps total, so a title promising "zaps received" would misreport a
-// user who has spent or withdrawn from their Private wallet.
-export const LEADERBOARD_TITLE = 'Current leaders (Private wallet balance):';
-export const LEADERBOARD_EMPTY_MESSAGE =
-  'No Private wallet balances to rank yet. Send a zap to get things started!';
 export const LEADERBOARD_UNAVAILABLE_MESSAGE =
   'Sorry, I could not load the leaderboard just now. Please try again in a moment.';
-export const LEADERBOARD_LIMIT = 10;
 
 export interface LeaderboardEntry {
   displayName: string;
   amount: number;
 }
 
+export interface LeaderboardCardOptions {
+  title: string;
+  emptyMessage: string;
+  portalUrl?: string;
+}
+
 // Builds the leaderboard card: a title, then one two-column row per leader
-// (rank + name on the left, bold amount on the right), capped at the top
-// LEADERBOARD_LIMIT entries. Entries must already be sorted. With no entries
-// the card says so instead of showing a title over nothing.
+// (rank + name on the left, bold amount on the right). Entries must already
+// be sorted and capped by the caller. With no entries the card says so
+// instead of showing a title over nothing.
 export function buildLeaderboardCard(
   entries: LeaderboardEntry[],
   rewardName: string,
-  portalUrl?: string,
+  options: LeaderboardCardOptions,
 ) {
-  const leaders = entries.slice(0, LEADERBOARD_LIMIT);
+  const { title, emptyMessage, portalUrl } = options;
   return {
     type: 'AdaptiveCard',
     body: [
       {
         type: 'TextBlock',
-        text: LEADERBOARD_TITLE,
+        text: title,
         weight: 'Bolder',
         size: 'Medium',
         wrap: true,
       },
-      ...(leaders.length === 0
+      ...(entries.length === 0
         ? [
             {
               type: 'TextBlock',
-              text: LEADERBOARD_EMPTY_MESSAGE,
+              text: emptyMessage,
               wrap: true,
             },
           ]
         : []),
-      ...leaders.map((entry, index) => ({
+      ...entries.map((entry, index) => ({
         type: 'ColumnSet',
         columns: [
           {
@@ -92,7 +96,10 @@ export function buildLeaderboardCard(
   };
 }
 
-// New command for showing leaderboard
+// Ranks people by the sats they zapped out of their Allowance wallet inside
+// the configured window. The Private wallet is never read: its balance is
+// private, and a leaderboard on it would rank what people received (or kept)
+// rather than what they gave.
 export class ShowLeaderboardCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
     try {
@@ -100,66 +107,35 @@ export class ShowLeaderboardCommand extends SSOCommand {
 
       const globalRewardName = process.env.LNBITS_POINTS_LABEL as string;
 
-      const [wallets, users] = await Promise.all([
-        getWallets(adminKey, 'Private'),
-        getUsers(adminKey, null),
-      ]);
-      // Silence is the wrong answer to a failed lookup: the user typed a
-      // command and must be told it did not work.
-      if (!wallets || !users) {
-        console.error(
-          'Leaderboard unavailable: LNbits returned no wallet or user list.',
-        );
-        await context.sendActivity(LEADERBOARD_UNAVAILABLE_MESSAGE);
-        return;
-      }
+      // Read inside the try so a bad setting reaches the user as
+      // "unavailable" and the operator as a log line naming the variable.
+      const { windowDays, topN } = readLeaderboardSettings();
 
-      // One getUsers call for every display name instead of a getUser
-      // round-trip per wallet.
-      const nameByUserId = new Map(
-        users.map(individual => [individual.id, individual.displayName]),
-      );
+      // getRecentZaps already keeps only outgoing Allowance payments that
+      // landed in a Private wallet and drops the weekly sweep, so the ledger
+      // it returns is exactly what may be ranked. Its default limit is sized
+      // for a feed, not a total, hence the explicit ceiling.
+      const zaps = await getRecentZaps({
+        sinceTimestamp: windowStartSeconds(windowDays),
+        limit: Number.MAX_SAFE_INTEGER,
+      });
 
-      const entries: LeaderboardEntry[] = [];
-      for (const candidate of wallets.filter(candidateWallet =>
-        candidateWallet.name.toLowerCase().includes('private'),
-      )) {
-        const displayName = nameByUserId.get(candidate.user);
-        if (!displayName) {
-          // Ranking a wallet we cannot attribute would publish a balance under
-          // a placeholder name. Leave it out and flag it for an operator.
-          console.warn(
-            `Leaderboard: skipping wallet ${candidate.id}; its owner is missing from the LNbits user list.`,
-          );
-          continue;
-        }
-        entries.push({
-          displayName,
-          amount: candidate.balance_msat / 1000,
-        });
-      }
-
-      // NOTE: the ranking is by Private wallet *balance*, not by a true
-      // "zaps received" total — LNbits only exposes the balance, and a
-      // withdrawal would lower a user's rank. Constraint of the LNbits
-      // data model, which is why the title names the balance.
-      // Equal balances are ordered by name so the card is stable between runs.
-      entries.sort(
-        (first, second) =>
-          second.amount - first.amount ||
-          first.displayName.localeCompare(second.displayName),
+      const entries: LeaderboardEntry[] = rankZapSenders(zaps, topN).map(
+        sender => ({
+          displayName: sender.displayName,
+          amount: sender.satsSent,
+        }),
       );
 
       // The portal shares the PORTAL_URL name with tabs/backend (see
       // env/.env.dev.example). Without it there is no live portal to link
       // to, so the button is omitted rather than pointing at a dead URL.
-      const cardResponse = buildLeaderboardCard(
-        entries,
-        globalRewardName,
-        process.env.PORTAL_URL,
-      );
+      const cardResponse = buildLeaderboardCard(entries, globalRewardName, {
+        title: leaderboardTitle(windowDays, globalRewardName),
+        emptyMessage: leaderboardEmptyMessage(windowDays),
+        portalUrl: process.env.PORTAL_URL,
+      });
 
-      // Send the formatted card as an activity
       await context.sendActivity({
         attachments: [CardFactory.adaptiveCard(cardResponse)],
       });
