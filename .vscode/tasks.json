@@ -27,6 +27,9 @@
                     "m365Account", // Sign-in prompt for Microsoft 365 account, then validate if the account enables the sideloading permission.
                     "portOccupancy" // Validate available ports to ensure those debug ones are not occupied.
                 ],
+                // Port 3000 is deliberately absent: nothing in this chain
+                // starts the tab server, so the developer starts it first
+                // (`cd tabs && npm start`) and the port is already taken.
                 "portOccupancy": [
                     3978, // app service port
                     9239 // app inspector port for Node.js debugger
@@ -49,6 +52,17 @@
                         "writeToEnvironmentFile": {
                             "endpoint": "BOT_ENDPOINT", // output tunnel endpoint as BOT_ENDPOINT
                             "domain": "BOT_DOMAIN" // output tunnel domain as BOT_DOMAIN
+                        }
+                    },
+                    {
+                        // Chrome and Edge block Teams from framing localhost,
+                        // so local tabs use the same public tunnel as the bot.
+                        "portNumber": 3000,
+                        "protocol": "https",
+                        "access": "public",
+                        "writeToEnvironmentFile": {
+                            "endpoint": "TAB_ENDPOINT",
+                            "domain": "TAB_DOMAIN"
                         }
                     }
                 ],

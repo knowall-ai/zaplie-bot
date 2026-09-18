@@ -1,10 +1,9 @@
 # TeamsFx files
-env/.env.*.user
-env/.env.dev
-env/.env.local
-env/.env.test
-# Contains real LNbits/host config — keep local, never commit (use env/.env.dev.example)
-env/.env.dev
+# Every generated environment file: they hold real LNbits/host config and
+# secrets (write-env copies values from the process environment into whichever
+# env/.env.<TEAMSFX_ENV> is active). Only the *.example templates are tracked.
+env/.env.*
+!env/.env.*.example
 .localConfigs
 appPackage/build
 

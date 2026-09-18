@@ -4,11 +4,47 @@ const dotenv = require('dotenv');
 
 const env = process.env.TEAMSFX_ENV || 'local';
 
+// TEAMSFX_ENV names a file inside env/, so keep it to a plain environment
+// name — a value with separators or '..' would write outside that folder.
+if (!/^[A-Za-z0-9_-]+$/.test(env)) {
+  console.error(
+    'Error: TEAMSFX_ENV is not a valid environment name (letters, digits, ' +
+      'underscore and hyphen only).',
+  );
+  process.exit(1);
+}
+
 const envFilePath = path.join(__dirname, '..', 'env', '.env.dev');
 const envOutputPath = path.join(__dirname, '..', 'env', `.env.${env}`);
 
-// Load environment variables from .env.dev
-const envConfig = dotenv.parse(fs.readFileSync(envFilePath));
+// env/.env.dev is gitignored, so a clean checkout (or CI) may not have it.
+// Read it when it exists and let process variables win, so values supplied by
+// the environment still reach the generated file.
+const fileConfig = fs.existsSync(envFilePath)
+  ? dotenv.parse(fs.readFileSync(envFilePath))
+  : {};
+// NOTE: process.env wins, and whatever lands in selectedVars is written to
+// env/.env.<TEAMSFX_ENV>. That file can therefore contain real credentials —
+// .gitignore covers every env/.env.* for exactly this reason.
+const envConfig = { ...fileConfig, ...process.env };
+
+const hostnameOf = value => {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return undefined;
+  }
+};
+
+// The tab URL the Entra manifest's SPA redirects point at.
+//
+// Locally it is only ever the tunnel value: falling back to CONTENT_URL here
+// would persist a TAB_ENDPOINT that build.js then uses for the website URLs
+// too, collapsing CONTENT_URL and WEBSITE_URL onto one value. A deployed
+// environment has no tunnel, so it uses CONTENT_URL — build.js ignores
+// TAB_ENDPOINT outside the local environment, so nothing collapses there.
+const tabEndpoint =
+  env === 'local' ? envConfig.TAB_ENDPOINT : envConfig.CONTENT_URL;
 
 // Select specific variables to write
 const selectedVars = {
@@ -21,6 +57,12 @@ const selectedVars = {
   ZAPLIE_DATA_DIR: envConfig.ZAPLIE_DATA_DIR,
   WEBSITE_URL: envConfig.WEBSITE_URL,
   CONTENT_URL: envConfig.CONTENT_URL,
+  // A local debug session overwrites both with the port 3000 tunnel before
+  // provisioning.
+  TAB_ENDPOINT: tabEndpoint,
+  TAB_DOMAIN:
+    (env === 'local' && envConfig.TAB_DOMAIN) ||
+    hostnameOf(tabEndpoint || envConfig.CONTENT_URL),
   FOUNDRY_PROJECT_ENDPOINT: envConfig.FOUNDRY_PROJECT_ENDPOINT,
   FOUNDRY_MODEL: envConfig.FOUNDRY_MODEL,
   GRAPH_CONNECTION_NAME: envConfig.GRAPH_CONNECTION_NAME,
@@ -62,6 +104,8 @@ appendEnvFile(envOutputPath, {
   ZAPLIE_DATA_DIR: selectedVars.ZAPLIE_DATA_DIR,
   WEBSITE_URL: selectedVars.WEBSITE_URL,
   CONTENT_URL: selectedVars.CONTENT_URL,
+  TAB_ENDPOINT: selectedVars.TAB_ENDPOINT,
+  TAB_DOMAIN: selectedVars.TAB_DOMAIN,
   FOUNDRY_PROJECT_ENDPOINT: selectedVars.FOUNDRY_PROJECT_ENDPOINT,
   FOUNDRY_MODEL: selectedVars.FOUNDRY_MODEL,
   GRAPH_CONNECTION_NAME: selectedVars.GRAPH_CONNECTION_NAME,
