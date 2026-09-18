@@ -20,7 +20,8 @@ export class ShowMyBalanceCommand extends SSOCommand {
         return;
       }
 
-      console.log('User:', user);
+      // Wallet objects carry keys, so only the id is logged.
+      console.log('Showing balance for user', user.id);
 
       // Get the user's wallets
       const usersWallets = await getUserWallets(adminKey, user.id);
@@ -29,8 +30,6 @@ export class ShowMyBalanceCommand extends SSOCommand {
         await context.sendActivity('No wallets found for the user.');
         return;
       }
-
-      console.log('User Wallets:', usersWallets);
 
       // Loop through all wallets and send their balances
       for (const wallet of usersWallets) {

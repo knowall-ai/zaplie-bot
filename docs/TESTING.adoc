@@ -24,6 +24,9 @@ closing the gaps.
   duplicate after restart that never invokes the payment dependency.
 - `src/services/lnbitsService.test.ts` mocks `fetch` and exercises the real
   service logic for wallet, invoice, and payment calls.
+- `src/services/paymentExtra.test.ts` and the `SendZap payment metadata` block
+  in `src/commands/sendZapCommand.test.ts` pin the keyless payment metadata
+  projection (no wallet keys or balances in LNbits `extra`).
 - Run:
 
 [source,bash]

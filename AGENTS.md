@@ -51,7 +51,9 @@ deployable components in one repository:
   clients for the LNbits REST API (`/api/v1/*`, `/users/api/v1/*`).
   Auth is either `X-Api-Key` (admin/invoice key) or a Bearer token from
   `POST /api/v1/auth`. A Zap = `createInvoice` on the receiver's Private wallet
-  then `payInvoice` from the sender's Allowance wallet.
+  then `payInvoice` from the sender's Allowance wallet. The payment `extra`
+  carries `{ id, name, user, displayName }` per wallet, built by
+  `src/services/paymentExtra.ts`, never a `Wallet` object (which holds keys).
 - **Tabs app**: routes `/feed`, `/users`, `/rewards`, `/wallet`, `/settings`
   (MSAL-guarded via `RequireAuth`), plus `/login`, `/auth-start`, `/auth-end`.
   `tabs/backend/server.js` is a tiny Express API that persists the renamable
@@ -170,4 +172,7 @@ table):
 ## Security
 
 Real money moves through this system. Treat LNbits keys and AAD secrets as
-production credentials at all times. Vulnerability reports: see `SECURITY.md`.
+production credentials at all times. Never serialise a `Wallet` object into
+LNbits payment `extra`, logs or Teams messages; project it with
+`toPaymentExtraWallet` from `src/services/paymentExtra.ts`. Vulnerability
+reports: see `SECURITY.md`.

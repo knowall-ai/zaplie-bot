@@ -8,6 +8,10 @@ import {
 } from '../services/lnbitsService';
 import { UserService } from '../services/userService';
 import { GENERIC_ERROR_MESSAGE } from '../messages';
+import {
+  ZapPaymentExtra,
+  toPaymentExtraWallet,
+} from '../services/paymentExtra';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
@@ -187,11 +191,21 @@ export async function SendZap(
   try {
     console.log('Sending zap ...');
 
-    // Extra information to be logged for tracking from which wallet the zap is sent from and to whom
-    const extra = {
-      from: sender.allowanceWallet,
-      to: receiver.privateWallet,
+    // Metadata LNbits stores on the invoice and the payment so the portal
+    // can show who zapped whom. Wallet objects carry keys, so only the
+    // projection goes in, and a missing wallet fails before any LNbits call.
+    const extra: ZapPaymentExtra = {
       tag: 'zap',
+      from: toPaymentExtraWallet(
+        sender.allowanceWallet,
+        'sender Allowance',
+        sender.displayName,
+      ),
+      to: toPaymentExtraWallet(
+        receiver.privateWallet,
+        'receiver Private',
+        receiver.displayName,
+      ),
     };
 
     // Create an invoice for the amount in the recipient's wallet

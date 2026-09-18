@@ -273,7 +273,10 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 | Transactions / Zaps
 | LNbits payments ledger
-| Queried per wallet for feed, history, and leaderboard
+| Queried per wallet for feed, history, and leaderboard. Each zap carries an
+  `extra` object `{ tag: 'zap', from, to }` where `from`/`to` are
+  `{ id, name, user, displayName }` projections of the wallets, never the
+  wallet objects themselves
 
 | Reward label ("Sats")
 | `data.json` under `ZAPLIE_DATA_DIR`
@@ -299,6 +302,24 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 |===
 
 == Design Decisions
+
+=== Payment metadata is a projection, not the wallet
+
+*Context:* LNbits stores the payment `extra` object as JSON on the payment
+row. Anyone holding the receiving wallet's invoice key can read it, and the
+portal feed loads it into every browser. Until this decision the bot wrote
+the full sender Allowance and receiver Private `Wallet` objects there,
+including `adminkey`, `inkey` and `balance_msat`.
+
+*Decision:* Writers build `extra.from` and `extra.to` through
+`toPaymentExtraWallet` (`src/services/paymentExtra.ts`), which picks
+`id`, `name`, `user` and an optional `displayName` by name and throws when
+the wallet is missing. No writer depends on the `Wallet` type for metadata.
+
+*Consequences:* New payments carry no key material. Readers (portal feed,
+automation summary, transaction log) already use only those fields.
+Payments written before this decision cannot be rewritten through the
+LNbits API; rotating the affected wallet keys is an operator decision.
 
 === LNbits as the wallet backend
 

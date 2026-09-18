@@ -174,7 +174,12 @@ describe('payReward recipientId resolution', () => {
     expect(JSON.stringify(extra)).not.toContain('inkey');
     expect(extra).toEqual(
       expect.objectContaining({
-        to: expect.objectContaining({ displayName: 'octocat' }),
+        to: {
+          id: 'wallet-1',
+          name: 'Private',
+          user: 'lnbits-user-1',
+          displayName: 'octocat',
+        },
       }),
     );
   });
