@@ -60,8 +60,24 @@ jobs:
             echo "::error::Revision ${sha} has no successful Code Quality Checks run."
             exit 1
           fi
+
+          # A successful quality run is not enough on its own: quality checks
+          # also run on pull request branches, so a manual dispatch could
+          # otherwise deploy a revision that was never merged. Test only ever
+          # runs code that is reachable from the default branch.
+          reachability=$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/compare/main...${sha}" \
+            --jq '.status')
+          case "$reachability" in
+            identical|behind) ;;
+            *)
+              echo "::error::Revision ${sha} is not reachable from main (compare status: ${reachability})."
+              exit 1
+              ;;
+          esac
+
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "Deploying the exact CI-validated revision ${sha}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Deploying the exact CI-validated revision ${sha}, which is reachable from main." >> "$GITHUB_STEP_SUMMARY"
 
   portal-policy:
     name: Check portal deployment prerequisites
@@ -242,7 +258,7 @@ jobs:
           node -e "for (const dep of ['body-parser','cors','express','express-rate-limit','jose']) require('./portal-artifact/node_modules/' + dep)"
 
       - name: Log in to Azure with OIDC
-        uses: azure/login@d54469830ea7d513b7371e02a077c3ee5cb7b112 # v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -251,7 +267,7 @@ jobs:
       # Mutable backend state lives under ZAPLIE_DATA_DIR outside wwwroot, so
       # a clean deployment can remove stale code without deleting app data.
       - name: Deploy the prebuilt portal
-        uses: azure/webapps-deploy@b686016b4de8820a23519503685d8d03fbfa03a6 # v3
+        uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3
         with:
           app-name: ${{ env.PORTAL_APP_NAME }}
           package: portal-artifact
@@ -313,14 +329,14 @@ jobs:
           node -e "require('./bot-artifact/node_modules/express')"
 
       - name: Log in to Azure with OIDC
-        uses: azure/login@d54469830ea7d513b7371e02a077c3ee5cb7b112 # v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy the prebuilt bot
-        uses: azure/webapps-deploy@b686016b4de8820a23519503685d8d03fbfa03a6 # v3
+        uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3
         with:
           app-name: ${{ env.BOT_APP_NAME }}
           package: bot-artifact

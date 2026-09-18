@@ -193,7 +193,12 @@ gh secret delete ZAPLIE_TEST_WEBAPP_PUBLISH_PROFILE --env Test
 
 `Azure_App_Service_zaplie-prod.yml` is unchanged and still deploys the portal
 to `zaplie-prod-webapp` from a publish profile on every push to `main`. It does
-not race this workflow because Test deploys the bot only, but production still
+not race this workflow, because the Test workflow's `portal` and `bot` jobs
+target their own Test App Services (`zaplie-test-webapp` and
+`zaplie-test-bot-uk`) and never touch a production one. In practice only the
+bot deploys today: the `portal` job is skipped whenever `portal-policy` finds
+privileged `REACT_APP_LNBITS_*` references in `tabs/src` or mutable JSON stores
+under `tabs/backend`, which it does on `main` at present. Production still
 needs its own protected OIDC promotion built on a revision that passed Test.
 
 === Persistent application state
