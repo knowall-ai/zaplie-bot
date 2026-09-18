@@ -90,7 +90,17 @@ ignored `.zaplie-data` fallback.
 * bot -> `zaplie-test-bot-uk`
 
 The workflow runs on Ubuntu with Node 24 after `Code Quality Checks` succeeds
-on `main`, or by an explicit manual dispatch. A fixed concurrency group allows
+on `main`. It has no manual dispatch trigger on purpose: a dispatch can write
+the default branch's Actions cache scope, so being able to name a revision on
+one is a cache poisoning vector. To redeploy Test on demand, re-run the
+quality workflow on `main` instead, and its completion starts this one:
+
+[source,bash]
+----
+gh workflow run ci-quality-checks.yml --ref main
+----
+
+A fixed concurrency group allows
 only one Test deployment at a time and does not cancel a deployment already in
 progress. Both artifacts are compiled on the runner, reduced to runtime
 dependencies and sent self-contained because Oryx/App Service build automation
@@ -115,8 +125,10 @@ Authentication uses GitHub OIDC. The protected `Test` environment must contain
 `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`; publish
 profiles are not used. Its federated credential must trust the `Test`
 environment subject. Restrict the environment's deployment branches to
-`main`; a manual dispatch still requires a successful `Code Quality Checks`
-run for the exact selected commit.
+`main`. The workflow independently requires that the revision it deploys has
+a successful `Code Quality Checks` run of its own and is reachable from
+`main`, and each job asserts that what it checked out is that exact
+revision.
 
 The portal deploy is intentionally skipped until these prerequisites
 are satisfied:

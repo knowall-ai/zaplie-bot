@@ -1,8 +1,12 @@
 name: Deploy to Azure App Service Test
 
-# Main is deployed only after the repository quality workflow succeeds. A
-# manual run is also available for an explicitly selected ref once this
-# workflow exists on the default branch.
+# Main is deployed only after the repository quality workflow succeeds on it.
+# There is deliberately no workflow_dispatch trigger: a dispatch can write the
+# default branch's Actions cache scope, so naming a revision on one is a cache
+# poisoning vector (CodeQL actions/cache-poisoning). To redeploy Test on
+# demand, re-run Code Quality Checks on main
+# (`gh workflow run ci-quality-checks.yml --ref main`); its completion is what
+# starts this workflow.
 on:
   workflow_run:
     workflows:
@@ -11,7 +15,6 @@ on:
       - completed
     branches:
       - main
-  workflow_dispatch:
 
 # Never interrupt an App Service deployment halfway through. This also keeps a
 # newer run from racing an older package into the shared Test environment.
@@ -32,9 +35,7 @@ env:
 jobs:
   validated-ref:
     name: Resolve a revision that passed CI
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -45,11 +46,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-          DISPATCH_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          sha="${WORKFLOW_RUN_SHA:-$DISPATCH_SHA}"
+          sha="$WORKFLOW_RUN_SHA"
           successful_runs=$(gh api --method GET \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/ci-quality-checks.yml/runs" \
             -f head_sha="$sha" \
@@ -62,9 +62,10 @@ jobs:
           fi
 
           # A successful quality run is not enough on its own: quality checks
-          # also run on pull request branches, so a manual dispatch could
-          # otherwise deploy a revision that was never merged. Test only ever
-          # runs code that is reachable from the default branch.
+          # also run on pull request branches, and a run can be re-dispatched
+          # on any ref, so this could otherwise deploy a revision that was
+          # never merged. Test only ever runs code reachable from the default
+          # branch.
           reachability=$(gh api --method GET \
             "repos/${GITHUB_REPOSITORY}/compare/main...${sha}" \
             --jq '.status')
@@ -87,23 +88,13 @@ jobs:
     outputs:
       allowed: ${{ steps.policy.outputs.allowed }}
     steps:
-      # Two checkouts rather than one ref expression. A manual dispatch can
-      # write the default branch's Actions cache scope, so it must not be able
-      # to name a revision at all: it takes the ref it was dispatched on and
-      # nothing else. The quality-run trigger, which only has read access to
-      # that scope, is the one that names a head_sha. Both are then asserted
-      # against the revision validated-ref cleared.
+      # workflow_run only has read access to the default branch's cache scope,
+      # so naming the revision here is not a cache poisoning vector. The
+      # assertion below still proves it is the revision validated-ref cleared.
       - name: Check out the revision that passed quality checks
-        if: github.event_name == 'workflow_run'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
-
-      - name: Check out the dispatched revision
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
           persist-credentials: false
 
       - name: Assert the checkout is the validated revision
@@ -177,23 +168,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Two checkouts rather than one ref expression. A manual dispatch can
-      # write the default branch's Actions cache scope, so it must not be able
-      # to name a revision at all: it takes the ref it was dispatched on and
-      # nothing else. The quality-run trigger, which only has read access to
-      # that scope, is the one that names a head_sha. Both are then asserted
-      # against the revision validated-ref cleared.
+      # workflow_run only has read access to the default branch's cache scope,
+      # so naming the revision here is not a cache poisoning vector. The
+      # assertion below still proves it is the revision validated-ref cleared.
       - name: Check out the revision that passed quality checks
-        if: github.event_name == 'workflow_run'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
-
-      - name: Check out the dispatched revision
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
           persist-credentials: false
 
       - name: Assert the checkout is the validated revision
@@ -212,10 +193,9 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          # No npm cache. A dispatch can build any revision reachable from
-          # main, and a cache write from such a job can poison the cache the
-          # default branch later restores (CodeQL actions/cache-poisoning).
-          # These jobs run once per deployment, so the saving is not worth it.
+          # No npm cache. These jobs run once per deployment, so the saving
+          # is not worth the cache-poisoning surface that a cache write from
+          # a job executing third-party install scripts would add.
 
       - name: Validate public build configuration
         working-directory: tabs
@@ -387,23 +367,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Two checkouts rather than one ref expression. A manual dispatch can
-      # write the default branch's Actions cache scope, so it must not be able
-      # to name a revision at all: it takes the ref it was dispatched on and
-      # nothing else. The quality-run trigger, which only has read access to
-      # that scope, is the one that names a head_sha. Both are then asserted
-      # against the revision validated-ref cleared.
+      # workflow_run only has read access to the default branch's cache scope,
+      # so naming the revision here is not a cache poisoning vector. The
+      # assertion below still proves it is the revision validated-ref cleared.
       - name: Check out the revision that passed quality checks
-        if: github.event_name == 'workflow_run'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
-
-      - name: Check out the dispatched revision
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
           persist-credentials: false
 
       - name: Assert the checkout is the validated revision
