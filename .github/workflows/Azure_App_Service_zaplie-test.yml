@@ -137,20 +137,20 @@ jobs:
             echo 'Portal security prerequisites passed.' >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  portal:
-    name: Deploy portal
+  # The build job deliberately has no id-token permission. npm lifecycle
+  # scripts and build tooling run here, so nothing in this job can mint an
+  # Azure OIDC token; only the deploy job below can, and it runs no
+  # repository or dependency code.
+  portal-build:
+    name: Build portal artifact
     needs:
       - validated-ref
       - portal-policy
     if: needs.portal-policy.outputs.allowed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    environment:
-      name: Test
-      url: https://zaplie-test-webapp.azurewebsites.net
+    timeout-minutes: 30
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Check out the validated revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -257,6 +257,54 @@ jobs:
           fi
           node -e "for (const dep of ['body-parser','cors','express','express-rate-limit','jose']) require('./portal-artifact/node_modules/' + dep)"
 
+      # A tarball survives the artifact round trip with file modes and
+      # node_modules symlinks intact, which a plain directory upload does not.
+      - name: Pack the artifact for the deploy job
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir handoff
+          tar -czf handoff/portal-artifact.tar.gz -C portal-artifact .
+          cp scripts/smoke-health.sh handoff/smoke-health.sh
+
+      - name: Upload the portal artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: portal-artifact
+          path: handoff
+          retention-days: 5
+          if-no-files-found: error
+
+  # This job holds id-token: write. It never checks out the repository and
+  # never runs npm, so no repository-controlled or third-party code executes
+  # in a job that can obtain Azure credentials.
+  portal-deploy:
+    name: Deploy portal
+    needs: portal-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Test
+      url: https://zaplie-test-webapp.azurewebsites.net
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - name: Download the portal artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: portal-artifact
+          path: handoff
+
+      - name: Unpack the portal artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir portal-artifact
+          tar -xzf handoff/portal-artifact.tar.gz -C portal-artifact
+          test -f portal-artifact/build/index.html
+          test -f portal-artifact/backend/server.js
+
       - name: Log in to Azure with OIDC
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
         with:
@@ -276,19 +324,16 @@ jobs:
 
       - name: Smoke test portal health
         shell: bash
-        run: bash scripts/smoke-health.sh "${PORTAL_APP_NAME}" Portal
+        run: bash handoff/smoke-health.sh "${PORTAL_APP_NAME}" Portal
 
-  bot:
-    name: Deploy bot
+  # As with the portal, npm and the build run in a job without id-token.
+  bot-build:
+    name: Build bot artifact
     needs: validated-ref
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    environment:
-      name: Test
-      url: https://zaplie-test-bot-uk.azurewebsites.net/healthz
+    timeout-minutes: 25
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Check out the validated revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -324,9 +369,54 @@ jobs:
             exit 1
           fi
 
-          # Importing the HTTP framework on the runner catches a package that
-          # cannot start on Node 24 before it replaces the running bot.
+          # This is a dependency check, not a startup check: it only proves
+          # that the HTTP framework resolves and loads under Node 24 on the
+          # runner. It does not execute lib/src/index.js and does not request
+          # /healthz. The post-deploy smoke test is what proves the app starts.
           node -e "require('./bot-artifact/node_modules/express')"
+
+      - name: Pack the artifact for the deploy job
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir handoff
+          tar -czf handoff/bot-artifact.tar.gz -C bot-artifact .
+          cp scripts/smoke-health.sh handoff/smoke-health.sh
+
+      - name: Upload the bot artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bot-artifact
+          path: handoff
+          retention-days: 5
+          if-no-files-found: error
+
+  bot-deploy:
+    name: Deploy bot
+    needs: bot-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Test
+      url: https://zaplie-test-bot-uk.azurewebsites.net/healthz
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - name: Download the bot artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: bot-artifact
+          path: handoff
+
+      - name: Unpack the bot artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir bot-artifact
+          tar -xzf handoff/bot-artifact.tar.gz -C bot-artifact
+          test -f bot-artifact/lib/src/index.js
+          test -f bot-artifact/lib/public/auth-end.html
 
       - name: Log in to Azure with OIDC
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
@@ -345,4 +435,4 @@ jobs:
 
       - name: Smoke test bot health
         shell: bash
-        run: bash scripts/smoke-health.sh "${BOT_APP_NAME}" Bot
+        run: bash handoff/smoke-health.sh "${BOT_APP_NAME}" Bot

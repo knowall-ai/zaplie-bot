@@ -96,8 +96,20 @@ progress. Both artifacts are compiled on the runner, reduced to runtime
 dependencies and sent self-contained because Oryx/App Service build automation
 is disabled. Both apps must return HTTP 200 from `/healthz` after deployment.
 
-The bot artifact imports Express under Node 24 before Azure login, so a package
-that cannot start on the runner never reaches the running App Service.
+Each component is built and deployed by a separate pair of jobs. The build
+jobs (`portal-build`, `bot-build`) check out the revision and run `npm`, and
+hold no `id-token` permission, so neither build tooling nor a dependency
+lifecycle script can mint an Azure OIDC token. The deploy jobs
+(`portal-deploy`, `bot-deploy`) hold `id-token: write`, but never check out the
+repository and never run `npm`: they download the built tarball, log in and
+deploy it. Grant the federated credential only what those two jobs need.
+
+Before handing the bot artifact over, the build job runs
+`node -e "require('.../express')"`. That is a dependency check, not a startup
+check: it proves only that the HTTP framework resolves and loads under Node 24
+on the runner. It does not execute `lib/src/index.js` and does not request
+`/healthz`, so an entry-point fault is caught by the post-deploy smoke test
+rather than here.
 
 Authentication uses GitHub OIDC. The protected `Test` environment must contain
 `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`; publish
@@ -193,12 +205,14 @@ gh secret delete ZAPLIE_TEST_WEBAPP_PUBLISH_PROFILE --env Test
 
 `Azure_App_Service_zaplie-prod.yml` is unchanged and still deploys the portal
 to `zaplie-prod-webapp` from a publish profile on every push to `main`. It does
-not race this workflow, because the Test workflow's `portal` and `bot` jobs
+not race this workflow, because the Test workflow's portal and bot jobs
 target their own Test App Services (`zaplie-test-webapp` and
 `zaplie-test-bot-uk`) and never touch a production one. In practice only the
-bot deploys today: the `portal` job is skipped whenever `portal-policy` finds
+bot deploys today: the `portal-build` job is skipped whenever `portal-policy`
+finds
 privileged `REACT_APP_LNBITS_*` references in `tabs/src` or mutable JSON stores
-under `tabs/backend`, which it does on `main` at present. Production still
+under `tabs/backend`, which it does on `main` at present, and `portal-deploy`
+is skipped with it. Production still
 needs its own protected OIDC promotion built on a revision that passed Test.
 
 === Persistent application state
