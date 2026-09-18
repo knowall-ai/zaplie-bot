@@ -90,15 +90,13 @@ const ReportsComponent: FunctionComponent = () => {
       try {
         const idToken = await acquireIdToken(instance, accounts[0]);
         setData(await getReports(idToken));
-      } catch (error) {
-        console.error('Error fetching reports:', error);
+      } catch {
         toast.error('Could not load reports.');
       } finally {
         setLoading(false);
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, instance]);
 
   if (loading) {

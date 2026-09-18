@@ -119,4 +119,33 @@ describe('UserListComponent', () => {
     expect(mockGetUsers).not.toHaveBeenCalled();
     expect(mockGetUserWallets).toHaveBeenCalledWith(user.id);
   });
+
+  test('hides service accounts without a linked Entra identity', async () => {
+    const serviceAccount: User = {
+      ...user,
+      id: 'svc-1',
+      displayName: 'zaplietestsvc',
+      aadObjectId: '',
+    };
+    mockGetUsers.mockResolvedValue([user, serviceAccount]);
+    mockGetUserWallets.mockResolvedValue([]);
+
+    // This test uses React's raw createRoot API, which is not auto-wrapped.
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <CacheProvider>
+          <RewardNameContext.Provider
+            value={{ rewardName: 'sats', setRewardName: jest.fn() }}
+          >
+            <UserListComponent />
+          </RewardNameContext.Provider>
+        </CacheProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain('Ada Lovelace');
+    expect(container.textContent).not.toContain('zaplietestsvc');
+    expect(mockGetUserWallets).not.toHaveBeenCalledWith(serviceAccount.id);
+  });
 });

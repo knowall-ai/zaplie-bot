@@ -87,8 +87,14 @@ flowchart TB
 `CloudAdapter` with multi-tenant credentials. All turns pass through
 `FetchUserMiddleware`, which resolves the Teams member and calls
 `UserService.ensureUserSetup()` — creating the LNbits user (keyed by the AAD
-object id stored in an LNbits extra field) and ensuring the Allowance and
+object id stored in the LNbits `external_id`) and ensuring the Allowance and
 Private wallets exist.
+
+The bot is not the only way in: the tab backend runs the same provisioning from
+`ensureCaller` (`tabs/backend/lnbitsGatewayService.js`) on the first
+authenticated portal request, using the same wallet names, the same
+`external_id` linkage and the same opening allowance. A user who opens the
+portal before ever messaging the bot is provisioned transparently.
 
 `src/teamsBot.ts` extends `TeamsActivityHandler`. Text commands are registered
 in a static `SSOCommandMap` keyed by lower-case message text:
