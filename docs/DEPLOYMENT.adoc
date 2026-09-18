@@ -215,17 +215,21 @@ gh secret delete ZAPLIE_TEST_BOT_PUBLISH_PROFILE --env Test
 gh secret delete ZAPLIE_TEST_WEBAPP_PUBLISH_PROFILE --env Test
 ----
 
-`Azure_App_Service_zaplie-prod.yml` is unchanged and still deploys the portal
-to `zaplie-prod-webapp` from a publish profile on every push to `main`. It does
-not race this workflow, because the Test workflow's portal and bot jobs
-target their own Test App Services (`zaplie-test-webapp` and
-`zaplie-test-bot-uk`) and never touch a production one. In practice only the
-bot deploys today: the `portal-build` job is skipped whenever `portal-policy`
-finds
-privileged `REACT_APP_LNBITS_*` references in `tabs/src` or mutable JSON stores
-under `tabs/backend`, which it does on `main` at present, and `portal-deploy`
-is skipped with it. Production still
-needs its own protected OIDC promotion built on a revision that passed Test.
+`Azure_App_Service_zaplie-prod.yml` is unchanged by this workflow. It still
+runs on every push to `main` and would deploy the portal to
+`zaplie-prod-webapp` from a publish profile, but in practice it does not
+deploy anything today: its `build` job fails on the source scan for
+`process.env.REACT_APP_LNBITS_(ADMINKEY|PASSWORD)` in `tabs/src`, and `deploy`
+depends on `build`. Production still needs its own protected OIDC promotion
+built on a revision that passed Test.
+
+The two workflows cannot race each other in any case. The Test workflow's
+portal and bot jobs target their own Test App Services (`zaplie-test-webapp`
+and `zaplie-test-bot-uk`) and never touch a production one. On the Test side
+only the bot deploys today: `portal-build` is skipped whenever `portal-policy`
+finds privileged `REACT_APP_LNBITS_*` references in `tabs/src` or mutable JSON
+stores under `tabs/backend`, which it does on `main` at present, and
+`portal-deploy` is skipped with it.
 
 === Persistent application state
 
