@@ -1,42 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * rotate-wallet-keys.js
+ * Zaplie - LNbits Wallet Key Rotation Script (Issue #375)
  *
- * Operator script to rotate LNbits wallet keys exposed through payment metadata
- * in historical zap payments (Issue #375).
+ * Rotates adminkey and inkey for user wallets (Allowance and Private)
+ * across an LNbits instance following exposure in payment extra metadata.
  *
- * Requirements & Behavior:
- * - Uses LNbits Users API to discover users and their wallets.
- * - By default targets 'Allowance' and 'Private' wallets (the exposed wallets).
- * - Authenticates each wallet key reset using the wallet owner's account via:
- *     PUT /api/v1/wallet/reset/{wallet_id}?usr={wallet.user}
- * - Requires LNbits operator to temporarily enable user-id-only authentication
- *   (e.g., AUTH_USER_ID_ONLY=true in LNbits configuration) during key rotation.
- * - Supports --dry-run to preview affected wallets without mutating keys.
- * - Never logs raw private key material (adminkey / inkey).
+ * LNbits 1.5.6 PUT /api/v1/wallet/reset/{wallet_id} resets keys for a wallet.
+ * The endpoint authenticates the wallet owner. When "user-id-only" is included
+ * in AUTH_ALLOWED_METHODS on LNbits, the endpoint authenticates via ?usr={user_id}.
+ * The superuser bearer token must not be sent to this endpoint, as LNbits would
+ * authenticate the caller as the superuser, failing the wallet-owner check for
+ * non-superuser wallets.
  */
 
-const fs = require('fs');
-const path = require('path');
+const dotenvFlow = require('dotenv-flow');
 
-// Load environment variables from env/ if available
-try {
-  const dotenvFlow = require('dotenv-flow');
-  dotenvFlow.config({ path: path.join(__dirname, '..', 'env'), silent: true });
-} catch {
-  // dotenv-flow not available or failed silently
-}
-
-try {
-  const dotenv = require('dotenv');
-  dotenv.config();
-} catch {
-  // dotenv not available
-}
+// Load environment configuration (.env, .env.local, etc.)
+dotenvFlow.config({ path: './env' });
 
 /**
- * Parses CLI arguments.
+ * Parses command-line arguments.
  */
 function parseArgs(argv = process.argv.slice(2)) {
   const options = {
@@ -48,8 +32,20 @@ function parseArgs(argv = process.argv.slice(2)) {
     nodeUrl: null,
     username: null,
     password: null,
+    yes: false,
     help: false,
   };
+
+  const takesValue = new Set([
+    '--filter',
+    '--wallet-name',
+    '--user',
+    '-u',
+    '--wallet',
+    '-w',
+    '--url',
+    '--username',
+  ]);
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -57,23 +53,32 @@ function parseArgs(argv = process.argv.slice(2)) {
       options.dryRun = true;
     } else if (arg === '--all-wallets') {
       options.allWallets = true;
-    } else if (arg === '--filter' || arg === '--wallet-name') {
-      const val = argv[++i];
-      if (val) {
-        options.walletNames = val.split(',').map(s => s.trim()).filter(Boolean);
-      }
-    } else if (arg === '--user' || arg === '-u') {
-      options.userFilter = argv[++i] || null;
-    } else if (arg === '--wallet' || arg === '-w') {
-      options.walletFilter = argv[++i] || null;
-    } else if (arg === '--url') {
-      options.nodeUrl = argv[++i] || null;
-    } else if (arg === '--username') {
-      options.username = argv[++i] || null;
-    } else if (arg === '--password') {
-      options.password = argv[++i] || null;
+    } else if (arg === '--yes' || arg === '-y') {
+      options.yes = true;
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
+    } else if (arg === '--password') {
+      throw new Error(
+        'Passing --password via command-line arguments is disabled for security. Set the LNBITS_PASSWORD environment variable instead.',
+      );
+    } else if (takesValue.has(arg)) {
+      if (i + 1 >= argv.length || argv[i + 1].startsWith('-')) {
+        throw new Error(`Missing value for option ${arg}`);
+      }
+      const val = argv[++i];
+      if (arg === '--filter' || arg === '--wallet-name') {
+        options.walletNames = val.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (arg === '--user' || arg === '-u') {
+        options.userFilter = val;
+      } else if (arg === '--wallet' || arg === '-w') {
+        options.walletFilter = val;
+      } else if (arg === '--url') {
+        options.nodeUrl = val;
+      } else if (arg === '--username') {
+        options.username = val;
+      }
+    } else {
+      throw new Error(`Unknown option: ${arg}`);
     }
   }
 
@@ -90,23 +95,29 @@ Usage:
 
 Options:
   --dry-run, -n          Preview wallets to be reset without executing changes
+  --yes, -y              Execute live key rotation without interactive confirmation prompt
   --all-wallets          Rotate all user wallets (default: only Allowance and Private)
   --filter <names>       Comma-separated wallet names to rotate (default: Allowance,Private)
   --user, -u <id>        Rotate wallets for a specific LNbits user ID or AAD object ID
   --wallet, -w <id>      Rotate keys for a specific wallet ID only
   --url <url>            LNbits node URL (default: process.env.LNBITS_NODE_URL)
   --username <user>      LNbits admin username (default: process.env.LNBITS_USERNAME)
-  --password <pass>      LNbits admin password (default: process.env.LNBITS_PASSWORD)
   --help, -h             Show this help message
+
+Environment Variables:
+  LNBITS_NODE_URL        LNbits instance URL (must use HTTPS unless localhost)
+  LNBITS_USERNAME        LNbits admin username
+  LNBITS_PASSWORD        LNbits admin password (required; cannot be passed via CLI)
+  LNBITS_TIMEOUT_MS      Request timeout in milliseconds (default: 15000)
 
 Prerequisites:
   LNbits 1.5.6 PUT /api/v1/wallet/reset/{wallet_id} requires wallet owner authentication.
   Before running this script to rotate keys across users, temporarily enable user-id-only
   authentication on the LNbits server:
-    1. Set AUTH_USER_ID_ONLY=true in LNbits .env or via LNbits Admin UI.
+    1. Include "user-id-only" in AUTH_ALLOWED_METHODS in LNbits .env or via LNbits Admin UI.
     2. Restart LNbits if modified via .env.
     3. Run this rotation script.
-    4. Set AUTH_USER_ID_ONLY=false and restart LNbits.
+    4. Remove "user-id-only" from AUTH_ALLOWED_METHODS and restart LNbits.
 `);
 }
 
@@ -114,7 +125,7 @@ Prerequisites:
  * Resolves node URL, username, and password from options or environment.
  */
 function resolveConfig(options = {}) {
-  const nodeUrl = (
+  const rawUrl = (
     options.nodeUrl ||
     process.env.LNBITS_NODE_URL ||
     ''
@@ -122,25 +133,67 @@ function resolveConfig(options = {}) {
 
   const username = options.username || process.env.LNBITS_USERNAME || '';
   const password = options.password || process.env.LNBITS_PASSWORD || '';
+  const timeoutMs = options.timeoutMs || Number(process.env.LNBITS_TIMEOUT_MS) || 15000;
 
-  if (!nodeUrl) {
+  if (!rawUrl) {
     throw new Error(
       'LNbits URL is not configured. Set LNBITS_NODE_URL or pass --url <url>.',
     );
   }
-  if (!username || !password) {
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch (err) {
+    throw new Error(`Invalid LNbits URL "${rawUrl}": ${err.message}`);
+  }
+
+  const isLocalhost =
+    parsedUrl.hostname === 'localhost' ||
+    parsedUrl.hostname === '127.0.0.1' ||
+    parsedUrl.hostname === '[::1]' ||
+    parsedUrl.hostname === '::1';
+
+  if (parsedUrl.protocol !== 'https:' && (!isLocalhost || parsedUrl.protocol !== 'http:')) {
     throw new Error(
-      'LNbits admin credentials missing. Set LNBITS_USERNAME and LNBITS_PASSWORD or pass --username and --password.',
+      `Insecure protocol for LNbits URL "${rawUrl}": node URL must use HTTPS (HTTP is only allowed for localhost).`,
     );
   }
 
-  return { nodeUrl, username, password };
+  const nodeUrl = rawUrl;
+
+  if (!username || !password) {
+    throw new Error(
+      'LNbits admin credentials missing. Set LNBITS_USERNAME and LNBITS_PASSWORD.',
+    );
+  }
+
+  return { nodeUrl, username, password, timeoutMs };
+}
+
+/**
+ * Requests confirmation interactively from TTY.
+ */
+async function promptConfirmation(message) {
+  const readline = require('node:readline/promises');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    const answer = await rl.question(message);
+    const trimmed = answer.trim().toLowerCase();
+    return trimmed === 'yes' || trimmed === 'y';
+  } finally {
+    rl.close();
+  }
 }
 
 /**
  * Obtains superuser access token.
  */
-async function getAccessToken({ nodeUrl, username, password, fetchFn = fetch }) {
+async function getAccessToken({ nodeUrl, username, password, timeoutMs = 15000, fetchFn = fetch }) {
+  const signal = AbortSignal.timeout(timeoutMs);
   const response = await fetchFn(`${nodeUrl}/api/v1/auth`, {
     method: 'POST',
     headers: {
@@ -148,6 +201,7 @@ async function getAccessToken({ nodeUrl, username, password, fetchFn = fetch }) 
       accept: 'application/json',
     },
     body: JSON.stringify({ username, password }),
+    signal,
   });
 
   if (!response.ok) {
@@ -167,13 +221,15 @@ async function getAccessToken({ nodeUrl, username, password, fetchFn = fetch }) 
 /**
  * Fetches all LNbits users via Users API.
  */
-async function getUsers({ nodeUrl, accessToken, fetchFn = fetch }) {
+async function getUsers({ nodeUrl, accessToken, timeoutMs = 15000, fetchFn = fetch }) {
+  const signal = AbortSignal.timeout(timeoutMs);
   const response = await fetchFn(`${nodeUrl}/users/api/v1/user`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -190,7 +246,8 @@ async function getUsers({ nodeUrl, accessToken, fetchFn = fetch }) {
 /**
  * Fetches all wallets for a specific LNbits user.
  */
-async function getUserWallets({ nodeUrl, accessToken, userId, fetchFn = fetch }) {
+async function getUserWallets({ nodeUrl, accessToken, userId, timeoutMs = 15000, fetchFn = fetch }) {
+  const signal = AbortSignal.timeout(timeoutMs);
   const response = await fetchFn(
     `${nodeUrl}/users/api/v1/user/${encodeURIComponent(userId)}/wallet`,
     {
@@ -199,6 +256,7 @@ async function getUserWallets({ nodeUrl, accessToken, userId, fetchFn = fetch })
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
+      signal,
     },
   );
 
@@ -239,13 +297,14 @@ function filterWallets(wallets, options = {}) {
 
 /**
  * Resets keys for a single wallet using PUT /api/v1/wallet/reset/{wallet_id}?usr={user_id}.
+ * Omit bearer access token so LNbits authenticates via usr query param.
  */
 async function resetWalletKey({
   nodeUrl,
   walletId,
   userId,
-  accessToken,
   oldKeys = {},
+  timeoutMs = 15000,
   fetchFn = fetch,
 }) {
   const url = `${nodeUrl}/api/v1/wallet/reset/${encodeURIComponent(walletId)}?usr=${encodeURIComponent(userId)}`;
@@ -254,19 +313,18 @@ async function resetWalletKey({
     'Content-Type': 'application/json',
     accept: 'application/json',
   };
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
 
+  const signal = AbortSignal.timeout(timeoutMs);
   const response = await fetchFn(url, {
     method: 'PUT',
     headers,
+    signal,
   });
 
   if (response.status === 401 || response.status === 403) {
     throw new Error(
       `Authentication error (HTTP ${response.status}) resetting wallet ${walletId}. ` +
-        `Ensure user-id-only authentication (AUTH_USER_ID_ONLY=true) is temporarily enabled on LNbits so ?usr=${userId} is accepted.`,
+        `Ensure user-id-only authentication is temporarily enabled by including "user-id-only" in AUTH_ALLOWED_METHODS on LNbits so ?usr=${userId} is accepted.`,
     );
   }
 
@@ -304,14 +362,14 @@ async function rotateWalletKeys(cliOptions = {}, deps = {}) {
   const fetchFn = deps.fetchFn || fetch;
   const logger = deps.logger || console;
 
-  const { nodeUrl, username, password } = resolveConfig(options);
+  const { nodeUrl, username, password, timeoutMs } = resolveConfig(options);
 
   logger.log(`Connecting to LNbits instance at: ${nodeUrl}`);
-  const accessToken = await getAccessToken({ nodeUrl, username, password, fetchFn });
+  const accessToken = await getAccessToken({ nodeUrl, username, password, timeoutMs, fetchFn });
   logger.log('Successfully authenticated as superuser.');
 
   logger.log('Retrieving LNbits users...');
-  const allUsers = await getUsers({ nodeUrl, accessToken, fetchFn });
+  const allUsers = await getUsers({ nodeUrl, accessToken, timeoutMs, fetchFn });
   logger.log(`Found ${allUsers.length} total user(s) in LNbits.`);
 
   // Filter users if --user flag provided (matches LNbits id or external_id / AAD object ID)
@@ -341,6 +399,8 @@ async function rotateWalletKeys(cliOptions = {}, deps = {}) {
     logger.log('\n--- [DRY RUN MODE ENABLED: No keys will be modified] ---');
   }
 
+  let confirmed = options.yes || false;
+
   for (const user of targetUsers) {
     const userLabel =
       user.extra?.display_name || user.username || user.email || user.id;
@@ -351,6 +411,7 @@ async function rotateWalletKeys(cliOptions = {}, deps = {}) {
         nodeUrl,
         accessToken,
         userId: user.id,
+        timeoutMs,
         fetchFn,
       });
     } catch (err) {
@@ -383,6 +444,28 @@ async function rotateWalletKeys(cliOptions = {}, deps = {}) {
         continue;
       }
 
+      if (!confirmed) {
+        if (deps.confirmFn) {
+          const ok = await deps.confirmFn();
+          if (!ok) {
+            throw new Error('Key rotation cancelled by user.');
+          }
+          confirmed = true;
+        } else if (!process.stdin.isTTY) {
+          throw new Error(
+            'Interactive confirmation required to rotate wallet keys live. Pass --yes to execute non-interactively.',
+          );
+        } else {
+          const ok = await promptConfirmation(
+            'Are you sure you want to proceed with live key rotation? This will invalidate existing wallet keys. (yes/no): ',
+          );
+          if (!ok) {
+            throw new Error('Key rotation cancelled by user.');
+          }
+          confirmed = true;
+        }
+      }
+
       logger.log(
         `Resetting keys for wallet "${wallet.name}" (walletId: ${wallet.id}) of user "${userLabel}"...`,
       );
@@ -392,11 +475,11 @@ async function rotateWalletKeys(cliOptions = {}, deps = {}) {
           nodeUrl,
           walletId: wallet.id,
           userId: user.id,
-          accessToken,
           oldKeys: {
             adminkey: wallet.adminkey,
             inkey: wallet.inkey,
           },
+          timeoutMs,
           fetchFn,
         });
 
@@ -454,7 +537,14 @@ async function rotateWalletKeys(cliOptions = {}, deps = {}) {
  * Main entry point when invoked via CLI.
  */
 async function main() {
-  const options = parseArgs(process.argv.slice(2));
+  let options;
+  try {
+    options = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(`\nError: ${err.message}\nRun with --help for usage information.`);
+    process.exit(1);
+  }
+
   if (options.help) {
     printHelp();
     process.exit(0);
@@ -483,6 +573,7 @@ module.exports = {
   parseArgs,
   printHelp,
   resolveConfig,
+  promptConfirmation,
   getAccessToken,
   getUsers,
   getUserWallets,

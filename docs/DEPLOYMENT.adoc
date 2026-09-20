@@ -346,8 +346,9 @@ To rotate the affected keys across all users:
 
 . *Temporarily enable user-id authentication on LNbits.*
   LNbits 1.5.6 `PUT /api/v1/wallet/reset/{wallet_id}` requires wallet owner
-  authentication. Set `AUTH_USER_ID_ONLY=true` in the LNbits `.env` file (or
-  enable it via the LNbits Admin UI) and restart LNbits.
+  authentication. Include `user-id-only` in `AUTH_ALLOWED_METHODS` in the LNbits
+  `.env` file (e.g. `AUTH_ALLOWED_METHODS="username-and-password,user-id-only"`,
+  or enable it via the LNbits Admin UI) and restart LNbits.
 . *Preview the planned key rotations:*
 +
 [source,bash]
@@ -364,13 +365,20 @@ will have their keys reset, without making any modifications.
 npm run rotate-keys
 ----
 +
+Live execution prompts for interactive confirmation before any keys are reset.
+For automated or non-interactive execution, pass `--yes` (`-y`).
++
 Options:
 * `--filter <names>`: Comma-separated wallet names to rotate (default: `Allowance,Private`).
 * `--all-wallets`: Rotate all wallets regardless of name.
 * `--user <id>`: Restrict rotation to a specific LNbits user ID or AAD object ID.
 * `--wallet <id>`: Restrict rotation to a specific wallet ID.
+* `--yes, -y`: Confirm live rotation non-interactively without prompt.
+* `--url <url>`: LNbits node URL (default: `LNBITS_NODE_URL`).
+* `--username <user>`: LNbits admin username (default: `LNBITS_USERNAME`).
+  Note: For security, the admin password must be provided via the `LNBITS_PASSWORD` environment variable.
 . *Disable user-id authentication on LNbits.*
-  Revert `AUTH_USER_ID_ONLY=false` in the LNbits `.env` file and restart LNbits.
+  Remove `user-id-only` from `AUTH_ALLOWED_METHODS` in the LNbits `.env` file and restart LNbits.
 . *Verify operation.*
   Confirm that `show my balance` and zaps in Microsoft Teams succeed and that the
   portal feed and wallet balances load without error.
