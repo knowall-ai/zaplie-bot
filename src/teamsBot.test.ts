@@ -696,6 +696,21 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     );
   });
 
+  test('guards when the message author cannot be identified', async () => {
+    const context = buildContext(currentUser);
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(undefined),
+    );
+
+    expect(mockGetUsers).not.toHaveBeenCalled();
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining("couldn't tell who sent that message"),
+    );
+    expect(response).toEqual({});
+  });
+
   test('guards against zapping yourself', async () => {
     mockGetUsers.mockResolvedValue([currentUser]);
 
