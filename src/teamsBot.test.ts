@@ -13,17 +13,26 @@ import {
 } from '@jest/globals';
 import * as os from 'os';
 import * as path from 'path';
-import { TurnContext } from 'botbuilder';
+import { MessagingExtensionAction, TurnContext } from 'botbuilder';
 import { GENERIC_ERROR_MESSAGE } from './messages';
 import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
 import {
   createInvoice,
   getUser,
+  getUsers,
   getWalletBalance,
   payInvoice,
 } from './services/lnbitsService';
+import { createZapCard } from './commands/sendZapCommand';
 
 jest.mock('./services/lnbitsService');
+// Partial mock: the zap-message action asserts the card prefill, while the
+// submitZaps suites below still run the real SendZap against the mocked
+// LNbits boundary.
+jest.mock('./commands/sendZapCommand', () => ({
+  ...(jest.requireActual('./commands/sendZapCommand') as object),
+  createZapCard: jest.fn(),
+}));
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -32,6 +41,11 @@ jest.mock('./services/zapHistoryService');
 // before the module is required (which is why this is a require, not a
 // hoisted import).
 process.env.LNBITS_POINTS_LABEL = process.env.LNBITS_POINTS_LABEL || 'Sats';
+// teamsBot.ts also captures the LNbits admin key at module load; the
+// zap-message suite asserts the author lookup is made with it.
+process.env.LNBITS_ADMINKEY = process.env.LNBITS_ADMINKEY || 'admin-key';
+const rewardName = process.env.LNBITS_POINTS_LABEL;
+const adminKey = process.env.LNBITS_ADMINKEY;
 // The durable zap ledger refuses to construct without a data directory. The
 // path is per worker because sibling suites set and then delete this one.
 process.env.ZAPLIE_DATA_DIR = path.join(
@@ -522,5 +536,219 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     await bot.run(submitContext('card-b').context);
 
     expect(payInvoice).toHaveBeenCalledTimes(2);
+  });
+});
+
+const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
+const mockCreateZapCard = createZapCard as jest.MockedFunction<
+  typeof createZapCard
+>;
+
+// "Zap a message": the right-click action only posts a pre-filled zap card.
+// Nothing is paid here - the card still goes through the submitZaps handler
+// above, with its ledger lock and budget checks.
+const currentUser = {
+  id: 'currentUserId',
+  displayName: 'Current User',
+  profileImg: '',
+  aadObjectId: 'aad-current',
+  email: 'current@test.com',
+  privateWallet: null,
+  allowanceWallet: null,
+} as User;
+
+const authorUser = {
+  id: 'authorUserId',
+  displayName: 'Author User',
+  profileImg: '',
+  aadObjectId: 'aad-author',
+  email: 'author@test.com',
+  privateWallet: null,
+  allowanceWallet: null,
+} as User;
+
+function buildContext(user: User) {
+  const turnState = new Map<string, unknown>();
+  turnState.set('user', user);
+  return {
+    turnState,
+    sendActivity: jest.fn(),
+  } as unknown as TurnContext;
+}
+
+function buildAction(
+  authorAadId: string | undefined,
+  content = '<p>Great work!</p>',
+  data?: Record<string, unknown>,
+) {
+  return {
+    data,
+    messagePayload: {
+      from: {
+        user: {
+          id: authorAadId,
+          displayName: 'Author User',
+        },
+      },
+      body: {
+        content,
+      },
+    },
+  } as unknown as MessagingExtensionAction;
+}
+
+describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
+  let bot: InstanceType<typeof TeamsBot>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    bot = new TeamsBot();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('sends the zap card prefilled for the message author and returns {}', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    const action = buildAction(authorUser.aadObjectId);
+
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      action,
+    );
+
+    expect(mockCreateZapCard).toHaveBeenCalledWith(currentUser, rewardName, {
+      receiverId: authorUser.id,
+      amountSats: 1000,
+      message: 'Great work!',
+    });
+    expect(mockGetUsers).toHaveBeenCalledWith(adminKey, {
+      aadObjectId: authorUser.aadObjectId,
+    });
+    expect(context.sendActivity).toHaveBeenCalledTimes(1);
+    expect(response).toEqual({});
+  });
+
+  test('extracts a plain-text memo, decoding HTML entities', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(
+        authorUser.aadObjectId,
+        '<p>that&#39;s great &amp;&nbsp;fast &#x2764; &lt;b&gt; &copy;</p>',
+      ),
+    );
+
+    // Unsupported entities (&copy;) stay literal rather than decoding wrongly.
+    expect(mockCreateZapCard.mock.calls[0][2]?.message).toBe(
+      "that's great & fast ❤ <b> &copy;",
+    );
+  });
+
+  test('sends an empty memo when the message has no body content', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    const action = buildAction(authorUser.aadObjectId);
+    delete (action as { messagePayload?: { body?: unknown } }).messagePayload!
+      .body;
+
+    await bot.handleTeamsMessagingExtensionSubmitAction(context, action);
+
+    expect(mockCreateZapCard.mock.calls[0][2]?.message).toBe('');
+  });
+
+  test('caps the memo preview at 80 characters', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId, `<p>${'x'.repeat(100)}</p>`),
+    );
+
+    expect(mockCreateZapCard.mock.calls[0][2]?.message).toBe('x'.repeat(80));
+  });
+
+  test('prefers a memo typed in the action dialog over the message text', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId, '<p>Great work!</p>', {
+        memo: '  Deploy fix appreciated  ',
+      }),
+    );
+
+    expect(mockCreateZapCard.mock.calls[0][2]?.message).toBe(
+      'Deploy fix appreciated',
+    );
+  });
+
+  test('guards against zapping yourself', async () => {
+    mockGetUsers.mockResolvedValue([currentUser]);
+
+    const context = buildContext(currentUser);
+    const action = buildAction(currentUser.aadObjectId);
+
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      action,
+    );
+
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining("can't zap yourself"),
+    );
+    expect(response).toEqual({});
+  });
+
+  test('guards when the message author has no Zaplie account', async () => {
+    mockGetUsers.mockResolvedValue([]);
+
+    const context = buildContext(currentUser);
+    const action = buildAction('aad-unknown-author');
+
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      action,
+    );
+
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining("doesn't have a Zaplie account"),
+    );
+    expect(response).toEqual({});
+  });
+
+  test('returns a friendly guard when the author lookup fails', async () => {
+    mockGetUsers.mockRejectedValue(new Error('LNbits unavailable'));
+    const errorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    const context = buildContext(currentUser);
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId),
+    );
+
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining("couldn't check that teammate's Zaplie account"),
+    );
+    expect(response).toEqual({});
+    errorSpy.mockRestore();
   });
 });
