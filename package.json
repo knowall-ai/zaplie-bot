@@ -24,7 +24,8 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "rotate-keys": "node scripts/rotate-wallet-keys.js"
   },
   "repository": {
     "type": "git",

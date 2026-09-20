@@ -300,6 +300,21 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 == Design Decisions
 
+=== Rotating LNbits wallet keys exposed through payment metadata
+
+*Context:* Every zap sent before payment metadata sanitization wrote the full
+Allowance and Private `Wallet` objects into the LNbits payment `extra` field,
+including `adminkey` and `inkey`. Because historical payment rows cannot be
+rewritten through the LNbits API, the exposure persists until every affected
+wallet's keys are rotated (issue #375).
+
+*Decision:* Operators rotate wallet keys via `scripts/rotate-wallet-keys.js`
+(`npm run rotate-keys`). The script discovers users and wallets through the
+LNbits Users API and calls `PUT /api/v1/wallet/reset/{wallet_id}?usr={wallet.user}`
+with LNbits user-id-only authentication temporarily enabled. The bot requires
+no code changes or restarts because it resolves fresh wallet keys from LNbits
+on every turn.
+
 === LNbits as the wallet backend
 
 *Context:* The system needs per-user custodial Lightning wallets with an

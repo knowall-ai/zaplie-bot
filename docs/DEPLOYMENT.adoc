@@ -333,6 +333,48 @@ Complete these once per new environment, right after the first deployment:
   time the bot sees them: each user must send the bot one message (any
   message) before opening the tab, or the tab cannot resolve their wallet.
 
+=== Rotating LNbits Wallet Keys (Issue #375)
+
+Every zap sent before payment metadata sanitization wrote both wallets'
+`adminkey` and `inkey` into the LNbits payment `extra` object, exposing spending
+keys to counterparty wallets and the portal feed. Historical payment rows cannot
+be modified via the API; rotating the affected wallet keys is the required mitigation.
+
+The bot re-reads wallet keys from LNbits on every turn and requires no restart or redeploy.
+
+To rotate the affected keys across all users:
+
+. *Temporarily enable user-id authentication on LNbits.*
+  LNbits 1.5.6 `PUT /api/v1/wallet/reset/{wallet_id}` requires wallet owner
+  authentication. Set `AUTH_USER_ID_ONLY=true` in the LNbits `.env` file (or
+  enable it via the LNbits Admin UI) and restart LNbits.
+. *Preview the planned key rotations:*
++
+[source,bash]
+----
+npm run rotate-keys -- --dry-run
+----
++
+This scans all LNbits users and lists the `Allowance` and `Private` wallets that
+will have their keys reset, without making any modifications.
+. *Execute key rotation:*
++
+[source,bash]
+----
+npm run rotate-keys
+----
++
+Options:
+* `--filter <names>`: Comma-separated wallet names to rotate (default: `Allowance,Private`).
+* `--all-wallets`: Rotate all wallets regardless of name.
+* `--user <id>`: Restrict rotation to a specific LNbits user ID or AAD object ID.
+* `--wallet <id>`: Restrict rotation to a specific wallet ID.
+. *Disable user-id authentication on LNbits.*
+  Revert `AUTH_USER_ID_ONLY=false` in the LNbits `.env` file and restart LNbits.
+. *Verify operation.*
+  Confirm that `show my balance` and zaps in Microsoft Teams succeed and that the
+  portal feed and wallet balances load without error.
+
 == Manifest and App Package
 
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
