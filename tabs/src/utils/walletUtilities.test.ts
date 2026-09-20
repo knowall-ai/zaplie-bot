@@ -1,7 +1,12 @@
 import { getAllPayments } from '../services/lnbits/payments';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
-import { fetchVerifiedZapPayments, fetchZapActivity } from './walletUtilities';
+import {
+  fetchVerifiedZapPayments,
+  fetchZapActivity,
+  PAYMENT_FETCH_CAP,
+  PAYMENT_PAGE_SIZE,
+} from './walletUtilities';
 
 jest.mock('../services/lnbits/payments', () => ({
   getAllPayments: jest.fn(),
@@ -97,12 +102,14 @@ describe('fetchZapActivity', () => {
     (getUserWallets as jest.Mock).mockImplementation(async (id: string) =>
       id === 'alex'
         ? [wallet('alex-a', 'Allowance', id)]
-        : [wallet('sam-p', 'Private', id)],
+        : [wallet('sam-p', 'Private', id), wallet('sam-p2', 'Private', id)],
     );
+    // Three legs on one checking_id is genuinely ambiguous — two of them land
+    // in different wallets, so this is not the repeated-read case.
     (getAllPayments as jest.Mock).mockResolvedValue([
       payment('internal_ambiguous', 'alex-a', -20_000, 10),
       payment('ambiguous', 'sam-p', 20_000, 10),
-      payment('ambiguous', 'sam-p', 20_000, 10),
+      payment('ambiguous', 'sam-p2', 20_000, 10),
       payment('internal_mismatch', 'alex-a', -10_000, 20),
       payment('mismatch', 'sam-p', 9_000, 20),
     ]);
@@ -145,8 +152,9 @@ describe('fetchZapActivity', () => {
     );
 
     // A full first page keeps paging; the second reaches past the window.
-    const firstPage = Array.from({ length: 1000 }, (_unused, index) =>
-      payment(`recent-${index}`, 'alex-a', -1_000, 5_000),
+    const firstPage = Array.from(
+      { length: PAYMENT_PAGE_SIZE },
+      (_unused, index) => payment(`recent-${index}`, 'alex-a', -1_000, 5_000),
     );
     (getAllPayments as jest.Mock)
       .mockResolvedValueOnce(firstPage)
@@ -155,8 +163,12 @@ describe('fetchZapActivity', () => {
     const result = await fetchZapActivity(1_000);
 
     expect(getAllPayments).toHaveBeenCalledTimes(2);
-    expect(getAllPayments).toHaveBeenNthCalledWith(1, 1000, 0);
-    expect(getAllPayments).toHaveBeenNthCalledWith(2, 1000, 1000);
+    expect(getAllPayments).toHaveBeenNthCalledWith(1, PAYMENT_PAGE_SIZE, 0);
+    expect(getAllPayments).toHaveBeenNthCalledWith(
+      2,
+      PAYMENT_PAGE_SIZE,
+      PAYMENT_PAGE_SIZE,
+    );
     expect(result.truncated).toBe(false);
   });
 
@@ -170,15 +182,55 @@ describe('fetchZapActivity', () => {
     // Every page is full and every row is inside the window, so paging only
     // stops at the cap — the caller has to be told the list is incomplete.
     (getAllPayments as jest.Mock).mockImplementation(async () =>
-      Array.from({ length: 1000 }, (_unused, index) =>
+      Array.from({ length: PAYMENT_PAGE_SIZE }, (_unused, index) =>
         payment(`row-${index}`, 'alex-a', -1_000, 5_000),
       ),
     );
 
     const result = await fetchZapActivity(1_000);
 
-    expect(getAllPayments).toHaveBeenCalledTimes(10);
+    expect(getAllPayments).toHaveBeenCalledTimes(
+      PAYMENT_FETCH_CAP / PAYMENT_PAGE_SIZE,
+    );
     expect(result.truncated).toBe(true);
+  });
+
+  test('keeps a pair whose leg repeats across a page boundary', async () => {
+    const alex = user('alex');
+    const sam = user('sam');
+    (getUsers as jest.Mock).mockResolvedValue([alex, sam]);
+    (getUserWallets as jest.Mock).mockImplementation(async (id: string) =>
+      id === 'alex'
+        ? [wallet('alex-a', 'Allowance', id)]
+        : [wallet('sam-p', 'Private', id)],
+    );
+
+    // /payments is live, so a write between the two reads shifts the list down
+    // and hands the same outgoing leg back on the second page.
+    const outgoing = payment('internal_valid', 'alex-a', -20_000, 5_000);
+    const firstPage = [
+      ...Array.from({ length: PAYMENT_PAGE_SIZE - 1 }, (_unused, index) =>
+        payment(`filler-${index}`, 'alex-a', -1_000, 5_000),
+      ),
+      outgoing,
+    ];
+    (getAllPayments as jest.Mock)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([
+        outgoing,
+        payment('valid', 'sam-p', 20_000, 5_000),
+        payment('older', 'alex-a', -1_000, 10),
+      ]);
+
+    const result = await fetchZapActivity(1_000);
+
+    expect(result.transfers).toEqual([
+      expect.objectContaining({
+        from: alex,
+        to: sam,
+        transaction: expect.objectContaining({ checking_id: 'internal_valid' }),
+      }),
+    ]);
   });
 
   test('rejects conflicting wallet ownership', async () => {
@@ -237,7 +289,7 @@ describe('fetchVerifiedZapPayments', () => {
       wallet('alex-a', 'Allowance', 'alex'),
     ]);
     (getAllPayments as jest.Mock).mockImplementation(async () =>
-      Array.from({ length: 1000 }, (_unused, index) =>
+      Array.from({ length: PAYMENT_PAGE_SIZE }, (_unused, index) =>
         payment(`row-${index}`, 'alex-a', -1_000, 5_000),
       ),
     );

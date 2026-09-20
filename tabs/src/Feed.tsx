@@ -4,7 +4,10 @@ import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
 import { getUsers } from './services/lnbits/users';
 import { useCache } from '../src/utils/CacheContext';
-import { fetchVerifiedZapPayments } from './utils/walletUtilities';
+import {
+  fetchVerifiedZapPayments,
+  VerifiedZapPayments,
+} from './utils/walletUtilities';
 
 const Home: React.FC = () => {
   const [timestamp] = useState(() => {
@@ -45,16 +48,20 @@ const Home: React.FC = () => {
       }
       // Load zaps and set in cache.
       try {
+        // The truncation flag is cached with the payments it describes: a
+        // remount that restored the rows but not the warning would present a
+        // capped history as the whole story.
         if (!cache['allZaps']) {
-          const { payments, truncated: isTruncated } =
-            await fetchVerifiedZapPayments();
-          console.log('allZaps', payments);
-          setCache('allZaps', payments);
-          setZaps(payments);
-          setTruncated(isTruncated);
+          const zapActivity = await fetchVerifiedZapPayments();
+          console.log('allZaps', zapActivity.payments);
+          setCache('allZaps', zapActivity);
+          setZaps(zapActivity.payments);
+          setTruncated(zapActivity.truncated);
         } else {
           console.log('Loading Zaps from cache:', cache['allZaps']);
-          setZaps(cache['allZaps']);
+          const cached = cache['allZaps'] as VerifiedZapPayments;
+          setZaps(cached.payments);
+          setTruncated(cached.truncated);
         }
       } catch (err) {
         setError(

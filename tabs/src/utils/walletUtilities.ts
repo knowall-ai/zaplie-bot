@@ -47,8 +47,8 @@ export const transactionTime = (transaction: Transaction): number => {
 // both the largest request it will serve and a silent ceiling once an instance
 // grows past it. Reading a page at a time lets us stop as soon as the caller's
 // window is covered, and lets us say so when it is not.
-const PAYMENT_PAGE_SIZE = 1_000;
-const PAYMENT_FETCH_CAP = 10_000;
+export const PAYMENT_PAGE_SIZE = 1_000;
+export const PAYMENT_FETCH_CAP = 10_000;
 
 // exclude scheduled top-up sweeps
 //
@@ -131,10 +131,18 @@ export const fetchZapActivity = async (
 
   const { payments, truncated } = await fetchPayments(sinceSeconds);
   const paymentsByPair = new Map<string, Transaction[]>();
+  // /payments is a live, newest-first list, so a payment written between two
+  // page reads shifts everything down and can hand back a boundary row twice.
+  // A duplicated leg would make its pair a group of three and get the whole
+  // zap thrown away, so the legs are keyed by the wallet they belong to.
+  const seenLegs = new Set<string>();
   payments.forEach(payment => {
     if (isAllowanceSweep(payment)) return;
     const id = pairId(payment);
     if (!id) return;
+    const legKey = `${id}|${payment.wallet_id}`;
+    if (seenLegs.has(legKey)) return;
+    seenLegs.add(legKey);
     const matches = paymentsByPair.get(id) ?? [];
     matches.push(payment);
     paymentsByPair.set(id, matches);
