@@ -679,6 +679,41 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     expect(mockCreateZapCard.mock.calls[0][2]?.message).toBe('x'.repeat(80));
   });
 
+  test('caps a memo typed in the action dialog at the same 80 characters', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    const context = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId, '<p>Great work!</p>', {
+        memo: 'y'.repeat(120),
+      }),
+    );
+
+    // Nothing in the manifest bounds the dialog field, so the handler has to.
+    expect(mockCreateZapCard.mock.calls[0][2]?.message).toBe('y'.repeat(80));
+  });
+
+  test('never splits a surrogate pair when capping the memo', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    // 79 plain characters then an astral emoji: the 80th code point is two
+    // UTF-16 code units, so a naive slice(0, 80) would keep half of it.
+    const context = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId, `<p>${'z'.repeat(79)}\u{1f600}x</p>`),
+    );
+
+    const memo = mockCreateZapCard.mock.calls[0][2]?.message ?? '';
+    expect(memo).toBe(`${'z'.repeat(79)}\u{1f600}`);
+    expect(Array.from(memo)).toHaveLength(80);
+    // The naive slice would have ended on the emoji's high surrogate alone.
+    expect(memo).not.toMatch(/[\uD800-\uDBFF]$/);
+  });
+
   test('prefers a memo typed in the action dialog over the message text', async () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);

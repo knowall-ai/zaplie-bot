@@ -501,7 +501,9 @@ export class TeamsBot extends TeamsActivityHandler {
     // 'memo' comes from the static-parameter dialog Teams shows before this
     // invoke (manifest zapMessage command); empty means "use the message text".
     const dialogMemo =
-      typeof action.data?.memo === 'string' ? action.data.memo.trim() : '';
+      typeof action.data?.memo === 'string'
+        ? capMemoPreview(action.data.memo.trim())
+        : '';
     const card = await createZapCard(currentUser, globalRewardName, {
       receiverId: author.id,
       amountSats: ZAP_MESSAGE_DEFAULT_SATS,
@@ -521,6 +523,21 @@ export class TeamsBot extends TeamsActivityHandler {
 // regex enforces 1..10,000.
 const ZAP_MESSAGE_DEFAULT_SATS = 1000;
 
+// Both memo sources - the dialog field and the extracted message text - go
+// through this one cap. Nothing in the manifest bounds the dialog field, and
+// the memo reaches the LNbits invoice and the receipt card, so an unbounded
+// one would travel further than the card. It is a prefill the user can still
+// edit, so an over-long memo is trimmed rather than refused.
+const MEMO_PREVIEW_MAX_CODE_POINTS = 80;
+
+// Counted in code points, not UTF-16 code units: slicing a string mid
+// surrogate pair leaves a lone half that renders as a replacement character.
+function capMemoPreview(text: string): string {
+  const codePoints = Array.from(text);
+  if (codePoints.length <= MEMO_PREVIEW_MAX_CODE_POINTS) return text;
+  return codePoints.slice(0, MEMO_PREVIEW_MAX_CODE_POINTS).join('').trimEnd();
+}
+
 const HTML_ENTITIES: Record<string, string> = {
   amp: '&',
   lt: '<',
@@ -535,7 +552,7 @@ const HTML_ENTITIES: Record<string, string> = {
 // are decoded after tag removal so "&lt;b&gt;" stays the literal text "<b>".
 function htmlToMemoPreview(html: string | undefined): string {
   if (!html) return '';
-  return html
+  const text = html
     .replace(/<[^>]*>/g, ' ')
     .replace(
       /&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z]+);/g,
@@ -551,6 +568,6 @@ function htmlToMemoPreview(html: string | undefined): string {
       },
     )
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
+    .trim();
+  return capMemoPreview(text);
 }
