@@ -233,6 +233,23 @@ describe('fetchZapActivity', () => {
     ]);
   });
 
+  test('rejects a window that is not a whole number of seconds', async () => {
+    (getUsers as jest.Mock).mockResolvedValue([user('alex')]);
+    (getUserWallets as jest.Mock).mockResolvedValue([
+      wallet('alex-a', 'Allowance', 'alex'),
+    ]);
+
+    for (const invalid of [Number.NaN, -1, 1_700_000_000.5, Infinity]) {
+      await expect(fetchZapActivity(invalid)).rejects.toThrow(
+        'A zap history window must be a whole, non-negative number of seconds.',
+      );
+    }
+
+    // Refused before any network call, so nothing half-read is reported.
+    expect(getUsers).not.toHaveBeenCalled();
+    expect(getAllPayments).not.toHaveBeenCalled();
+  });
+
   test('rejects conflicting wallet ownership', async () => {
     const alex = user('alex');
     const sam = user('sam');

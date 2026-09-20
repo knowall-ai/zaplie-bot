@@ -135,8 +135,10 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     setActivityError(null);
     setLoadingActivity(true);
 
-    const since =
-      Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+    // Whole seconds: fetchZapActivity rejects a fractional window.
+    const since = Math.floor(
+      Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY,
+    );
 
     fetchZapActivity(since)
       .then(loaded => {
@@ -351,6 +353,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
                 <img
                   className={styles.avatarIcon}
                   alt=""
+                  aria-hidden="true"
                   src={outgoing ? ArrowOutgoing : ArrowIncoming}
                 />
                 <div className={styles.userName}>
@@ -399,7 +402,9 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
         );
       })}
       {displayedTransactions.length === 0 && (
-        <div className={styles.emptyState}>No transactions to show.</div>
+        <div className={styles.emptyState} role="status">
+          No transactions to show.
+        </div>
       )}
     </div>
   );

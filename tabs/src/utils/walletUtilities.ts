@@ -62,12 +62,26 @@ const isAllowanceSweep = (payment: Transaction): boolean =>
 /**
  * Reads instance-wide payments newest-first, a page at a time.
  *
- * `sinceSeconds` is the oldest moment the caller cares about: paging stops as
+ * `sinceSeconds` is the oldest moment the caller cares about, as a whole
+ * number of seconds since the epoch: paging stops as
  * soon as a page reaches past it, which also guarantees both legs of every pair
  * inside the window are present, since a page boundary can only split a pair
  * that straddles the point we stopped at. Without it the whole history is read,
  * up to `PAYMENT_FETCH_CAP`.
  */
+const assertValidWindow = (sinceSeconds?: number): void => {
+  if (sinceSeconds === undefined) return;
+  // A fractional, negative or non-finite window never compares true against a
+  // payment time, so paging would run to PAYMENT_FETCH_CAP and then report
+  // truncation that never happened. Refusing the value beats reporting a
+  // misleading result.
+  if (!Number.isSafeInteger(sinceSeconds) || sinceSeconds < 0) {
+    throw new Error(
+      'A zap history window must be a whole, non-negative number of seconds.',
+    );
+  }
+};
+
 const fetchPayments = async (
   sinceSeconds?: number,
 ): Promise<{ payments: Transaction[]; truncated: boolean }> => {
@@ -107,6 +121,8 @@ const fetchPayments = async (
 export const fetchZapActivity = async (
   sinceSeconds?: number,
 ): Promise<ZapActivity> => {
+  assertValidWindow(sinceSeconds);
+
   const users = await getUsers();
   const walletsByUser = await Promise.all(
     users.map(async user => ({ user, wallets: await getUserWallets(user.id) })),

@@ -53,8 +53,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
         // Fetch all transactions using the same method as Feed
         console.log('[Leaderboard] Fetching all transactions...');
         const { payments: allTransactions, truncated: isTruncated } =
+          // Whole seconds: fetchVerifiedZapPayments rejects a fractional window.
           await fetchVerifiedZapPayments(
-            paymentsSinceTimestamp > 0 ? paymentsSinceTimestamp : undefined,
+            paymentsSinceTimestamp > 0
+              ? Math.floor(paymentsSinceTimestamp)
+              : undefined,
           );
         setTruncated(isTruncated);
         console.log(
