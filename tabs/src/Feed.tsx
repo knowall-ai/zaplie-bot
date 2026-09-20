@@ -4,7 +4,7 @@ import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
 import { getUsers } from './services/lnbits/users';
 import { useCache } from '../src/utils/CacheContext';
-import { fetchAllowanceWalletTransactions } from './utils/walletUtilities';
+import { fetchVerifiedZapPayments } from './utils/walletUtilities';
 
 const Home: React.FC = () => {
   const [timestamp] = useState(() => {
@@ -16,6 +16,7 @@ const Home: React.FC = () => {
 
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [truncated, setTruncated] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchZaps = async () => {
@@ -45,10 +46,12 @@ const Home: React.FC = () => {
       // Load zaps and set in cache.
       try {
         if (!cache['allZaps']) {
-          const allZaps = await fetchAllowanceWalletTransactions();
-          console.log('allZaps', allZaps);
-          setCache('allZaps', allZaps);
-          setZaps(allZaps);
+          const { payments, truncated: isTruncated } =
+            await fetchVerifiedZapPayments();
+          console.log('allZaps', payments);
+          setCache('allZaps', payments);
+          setZaps(payments);
+          setTruncated(isTruncated);
         } else {
           console.log('Loading Zaps from cache:', cache['allZaps']);
           setZaps(cache['allZaps']);
@@ -99,6 +102,15 @@ const Home: React.FC = () => {
             flexWrap: 'wrap',
           }}
         >
+          {truncated && (
+            <div
+              role="status"
+              style={{ width: '100%', color: '#E0B000', paddingBottom: 8 }}
+            >
+              History truncated: only the most recent payments could be read, so
+              these totals are incomplete.
+            </div>
+          )}
           <TotalZapsComponent
             isLoading={loading}
             allZaps={zaps}

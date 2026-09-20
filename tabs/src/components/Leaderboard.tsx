@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from './Leaderboard.module.css';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
-import { fetchAllowanceWalletTransactions } from '../utils/walletUtilities';
+import { fetchVerifiedZapPayments } from '../utils/walletUtilities';
 import ZapIcon from '../images/ZapIcon.svg';
 import circleFirstPlace from '../images/circleFirstPlace.svg';
 import CircleSecondPlace from '../images/circleSecondPlace.svg';
@@ -30,6 +30,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isAscending, setIsAscending] = useState<boolean>(true);
+  const [truncated, setTruncated] = useState<boolean>(false);
 
   useEffect(() => {
     // Use the provided timestamp to 0
@@ -51,7 +52,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
         // Fetch all transactions using the same method as Feed
         console.log('[Leaderboard] Fetching all transactions...');
-        const allTransactions = await fetchAllowanceWalletTransactions();
+        const { payments: allTransactions, truncated: isTruncated } =
+          await fetchVerifiedZapPayments(
+            paymentsSinceTimestamp > 0 ? paymentsSinceTimestamp : undefined,
+          );
+        setTruncated(isTruncated);
         console.log(
           `[Leaderboard] Found ${allTransactions.length} total transactions`,
         );
@@ -172,6 +177,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
 
   return (
     <div className={styles.feedlist}>
+      {truncated && (
+        <div role="status" className={styles.truncatedNotice}>
+          History truncated: only the most recent payments could be read, so
+          these totals are incomplete.
+        </div>
+      )}
       <div className={styles.headercell}>
         <div className={styles.headerContents}>
           <b className={styles.string}>Rank</b>

@@ -140,6 +140,7 @@ const configureSuccess = (transactions: Transaction[] = [knownIncoming]) => {
   (fetchZapActivity as jest.Mock).mockResolvedValue({
     users: [alex, sam],
     transfers: [{ transaction: knownOutgoingPair, from: sam, to: alex }],
+    truncated: false,
   });
 };
 
@@ -194,6 +195,58 @@ describe('WalletTransactionLog', () => {
     expect(container.textContent).not.toContain('1 minutes ago');
   });
 
+  test('does not refetch tenant-wide pairing data on a wallet switch', async () => {
+    const allowanceWallet = wallet('alex-allowance', 'Allowance', alex.id);
+    configureSuccess();
+    (getUserWallets as jest.Mock).mockResolvedValue([
+      privateArchive,
+      privateWallet,
+      allowanceWallet,
+    ]);
+
+    await mount();
+    await eventually(() => {
+      expect(container.textContent).toContain('from Sam Chen');
+    });
+    expect(fetchZapActivity).toHaveBeenCalledTimes(1);
+
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <RewardNameContext.Provider
+          value={{
+            rewardName: 'Sats',
+            rewardNameLabel: 'Sats',
+            setRewardName: jest.fn(),
+            isLoading: false,
+            error: null,
+          }}
+        >
+          <WalletTransactionLog activeTab="all" activeWallet="Allowance" />
+        </RewardNameContext.Provider>,
+      );
+    });
+    await settle();
+
+    // The wallet's own rows are reread; the expensive tenant-wide fetch is not.
+    expect(getWalletTransactionsSince).toHaveBeenCalledTimes(2);
+    expect(fetchZapActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test('says so when the payment history was truncated', async () => {
+    configureSuccess();
+    (fetchZapActivity as jest.Mock).mockResolvedValue({
+      users: [alex, sam],
+      transfers: [{ transaction: knownOutgoingPair, from: sam, to: alex }],
+      truncated: true,
+    });
+
+    await mount();
+    await eventually(() => {
+      expect(container.textContent).toContain('History truncated');
+    });
+  });
+
   test('rejects ambiguous selected wallets', async () => {
     configureSuccess();
     (getUserWallets as jest.Mock).mockResolvedValue([
@@ -209,7 +262,6 @@ describe('WalletTransactionLog', () => {
     });
 
     expect(getWalletTransactionsSince).not.toHaveBeenCalled();
-    expect(fetchZapActivity).not.toHaveBeenCalled();
   });
 
   test('does not infer a counterparty from memo text or mutate API data', async () => {

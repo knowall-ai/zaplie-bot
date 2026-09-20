@@ -9,6 +9,7 @@ import {
   fetchZapActivity,
   pairId,
   transactionTime,
+  ZapActivity,
   ZapTransfer,
 } from '../utils/walletUtilities';
 import { RewardNameContext } from './RewardNameContext';
@@ -21,17 +22,17 @@ interface WalletTransactionLogProps {
   activeWallet: WalletType;
 }
 
-interface TransactionHistory {
+interface WalletHistory {
   currentUser: User;
   transactions: Transaction[];
-  transfersById: Map<string, ZapTransfer>;
 }
 
 const SECONDS_PER_DAY = 86_400;
 const TRANSACTION_HISTORY_DAYS = 30;
 
-// Intl handles the singular forms ("1 minute ago", not "1 minutes ago") and
-// leaves the door open to other locales without another pass over this file.
+// Intl gets the singular forms right ("1 minute ago", not "1 minutes ago").
+// The rest of this tab is English-only, so the locale is pinned to match
+// rather than following the browser and leaving a half-translated row.
 const relativeTimeFormat = new Intl.RelativeTimeFormat('en', {
   numeric: 'always',
 });
@@ -106,21 +107,71 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     error: rewardNameError,
     retry: retryRewardName,
   } = useContext(RewardNameContext);
-  const [history, setHistory] = useState<TransactionHistory | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<WalletHistory | null>(null);
+  const [activity, setActivity] = useState<ZapActivity | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
+  const loading = loadingHistory || loadingActivity;
+  const error = historyError ?? activityError;
+
+  // The tenant-wide pairing data is the expensive half of this screen — every
+  // user, every user's wallets, and paged instance-wide payments — and none of
+  // it depends on which of the signed-in user's own wallets is on screen. It
+  // gets its own effect so switching Private/Allowance does not re-run it.
+  useEffect(() => {
+    if (!accountId) {
+      setActivity(null);
+      setActivityError(null);
+      setLoadingActivity(false);
+      return;
+    }
+
+    let cancelled = false;
+    setActivity(null);
+    setActivityError(null);
+    setLoadingActivity(true);
+
+    const since =
+      Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
+
+    fetchZapActivity(since)
+      .then(loaded => {
+        if (!cancelled) setActivity(loaded);
+      })
+      .catch(loadError => {
+        if (!cancelled) {
+          setActivityError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Transaction history could not be loaded.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingActivity(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, retryToken]);
+
+  // The selected wallet's own rows, which is the only part a wallet switch
+  // actually invalidates.
   useEffect(() => {
     let cancelled = false;
 
     const loadTransactions = async () => {
       setHistory(null);
-      setError(null);
+      setHistoryError(null);
 
       if (!accountId) {
-        setLoading(false);
-        setError(
+        setLoadingHistory(false);
+        setHistoryError(
           accountCount === 0
             ? 'Sign in to load your transaction history.'
             : 'Your Zaplie account could not be identified.',
@@ -128,7 +179,7 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
         return;
       }
 
-      setLoading(true);
+      setLoadingHistory(true);
       try {
         const matchingUsers = await getUsers({ aadObjectId: accountId });
         if (matchingUsers.length !== 1) {
@@ -153,29 +204,25 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
         const since =
           Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
-        const [transactions, activity] = await Promise.all([
-          getWalletTransactionsSince(wallet.id, since, null),
-          fetchZapActivity(),
-        ]);
-        const transfersById = new Map(
-          activity.transfers
-            .map(transfer => [pairId(transfer.transaction), transfer] as const)
-            .filter(([id]) => Boolean(id)),
+        const transactions = await getWalletTransactionsSince(
+          wallet.id,
+          since,
+          null,
         );
 
         if (!cancelled) {
-          setHistory({ currentUser, transactions, transfersById });
+          setHistory({ currentUser, transactions });
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
+          setHistoryError(
             loadError instanceof Error
               ? loadError.message
               : 'Transaction history could not be loaded.',
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingHistory(false);
       }
     };
 
@@ -184,6 +231,15 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       cancelled = true;
     };
   }, [accountCount, accountId, activeWallet, retryToken]);
+
+  const transfersById = useMemo(() => {
+    const byId = new Map<string, ZapTransfer>();
+    activity?.transfers.forEach(transfer => {
+      const id = pairId(transfer.transaction);
+      if (id) byId.set(id, transfer);
+    });
+    return byId;
+  }, [activity]);
 
   const displayedTransactions = useMemo(() => {
     if (!history) return [];
@@ -267,9 +323,15 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
 
   return (
     <div className={styles.feedlist}>
+      {activity?.truncated && (
+        <div className={styles.truncatedNotice} role="status">
+          History truncated: only the most recent payments could be read, so
+          some counterparties are unavailable.
+        </div>
+      )}
       {displayedTransactions.map((transaction, index) => {
         const outgoing = transaction.amount < 0;
-        const transfer = history.transfersById.get(pairId(transaction));
+        const transfer = transfersById.get(pairId(transaction));
         const counterparty = counterpartyName(
           transaction,
           history.currentUser,
