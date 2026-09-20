@@ -152,6 +152,13 @@ const FeedList: React.FC<FeedListProps> = ({
           <button
             key={field}
             type="button"
+            aria-label={
+              sortField === field
+                ? `${label}, sorted ${
+                    sortOrder === 'asc' ? 'ascending' : 'descending'
+                  }`
+                : `${label}, not sorted`
+            }
             className={`${styles.headCell} ${className}`}
             onClick={() => sort(field)}
           >
@@ -161,6 +168,13 @@ const FeedList: React.FC<FeedListProps> = ({
         <span className={`${styles.headLabel} ${styles.cellMemo}`}>Reason</span>
         <button
           type="button"
+          aria-label={
+            sortField === 'amount'
+              ? `Zap amount, sorted ${
+                  sortOrder === 'asc' ? 'ascending' : 'descending'
+                }`
+              : 'Zap amount, not sorted'
+          }
           className={`${styles.headCell} ${styles.cellAmount} ${styles.amountHead}`}
           onClick={() => sort('amount')}
         >

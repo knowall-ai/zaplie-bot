@@ -1,6 +1,7 @@
 import { getAllPayments } from '../services/lnbits/payments';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
+import { WALLET_FETCH_CONCURRENCY, mapWithConcurrency } from './concurrency';
 
 export interface ZapTransfer {
   transaction: Transaction;
@@ -33,8 +34,13 @@ export const transactionTime = (transaction: Transaction): number => {
 
 export const fetchZapActivity = async (): Promise<ZapActivity> => {
   const users = await getUsers();
-  const walletsByUser = await Promise.all(
-    users.map(async user => ({ user, wallets: await getUserWallets(user.id) })),
+  // One wallet request per directory user: bounded, because /users is not
+  // capped and an unbounded fan-out over a large tenant queues in the browser
+  // until the gateway client's timeout fires against the queue, not the server.
+  const walletsByUser = await mapWithConcurrency(
+    users,
+    WALLET_FETCH_CONCURRENCY,
+    async user => ({ user, wallets: await getUserWallets(user.id) }),
   );
   const walletOwners = new Map<string, User>();
   const allowanceWalletIds = new Set<string>();

@@ -45,8 +45,8 @@ flowchart TB
     TB --> MW --> LNS
     TB --> BZL
     User -->|static tabs| CRA
-    CRA -->|X-Api-Key / Bearer| LN
-    CRA --> BE
+    CRA -->|Entra ID bearer token| BE
+    BE -->|server-side LNbits credentials| LN
     LNS -->|REST API| LN
     F1 --> LN
     F2 --> LN
@@ -275,7 +275,7 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 | Users and wallets
 | LNbits (core Users API)
-| Keyed by AAD object id in an extra field; one Allowance + one Private wallet per user
+| Keyed by AAD object id in the LNbits `external_id`; one Allowance + one Private wallet per user
 
 | Transactions / Zaps
 | LNbits payments ledger

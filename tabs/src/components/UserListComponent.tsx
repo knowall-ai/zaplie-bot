@@ -10,39 +10,17 @@ import styles from './UserListComponent.module.css';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
 import { useCache } from '../utils/CacheContext';
+import {
+  WALLET_FETCH_CONCURRENCY,
+  mapWithConcurrency,
+} from '../utils/concurrency';
 import { RewardNameContext } from './RewardNameContext';
 import {
   isFunded,
   selectWalletByName,
 } from '../services/lnbits/walletSelection';
 
-// The wallet lookup is one request per user. Browsers cap concurrent requests
-// per host, so an unbounded fan-out leaves the surplus queued in the browser
-// while the gateway client's 30s timeout runs down against the queued request
-// rather than the server — late users then render with blank wallet columns.
-export const WALLET_FETCH_CONCURRENCY = 5;
-
-const mapWithConcurrency = async <TIn, TOut>(
-  items: TIn[],
-  limit: number,
-  worker: (item: TIn) => Promise<TOut>,
-): Promise<TOut[]> => {
-  const results = new Array<TOut>(items.length);
-  let next = 0;
-
-  const runner = async (): Promise<void> => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await worker(items[index]);
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => runner()),
-  );
-
-  return results;
-};
+export { WALLET_FETCH_CONCURRENCY };
 
 // Fail closed on the *value*, not on the row: a substring match
 // ("Private archive") or a wallet owned by somebody else is refused outright,
