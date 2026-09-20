@@ -8,6 +8,7 @@ const {
   fundAllowanceWallet,
   initialAllowance,
   listUserWallets,
+  listWalletPayments,
   repairCallerWallets,
   resetCachesForTests,
 } = require('./lnbitsGatewayService');
@@ -584,6 +585,55 @@ test('a repair that queues behind another does not create a second wallet', asyn
     second.map((wallet) => wallet.name).sort(),
     ['Allowance', 'Private'],
   );
+});
+
+test('a repaired wallet is reachable immediately, not 404 until the index expires', async (t) => {
+  withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
+  const requests = [];
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  t.after(() => {
+    console.warn = originalWarn;
+  });
+  const lnbits = recordingLnbits(requests, {
+    users: [{ id: 'user-half', external_id: 'entra-half' }],
+    wallets: [
+      {
+        id: 'wallet-existing',
+        name: 'Private',
+        user: 'user-half',
+        inkey: 'inkey-existing',
+        adminkey: 'adminkey-existing',
+        balance_msat: 0,
+      },
+    ],
+  });
+  global.fetch = async (url, options) => {
+    const path = String(url).replace('https://lnbits.test', '');
+    if (path.startsWith('/api/v1/payments')) {
+      return jsonResponse([]);
+    }
+    return lnbits(url, options);
+  };
+
+  // Warm the whole-instance wallet index before the repair. A cold per-wallet
+  // cache sends getWalletWithKeys through getWalletIndex, which then holds a
+  // snapshot of this account taken before the repair for the next 30 seconds.
+  await listWalletPayments('wallet-existing');
+
+  const repaired = await repairCallerWallets(
+    'user-half',
+    await listUserWallets('user-half'),
+  );
+  const created = repaired.find((wallet) => wallet.name === 'Allowance');
+  assert.ok(created, 'the repair created the Allowance wallet');
+
+  // invalidateUserDirectory drops the per-wallet cache, but getWalletWithKeys
+  // also falls back to walletIndex, which was built before this wallet
+  // existed. Leaving that stale answered 'Wallet not found' (404) for a wallet
+  // this very request had just created.
+  await assert.doesNotReject(listWalletPayments(created.id));
 });
 
 test('a failed repair still returns the wallets the account does have', async (t) => {

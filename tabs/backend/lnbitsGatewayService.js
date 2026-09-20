@@ -647,6 +647,11 @@ const invalidateUserDirectory = userId => {
       walletCache.delete(walletId);
     }
   }
+  // The per-wallet cache is not the only copy. getWalletWithKeys falls back to
+  // the whole-instance walletIndex, which was built before these wallets
+  // existed, so leaving it would answer "Wallet not found" (404) for a wallet
+  // this request just created until the index expired on its own.
+  walletIndex = null;
 };
 
 // The Entra object id is a GUID and must never reach the UI: it would become
