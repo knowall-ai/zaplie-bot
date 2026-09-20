@@ -50,7 +50,17 @@ export const fetchZapActivity = async (): Promise<ZapActivity> => {
     wallets.forEach(wallet => {
       const existingOwner = walletOwners.get(wallet.id);
       if (existingOwner && existingOwner.id !== user.id) {
-        throw new Error(`Wallet ${wallet.id} has conflicting owners.`);
+        // One contradictory row must not blank the Feed, the Leaderboard and
+        // the stat cards, all of which read this one call. Skip it and keep
+        // the owner already recorded, matching the gateway's own policy for a
+        // bad payment row (sanitizePaymentPage in lnbitsGatewayService.js).
+        console.warn(
+          'Skipped a wallet with conflicting owners:',
+          `wallet_id=${wallet.id}`,
+          `kept=${existingOwner.id}`,
+          `ignored=${user.id}`,
+        );
+        return;
       }
 
       walletOwners.set(wallet.id, user);

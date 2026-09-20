@@ -100,6 +100,11 @@ const createLnbitsRouter = ({
 
   // A verified caller who has never used the bot has no LNbits account yet;
   // provision one here instead of failing the whole tab with a 403.
+  //
+  // TODO: who may self-provision is an open product decision (Ben is settling
+  // it separately). Today any caller with a valid tenant token gets an account
+  // and an opening allowance on first request; a narrower gate (an Entra group,
+  // an explicit invite) would go here. Deliberately unchanged in this PR.
   router.use(async (req, _res, next) => {
     try {
       const { user } = await service.ensureCaller({

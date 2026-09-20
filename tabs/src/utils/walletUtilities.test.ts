@@ -111,17 +111,45 @@ describe('fetchZapActivity', () => {
     });
   });
 
-  test('rejects conflicting wallet ownership', async () => {
+  test('skips a wallet with conflicting owners instead of blanking the page', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const alex = user('alex');
     const sam = user('sam');
     (getUsers as jest.Mock).mockResolvedValue([alex, sam]);
-    (getUserWallets as jest.Mock).mockImplementation(async (id: string) => [
-      wallet('shared-wallet', 'Allowance', id),
+    (getUserWallets as jest.Mock).mockImplementation(async (id: string) =>
+      id === 'alex'
+        ? [
+            wallet('alex-a', 'Allowance', id),
+            // Claimed by both users: the directory contradicts itself.
+            wallet('shared-wallet', 'Private', id),
+          ]
+        : [
+            wallet('shared-wallet', 'Private', id),
+            wallet('sam-p', 'Private', id),
+          ],
+    );
+    (getAllPayments as jest.Mock).mockResolvedValue([
+      payment('internal_valid', 'alex-a', -20_000, 10),
+      payment('valid', 'sam-p', 20_000, 10),
     ]);
 
-    await expect(fetchZapActivity()).rejects.toThrow(
-      'Wallet shared-wallet has conflicting owners.',
+    // Feed, Leaderboard and the stat cards all read this one call, so one
+    // contradictory row must not take all three down.
+    const result = await fetchZapActivity();
+
+    expect(result.transfers).toEqual([
+      expect.objectContaining({
+        from: alex,
+        to: sam,
+        transaction: expect.objectContaining({ checking_id: 'internal_valid' }),
+      }),
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      'Skipped a wallet with conflicting owners:',
+      'wallet_id=shared-wallet',
+      'kept=alex',
+      'ignored=sam',
     );
-    expect(getAllPayments).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

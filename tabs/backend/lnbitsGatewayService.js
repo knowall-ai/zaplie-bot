@@ -510,6 +510,18 @@ const deleteLnbitsUser = async userId => {
 // account permanently unusable: findUniqueUserByAadObjectId throws on every
 // later request. Re-read the directory immediately after creating, and collapse
 // a lost race back to a single row.
+const removeDuplicateLnbitsUser = async (duplicateId, aadObjectId) => {
+  try {
+    await deleteLnbitsUser(duplicateId);
+  } catch (error) {
+    console.error(
+      `Zaplie provisioning: could not delete duplicate LNbits user ${duplicateId} for ` +
+        `${aadObjectId} (${error.message}). Every request for this account will fail ` +
+        'until the duplicate is removed by hand.',
+    );
+  }
+};
+
 const resolveDuplicateLnbitsUser = async (aadObjectId, created) => {
   const linked = findUsersByAadObjectId(await listRawUsers(), aadObjectId);
   // Anything else carrying this oid is another instance's account. Not finding
@@ -518,29 +530,29 @@ const resolveDuplicateLnbitsUser = async (aadObjectId, created) => {
   if (others.length === 0) {
     return created;
   }
-  // Both instances must pick the same survivor, or each deletes the row the
-  // other kept and the account is left with none.
-  const survivor = [created, ...others].sort((a, b) =>
+  // Always withdraw the row this process just created, and adopt the
+  // lowest-sorting row that was already there.
+  //
+  // The earlier rule kept our row when it sorted first, on the assumption that
+  // the other writer would reconcile too. The bot does not: createUser in
+  // src/services/lnbitsService.ts creates and returns. So bot-then-portal in
+  // the same second left both rows, and findUniqueUserByAadObjectId threw on
+  // every later request — permanently, until someone deleted a row by hand.
+  //
+  // The cost is that two *portal* instances racing each other can now both
+  // stand down and leave no row at all. That resolves itself: the next request
+  // finds nothing linked and provisions cleanly. A transient failure that heals
+  // beats a permanent one that needs an operator.
+  const adopted = [...others].sort((a, b) =>
     String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0,
   )[0];
-  if (survivor.id === created.id) {
-    return created;
-  }
   console.warn(
     `Zaplie provisioning: ${others.length + 1} LNbits users are linked to ` +
-      `${aadObjectId}; keeping ${survivor.id} and removing the duplicate ` +
+      `${aadObjectId}; keeping ${adopted.id} and removing the duplicate ` +
       `${created.id}`,
   );
-  try {
-    await deleteLnbitsUser(created.id);
-  } catch (error) {
-    console.error(
-      `Zaplie provisioning: could not delete duplicate LNbits user ${created.id} for ` +
-        `${aadObjectId} (${error.message}). Every request for this account will fail ` +
-        'until the duplicate is removed by hand.',
-    );
-  }
-  return survivor;
+  await removeDuplicateLnbitsUser(created.id, aadObjectId);
+  return adopted;
 };
 
 const createUserWallet = async (userId, name) => {
@@ -664,6 +676,53 @@ const callerDisplayName = (aadObjectId, profile = {}) => {
 // for free: the caller's own wallet listing (GET /users/:id/wallets, the first
 // thing the tab asks for) coming back without both wallets. A healthy account
 // pays nothing — the listing already happened, and the check is in memory.
+// Money path: the repair creates the Allowance wallet and credits
+// LNBITS_INITIAL_ALLOWANCE into it, so it must run once per account and never
+// concurrently. Two overlapping wallet listings for one half-provisioned user
+// (two tabs, a double click, React StrictMode's double render) would otherwise
+// both see the wallet missing and both create and fund one — and sendZap picks
+// its Allowance wallet with a plain `.find`, so the second balance is
+// unreachable and the grant is doubled. Same shape as createEnsureCaller's
+// in-flight map, keyed by LNbits user id.
+const walletRepairsInFlight = new Map();
+
+const runRepair = async (userId, list) => {
+  // Re-list inside the lock. A request that queued behind another repair is
+  // acting on the listing it read *before* that repair ran, so the wallets it
+  // believes are missing may already exist.
+  const current = await listUserWalletsWithKeys(userId);
+  const stillMissing = [PRIVATE_WALLET_NAME, ALLOWANCE_WALLET_NAME].filter(
+    name => walletNamed(current, name) === null,
+  );
+  if (stillMissing.length === 0) {
+    const known = new Set(list.map(wallet => wallet.id));
+    return [
+      ...list,
+      ...current.filter(w => !known.has(w.id)).map(sanitizeWallet),
+    ];
+  }
+
+  console.warn(
+    `Zaplie provisioning: repairing half-provisioned LNbits user ${userId} ` +
+      `(missing ${stillMissing.join(', ')})`,
+  );
+  const repaired = await ensureProvisionedWallets(userId);
+  if (repaired.allowanceCreated) {
+    // This finishes an interrupted provisioning rather than refilling an
+    // account: a wallet that already existed is never topped up, so nobody
+    // can farm an allowance by spending down to zero.
+    await fundAllowanceWallet(repaired.allowanceWallet.id);
+    invalidateUserDirectory(userId);
+  }
+  const known = new Set(list.map(wallet => wallet.id));
+  return [
+    ...list,
+    ...[repaired.privateWallet, repaired.allowanceWallet]
+      .filter(wallet => !known.has(wallet.id))
+      .map(sanitizeWallet),
+  ];
+};
+
 const repairCallerWallets = async (userId, wallets) => {
   const list = Array.isArray(wallets) ? wallets : [];
   const missing = [PRIVATE_WALLET_NAME, ALLOWANCE_WALLET_NAME].filter(
@@ -673,26 +732,20 @@ const repairCallerWallets = async (userId, wallets) => {
     return list;
   }
 
+  let operation = walletRepairsInFlight.get(userId);
+  if (!operation) {
+    operation = runRepair(userId, list);
+    walletRepairsInFlight.set(userId, operation);
+    const release = () => {
+      if (walletRepairsInFlight.get(userId) === operation) {
+        walletRepairsInFlight.delete(userId);
+      }
+    };
+    operation.then(release, release);
+  }
+
   try {
-    console.warn(
-      `Zaplie provisioning: repairing half-provisioned LNbits user ${userId} ` +
-        `(missing ${missing.join(', ')})`,
-    );
-    const repaired = await ensureProvisionedWallets(userId);
-    if (repaired.allowanceCreated) {
-      // This finishes an interrupted provisioning rather than refilling an
-      // account: a wallet that already existed is never topped up, so nobody
-      // can farm an allowance by spending down to zero.
-      await fundAllowanceWallet(repaired.allowanceWallet.id);
-      invalidateUserDirectory(userId);
-    }
-    const known = new Set(list.map(wallet => wallet.id));
-    return [
-      ...list,
-      ...[repaired.privateWallet, repaired.allowanceWallet]
-        .filter(wallet => !known.has(wallet.id))
-        .map(sanitizeWallet),
-    ];
+    return await operation;
   } catch (error) {
     // A failed repair must not blank the wallet page: whatever the account does
     // have is still returned, and the next request tries again.
@@ -766,24 +819,28 @@ const createEnsureCaller = ({
       );
     }
 
-    const existing = await findLinkedUserForCaller(aadObjectId);
-    if (existing) {
-      return { user: existing, provisioned: false, funding: null };
-    }
-
-    let operation = inFlight.get(aadObjectId);
-    if (!operation) {
-      operation = provision(aadObjectId, profile);
-      inFlight.set(aadObjectId, operation);
-      const release = () => {
-        if (inFlight.get(aadObjectId) === operation) {
-          inFlight.delete(aadObjectId);
-        }
-      };
-      operation.then(release, release);
-    }
-
     try {
+      // Inside the try: findUniqueUserByAadObjectId throws when two rows carry
+      // this oid, which is exactly the state a lost provisioning race leaves
+      // behind. Outside, that surfaced as a raw 500 instead of the friendly
+      // PROVISIONING_FAILED_MESSAGE the tab knows how to render.
+      const existing = await findLinkedUserForCaller(aadObjectId);
+      if (existing) {
+        return { user: existing, provisioned: false, funding: null };
+      }
+
+      let operation = inFlight.get(aadObjectId);
+      if (!operation) {
+        operation = provision(aadObjectId, profile);
+        inFlight.set(aadObjectId, operation);
+        const release = () => {
+          if (inFlight.get(aadObjectId) === operation) {
+            inFlight.delete(aadObjectId);
+          }
+        };
+        operation.then(release, release);
+      }
+
       return await operation;
     } catch (error) {
       if (error instanceof LnbitsGatewayError && error.status === 403) {

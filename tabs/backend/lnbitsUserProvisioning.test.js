@@ -512,6 +512,80 @@ test('repair reuses an existing allowance wallet and never re-funds it', async (
   );
 });
 
+test('two overlapping repairs create and fund exactly one Allowance wallet', async (t) => {
+  withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
+  const requests = [];
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  t.after(() => {
+    console.warn = originalWarn;
+  });
+  // Two tabs, a double click, or React StrictMode's double render: the same
+  // half-provisioned account is listed twice before either repair finishes.
+  global.fetch = halfProvisioned(requests, 'Private');
+
+  const listed = await listUserWallets('user-half');
+  const [first, second] = await Promise.all([
+    repairCallerWallets('user-half', listed),
+    repairCallerWallets('user-half', listed),
+  ]);
+
+  const createdNames = requests
+    .filter(([method, path]) => method === 'POST' && path.endsWith('/wallet'))
+    .map(([, , body]) => body.name);
+  // The bug this guards: without the lock both callers saw the wallet missing
+  // and both created and funded one, leaving two Allowance wallets. sendZap
+  // picks one with a plain `.find`, so the second balance is unreachable and
+  // the opening allowance has been granted twice.
+  assert.deepEqual(createdNames, ['Allowance']);
+  assert.deepEqual(
+    requests.filter(([, path]) => path === '/users/api/v1/balance').length,
+    1,
+  );
+  // Both callers still get a usable, complete wallet list back.
+  for (const result of [first, second]) {
+    assert.deepEqual(
+      result.map((wallet) => wallet.name).sort(),
+      ['Allowance', 'Private'],
+    );
+  }
+  // One repair happened, so it is announced once.
+  assert.equal(
+    warnings.filter((line) => /repairing half-provisioned/.test(line)).length,
+    1,
+  );
+});
+
+test('a repair that queues behind another does not create a second wallet', async (t) => {
+  withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
+  const requests = [];
+  console.warn = console.warn;
+  global.fetch = halfProvisioned(requests, 'Private');
+
+  const listed = await listUserWallets('user-half');
+  // Sequential, but the second caller still holds the stale listing it read
+  // before the first repair ran — the re-list inside the lock is what stops it
+  // creating and funding a duplicate.
+  await repairCallerWallets('user-half', listed);
+  const second = await repairCallerWallets('user-half', listed);
+
+  assert.deepEqual(
+    requests
+      .filter(([method, path]) => method === 'POST' && path.endsWith('/wallet'))
+      .map(([, , body]) => body.name),
+    ['Allowance'],
+  );
+  assert.equal(
+    requests.filter(([, path]) => path === '/users/api/v1/balance').length,
+    1,
+  );
+  assert.deepEqual(
+    second.map((wallet) => wallet.name).sort(),
+    ['Allowance', 'Private'],
+  );
+});
+
 test('a failed repair still returns the wallets the account does have', async (t) => {
   withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
   const originalError = console.error;
@@ -563,7 +637,7 @@ test('a second instance racing the same oid leaves exactly one LNbits user', asy
   );
 });
 
-test('the racing instance whose row sorts first keeps it and deletes nothing', async (t) => {
+test('the racing instance withdraws its own row even when that row sorts first', async (t) => {
   withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
   const requests = [];
   const warnings = [];
@@ -573,7 +647,10 @@ test('the racing instance whose row sorts first keeps it and deletes nothing', a
     console.warn = originalWarn;
   });
   // Seen from the other side of the same race: 'user-new' sorts before
-  // 'user-younger', so this instance is the one that must keep its row.
+  // 'user-younger'. Keeping our row on sort order alone only works when the
+  // other writer reconciles too — and the bot's createUser
+  // (src/services/lnbitsService.ts) does not, so the pair would survive and
+  // findUniqueUserByAadObjectId would throw for this account forever.
   global.fetch = recordingLnbits(requests, {
     users: [{ id: 'user-younger', external_id: 'entra-oid-race-3' }],
   });
@@ -582,13 +659,53 @@ test('the racing instance whose row sorts first keeps it and deletes nothing', a
     findLinkedUserForCaller: async () => null,
   })({ aadObjectId: 'entra-oid-race-3', displayName: 'Ada Lovelace' });
 
-  assert.equal(result.user.id, 'user-new');
-  // Deleting here would race the other instance into deleting both rows.
+  // The row this process is certain it owns is the one it just created, so
+  // that is the one it withdraws; the survivor is adopted.
+  assert.equal(result.user.id, 'user-younger');
+  assert.equal(result.provisioned, false);
   assert.deepEqual(
     requests.filter(([method]) => method === 'DELETE'),
-    [],
+    [['DELETE', '/users/api/v1/user/user-new', undefined]],
   );
-  assert.deepEqual(warnings, []);
+  // No wallet or funding traffic for the row that was withdrawn.
+  assert.equal(
+    requests.some(([, path]) => /\/wallet$|\/balance$/.test(path)),
+    false,
+  );
+  assert.match(warnings.join('\n'), /keeping user-younger/);
+});
+
+test('duplicate rows surface the friendly provisioning message, not a raw 500', async (t) => {
+  withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
+  const errors = [];
+  const originalError = console.error;
+  console.error = (message) => errors.push(message);
+  t.after(() => {
+    console.error = originalError;
+  });
+  // The state a lost race leaves behind when nobody reconciled: two rows for
+  // one oid. findUniqueUserByAadObjectId throws on the very first lookup, and
+  // that lookup used to sit outside ensureCaller's try/catch.
+  global.fetch = recordingLnbits([], {
+    users: [
+      { id: 'user-a', external_id: 'entra-oid-dup' },
+      { id: 'user-b', external_id: 'entra-oid-dup' },
+    ],
+  });
+
+  await assert.rejects(
+    createEnsureCaller()({
+      aadObjectId: 'entra-oid-dup',
+      displayName: 'Ada Lovelace',
+    }),
+    (error) => {
+      assert.equal(error.message, PROVISIONING_FAILED_MESSAGE);
+      assert.equal(error.status, 503);
+      assert.equal(error.expose, true);
+      return true;
+    },
+  );
+  assert.match(errors.join('\n'), /Zaplie provisioning failed/);
 });
 
 test('a duplicate that cannot be deleted is logged loudly', async (t) => {
