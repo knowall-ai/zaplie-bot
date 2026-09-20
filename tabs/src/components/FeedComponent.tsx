@@ -27,11 +27,10 @@ const FeedComponent: FunctionComponent<FeedComponentProps> = ({
 
   return (
     <section className={styles.feedcomponent}>
-      <div className={styles.tabs} role="tablist" aria-label="Activity view">
+      <div className={styles.tabs}>
         <button
           type="button"
-          role="tab"
-          aria-selected={showFeed}
+          aria-pressed={showFeed}
           className={`${styles.stringTabTitle} ${
             showFeed ? styles.active : ''
           }`}
@@ -41,8 +40,7 @@ const FeedComponent: FunctionComponent<FeedComponentProps> = ({
         </button>
         <button
           type="button"
-          role="tab"
-          aria-selected={!showFeed}
+          aria-pressed={!showFeed}
           className={`${styles.stringTabTitle} ${
             !showFeed ? styles.active : ''
           }`}

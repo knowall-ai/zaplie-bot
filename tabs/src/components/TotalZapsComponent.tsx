@@ -73,19 +73,21 @@ const TotalZapsComponent: FunctionComponent<TotalZapsComponentProps> = ({
         <div>
           <dt>Average per user</dt>
           <dd>
-            {value(stats.averagePerUser)} {!isLoading && rewardNameLabel}
+            {value(stats.averagePerUser)}{' '}
+            {!isLoading && !hasError && rewardNameLabel}
           </dd>
         </div>
         <div>
           <dt>Average per day</dt>
           <dd>
-            {value(stats.averagePerDay)} {!isLoading && rewardNameLabel}
+            {value(stats.averagePerDay)}{' '}
+            {!isLoading && !hasError && rewardNameLabel}
           </dd>
         </div>
         <div>
           <dt>Biggest Zap</dt>
           <dd>
-            {value(stats.biggest)} {!isLoading && rewardNameLabel}
+            {value(stats.biggest)} {!isLoading && !hasError && rewardNameLabel}
           </dd>
         </div>
       </dl>

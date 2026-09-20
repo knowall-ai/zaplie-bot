@@ -29,10 +29,10 @@ the result and your remaining balance.
 
 === Why did sending to a colleague fail?
 
-Recipients must have opened the app at least once so their wallets exist —
-either by messaging the bot or by opening the Zaplie tab, both of which
-provision the account. Failed recipients are listed on the result card — ask
-them to open Zaplie, then try again.
+Recipients need wallets, which are created the first time they message the bot
+or open the Zaplie tab — either one provisions the account. Failed recipients
+are listed on the result card; ask them to message the bot or open the Zaplie
+tab, then try again.
 
 === Where do received Zaps go?
 

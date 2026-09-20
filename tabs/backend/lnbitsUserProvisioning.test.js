@@ -534,20 +534,23 @@ test('a failed repair still returns the wallets the account does have', async (t
   assert.deepEqual(await repairCallerWallets('user-half', wallets), wallets);
 });
 
+// The survivor is the lexicographically smallest id, so every instance racing
+// the same oid collapses onto the same row. 'user-elder' sorts before the
+// 'user-new' this fixture creates, so the row created here is the duplicate.
 test('a second instance racing the same oid leaves exactly one LNbits user', async (t) => {
   withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
   const requests = [];
   // The other portal instance already created its user for this oid: the
   // in-flight map is per-process, so this one only finds out after creating.
   global.fetch = recordingLnbits(requests, {
-    users: [{ id: 'user-winner', external_id: 'entra-oid-race' }],
+    users: [{ id: 'user-elder', external_id: 'entra-oid-race' }],
   });
 
   const result = await createEnsureCaller({
     findLinkedUserForCaller: async () => null,
   })({ aadObjectId: 'entra-oid-race', displayName: 'Ada Lovelace' });
 
-  assert.equal(result.user.id, 'user-winner');
+  assert.equal(result.user.id, 'user-elder');
   assert.equal(result.provisioned, false);
   assert.deepEqual(
     requests.filter(([method]) => method === 'DELETE'),
@@ -558,6 +561,34 @@ test('a second instance racing the same oid leaves exactly one LNbits user', asy
     requests.some(([, path]) => /\/wallet$|\/balance$/.test(path)),
     false,
   );
+});
+
+test('the racing instance whose row sorts first keeps it and deletes nothing', async (t) => {
+  withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
+  const requests = [];
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  t.after(() => {
+    console.warn = originalWarn;
+  });
+  // Seen from the other side of the same race: 'user-new' sorts before
+  // 'user-younger', so this instance is the one that must keep its row.
+  global.fetch = recordingLnbits(requests, {
+    users: [{ id: 'user-younger', external_id: 'entra-oid-race-3' }],
+  });
+
+  const result = await createEnsureCaller({
+    findLinkedUserForCaller: async () => null,
+  })({ aadObjectId: 'entra-oid-race-3', displayName: 'Ada Lovelace' });
+
+  assert.equal(result.user.id, 'user-new');
+  // Deleting here would race the other instance into deleting both rows.
+  assert.deepEqual(
+    requests.filter(([method]) => method === 'DELETE'),
+    [],
+  );
+  assert.deepEqual(warnings, []);
 });
 
 test('a duplicate that cannot be deleted is logged loudly', async (t) => {
@@ -572,7 +603,7 @@ test('a duplicate that cannot be deleted is logged loudly', async (t) => {
     console.warn = originalWarn;
   });
   global.fetch = recordingLnbits([], {
-    users: [{ id: 'user-winner', external_id: 'entra-oid-race-2' }],
+    users: [{ id: 'user-elder', external_id: 'entra-oid-race-2' }],
     deleteStatus: 500,
   });
 
@@ -580,7 +611,7 @@ test('a duplicate that cannot be deleted is logged loudly', async (t) => {
     findLinkedUserForCaller: async () => null,
   })({ aadObjectId: 'entra-oid-race-2', displayName: 'Ada Lovelace' });
 
-  assert.equal(result.user.id, 'user-winner');
+  assert.equal(result.user.id, 'user-elder');
   assert.match(
     errors.join('\n'),
     /could not delete duplicate LNbits user user-new .*until the duplicate is removed by hand/s,

@@ -84,8 +84,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
   return (
     <div className={styles.feedlist}>
       <div className={styles.headRow}>
-        <span className={`${styles.headLabel} ${styles.rankCol}`}>Rank</span>
-        <span className={`${styles.headLabel} ${styles.userCol}`}>User</span>
+        <span className={styles.headLabel}>Rank</span>
+        <span className={styles.headLabel}>User</span>
         <button
           type="button"
           className={`${styles.headSortButton} ${styles.amountCol}`}
@@ -104,7 +104,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         <ol className={styles.ranking}>
           {summaries.map(summary => (
             <li key={summary.user.id} className={styles.bodyRow}>
-              <span className={styles.rankCol}>
+              <span>
                 <span
                   className={
                     summary.rank <= 3
@@ -115,7 +115,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                   {summary.rank}
                 </span>
               </span>
-              <span className={`${styles.person} ${styles.userCol}`}>
+              <span className={styles.person}>
                 {summary.user.profileImg ? (
                   <img
                     className={styles.avatar}

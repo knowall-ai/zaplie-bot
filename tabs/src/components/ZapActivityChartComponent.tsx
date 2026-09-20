@@ -10,10 +10,15 @@ interface ZapContributionsChartProps {
   hasError?: boolean;
 }
 
-const toDateKey = (value: number | string): string =>
-  new Date(typeof value === 'number' ? value * 1000 : value)
-    .toISOString()
-    .slice(0, 10);
+// A transaction can carry a timestamp LNbits never parsed (an empty or
+// malformed string). new Date(...) then yields an Invalid Date and
+// toISOString() throws during render, so report null and drop the row.
+const toDateKey = (value: number | string): string | null => {
+  const date = new Date(typeof value === 'number' ? value * 1000 : value);
+  return Number.isFinite(date.getTime())
+    ? date.toISOString().slice(0, 10)
+    : null;
+};
 
 const buildActivities = (
   transactions: Transaction[],
@@ -24,6 +29,7 @@ const buildActivities = (
     (result, transaction) => {
       if (!transaction.time) return result;
       const date = toDateKey(transaction.time);
+      if (!date) return result;
       result[date] = (result[date] ?? 0) + Math.abs(transaction.amount) / 1000;
       return result;
     },

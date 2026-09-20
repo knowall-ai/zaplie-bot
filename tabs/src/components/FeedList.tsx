@@ -55,7 +55,10 @@ const FeedList: React.FC<FeedListProps> = ({
   const [sortField, setSortField] = useState<SortField>('time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
-  useEffect(() => setCurrentPage(1), [sortField, sortOrder, timestamp]);
+  useEffect(
+    () => setCurrentPage(1),
+    [sortField, sortOrder, timestamp, transfers],
+  );
 
   const rows = useMemo(() => {
     const filtered = transfers.filter(
@@ -88,9 +91,12 @@ const FeedList: React.FC<FeedListProps> = ({
   }, [sortField, sortOrder, timestamp, transfers]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / ITEMS_PER_PAGE));
+  // Rows can shrink under a page that is already selected (a retry returning
+  // less, a narrower period). Clamp rather than render an empty page.
+  const page = Math.min(currentPage, totalPages);
   const pageRows = rows.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
   );
 
   const sort = (field: SortField) => {
@@ -135,7 +141,7 @@ const FeedList: React.FC<FeedListProps> = ({
 
   return (
     <div className={styles.feedlist}>
-      <div className={`${styles.gridRow} ${styles.headRow}`} role="row">
+      <div className={`${styles.gridRow} ${styles.headRow}`}>
         {(
           [
             ['time', 'Time', styles.cellTime],
@@ -213,32 +219,27 @@ const FeedList: React.FC<FeedListProps> = ({
       )}
       {rows.length > ITEMS_PER_PAGE && (
         <nav className={styles.pagination} aria-label="Feed pages">
-          <button
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-          >
+          <button onClick={() => setCurrentPage(1)} disabled={page === 1}>
             First
           </button>
           <button
-            onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
-            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(Math.max(1, page - 1))}
+            disabled={page === 1}
           >
             Previous
           </button>
           <span>
-            {currentPage} / {totalPages}
+            {page} / {totalPages}
           </span>
           <button
-            onClick={() =>
-              setCurrentPage(page => Math.min(totalPages, page + 1))
-            }
-            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(Math.min(totalPages, page + 1))}
+            disabled={page === totalPages}
           >
             Next
           </button>
           <button
             onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages}
+            disabled={page === totalPages}
           >
             Last
           </button>

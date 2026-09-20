@@ -518,7 +518,14 @@ const resolveDuplicateLnbitsUser = async (aadObjectId, created) => {
   if (others.length === 0) {
     return created;
   }
-  const survivor = others[0];
+  // Both instances must pick the same survivor, or each deletes the row the
+  // other kept and the account is left with none.
+  const survivor = [created, ...others].sort((a, b) =>
+    String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0,
+  )[0];
+  if (survivor.id === created.id) {
+    return created;
+  }
   console.warn(
     `Zaplie provisioning: ${others.length + 1} LNbits users are linked to ` +
       `${aadObjectId}; keeping ${survivor.id} and removing the duplicate ` +
