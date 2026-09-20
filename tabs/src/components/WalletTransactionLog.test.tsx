@@ -182,6 +182,18 @@ describe('WalletTransactionLog', () => {
     expect(container.textContent).not.toContain('$0.11');
   });
 
+  test('renders singular relative times without a stray plural', async () => {
+    // Date.now is pinned 100 seconds after the payment, so this is one minute.
+    configureSuccess();
+
+    await mount();
+    await eventually(() => {
+      expect(container.textContent).toContain('1 minute ago');
+    });
+
+    expect(container.textContent).not.toContain('1 minutes ago');
+  });
+
   test('rejects ambiguous selected wallets', async () => {
     configureSuccess();
     (getUserWallets as jest.Mock).mockResolvedValue([

@@ -30,19 +30,37 @@ interface TransactionHistory {
 const SECONDS_PER_DAY = 86_400;
 const TRANSACTION_HISTORY_DAYS = 30;
 
+// Intl handles the singular forms ("1 minute ago", not "1 minutes ago") and
+// leaves the door open to other locales without another pass over this file.
+const relativeTimeFormat = new Intl.RelativeTimeFormat('en', {
+  numeric: 'always',
+});
+
 const relativeTime = (transaction: Transaction): string => {
   const seconds = transactionTime(transaction);
   if (!Number.isFinite(seconds)) return 'Time unavailable';
 
+  // Negated because these are all in the past; -0 still formats as "ago".
   const elapsedSeconds = Math.max(0, Math.floor(Date.now() / 1000 - seconds));
-  if (elapsedSeconds < 60) return `${elapsedSeconds} seconds ago`;
+  if (elapsedSeconds < 60) {
+    return relativeTimeFormat.format(-elapsedSeconds, 'second');
+  }
   if (elapsedSeconds < 3_600) {
-    return `${Math.floor(elapsedSeconds / 60)} minutes ago`;
+    return relativeTimeFormat.format(
+      -Math.floor(elapsedSeconds / 60),
+      'minute',
+    );
   }
   if (elapsedSeconds < SECONDS_PER_DAY) {
-    return `${Math.floor(elapsedSeconds / 3_600)} hours ago`;
+    return relativeTimeFormat.format(
+      -Math.floor(elapsedSeconds / 3_600),
+      'hour',
+    );
   }
-  return `${Math.floor(elapsedSeconds / SECONDS_PER_DAY)} days ago`;
+  return relativeTimeFormat.format(
+    -Math.floor(elapsedSeconds / SECONDS_PER_DAY),
+    'day',
+  );
 };
 
 const counterpartyName = (
