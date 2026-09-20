@@ -908,6 +908,28 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     expect(dialogText(response)).toContain("doesn't have a Zaplie account");
   });
 
+  test('refuses an author whose aadObjectId matches more than one account', async () => {
+    // Paying an arbitrary one of them could pay the wrong person's wallet.
+    // UserService.ensureUserSetup refuses the same ambiguity.
+    mockGetUsers.mockResolvedValue([authorUser, { ...authorUser } as User]);
+    const errorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    const { context, sendActivity, createConversationAsync } =
+      buildContext(currentUser);
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId),
+    );
+
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain('more than one Zaplie account');
+    errorSpy.mockRestore();
+  });
+
   test('returns a friendly guard when the author lookup fails', async () => {
     mockGetUsers.mockRejectedValue(new Error('LNbits unavailable'));
     const errorSpy = jest

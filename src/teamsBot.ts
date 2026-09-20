@@ -500,6 +500,16 @@ export class TeamsBot extends TeamsActivityHandler {
     let author: User | undefined;
     try {
       const users = await getUsers(adminKey, { aadObjectId: authorUser.id });
+      // Fail closed on an ambiguous identity rather than paying an arbitrary
+      // one of them - UserService.ensureUserSetup refuses the same way.
+      if (users.length > 1) {
+        console.error(
+          'More than one Zaplie account shares the message author aadObjectId.',
+        );
+        return dialogMessage(
+          `D'oh! ${authorUser.displayName || 'That person'} has more than one Zaplie account, so I can't tell which one to zap. An admin needs to sort that out first.`,
+        );
+      }
       author = users[0];
     } catch (error) {
       console.error(
