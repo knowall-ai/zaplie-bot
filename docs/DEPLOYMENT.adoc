@@ -338,9 +338,11 @@ Complete these once per new environment, right after the first deployment:
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
 into `manifest.template.json`, auto-increments the patch version for Test/Prod,
 and writes `appPackage/manifest.json` (gitignored). The manifest declares the
-bot (personal/team/groupchat scopes with the four commands), the `zapMessage`
-message action under `composeExtensions`, and five static tabs (Feed, Users,
-Rewards, Wallet, Settings).
+bot (personal/team/groupchat scopes with its three commands - Send Zap, Show
+my balance, Show Leaderboard), the `zapMessage` message action under
+`composeExtensions`, and five static tabs (Feed, Users, Rewards, Wallet,
+Settings). `withdraw my zaps` is deliberately not listed until withdrawals
+work (issue #293).
 
 === Re-uploading after a manifest change
 
