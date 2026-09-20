@@ -338,5 +338,31 @@ Complete these once per new environment, right after the first deployment:
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
 into `manifest.template.json`, auto-increments the patch version for Test/Prod,
 and writes `appPackage/manifest.json` (gitignored). The manifest declares the
-bot (personal/team/groupchat scopes with the four commands) and five static
-tabs (Feed, Users, Rewards, Wallet, Settings).
+bot (personal/team/groupchat scopes with its three commands - Send Zap, Show
+my balance, Show Leaderboard), the `zapMessage` message action under
+`composeExtensions`, and five static tabs (Feed, Users, Rewards, Wallet,
+Settings). `withdraw my zaps` is deliberately not listed until withdrawals
+work (issue #293).
+
+=== Re-uploading after a manifest change
+
+Deploying the bot does not update the manifest. Anything declared in
+`manifest.template.json` — a new bot command, a static tab, or a messaging
+extension such as the `zapMessage` right-click action — only reaches users
+once the app package is rebuilt and re-uploaded:
+
+[source,bash]
+----
+npm run build-manifest          # regenerates appPackage/manifest.json
+teamsapp provision --env dev    # uploads the app package to the tenant
+----
+
+Then, in Teams, the app has to be updated where it is installed: Teams admin
+centre -> Manage apps -> Zaplie -> Update, or re-upload the package under
+Apps -> Manage your apps -> Upload a custom app. Until that happens, the bot
+handles the new invoke but no one can reach it, because the client never
+renders the entry point.
+
+The `zapMessage` action also needs Zaplie installed in the user's personal
+scope: the pre-filled zap card is delivered to their 1:1 chat with the bot,
+so only they see their balance and only they can send the zap.

@@ -8,7 +8,13 @@
 
 import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import type { TurnContext } from 'botbuilder';
-import { SendZap, SendZapCommand, buildZapReceiptCard } from './sendZapCommand';
+import {
+  SendZap,
+  SendZapCommand,
+  buildZapReceiptCard,
+  createZapCard,
+} from './sendZapCommand';
+import { UserService } from '../services/userService';
 import {
   createInvoice,
   getUsers,
@@ -288,5 +294,96 @@ describe('buildZapReceiptCard', () => {
     expect(text).toContain((2500).toLocaleString());
     expect(text).toContain((5000).toLocaleString());
     expect(text).toContain((12000).toLocaleString());
+  });
+});
+
+// The recipient ChoiceSet is built from the live user list. It used to be
+// filtered against the process-wide UserService singleton *after* an awaited
+// read, so a concurrent turn could re-point the singleton and decide who was
+// dropped from this card's list.
+describe('createZapCard recipient choices', () => {
+  type ChoiceSet = {
+    id?: string;
+    choices?: { title: string; value: string }[];
+    value?: string;
+  };
+
+  const alice = {
+    id: 'user-alice',
+    displayName: 'Alice',
+    aadObjectId: 'aad-alice',
+    allowanceWallet: { id: 'w-alice', inkey: 'inkey-alice', adminkey: 'adm' },
+  } as never as User;
+  const bob = {
+    id: 'user-bob',
+    displayName: 'Bob',
+    aadObjectId: 'aad-bob',
+  } as never as User;
+  const carol = {
+    id: 'user-carol',
+    displayName: 'Carol',
+    aadObjectId: 'aad-carol',
+  } as never as User;
+
+  const receiverChoiceSet = (card: { body: unknown[] }): ChoiceSet =>
+    (card.body as ChoiceSet[]).find(el => el.id === 'zapReceiverId') ?? {};
+
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.mocked(getWalletBalance).mockResolvedValue(1000);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('filters the sender out using the sender passed in, not the singleton', async () => {
+    jest.mocked(getUsers).mockResolvedValue([alice, bob, carol]);
+    // A concurrent turn has already re-pointed the singleton at Bob. The card
+    // being built is Alice's, so Alice must be the one filtered out.
+    jest.spyOn(UserService, 'getInstance').mockReturnValue({
+      getCurrentUser: () => bob,
+    } as unknown as UserService);
+
+    const card = await createZapCard(alice, 'Sats');
+
+    const values = (receiverChoiceSet(card).choices ?? []).map(c => c.value);
+    expect(values).toEqual(['user-bob', 'user-carol']);
+    expect(values).not.toContain('user-alice');
+  });
+
+  test('a prefilled recipient missing from the list is still selectable', async () => {
+    // Carol is the message author but did not come back in the list.
+    jest.mocked(getUsers).mockResolvedValue([bob]);
+
+    const card = await createZapCard(alice, 'Sats', {
+      receiverId: carol.id,
+      receiverName: carol.displayName,
+      amountSats: 1000,
+      message: 'Nice work',
+    });
+
+    const choiceSet = receiverChoiceSet(card);
+    expect(choiceSet.value).toBe('user-carol');
+    // An Input.ChoiceSet value that names no choice renders as an empty
+    // required field with no hint of who it meant.
+    expect(choiceSet.choices).toContainEqual({
+      title: 'Carol',
+      value: 'user-carol',
+    });
+  });
+
+  test('does not duplicate a prefilled recipient that is already listed', async () => {
+    jest.mocked(getUsers).mockResolvedValue([bob, carol]);
+
+    const card = await createZapCard(alice, 'Sats', {
+      receiverId: carol.id,
+      receiverName: carol.displayName,
+      amountSats: 1000,
+      message: 'Nice work',
+    });
+
+    const values = (receiverChoiceSet(card).choices ?? []).map(c => c.value);
+    expect(values.filter(v => v === 'user-carol')).toHaveLength(1);
   });
 });
