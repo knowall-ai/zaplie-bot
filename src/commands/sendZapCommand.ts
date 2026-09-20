@@ -6,7 +6,6 @@ import {
   createInvoice,
   getWalletBalance,
 } from '../services/lnbitsService';
-import { UserService } from '../services/userService';
 import { GENERIC_ERROR_MESSAGE } from '../messages';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
@@ -291,6 +290,9 @@ export async function SendZap(
 // re-checks recipient, amount, balance, self-zap and the durable zap ledger.
 export interface ZapCardPrefill {
   receiverId: string;
+  // Used only if the recipient is missing from the wallet choices, so the
+  // pre-filled value always names a choice that exists.
+  receiverName?: string;
   amountSats: number;
   message: string;
 }
@@ -302,7 +304,21 @@ export async function createZapCard(
   prefill?: ZapCardPrefill,
 ) {
   console.log('Creating Zap Card ...');
-  const walletChoices = await populateWalletChoices();
+  const walletChoices = await populateWalletChoices(sender);
+
+  // An Input.ChoiceSet value naming a choice that is not in the list renders
+  // as an empty required field, and the person cannot tell who it was meant
+  // to be. If the recipient did not come back in the list - a pagination gap,
+  // or an account created since - put them in it.
+  if (
+    prefill &&
+    !walletChoices.some(choice => choice.value === prefill.receiverId)
+  ) {
+    walletChoices.unshift({
+      title: prefill.receiverName ?? 'Message author',
+      value: prefill.receiverId,
+    });
+  }
 
   // TODO: Add the users current balance to here!
   const currentBalance = await getWalletBalance(sender.allowanceWallet.inkey);
@@ -379,27 +395,25 @@ export async function createZapCard(
   };
 }
 
-// Function to populate choices
-async function populateWalletChoices() {
+// Function to populate choices.
+//
+// The sender is passed in rather than read from the UserService singleton:
+// the singleton is process-wide and is re-pointed by every turn, so reading
+// it after the awaited getUsers call let a concurrent turn decide who got
+// filtered out of this card's recipient list.
+async function populateWalletChoices(
+  sender: User | undefined,
+): Promise<{ title: string; value: string }[]> {
   console.log('Populating wallet choices ...');
   const users = await getUsers(adminKey, null);
 
-  // Get the current user
-  const userService = UserService.getInstance();
-  const currentUser = userService.getCurrentUser();
+  const senderAadObjectId = sender?.aadObjectId;
+  const selectableUsers = senderAadObjectId
+    ? users.filter(user => user?.aadObjectId !== senderAadObjectId)
+    : users;
 
-  let filteresUsers = users;
-  if (currentUser) {
-    filteresUsers = users.filter(
-      user => user?.aadObjectId !== userService.getCurrentUser().aadObjectId,
-    );
-  }
-
-  if (filteresUsers) {
-    return filteresUsers.map(user => ({
-      title: user.displayName,
-      value: user.id,
-    }));
-  }
-  return [];
+  return selectableUsers.map(user => ({
+    title: user.displayName,
+    value: user.id,
+  }));
 }

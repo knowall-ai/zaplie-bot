@@ -44,6 +44,9 @@ process.env.LNBITS_POINTS_LABEL = process.env.LNBITS_POINTS_LABEL || 'Sats';
 // teamsBot.ts also captures the LNbits admin key at module load; the
 // zap-message suite asserts the author lookup is made with it.
 process.env.LNBITS_ADMINKEY = process.env.LNBITS_ADMINKEY || 'admin-key';
+// The zap-message action opens a 1:1 chat proactively, which needs the bot's
+// app id; config.ts captures it at module load.
+process.env.BOT_ID = process.env.BOT_ID || 'bot-app-id';
 const rewardName = process.env.LNBITS_POINTS_LABEL;
 const adminKey = process.env.LNBITS_ADMINKEY;
 // The durable zap ledger refuses to construct without a data directory. The
@@ -544,9 +547,10 @@ const mockCreateZapCard = createZapCard as jest.MockedFunction<
   typeof createZapCard
 >;
 
-// "Zap a message": the right-click action only posts a pre-filled zap card.
-// Nothing is paid here - the card still goes through the submitZaps handler
-// above, with its ledger lock and budget checks.
+// "Zap a message": the right-click action pays nothing. It opens the existing
+// zap card, pre-filled, in the invoker's 1:1 chat with the bot - never in the
+// conversation the message came from - and the card still goes through the
+// submitZaps handler above, with its ledger lock and budget checks.
 const currentUser = {
   id: 'currentUserId',
   displayName: 'Current User',
@@ -567,13 +571,53 @@ const authorUser = {
   allowanceWallet: null,
 } as User;
 
-function buildContext(user: User) {
+type ExtensionContext = {
+  context: TurnContext;
+  sendActivity: jest.Mock;
+  createConversationAsync: jest.Mock;
+  // Every activity the bot sent through the proactive 1:1 conversation.
+  proactive: unknown[];
+};
+
+function buildContext(user: User | undefined): ExtensionContext {
   const turnState = new Map<string, unknown>();
-  turnState.set('user', user);
-  return {
+  if (user) turnState.set('user', user);
+  const sendActivity = jest
+    .fn<() => Promise<void>>()
+    .mockResolvedValue(undefined);
+  const proactive: unknown[] = [];
+  // Stands in for CloudAdapter.createConversationAsync: runs the callback
+  // against a throwaway 1:1 turn context and records what was sent there.
+  const createConversationAsync = jest.fn(
+    async (..._args: unknown[]): Promise<void> => {
+      const logic = _args[5] as (c: TurnContext) => Promise<void>;
+      await logic({
+        sendActivity: async (activity: unknown) => {
+          proactive.push(activity);
+        },
+      } as unknown as TurnContext);
+    },
+  );
+  const context = {
+    activity: {
+      type: 'invoke',
+      name: 'composeExtension/submitAction',
+      channelId: 'msteams',
+      serviceUrl: 'https://smba.example/teams/',
+      recipient: { id: 'bot-id' },
+      from: { id: 'invoker-teams-id' },
+      conversation: { id: 'channel-thread-1', tenantId: 'tenant-1' },
+    },
     turnState,
-    sendActivity: jest.fn(),
+    sendActivity,
+    adapter: { createConversationAsync },
   } as unknown as TurnContext;
+  return {
+    context,
+    sendActivity: sendActivity as unknown as jest.Mock,
+    createConversationAsync: createConversationAsync as unknown as jest.Mock,
+    proactive,
+  };
 }
 
 function buildAction(
@@ -597,6 +641,22 @@ function buildAction(
   } as unknown as MessagingExtensionAction;
 }
 
+// A message posted by an app rather than a person: Teams sets `application`
+// and leaves `user` unset.
+function buildAppAuthoredAction() {
+  return {
+    messagePayload: {
+      from: { application: { id: 'app-1', displayName: 'Some App' } },
+      body: { content: '<p>Build 42 succeeded</p>' },
+    },
+  } as unknown as MessagingExtensionAction;
+}
+
+// Every reply goes back as a task-module message, which Teams shows only to
+// the person who used the action.
+const dialogText = (response: { task?: { value?: unknown } }): string =>
+  String(response.task?.value ?? '');
+
 describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
   let bot: InstanceType<typeof TeamsBot>;
 
@@ -609,35 +669,58 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     jest.restoreAllMocks();
   });
 
-  test('sends the zap card prefilled for the message author and returns {}', async () => {
+  test('opens the prefilled card in the invoker 1:1 chat, never in the source conversation', async () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
 
-    const context = buildContext(currentUser);
-    const action = buildAction(authorUser.aadObjectId);
-
+    const { context, sendActivity, createConversationAsync, proactive } =
+      buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
-      action,
+      buildAction(authorUser.aadObjectId),
     );
 
     expect(mockCreateZapCard).toHaveBeenCalledWith(currentUser, rewardName, {
       receiverId: authorUser.id,
+      receiverName: authorUser.displayName,
       amountSats: 1000,
       message: 'Great work!',
     });
     expect(mockGetUsers).toHaveBeenCalledWith(adminKey, {
       aadObjectId: authorUser.aadObjectId,
     });
-    expect(context.sendActivity).toHaveBeenCalledTimes(1);
-    expect(response).toEqual({});
+
+    // The card carries the invoker's own balance and a live Send Zap button,
+    // and the ledger key is not scoped by sender - so it must never be posted
+    // into the channel or group chat the message came from.
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(createConversationAsync).toHaveBeenCalledTimes(1);
+    expect(proactive).toHaveLength(1);
+
+    const [botAppId, channelId, serviceUrl, , parameters] =
+      createConversationAsync.mock.calls[0] as [
+        string,
+        string,
+        string,
+        string,
+        { isGroup: boolean; members: { id: string }[]; tenantId: string },
+      ];
+    expect(botAppId).toBe(process.env.BOT_ID);
+    expect(channelId).toBe('msteams');
+    expect(serviceUrl).toBe('https://smba.example/teams/');
+    expect(parameters.isGroup).toBe(false);
+    expect(parameters.members).toEqual([{ id: 'invoker-teams-id' }]);
+    expect(parameters.tenantId).toBe('tenant-1');
+
+    expect(response.task?.type).toBe('message');
+    expect(dialogText(response)).toContain('Author User');
   });
 
   test('extracts a plain-text memo, decoding HTML entities', async () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
 
-    const context = buildContext(currentUser);
+    const { context } = buildContext(currentUser);
     await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(
@@ -652,11 +735,33 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     );
   });
 
+  test('strips markdown link syntax from the memo preview', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+
+    // The memo is another person's message text and it is rendered back on
+    // the zap receipt, whose TextBlock renders markdown: a link must not
+    // survive as a live link.
+    const { context } = buildContext(currentUser);
+    await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(
+        authorUser.aadObjectId,
+        '<p>see [our invoice portal](https://evil.example) now</p>',
+      ),
+    );
+
+    const memo = mockCreateZapCard.mock.calls[0][2]?.message ?? '';
+    expect(memo).toBe('see our invoice portal now');
+    expect(memo).not.toContain('evil.example');
+    expect(memo).not.toContain('[');
+  });
+
   test('sends an empty memo when the message has no body content', async () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
 
-    const context = buildContext(currentUser);
+    const { context } = buildContext(currentUser);
     const action = buildAction(authorUser.aadObjectId);
     delete (action as { messagePayload?: { body?: unknown } }).messagePayload!
       .body;
@@ -670,7 +775,7 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
 
-    const context = buildContext(currentUser);
+    const { context } = buildContext(currentUser);
     await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(authorUser.aadObjectId, `<p>${'x'.repeat(100)}</p>`),
@@ -683,7 +788,7 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
 
-    const context = buildContext(currentUser);
+    const { context } = buildContext(currentUser);
     await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(authorUser.aadObjectId, '<p>Great work!</p>', {
@@ -701,7 +806,7 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
 
     // 79 plain characters then an astral emoji: the 80th code point is two
     // UTF-16 code units, so a naive slice(0, 80) would keep half of it.
-    const context = buildContext(currentUser);
+    const { context } = buildContext(currentUser);
     await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(authorUser.aadObjectId, `<p>${'z'.repeat(79)}\u{1f600}x</p>`),
@@ -718,7 +823,7 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     mockGetUsers.mockResolvedValue([authorUser]);
     mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
 
-    const context = buildContext(currentUser);
+    const { context } = buildContext(currentUser);
     await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(authorUser.aadObjectId, '<p>Great work!</p>', {
@@ -731,8 +836,23 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
     );
   });
 
+  test('explains itself when the message was posted by an app, not a person', async () => {
+    const { context, sendActivity, createConversationAsync } =
+      buildContext(currentUser);
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAppAuthoredAction(),
+    );
+
+    expect(mockGetUsers).not.toHaveBeenCalled();
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain('posted by an app');
+  });
+
   test('guards when the message author cannot be identified', async () => {
-    const context = buildContext(currentUser);
+    const { context, createConversationAsync } = buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(undefined),
@@ -740,46 +860,52 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
 
     expect(mockGetUsers).not.toHaveBeenCalled();
     expect(mockCreateZapCard).not.toHaveBeenCalled();
-    expect(context.sendActivity).toHaveBeenCalledWith(
-      expect.stringContaining("couldn't tell who sent that message"),
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain(
+      "couldn't tell who sent that message",
     );
-    expect(response).toEqual({});
+  });
+
+  test('guards when the invoker has no resolved Zaplie identity', async () => {
+    const { context, createConversationAsync } = buildContext(undefined);
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId),
+    );
+
+    expect(mockCreateZapCard).not.toHaveBeenCalled();
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain("couldn't verify who you are");
   });
 
   test('guards against zapping yourself', async () => {
     mockGetUsers.mockResolvedValue([currentUser]);
 
-    const context = buildContext(currentUser);
-    const action = buildAction(currentUser.aadObjectId);
-
+    const { context, sendActivity, createConversationAsync } =
+      buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
-      action,
+      buildAction(currentUser.aadObjectId),
     );
 
     expect(mockCreateZapCard).not.toHaveBeenCalled();
-    expect(context.sendActivity).toHaveBeenCalledWith(
-      expect.stringContaining("can't zap yourself"),
-    );
-    expect(response).toEqual({});
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain("can't zap yourself");
   });
 
   test('guards when the message author has no Zaplie account', async () => {
     mockGetUsers.mockResolvedValue([]);
 
-    const context = buildContext(currentUser);
-    const action = buildAction('aad-unknown-author');
-
+    const { context, createConversationAsync } = buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
-      action,
+      buildAction('aad-unknown-author'),
     );
 
     expect(mockCreateZapCard).not.toHaveBeenCalled();
-    expect(context.sendActivity).toHaveBeenCalledWith(
-      expect.stringContaining("doesn't have a Zaplie account"),
-    );
-    expect(response).toEqual({});
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain("doesn't have a Zaplie account");
   });
 
   test('returns a friendly guard when the author lookup fails', async () => {
@@ -788,17 +914,64 @@ describe('TeamsBot handleTeamsMessagingExtensionSubmitAction', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
 
-    const context = buildContext(currentUser);
+    const { context, createConversationAsync } = buildContext(currentUser);
     const response = await bot.handleTeamsMessagingExtensionSubmitAction(
       context,
       buildAction(authorUser.aadObjectId),
     );
 
     expect(mockCreateZapCard).not.toHaveBeenCalled();
-    expect(context.sendActivity).toHaveBeenCalledWith(
-      expect.stringContaining("couldn't check that teammate's Zaplie account"),
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain(
+      "couldn't check that teammate's Zaplie account",
     );
-    expect(response).toEqual({});
+    errorSpy.mockRestore();
+  });
+
+  test('returns a friendly guard when building the card fails', async () => {
+    // createZapCard reads the wallet list and the live balance, so LNbits
+    // being down must land like the guards above rather than as a bare
+    // task-module error.
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockRejectedValue(new Error('LNbits unavailable'));
+    const errorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    const { context, sendActivity, createConversationAsync } =
+      buildContext(currentUser);
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId),
+    );
+
+    expect(createConversationAsync).not.toHaveBeenCalled();
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain("couldn't open a zap card");
+    errorSpy.mockRestore();
+  });
+
+  test('returns a friendly guard when the 1:1 chat cannot be opened', async () => {
+    mockGetUsers.mockResolvedValue([authorUser]);
+    mockCreateZapCard.mockResolvedValue({ type: 'AdaptiveCard' } as never);
+    const errorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    const { context, sendActivity, createConversationAsync } =
+      buildContext(currentUser);
+    createConversationAsync.mockImplementation(() =>
+      Promise.reject(new Error('bot is not part of the conversation roster')),
+    );
+
+    const response = await bot.handleTeamsMessagingExtensionSubmitAction(
+      context,
+      buildAction(authorUser.aadObjectId),
+    );
+
+    // The failure must not fall back to posting the card in the channel.
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(dialogText(response)).toContain("couldn't open a zap card");
     errorSpy.mockRestore();
   });
 });

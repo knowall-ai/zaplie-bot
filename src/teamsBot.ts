@@ -10,6 +10,7 @@ import {
   MessageFactory,
   MessagingExtensionAction,
   MessagingExtensionActionResponse,
+  ConversationParameters,
 } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
 import {
@@ -43,6 +44,7 @@ import {
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createReadOnlyTools } from './commands/agentTools';
 import { getUser, getUsers, getWalletBalance } from './services/lnbitsService';
+import config from './config';
 
 const UNRECOGNIZED_COMMAND_MESSAGE =
   "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
@@ -455,19 +457,44 @@ export class TeamsBot extends TeamsActivityHandler {
   }
 
   // "Zap a message" action command: right-click a message -> pre-fill a zap card for its author.
+  // "Zap a message" action command: right-click a message -> open a zap card
+  // pre-filled for its author.
+  //
+  // Every reply is a task-module message, and the card itself is delivered to
+  // the invoker's 1:1 chat with the bot. Nothing is posted into the source
+  // conversation. Posting there would put a card carrying the invoker's own
+  // Available Balance, and a live Send Zap button, in front of everyone in
+  // the channel or group chat - and the zap ledger key (tenant, conversation,
+  // card, recipient) is deliberately not scoped by sender, so whoever pressed
+  // it first would pay from their own allowance and the invoker's own submit
+  // would then be rejected as a duplicate.
   async handleTeamsMessagingExtensionSubmitAction(
     context: TurnContext,
     action: MessagingExtensionAction,
   ): Promise<MessagingExtensionActionResponse> {
-    // FetchUserMiddleware guarantees 'user' is set (or the turn already threw).
-    const currentUser = context.turnState.get('user');
+    // FetchUserMiddleware sets 'user' on every turn or the turn throws before
+    // reaching here. Typed as optional anyway: this handler owes Teams a
+    // response, and an unhandled TypeError would surface as a bare dialog
+    // failure with nothing said to the person.
+    const currentUser: User | undefined = context.turnState.get('user');
+    if (!currentUser) {
+      return dialogMessage(
+        "D'oh! I couldn't verify who you are, so I can't open a zap card.",
+      );
+    }
 
-    const authorUser = action.messagePayload?.from?.user;
+    const from = action.messagePayload?.from;
+    if (from?.application && !from.user) {
+      return dialogMessage(
+        "D'oh! That message was posted by an app, not a person, so there's nobody to zap.",
+      );
+    }
+
+    const authorUser = from?.user;
     if (!authorUser?.id) {
-      await context.sendActivity(
+      return dialogMessage(
         "D'oh! I couldn't tell who sent that message, so I can't zap them.",
       );
-      return {};
     }
 
     let author: User | undefined;
@@ -479,23 +506,20 @@ export class TeamsBot extends TeamsActivityHandler {
         'Unable to resolve the message author in Zaplie:',
         error instanceof Error ? error.message : error,
       );
-      await context.sendActivity(
+      return dialogMessage(
         "D'oh! I couldn't check that teammate's Zaplie account right now. Please try again later.",
       );
-      return {};
     }
     if (!author) {
-      await context.sendActivity(
+      return dialogMessage(
         `D'oh! ${authorUser.displayName || 'That person'} doesn't have a Zaplie account yet.`,
       );
-      return {};
     }
 
     if (author.aadObjectId === currentUser.aadObjectId) {
-      await context.sendActivity(
+      return dialogMessage(
         "D'oh! You can't zap yourself - the allowance is for recognising others.",
       );
-      return {};
     }
 
     // 'memo' comes from the static-parameter dialog Teams shows before this
@@ -504,19 +528,83 @@ export class TeamsBot extends TeamsActivityHandler {
       typeof action.data?.memo === 'string'
         ? capMemoPreview(action.data.memo.trim())
         : '';
-    const card = await createZapCard(currentUser, globalRewardName, {
-      receiverId: author.id,
-      amountSats: ZAP_MESSAGE_DEFAULT_SATS,
-      message:
-        dialogMemo || htmlToMemoPreview(action.messagePayload?.body?.content),
-    });
 
-    await context.sendActivity(
-      MessageFactory.attachment(CardFactory.adaptiveCard(card)),
+    // createZapCard reads the wallet list and the sender's live balance, and
+    // opening the 1:1 chat is a network call too. LNbits or Teams being down
+    // must fail like the guards above - a sentence in the dialog - not as a
+    // bare task-module error.
+    try {
+      const card = await createZapCard(currentUser, globalRewardName, {
+        receiverId: author.id,
+        receiverName: author.displayName,
+        amountSats: ZAP_MESSAGE_DEFAULT_SATS,
+        message:
+          dialogMemo || htmlToMemoPreview(action.messagePayload?.body?.content),
+      });
+      await this.sendCardToInvoker(context, card);
+    } catch (error) {
+      console.error(
+        'Unable to open a zap card for the message author:',
+        error instanceof Error ? error.message : error,
+      );
+      return dialogMessage(
+        "D'oh! I couldn't open a zap card just now. Check that you have Zaplie installed in a personal chat, then try again.",
+      );
+    }
+
+    return dialogMessage(
+      `Opened a zap card for ${author.displayName} in your chat with Zaplie. Nothing is sent until you press Send Zap there.`,
     );
-
-    return {};
   }
+
+  // Delivers the pre-filled card to the invoker's 1:1 chat with the bot, so
+  // only they can see their balance and only they can press Send Zap. The
+  // card lands in a personal conversation, which also scopes the zap ledger
+  // key to that conversation.
+  private async sendCardToInvoker(
+    context: TurnContext,
+    card: Awaited<ReturnType<typeof createZapCard>>,
+  ): Promise<void> {
+    const botAppId = config.botId;
+    if (!botAppId) {
+      throw new Error('BOT_ID is not set, so no 1:1 chat can be opened.');
+    }
+    // Teams stamps the tenant on the conversation for most activities and only
+    // in channelData for some; read both rather than guess.
+    const channelData = context.activity.channelData as
+      { tenant?: { id?: string } } | undefined;
+    const tenantId =
+      context.activity.conversation?.tenantId ?? channelData?.tenant?.id;
+    if (!tenantId) {
+      throw new Error('No tenant id on the zap-message invoke.');
+    }
+
+    const message = MessageFactory.attachment(CardFactory.adaptiveCard(card));
+    const conversationParameters: ConversationParameters = {
+      isGroup: false,
+      bot: context.activity.recipient,
+      members: [context.activity.from],
+      tenantId,
+      channelData: { tenant: { id: tenantId } },
+    };
+
+    await context.adapter.createConversationAsync(
+      botAppId,
+      context.activity.channelId,
+      context.activity.serviceUrl,
+      '',
+      conversationParameters,
+      async (proactive: TurnContext) => {
+        await proactive.sendActivity(message);
+      },
+    );
+  }
+}
+
+// Teams shows this in the invoker's own dialog, so it reaches the person who
+// used the action and nobody else in the conversation.
+function dialogMessage(value: string): MessagingExtensionActionResponse {
+  return { task: { type: 'message', value } };
 }
 
 // Prefill only: the user can still edit the amount on the card, whose input
@@ -569,5 +657,20 @@ function htmlToMemoPreview(html: string | undefined): string {
     )
     .replace(/\s+/g, ' ')
     .trim();
-  return capMemoPreview(text);
+  return capMemoPreview(stripMarkdownLinks(text));
+}
+
+// Adaptive Card TextBlocks render a subset of markdown, and the zap receipt
+// card shows the memo back. Tags are already gone by this point, but
+// "[our invoice portal](https://evil.example)" would still render as a live
+// link on a receipt that is now seeded by somebody else's message. Keep the
+// label, drop the target, then remove the brackets and backticks that could
+// re-form one. Emphasis markers are left alone: they only change styling and
+// stripping them would mangle ordinary prose.
+function stripMarkdownLinks(text: string): string {
+  return text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[[\]`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
