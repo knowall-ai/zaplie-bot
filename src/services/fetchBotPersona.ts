@@ -58,12 +58,15 @@ const fetchPersona = async (): Promise<string> => {
   if (typeof botPersona !== 'string') {
     throw new Error('bot persona response has no botPersona string');
   }
-  const persona = botPersona.replace(/\r\n?/g, '\n').trim();
+  const lineEndingsNormalized = botPersona.replace(/\r\n?/g, '\n');
+  const persona = lineEndingsNormalized.trim();
   if (
     // Code points, not UTF-16 units — the portal caps the same way, so an
     // emoji-heavy persona it accepted must not be dropped here.
     [...persona].length > MAX_PERSONA_LENGTH ||
-    !isPlainText(persona) ||
+    // Untrimmed, because U+2028 and U+2029 are Unicode whitespace and trim()
+    // would swallow a boundary one rather than refuse it.
+    !isPlainText(lineEndingsNormalized) ||
     hasPersonaDelimiterLine(persona)
   ) {
     throw new Error('bot persona response failed validation');

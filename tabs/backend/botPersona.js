@@ -47,15 +47,18 @@ const hasPersonaDelimiterLine = value =>
   value.split('\n').some(line => PERSONA_DELIMITER_LINE.test(line));
 
 // CRLF and lone CR come from pasting out of Windows editors; the stored value
-// is normalized so a round trip never changes what the admin saw.
-const normalizeBotPersona = value => value.replace(/\r\n?/g, '\n').trim();
+// is normalized so a round trip never changes what the admin saw. The trim
+// that finishes the job lives in validateBotPersona rather than here, because
+// one rule has to run before it — see below.
+const normalizeLineEndings = value => value.replace(/\r\n?/g, '\n');
 
 const validateBotPersona = value => {
   if (typeof value !== 'string') {
     return { valid: false, message: 'botPersona must be a string' };
   }
 
-  const botPersona = normalizeBotPersona(value);
+  const lineEndingsNormalized = normalizeLineEndings(value);
+  const botPersona = lineEndingsNormalized.trim();
   // Code points, not UTF-16 units, so an emoji is not billed twice against a
   // limit the message states in characters.
   if ([...botPersona].length > MAX_BOT_PERSONA_LENGTH) {
@@ -64,7 +67,11 @@ const validateBotPersona = value => {
       message: `botPersona must be at most ${MAX_BOT_PERSONA_LENGTH} characters`,
     };
   }
-  if (hasControlCharacter(botPersona)) {
+  // Deliberately the untrimmed value: U+2028 and U+2029 have the Unicode
+  // White_Space property, so trim() would quietly swallow one sitting at
+  // either end instead of refusing it. Leading and trailing spaces and tabs
+  // are allowed characters, so running the check early costs nothing.
+  if (hasControlCharacter(lineEndingsNormalized)) {
     return {
       valid: false,
       message: 'botPersona must be plain text without control characters',

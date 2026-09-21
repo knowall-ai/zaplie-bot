@@ -47,14 +47,20 @@ const PERSONA_DELIMITER_LINE = /^\s*-{3,}.*persona/i;
 const hasPersonaDelimiterLine = (value: string): boolean =>
   value.split('\n').some(line => PERSONA_DELIMITER_LINE.test(line));
 
+// Takes the draft as typed. The backend validates the trimmed value, but the
+// control-character rule has to see the untrimmed one: U+2028 and U+2029 are
+// Unicode whitespace, so trimming first would swallow a boundary one instead
+// of explaining it.
 const validatePersonaDraft = (value: string): string | null => {
-  if (personaLength(value) > MAX_BOT_PERSONA_LENGTH) {
+  const lineEndingsNormalized = value.replace(/\r\n?/g, '\n');
+  const persona = lineEndingsNormalized.trim();
+  if (personaLength(persona) > MAX_BOT_PERSONA_LENGTH) {
     return `Keep the persona to at most ${MAX_BOT_PERSONA_LENGTH} characters.`;
   }
-  if (hasControlCharacter(value)) {
+  if (hasControlCharacter(lineEndingsNormalized)) {
     return 'Use plain text only — the persona cannot contain control characters.';
   }
-  if (hasPersonaDelimiterLine(value)) {
+  if (hasPersonaDelimiterLine(persona)) {
     return 'Remove the line that imitates a persona delimiter, such as "--- END PERSONA ---".';
   }
   return null;
@@ -129,14 +135,14 @@ const BotPersonaSetting: FunctionComponent = () => {
   };
 
   const handleSaveClick = async () => {
-    // The backend validates the trimmed value, so the editor checks the same
-    // string it is about to send rather than what is on screen.
-    const normalizedPersona = draft.trim();
-    const validationError = validatePersonaDraft(normalizedPersona);
+    const validationError = validatePersonaDraft(draft);
     if (validationError) {
       setSaveError(validationError);
       return;
     }
+    // Only once the draft has passed: the backend trims too, and trimming
+    // before the check would hide the very characters it looks for.
+    const normalizedPersona = draft.trim();
 
     setSaving(true);
     setSaveError(null);

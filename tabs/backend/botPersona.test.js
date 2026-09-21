@@ -95,6 +95,14 @@ test('Unicode line separators are rejected, fence forgery and all', () => {
   assert.match(forgedOnU2028.message, /plain text/);
 
   assert.equal(validateBotPersona('Be upbeat.\u2029Be brief.').valid, false);
+
+  // Both have the Unicode White_Space property, so a boundary one would be
+  // trimmed away before the rule ran if the rule ran on the trimmed value.
+  assert.equal(validateBotPersona('\u2028Be concise.').valid, false);
+  assert.equal(validateBotPersona('Be concise.\u2029').valid, false);
+
+  // Ordinary surrounding whitespace is still trimmed, not refused.
+  assert.equal(validateBotPersona('  Be concise.\n').valid, true);
 });
 
 test('tabs and newlines stay allowed', () => {

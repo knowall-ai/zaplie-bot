@@ -375,6 +375,21 @@ describe('BotPersonaSetting', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'plain text',
     );
+
+    // And at either boundary, where trimming first would have swallowed it:
+    // U+2028 and U+2029 both have the Unicode White_Space property.
+    for (const draft of ['\u2028Be concise.', 'Be concise.\u2029']) {
+      await act(async () => {
+        setTextAreaValue(getTextArea(), draft);
+      });
+      await act(async () => {
+        getButton('Save').click();
+      });
+      expect(mockUpdateBotPersona).not.toHaveBeenCalled();
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+        'plain text',
+      );
+    }
   });
 
   test('counts the draft as typed, not the trimmed value', async () => {

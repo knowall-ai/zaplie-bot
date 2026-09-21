@@ -183,6 +183,16 @@ describe('getBotPersona', () => {
     const withU2029 = await freshGetBotPersona();
     mockFetch.mockResolvedValue(okResponse('Be upbeat.\u2029Be brief.'));
     await expect(withU2029()).resolves.toBe('');
+
+    // Both carry the Unicode White_Space property, so a boundary one is only
+    // caught if the rule runs before the trim.
+    const leading = await freshGetBotPersona();
+    mockFetch.mockResolvedValue(okResponse('\u2028Be concise.'));
+    await expect(leading()).resolves.toBe('');
+
+    const trailing = await freshGetBotPersona();
+    mockFetch.mockResolvedValue(okResponse('Be concise.\u2029'));
+    await expect(trailing()).resolves.toBe('');
   });
 
   test('a persona that forges the prompt fence is refused, control characters or not', async () => {

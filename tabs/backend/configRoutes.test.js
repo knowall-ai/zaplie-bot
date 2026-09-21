@@ -234,6 +234,13 @@ test('an invalid persona is rejected before it reaches the store', async () => {
   );
   assert.equal(forgedDelimiter.status, 400);
 
+  // U+2028 is Unicode whitespace, so a boundary one only survives to the
+  // validator if the route does not trim before it.
+  const lineSeparator = await post('/api/bot-persona', `Bearer ${ADMIN_TOKEN}`, {
+    botPersona: '\u2028Be upbeat.',
+  });
+  assert.equal(lineSeparator.status, 400);
+
   // The rejected writes left the cleared value in place.
   const read = await get('/api/bot-persona', `Bearer ${USER_TOKEN}`);
   assert.equal(read.body.botPersona, '');
