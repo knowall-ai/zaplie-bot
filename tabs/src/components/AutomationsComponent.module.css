@@ -240,13 +240,8 @@
 
 .engagementScroller {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(300px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  scroll-snap-type: x proximity;
-  scrollbar-color: #5a5856 #1f1f1f;
 }
 
 .engagementPanel {
@@ -255,7 +250,6 @@
   border-radius: 4px;
   background-color: #1f1f1f;
   padding: 16px;
-  scroll-snap-align: start;
 }
 
 .engagementTitle {
@@ -986,7 +980,7 @@
   }
 
   .engagementScroller {
-    grid-auto-columns: minmax(270px, 88vw);
+    grid-template-columns: 1fr;
   }
 
   .ruleGrid {

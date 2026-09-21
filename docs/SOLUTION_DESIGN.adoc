@@ -45,8 +45,8 @@ flowchart TB
     TB --> MW --> LNS
     TB --> BZL
     User -->|static tabs| CRA
-    CRA -->|X-Api-Key / Bearer| LN
-    CRA --> BE
+    CRA -->|Entra ID bearer token| BE
+    BE -->|server-side LNbits credentials| LN
     LNS -->|REST API| LN
     F1 --> LN
     F2 --> LN
@@ -91,8 +91,14 @@ flowchart TB
 `CloudAdapter` with multi-tenant credentials. All turns pass through
 `FetchUserMiddleware`, which resolves the Teams member and calls
 `UserService.ensureUserSetup()` — creating the LNbits user (keyed by the AAD
-object id stored in an LNbits extra field) and ensuring the Allowance and
+object id stored in the LNbits `external_id`) and ensuring the Allowance and
 Private wallets exist.
+
+The bot is not the only way in: the tab backend runs the same provisioning from
+`ensureCaller` (`tabs/backend/lnbitsGatewayService.js`) on the first
+authenticated portal request, using the same wallet names, the same
+`external_id` linkage and the same opening allowance. A user who opens the
+portal before ever messaging the bot is provisioned transparently.
 
 `src/teamsBot.ts` extends `TeamsActivityHandler`. Text commands are registered
 in a static `SSOCommandMap` keyed by lower-case message text:
@@ -281,7 +287,7 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 | Users and wallets
 | LNbits (core Users API)
-| Keyed by AAD object id in an extra field; one Allowance + one Private wallet per user
+| Keyed by AAD object id in the LNbits `external_id`; one Allowance + one Private wallet per user
 
 | Transactions / Zaps
 | LNbits payments ledger

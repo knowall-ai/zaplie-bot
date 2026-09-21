@@ -1,5 +1,10 @@
 .stringTabTitle {
   position: relative;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   line-height: 20px;
   padding-bottom: 15px;
 }
@@ -160,16 +165,21 @@
   font-family: 'Segoe UI';
 }
 .daysInactive {
-  /*top: calc(50% - 5px);*/
-  /*right: 2px;*/
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   line-height: 10px;
   width: 65px;
   text-align: center;
   display: inline-block;
 }
 .daysActive {
-  /*top: calc(50% - 5px);*/
-  /*left: 40.52%;*/
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
   line-height: 10px;
   width: 65px;
   font-weight: bold;
@@ -182,7 +192,7 @@
   width: 232px;
   height: 10px;
   z-index: 2;
-  /*text-align: right;*/
+  display: flex;
   font-size: 10px;
   font-family: 'Segoe UI';
 }

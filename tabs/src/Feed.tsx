@@ -2,69 +2,56 @@ import React, { useEffect, useState } from 'react';
 import FeedComponent from './components/FeedComponent';
 import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
-import { getUsers } from './services/lnbits/users';
-import { useCache } from '../src/utils/CacheContext';
-import { fetchAllowanceWalletTransactions } from './utils/walletUtilities';
+import { useCache } from './utils/CacheContext';
+import { fetchZapActivity, ZapTransfer } from './utils/walletUtilities';
 
 const Home: React.FC = () => {
-  const [timestamp] = useState(() => {
-    return Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 365 * (8.5 / 12); // Last 8.5 months
-  });
-  const { cache, setCache } = useCache();
-  const [loading, setLoading] = useState<boolean>(true);
-  const [, setError] = useState<string | null>(null);
-
+  const { setCache } = useCache();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [zaps, setZaps] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [transfers, setTransfers] = useState<ZapTransfer[]>([]);
+  const [retryToken, setRetryToken] = useState(0);
+  const [timestamp] = useState(
+    () => Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 259,
+  );
 
   useEffect(() => {
-    const fetchZaps = async () => {
+    let active = true;
+
+    const loadFeed = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        if (!cache['allUsers']) {
-          const allUsers = await getUsers({});
-          console.log('allUsers', allUsers);
-          if (allUsers) {
-            setCache('allUsers', allUsers);
-            setUsers(allUsers);
-          }
-        } else {
-          console.log('Loading Users from cache....');
-          setUsers(cache['allUsers']);
-        }
-      } catch (error) {
-        if (error instanceof Error) {
-          setError(`Failed to fetch users: ${error.message}`);
-        } else {
-          setError('An unknown error occurred while fetching users');
-        }
-        console.error(error);
-      }
-      // Load zaps and set in cache.
-      try {
-        if (!cache['allZaps']) {
-          const allZaps = await fetchAllowanceWalletTransactions();
-          console.log('allZaps', allZaps);
-          setCache('allZaps', allZaps);
-          setZaps(allZaps);
-        } else {
-          console.log('Loading Zaps from cache:', cache['allZaps']);
-          setZaps(cache['allZaps']);
-        }
-      } catch (err) {
+        const activity = await fetchZapActivity();
+
+        if (!active) return;
+
+        const loadedZaps = activity.transfers.map(item => item.transaction);
+        setUsers(activity.users);
+        setTransfers(activity.transfers);
+        setZaps(loadedZaps);
+        setCache('allUsers', activity.users);
+        setCache('allZaps', loadedZaps);
+      } catch (loadError) {
+        if (!active) return;
         setError(
-          err instanceof Error ? err.message : 'An unknown error occurred',
+          loadError instanceof Error
+            ? loadError.message
+            : 'Feed data is unavailable.',
         );
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
-    fetchZaps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // cache and setCache are from context and are stable, intentionally excluded
+    void loadFeed();
+    return () => {
+      active = false;
+    };
+  }, [setCache, retryToken]);
 
   return (
     <div
@@ -77,14 +64,40 @@ const Home: React.FC = () => {
         boxSizing: 'border-box',
       }}
     >
+      {error && (
+        <div
+          role="alert"
+          style={{
+            margin: '20px 20px 0',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            color: '#ffb4ab',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setRetryToken(token => token + 1)}
+            style={{
+              padding: '6px 16px',
+              border: '1px solid var(--accent)',
+              borderRadius: 'var(--radius-full)',
+              background: 'none',
+              color: 'var(--accent)',
+              font: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div
         style={{
           width: '100%',
-          height: '100%',
           padding: 20,
-          //background: '#1F1F1F',
-          justifyContent: 'flex-start',
-          alignItems: 'flex-start',
           display: 'flex',
           boxSizing: 'border-box',
         }}
@@ -92,40 +105,35 @@ const Home: React.FC = () => {
         <div
           style={{
             width: '100%',
-            justifyContent: 'flex-start',
-            alignItems: 'stretch',
             gap: 6,
             display: 'flex',
             flexWrap: 'wrap',
+            alignItems: 'stretch',
           }}
         >
           <TotalZapsComponent
             isLoading={loading}
             allZaps={zaps}
             allUsers={users}
+            hasError={Boolean(error)}
           />
           <ZapActivityChartComponent
-            lnKey={''}
             isLoading={loading}
             timestamp={timestamp}
             allZaps={zaps}
-            allUsers={users}
+            hasError={Boolean(error)}
           />
         </div>
       </div>
       <div
         style={{
-          paddingLeft: 20,
-          paddingRight: 20,
-          paddingBottom: 20,
-          paddingTop: 0,
+          padding: '0 20px 20px',
           minWidth: 0,
           maxWidth: '100%',
           boxSizing: 'border-box',
-          overflowX: 'auto',
         }}
       >
-        <FeedComponent />
+        <FeedComponent transfers={transfers} loading={loading} error={error} />
       </div>
     </div>
   );

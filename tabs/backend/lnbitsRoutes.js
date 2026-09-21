@@ -76,7 +76,21 @@ const createLnbitsRouter = ({
       if (!claims || typeof claims.oid !== 'string' || claims.oid.length === 0) {
         throw new Error('token is missing the oid claim');
       }
-      req.auth = { oid: claims.oid, roles: claims.roles || [] };
+      // Trimmed: a whitespace-only claim would otherwise count as present and
+      // be persisted as the LNbits email or an AccountName avatar URL.
+      const claimString = (value) =>
+        typeof value === 'string' ? value.trim() : '';
+      // Profile details for first-run provisioning come from the verified
+      // token, never from the request body, so they cannot be forged.
+      req.auth = {
+        oid: claims.oid,
+        roles: claims.roles || [],
+        name: claimString(claims.name),
+        email:
+          claimString(claims.email) || claimString(claims.preferred_username),
+        userPrincipalName:
+          claimString(claims.upn) || claimString(claims.preferred_username),
+      };
       next();
     } catch (error) {
       console.error('LNbits gateway token validation failed:', error.message);
@@ -84,9 +98,25 @@ const createLnbitsRouter = ({
     }
   });
 
+  // A verified caller who has never used the bot has no LNbits account yet;
+  // provision one here instead of failing the whole tab with a 403.
+  //
+  // TODO: who may self-provision is an open product decision (Ben is settling
+  // it separately). Today any caller with a valid tenant token gets an account
+  // and an opening allowance on first request; a narrower gate (an Entra group,
+  // an explicit invite) would go here. Deliberately unchanged in this PR.
   router.use(async (req, _res, next) => {
     try {
-      await service.assertCaller(req.auth.oid);
+      const { user } = await service.ensureCaller({
+        aadObjectId: req.auth.oid,
+        displayName: req.auth.name,
+        email: req.auth.email,
+        userPrincipalName: req.auth.userPrincipalName,
+      });
+      // Remembered so a listing of the caller's *own* wallets can finish an
+      // interrupted provisioning (see repairCallerWallets). Other users'
+      // listings are read-only, as before.
+      req.auth.lnbitsUserId = typeof user?.id === 'string' ? user.id : '';
       next();
     } catch (error) {
       next(error);
@@ -114,7 +144,12 @@ const createLnbitsRouter = ({
       res.status(400).json({ error: 'invalid user id' });
       return;
     }
-    res.json(await service.listUserWallets(req.params.userId));
+    const wallets = await service.listUserWallets(req.params.userId);
+    res.json(
+      req.params.userId === req.auth.lnbitsUserId
+        ? await service.repairCallerWallets(req.params.userId, wallets)
+        : wallets,
+    );
   }));
 
   router.get('/wallets', asyncRoute(async (_req, res) => {

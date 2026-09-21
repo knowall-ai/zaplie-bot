@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  ReactNode,
+} from 'react';
 
 interface CacheContextType {
   cache: Record<string, any>;
@@ -12,14 +19,17 @@ export const CacheProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const [cache, setCacheState] = useState<Record<string, any>>({});
 
-  const setCache = (key: string, value: any) => {
+  // Memoised: consumers list `setCache` in effect dependencies, and an effect
+  // that also writes to the cache would otherwise re-run on every provider
+  // render — an unbounded fetch loop (Feed.tsx does exactly this).
+  const setCache = useCallback((key: string, value: any) => {
     setCacheState(prevCache => ({ ...prevCache, [key]: value }));
-  };
+  }, []);
+
+  const value = useMemo(() => ({ cache, setCache }), [cache, setCache]);
 
   return (
-    <CacheContext.Provider value={{ cache, setCache }}>
-      {children}
-    </CacheContext.Provider>
+    <CacheContext.Provider value={value}>{children}</CacheContext.Provider>
   );
 };
 
