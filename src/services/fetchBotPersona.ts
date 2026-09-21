@@ -18,13 +18,22 @@ const NO_PERSONA = '';
 // system prompt.
 const MAX_PERSONA_LENGTH = 2000;
 
+// U+2028 and U+2029 sit outside C0/C1 yet still break a line for most readers,
+// including the model, while the delimiter check below only splits on '\n'.
+// Refused here for the same reason the portal refuses them: a persona that
+// renders as more lines than we counted is a persona that can forge the fence.
 const isPlainText = (value: string): boolean =>
   [...value].every(character => {
     if (character === '\n' || character === '\t') {
       return true;
     }
     const code = character.codePointAt(0) as number;
-    return code >= 0x20 && (code < 0x7f || code > 0x9f);
+    return (
+      code >= 0x20 &&
+      (code < 0x7f || code > 0x9f) &&
+      code !== 0x2028 &&
+      code !== 0x2029
+    );
   });
 
 // The fence buildInstructions() puts around the persona is printable ASCII, so
@@ -51,7 +60,9 @@ const fetchPersona = async (): Promise<string> => {
   }
   const persona = botPersona.replace(/\r\n?/g, '\n').trim();
   if (
-    persona.length > MAX_PERSONA_LENGTH ||
+    // Code points, not UTF-16 units — the portal caps the same way, so an
+    // emoji-heavy persona it accepted must not be dropped here.
+    [...persona].length > MAX_PERSONA_LENGTH ||
     !isPlainText(persona) ||
     hasPersonaDelimiterLine(persona)
   ) {

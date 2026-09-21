@@ -17,14 +17,26 @@ import { acquireIdToken, isZaplieAdmin } from '../services/adminRole';
 // Mirrors validateBotPersona in tabs/backend/botPersona.js. The backend is
 // still the enforcement point — this only means a rule the admin can see
 // explains itself in the editor instead of coming back as a bare 400.
-// (Array.from, not a spread: this bundle still compiles down to ES5.)
+// (Array.from throughout, not a spread: this bundle still compiles down to
+// ES5.)
+
+// The backend counts code points, so the editor counts them too: String.length
+// counts UTF-16 units and would bill an emoji twice, refusing a persona the
+// backend would have accepted.
+const personaLength = (value: string): number => Array.from(value).length;
+
 const hasControlCharacter = (value: string): boolean =>
   Array.from(value).some(character => {
     if (character === '\n' || character === '\t') {
       return false;
     }
     const code = character.codePointAt(0) as number;
-    return code < 0x20 || (code >= 0x7f && code <= 0x9f);
+    return (
+      code < 0x20 ||
+      (code >= 0x7f && code <= 0x9f) ||
+      code === 0x2028 ||
+      code === 0x2029
+    );
   });
 
 // The bot fences the persona with printable ASCII ("--- BEGIN PERSONA ---"),
@@ -36,7 +48,7 @@ const hasPersonaDelimiterLine = (value: string): boolean =>
   value.split('\n').some(line => PERSONA_DELIMITER_LINE.test(line));
 
 const validatePersonaDraft = (value: string): string | null => {
-  if (value.length > MAX_BOT_PERSONA_LENGTH) {
+  if (personaLength(value) > MAX_BOT_PERSONA_LENGTH) {
     return `Keep the persona to at most ${MAX_BOT_PERSONA_LENGTH} characters.`;
   }
   if (hasControlCharacter(value)) {
@@ -153,9 +165,12 @@ const BotPersonaSetting: FunctionComponent = () => {
     }
   };
 
-  // Counts what maxLength counts — the untrimmed draft — so the number does
-  // not disagree with the field that stops the typing.
-  const remaining = MAX_BOT_PERSONA_LENGTH - draft.length;
+  // The untrimmed draft, so the number agrees with what is on screen. The
+  // textarea has no maxLength any more — the DOM counts UTF-16 units and would
+  // cut an emoji-heavy persona off at roughly half the allowance the backend
+  // grants — so the counter is what tells an admin they have gone over, and it
+  // has to keep counting past zero to do that.
+  const remaining = MAX_BOT_PERSONA_LENGTH - personaLength(draft);
 
   return (
     <section className={styles.section} aria-labelledby="bot-persona-heading">
@@ -207,7 +222,6 @@ const BotPersonaSetting: FunctionComponent = () => {
                   disabled={!isEditing || saving}
                   className={`${styles.textArea} ${isEditing ? styles.editing : ''}`}
                   rows={5}
-                  maxLength={MAX_BOT_PERSONA_LENGTH}
                   title="Assistant persona"
                   placeholder="Warm, concise, and specific about the work being recognised."
                   aria-describedby="bot-persona-count"
@@ -216,9 +230,11 @@ const BotPersonaSetting: FunctionComponent = () => {
                 <div className={styles.textAreaFooter}>
                   <p id="bot-persona-count" className={styles.helperText}>
                     {isEditing
-                      ? `${remaining} characters left`
+                      ? remaining >= 0
+                        ? `${remaining} characters left`
+                        : `${-remaining} character${remaining === -1 ? '' : 's'} over the limit`
                       : persona
-                        ? `${persona.length} of ${MAX_BOT_PERSONA_LENGTH} characters`
+                        ? `${personaLength(persona)} of ${MAX_BOT_PERSONA_LENGTH} characters`
                         : 'No persona set — the assistant uses its built-in voice.'}
                   </p>
                   {isAdmin &&

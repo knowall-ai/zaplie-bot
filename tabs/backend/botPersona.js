@@ -15,13 +15,25 @@ const MAX_BOT_PERSONA_LENGTH = 2000;
 // the rest of C0/C1 has no place in prose. Checked by code point rather than a
 // regex literal so the rule stays readable (and greppable) instead of a row of
 // escapes.
+//
+// U+2028 and U+2029 are in neither C0 nor C1, but editors and language models
+// both break lines on them while the split('\n') below does not — so a persona
+// carrying one reads as several lines to the model and as a single line to the
+// fence check underneath. They are refused rather than normalized: prose has no
+// use for them, and accepting one would mean trusting every downstream reader
+// to agree with us about where the lines are.
 const hasControlCharacter = value =>
   [...value].some(character => {
     if (character === '\n' || character === '\t') {
       return false;
     }
     const code = character.codePointAt(0);
-    return code < 0x20 || (code >= 0x7f && code <= 0x9f);
+    return (
+      code < 0x20 ||
+      (code >= 0x7f && code <= 0x9f) ||
+      code === 0x2028 ||
+      code === 0x2029
+    );
   });
 
 // The fence the bot builds is printable ASCII — "--- BEGIN PERSONA ---" and

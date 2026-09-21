@@ -196,6 +196,19 @@ test('an admin clears the persona back to the built-in voice', async () => {
   assert.equal(cleared.body.botPersona, '');
 });
 
+test('an unknown body key is refused rather than quietly ignored', async () => {
+  const extraKey = await post('/api/bot-persona', `Bearer ${ADMIN_TOKEN}`, {
+    botPersona: 'Be upbeat.',
+    rewardName: 'Sats',
+  });
+  assert.equal(extraKey.status, 400);
+  assert.match(extraKey.body.message, /only accepted field/);
+
+  // The refused write never reached the store.
+  const read = await get('/api/bot-persona', `Bearer ${USER_TOKEN}`);
+  assert.equal(read.body.botPersona, '');
+});
+
 test('an invalid persona is rejected before it reaches the store', async () => {
   const nonString = await post('/api/bot-persona', `Bearer ${ADMIN_TOKEN}`, {
     botPersona: 42,

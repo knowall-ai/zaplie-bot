@@ -35,10 +35,10 @@ deployable components in one repository:
   `src/services/fetchBotPersona.ts` caches the persona for 60s, so an admin's
   save reaches the assistant within a minute with no redeploy. That module
   re-validates the fetched text against the same rules as
-  `tabs/backend/botPersona.js` (2000 characters, no control characters, no
-  forged `--- BEGIN/END PERSONA ---` line) — two copies because the packages are
-  separate, kept identical on purpose. The fetch fails open to the built-in
-  persona — a portal outage never fails a turn.
+  `tabs/backend/botPersona.js` (2000 code points, no control characters, no
+  U+2028/U+2029 line separators, no forged `--- BEGIN/END PERSONA ---` line) —
+  two copies because the packages are separate, kept identical on purpose. The
+  fetch fails open to the built-in persona — a portal outage never fails a turn.
 - **Middleware** (`src/services/fetchUserMiddleware.ts`): every turn resolves
   the Teams member and calls `UserService.ensureUserSetup()`, which creates the
   LNbits user (keyed by AAD object id) and ensures each user has an

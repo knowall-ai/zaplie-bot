@@ -157,12 +157,28 @@ app.post('/api/reward-amounts', requireAdmin, (req, res) => {
   });
 });
 
+// A body key this route does not read is a key the caller believed it could
+// set, so the request is refused instead of silently half-honoured — the same
+// contract the payment routes state in lnbitsRoutes.js.
+const BOT_PERSONA_BODY_KEYS = new Set(['botPersona']);
+
+const hasOnlyKeys = (body, allowed) =>
+  typeof body === 'object' &&
+  body !== null &&
+  !Array.isArray(body) &&
+  Object.keys(body).every(key => allowed.has(key));
+
 // The persona is a system-prompt fragment for the assistant, so only an admin
 // may set it and the value is validated before it ever reaches the bot. An
 // empty string is a legitimate save: it puts the assistant back on its
 // built-in voice.
 app.post('/api/bot-persona', requireAdmin, (req, res) => {
-  const { botPersona } = req.body || {};
+  if (!hasOnlyKeys(req.body, BOT_PERSONA_BODY_KEYS)) {
+    res.status(400).send({ message: 'botPersona is the only accepted field' });
+    return;
+  }
+
+  const { botPersona } = req.body;
   const validation = validateBotPersona(botPersona);
   if (!validation.valid) {
     res.status(400).send({ message: validation.message });
