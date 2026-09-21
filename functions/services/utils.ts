@@ -20,7 +20,7 @@ export function getCredentials(req: HttpRequest) {
     if (req.query) {
         console.log("Query: ", req.query);
         siteUrl = req.query.siteURL || null;
-        adminKey = req.query.adminkey || null;;
+        adminKey = req.query.adminkey || null;
     }
 
 

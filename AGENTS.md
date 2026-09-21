@@ -45,10 +45,11 @@ deployable components in one repository:
   **Allowance** wallet (spending budget) and a **Private** wallet (received
   Zaps).
 - **LNbits integration**: `src/services/lnbitsService.ts` (bot),
-  `tabs/src/services/lnbits/` (browser: `auth`, `cache`, `users`, `wallets`,
-  `payments`, `rewards`), and
-  `functions/services/lnbitsService.ts` (request-scoped) are three parallel
-  clients for the LNbits REST API (`/api/v1/*`, `/users/api/v1/*`).
+  `tabs/src/services/lnbits/` (browser: calls same-origin Express gateway
+  `gateway.ts`, which rethrows failures and validates server-side), and
+  `functions/services/lnbitsService.ts` (request-scoped: exports the active
+  operations `setLnbitUrl`, `getAccessToken`, `createInvoice`, `payInvoice`,
+  and deprecated `getUser`/`getUsers`, rethrows on failure, and avoids `any`).
   Auth is either `X-Api-Key` (admin/invoice key) or a Bearer token from
   `POST /api/v1/auth`. A Zap = `createInvoice` on the receiver's Private wallet
   then `payInvoice` from the sender's Allowance wallet.
@@ -98,7 +99,8 @@ npm run test:backend   # node:test suite for the Express backend (runs in CI)
 ```bash
 cd functions
 npm install
-npm run build    # tsc → ../dist
+npm run build    # tsc → dist/
+npm test         # node:test suite for the Functions LNbits client
 npm start        # func start (requires Azure Functions Core Tools)
 ```
 

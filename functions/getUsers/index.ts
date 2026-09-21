@@ -33,9 +33,10 @@ const listUsers: AzureFunction = async function (context: Context, req: HttpRequ
             };
         
     } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         context.res = {
             status: 500,
-            body: `Error: ${error.message}`
+            body: `Error: ${message}`
         };
     }
 };
