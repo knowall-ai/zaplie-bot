@@ -39,11 +39,17 @@ deployable components in one repository:
   U+2028/U+2029 line separators, no forged `--- BEGIN/END PERSONA ---` line) —
   two copies because the packages are separate, kept identical on purpose. The
   fetch fails open to the built-in persona — a portal outage never fails a turn.
-- **Middleware** (`src/services/fetchUserMiddleware.ts`): every turn resolves
-  the Teams member and calls `UserService.ensureUserSetup()`, which creates the
+- **Middleware** (`src/services/fetchUserMiddleware.ts`): every turn that has
+  a sender (the synthetic event of a proactive send has none) resolves the
+  Teams member and calls `UserService.ensureUserSetup()`, which creates the
   LNbits user (keyed by AAD object id) and ensures each user has an
   **Allowance** wallet (spending budget) and a **Private** wallet (received
   Zaps).
+- **Recipient notifications** (`src/services/recipientNotifier.ts`): after the
+  ledger records a zap as paid and the sender's receipt is updated, the bot
+  opens the recipient's personal chat on demand (`createConversationAsync`,
+  by AAD object id) and sends a one-line notice. Best effort by contract: it
+  returns an outcome and never throws into the payment path.
 - **LNbits integration**: `src/services/lnbitsService.ts` (bot),
   `tabs/src/services/lnbits/` (browser: `auth`, `cache`, `users`, `wallets`,
   `payments`, `rewards`), and

@@ -132,14 +132,19 @@ sequenceDiagram
     participant S as Sender (Teams)
     participant B as Bot
     participant L as LNbits
+    participant T as Teams
+    participant R as Recipient (Teams)
 
     S->>B: Submit "Send Zap" card
     B->>L: createInvoice (receiver Private wallet)
     L-->>B: bolt11 invoice
     B->>L: payInvoice (sender Allowance wallet, admin key)
     L-->>B: payment confirmed
+    B->>B: Record the payment in the zap ledger
     B->>S: Update card with result + remaining balance
-    B->>B: Notify recipient (mention entity)
+    B->>T: Open the recipient's personal chat (AAD object id)
+    T-->>B: chat id
+    B->>R: One-line notice: sender, amount, message
 ....
 
 === LNbits Integration
@@ -222,6 +227,56 @@ including Azure runtimes detected without `NODE_ENV`. `npm run dev` explicitly
 uses development mode and falls back to the ignored `.zaplie-data` directory
 when no override is configured. This fallback is never selected by a deployed
 bot.
+
+=== Recipient Notifications
+
+Once every recipient of a submit has been processed and the sender's receipt
+is updated, the bot hands each recipient the ledger recorded as paid to
+`src/services/recipientNotifier.ts`. The notifier opens that person's personal
+chat with the bot on demand through the adapter's `createConversationAsync`,
+addressing them by AAD object id with the tenant, service URL and bot
+identity of the sender's own turn, and sends one plain-text line naming the
+sender, the amount and the zap message. Teams returns the existing chat when
+there is one, so nothing is stored between turns and no Graph permission is
+involved; the only requirement is that the app is installed for the
+recipient, in their personal scope or through a team or group chat that has
+the app and them as a member, which is also what lets them use the bot.
+
+The step runs after the ledger record and after the receipt, so a slow Teams
+call can neither leave a settled payment unrecorded nor withhold the sender's
+confirmation, and it is best effort by contract: it returns `notified`,
+`unreachable` or `failed`, never throws, and every failure is logged with the
+recipient's id (or display name when the LNbits account has no id). Teams
+answers a person it cannot address with a 400 (`MemberNotFoundInConversation`
+for an unknown id, `BadSyntax` for an id that is not a user of the tenant)
+or a 403/404 for an app that is not installed for them; those are
+`unreachable`, one warning each. Anything else, from missing configuration to
+a 401 or a 5xx, is `failed` and logged as an error with its status code. A
+send that Teams refuses is caught inside the proactive callback, because an
+error leaving it would reach the adapter's `onTurnError`, which would
+apologise to the recipient and hide the failure; for the same reason a
+pipeline that never reaches the callback is reported as `failed`, not as a
+delivery. The sender's receipt, the ledger record and the payment are
+unaffected in every case, and a resubmit cannot repeat the notice because the
+ledger blocks the payment first. The proactive turn runs the middleware
+pipeline with a synthetic `createConversation` event that has no sender, so
+`FetchUserMiddleware` passes it through instead of throwing on the missing
+sender, and the adapter's `onTurnError` stays silent on a turn without a
+sender, so a failure on that pipeline never apologises into the recipient's
+chat.
+
+The fan-out is bounded. Each recipient's open-and-send must finish within
+`NOTIFY_TIMEOUT_MS` (five seconds) or it is reported as `failed` and the turn
+moves on (the connector call itself cannot be cancelled and is left to finish
+or fail); recipients are told `NOTIFY_CONCURRENCY` (three) at a time; a 429 is
+retried once after Teams' `Retry-After`, capped at `RETRY_AFTER_CAP_MS` (five
+seconds), and a second 429 is a failure. `unreachable` is decided by status
+and error code together (400 `MemberNotFoundInConversation` or `BadSyntax`,
+403 `BotNotInConversationRoster`, 404 `ConversationNotFound`); the same
+status with another code is an error, not a friendly warning. The memo in the
+notice is the sender's text collapsed to one line and cut at
+`ZAP_MEMO_PREVIEW_MAX` (200) characters, because the card's own length limit
+is client-side.
 
 === Web Tabs
 

@@ -22,6 +22,15 @@ closing the gaps.
 - `src/commands/zapRecipient.test.ts` exercises the production transition path,
   including safe pre-payment release, persisted unknown outcomes, and a paid
   duplicate after restart that never invokes the payment dependency.
+- `src/services/recipientNotifier.test.ts` drives the notifier through a
+  stand-in adapter that mimics the real pipeline (an error leaving the callback,
+  or thrown by a middleware before it, goes to `onTurnError`), so a refused
+  or never-attempted send is reported as a failure and never as a delivery;
+  `src/commands/zapRecipient.test.ts` pins that the `onPaid` step runs only
+  after the ledger records the payment and cannot change the outcome;
+  `src/teamsBot.test.ts` pins that the chat is opened after the receipt;
+  `src/services/fetchUserMiddleware.proactive.test.ts` pins that the
+  synthetic proactive event skips the Teams and LNbits lookups.
 - `src/services/lnbitsService.test.ts` mocks `fetch` and exercises the real
   service logic for wallet, invoice, and payment calls.
 - `src/services/paymentExtra.test.ts` and the `SendZap payment metadata` block

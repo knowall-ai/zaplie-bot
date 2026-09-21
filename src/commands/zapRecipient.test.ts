@@ -20,6 +20,7 @@ import {
   normalizeRecipientIds,
   processZapRecipient,
   validateSelfZap,
+  type ZapRecipient,
 } from './zapRecipient';
 
 const ENTRY_KEY = zapKey({
@@ -256,5 +257,80 @@ describe('processZapRecipient', () => {
     await expect(ledger.get(ENTRY_KEY)).resolves.toMatchObject({
       paymentHash: 'hash-1',
     });
+  });
+});
+
+describe('processZapRecipient onPaid', () => {
+  let ledger: ZapLedger;
+  let dataDirectory: string;
+  beforeEach(() => {
+    dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-onpaid-'));
+    ledger = new ZapLedger({
+      storePath: path.join(dataDirectory, 'ledger.json'),
+    });
+  });
+  afterEach(() => {
+    fs.rmSync(dataDirectory, { recursive: true, force: true });
+  });
+
+  test('runs with the receiver only after the payment is recorded as paid', async () => {
+    const seen: { receiver: ZapRecipient; recorded: unknown }[] = [];
+    const onPaid = jest.fn(async (receiver: ZapRecipient) => {
+      seen.push({ receiver, recorded: await ledger.get(ENTRY_KEY) });
+    });
+
+    await expect(run(ledger, { onPaid })).resolves.toEqual({
+      status: 'paid',
+      label: 'Alice',
+    });
+
+    expect(onPaid).toHaveBeenCalledTimes(1);
+    expect(seen[0].receiver).toBe(receiverOk);
+    expect(seen[0].recorded).toMatchObject({
+      state: 'paid',
+      paymentHash: 'hash-1',
+    });
+  });
+
+  test('an onPaid failure is logged and the outcome and the record stay paid', async () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      run(ledger, {
+        onPaid: async () => {
+          throw new Error('Teams is down');
+        },
+      }),
+    ).resolves.toEqual({ status: 'paid', label: 'Alice' });
+
+    await expect(ledger.get(ENTRY_KEY)).resolves.toMatchObject({
+      paymentHash: 'hash-1',
+    });
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('alice'),
+      expect.any(Error),
+    );
+    error.mockRestore();
+  });
+
+  test('never runs for a failed, unknown or skipped recipient', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const onPaid = jest.fn(async () => undefined);
+
+    await run(ledger, {
+      onPaid,
+      pay: async () => {
+        throw new Error('before payment');
+      },
+    });
+    await run(ledger, {
+      onPaid,
+      pay: async () => {
+        throw new PaymentOutcomeUnknownError('lost');
+      },
+    });
+    await run(ledger, { onPaid });
+
+    expect(onPaid).not.toHaveBeenCalled();
   });
 });

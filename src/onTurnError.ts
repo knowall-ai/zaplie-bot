@@ -12,6 +12,16 @@ export const onTurnErrorHandler = async (
   // NOTE: In production environment, you should consider logging this to
   // Azure application insights.
   console.error('\n [onTurnError] unhandled error:', error);
+
+  // A proactive turn opened with createConversationAsync has no sender: the
+  // person it addresses did nothing, and an apology would be the only thing
+  // they ever see from the bot. The log line above is the whole report.
+  if (!context.activity?.from) {
+    console.error(
+      '[onTurnError] on a turn without a sender; nothing was sent.',
+    );
+    return;
+  }
   console.error(
     `User ID: ${context.activity.from?.id}, AAD Object ID: ${context.activity.from?.aadObjectId}, Display Name: ${context.activity.from?.name}`,
   );

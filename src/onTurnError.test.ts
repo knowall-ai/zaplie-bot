@@ -63,3 +63,28 @@ describe('onTurnErrorHandler', () => {
     );
   });
 });
+
+describe('onTurnErrorHandler on a proactive turn', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('stays silent when the turn has no sender', async () => {
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const { context, sendActivity, sendTraceActivity } = makeContext();
+    (context as unknown as { activity: { from?: unknown } }).activity.from =
+      undefined;
+    const error = new Error('createConversation pipeline failure');
+
+    await onTurnErrorHandler(context, error);
+
+    expect(sendActivity).not.toHaveBeenCalled();
+    expect(sendTraceActivity).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(
+      '\n [onTurnError] unhandled error:',
+      error,
+    );
+  });
+});

@@ -15,6 +15,10 @@ export interface RecipientDeps {
   getReceiver: () => Promise<ZapRecipient | null>;
   validateReceiver?: (receiver: ZapRecipient) => string | null;
   pay: (receiver: ZapRecipient) => Promise<{ paymentHash: string }>;
+  // Runs once the payment is recorded as paid, for work that must neither
+  // delay nor change that record (collecting the recipient for their
+  // notification). A failure here is logged and the outcome stays paid.
+  onPaid?: (receiver: ZapRecipient) => Promise<unknown>;
 }
 
 export interface ZapRecipient {
@@ -83,6 +87,7 @@ export async function processZapRecipient({
   getReceiver,
   validateReceiver,
   pay,
+  onPaid,
 }: RecipientDeps): Promise<RecipientOutcome> {
   if (!(await ledger.tryAcquire(entryKey))) {
     return { status: 'skipped' };
@@ -129,5 +134,15 @@ export async function processZapRecipient({
   // Recorded as soon as the hash is confirmed and before any card update, so a
   // UI failure cannot make a settled payment retryable.
   await ledger.markPaid(entryKey, paid.paymentHash);
+  if (onPaid) {
+    try {
+      await onPaid(receiver);
+    } catch (error) {
+      console.error(
+        `Post-payment work for ${recipientId} failed; the payment stands.`,
+        error,
+      );
+    }
+  }
   return { status: 'paid', label };
 }
