@@ -1,11 +1,13 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext } from 'botbuilder';
 import { getUserWallets } from '../services/lnbitsService';
+import { resolveLocale, t } from '../i18n';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 
 export class ShowMyBalanceCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
+    const locale = resolveLocale(context.activity?.locale);
     try {
       //await context.sendActivity('Showing your balance...');
       console.log('Showing your balance...');
@@ -16,7 +18,7 @@ export class ShowMyBalanceCommand extends SSOCommand {
       const user = context.turnState.get('user') as User;
 
       if (!user) {
-        await context.sendActivity('User not found.');
+        await context.sendActivity(t(locale, 'balanceUserNotFound'));
         return;
       }
 
@@ -27,7 +29,7 @@ export class ShowMyBalanceCommand extends SSOCommand {
       const usersWallets = await getUserWallets(adminKey, user.id);
 
       if (!usersWallets || usersWallets.length === 0) {
-        await context.sendActivity('No wallets found for the user.');
+        await context.sendActivity(t(locale, 'balanceNoWallets'));
         return;
       }
 
@@ -36,21 +38,23 @@ export class ShowMyBalanceCommand extends SSOCommand {
         const balanceMsat = wallet.balance_msat;
         if (balanceMsat === undefined) {
           await context.sendActivity(
-            `Balance information not available for wallet ${wallet.id}.`,
+            t(locale, 'balanceUnavailable', { walletId: wallet.id }),
           );
           continue;
         }
 
         const balanceSat = balanceMsat / 1000; // Convert from msat to sat
         await context.sendActivity(
-          `Your ${wallet.name} wallet has a balance of ${balanceSat} ${globalRewardName}.`,
+          t(locale, 'balanceLine', {
+            walletName: wallet.name,
+            balance: balanceSat,
+            rewardName: globalRewardName,
+          }),
         );
       }
     } catch (error) {
       console.error('Error in ShowMyBalanceCommand:', error);
-      await context.sendActivity(
-        'Sorry, something went wrong while showing your balance.',
-      );
+      await context.sendActivity(t(locale, 'balanceError'));
     }
   }
 }

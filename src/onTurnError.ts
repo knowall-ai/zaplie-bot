@@ -1,5 +1,6 @@
 import { TurnContext } from 'botbuilder';
-import { GENERIC_ERROR_MESSAGE } from './messages';
+import { resolveLocale } from './i18n';
+import { genericErrorMessage } from './messages';
 
 // Catch-all for errors. Lives outside index.ts so it can be unit tested
 // without starting the express server.
@@ -24,6 +25,8 @@ export const onTurnErrorHandler = async (
     'TurnError',
   );
 
-  // Send a single generic, friendly message to the user
-  await context.sendActivity(GENERIC_ERROR_MESSAGE);
+  // Send a single generic, friendly message to the user, in their language.
+  await context.sendActivity(
+    genericErrorMessage(resolveLocale(context.activity.locale)),
+  );
 };

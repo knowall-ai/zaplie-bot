@@ -391,6 +391,28 @@ Weekly top-ups are the allowance extension's job.
 The leaderboard keeps excluding payments whose memo contains
 `Weekly Allowance cleared` so historical sweeps never count as zaps.
 
+=== Bot copy follows the user's Teams language
+
+*Decision:* Every user-facing bot string lives in `src/i18n/index.ts` as a
+key with an English and a Spanish rendering (typed objects, so a missing
+translation is a compile error). Handlers resolve the language from the
+`locale` Teams sends on each activity (`es-*` is Spanish, anything else is
+English) and render through `t(locale, key, params)`; validation errors carry
+a key (`UserFacingError`) and are rendered where they are caught. Command
+words, LNbits wallet names, display names, amounts and the reward label are
+data and are never translated. The zap card and its receipt use the same
+keys, and `appPackage/es.json` localises the manifest (name, descriptions and
+tab names; command titles stay English because the bot matches them).
+
+*Rationale:* Issue #110 asks for Spanish first. Two dictionaries and 30-odd
+keys do not justify a localisation framework, and a typed object gives
+compile-time key safety that a JSON resource cannot. Per-user locale needs no
+configuration and matches what Teams already knows about the user.
+
+*Consequences:* A language the bot does not have falls back to English and
+never fails a turn; a missing Spanish value falls back with a warning in the
+logs. Spanish command aliases ("enviar zap") are a separate decision.
+
 === Teams Toolkit for provisioning
 
 *Context:* The app spans an AAD app registration, a bot registration, an App

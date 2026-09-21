@@ -658,3 +658,94 @@ describe('SendZap payment metadata', () => {
     expect(payInvoice).not.toHaveBeenCalled();
   });
 });
+
+// The card a Spanish client receives is Spanish end to end: form labels,
+// validation hints, the balance line, the button, and the receipt it turns
+// into. Wallet names, amounts and the reward label stay as they are.
+describe('zap card and receipt in the user language', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('renders the receipt in Spanish', () => {
+    const text = allText(
+      buildZapReceiptCard(
+        {
+          ...baseReceipt,
+          recipients: ['Bob', 'Carol'],
+          failedRecipients: ['Dave'],
+          uncertainRecipients: ['Erin'],
+        },
+        'es',
+      ) as CardElement,
+    );
+
+    for (const expected of [
+      '¡Zap enviado!',
+      'Destinatarios:',
+      'Bob, Carol',
+      'Mensaje:',
+      'Thanks for the review!',
+      'Cantidad (Sats):',
+      'Total enviado (Sats):',
+      'Saldo restante (Sats):',
+      '**Destinatarios fallidos:**',
+      '- Dave',
+      '**Por verificar:**',
+      '- Erin',
+    ]) {
+      expect(text).toContain(expected);
+    }
+    expect(text).not.toContain('Zap sent!');
+  });
+
+  test('defaults the receipt to English', () => {
+    expect(allText(buildZapReceiptCard(baseReceipt) as CardElement)).toContain(
+      'Zap sent!',
+    );
+  });
+
+  test('sends the zap card in Spanish for a Spanish client', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest
+      .mocked(getUsers)
+      .mockResolvedValue([
+        { id: 'user-2', displayName: 'Bob', aadObjectId: 'aad-2' } as never,
+      ]);
+    jest.mocked(getWalletBalance).mockResolvedValue(15000);
+    const { context, sendActivity } = makeContext();
+    (context as unknown as { activity: unknown }).activity = {
+      locale: 'es-MX',
+    };
+    (context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      allowanceWallet: { id: 'w-1', inkey: 'inkey-1', adminkey: 'adm-1' },
+    });
+
+    await new SendZapCommand().execute(context);
+
+    const [message] = sendActivity.mock.calls[0] as unknown as [
+      { attachments: { content: unknown }[] },
+    ];
+    const card = JSON.stringify(message.attachments[0].content);
+    // The reward label is read when the module loads, so this file does not
+    // pin it; the label-bearing strings are checked up to the label.
+    for (const expected of [
+      'Destinatario',
+      'Selecciona una o más carteras destinatarias',
+      'Debes seleccionar al menos a una persona',
+      'Mensaje',
+      '¡Gracias por ayudarme con la propuesta!',
+      'Cantidad (',
+      'Indica un número entero entre 1 y 10,000',
+      '**Saldo disponible (',
+      '15000',
+      'Enviar zap',
+    ]) {
+      expect(card).toContain(expected);
+    }
+    expect(card).not.toContain('Send Zap');
+    // The submit payload the handler keys on is unchanged.
+    expect(card).toContain('"action":"submitZaps"');
+  });
+});

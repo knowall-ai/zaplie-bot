@@ -24,6 +24,11 @@ closing the gaps.
   duplicate after restart that never invokes the payment dependency.
 - `src/services/lnbitsService.test.ts` mocks `fetch` and exercises the real
   service logic for wallet, invoice, and payment calls.
+- `src/i18n/i18n.test.ts` pins language resolution and rendering (Spanish
+  for `es-*`, English otherwise, placeholder parity, fallback with a warning);
+  `src/teamsBot.test.ts`, `src/onTurnError.test.ts` and
+  `src/commands/showMyBalanceCommand.i18n.test.ts` assert Spanish replies
+  through the handlers.
 - `src/services/paymentExtra.test.ts` and the `SendZap payment metadata` block
   in `src/commands/sendZapCommand.test.ts` pin the keyless payment metadata
   projection (no wallet keys or balances in LNbits `extra`).

@@ -524,3 +524,97 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     expect(payInvoice).toHaveBeenCalledTimes(2);
   });
 });
+
+// The bot answers in the language of the Teams client: Spanish for any es-*
+// locale, English for everything else. Command words stay English.
+describe('TeamsBot replies in the user language', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const zapSubmitter = {
+    id: 'user-1',
+    aadObjectId: 'aad-user-1',
+    allowanceWallet: { id: 'wallet-1', inkey: 'inkey', adminkey: 'adminkey' },
+  };
+
+  test('welcomes a Spanish client in Spanish, with the English command words', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      type: 'conversationUpdate',
+      text: undefined,
+      locale: 'es-MX',
+      membersAdded: [{ id: 'bot-id' }],
+    });
+
+    await bot.run(context);
+
+    const [welcome] = sendActivity.mock.calls[0] as unknown as [string];
+    expect(welcome).toContain('Soy Zaplie');
+    expect(welcome).toContain('send zap');
+    expect(welcome).not.toContain("I'm Zaplie");
+  });
+
+  test('explains an unrecognized channel command in Spanish', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      text: 'hazme rico',
+      locale: 'es-ES',
+      conversation: {
+        id: 'conv-2',
+        conversationType: 'channel',
+        tenantId: 'tenant-1',
+      },
+    });
+
+    await bot.run(context);
+
+    const [reply] = sendActivity.mock.calls[0] as unknown as [string];
+    expect(reply).toContain('¡Ups! No reconocí ese comando.');
+    expect(reply).toContain('show leaderboard');
+  });
+
+  test('renders a validation error in Spanish', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      replyToId: 'card-es',
+      locale: 'es-419',
+      value: {
+        action: 'submitZaps',
+        zapReceiverId: 'user-1',
+        zapMessage: 'gracias',
+        zapAmount: '10',
+      },
+    });
+    (context.turnState as Map<unknown, unknown>).set('user', zapSubmitter);
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      '¡Ups! No puedes enviarte un zap a ti mismo, así que no se envió ningún zap.',
+    );
+  });
+
+  test('falls back to English for any other locale', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      replyToId: 'card-fr',
+      locale: 'fr-FR',
+      value: {
+        action: 'submitZaps',
+        zapReceiverId: 'user-1',
+        zapMessage: 'merci',
+        zapAmount: '10',
+      },
+    });
+    (context.turnState as Map<unknown, unknown>).set('user', zapSubmitter);
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      "D'oh! You cannot zap yourself, so no zaps were sent.",
+    );
+  });
+});

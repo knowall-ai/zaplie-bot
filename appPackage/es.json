@@ -1,0 +1,15 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.Localization.schema.json",
+  "name.short": "Zaplie (${{APP_NAME_SUFFIX}})",
+  "name.full": "Zaplie, el de los zaps",
+  "description.short": "Zaplie: recompensas en Bitcoin e IA para colaborar mejor en Teams",
+  "description.full": "Zaplie se integra en Microsoft Teams y combina micropagos en Bitcoin con automatización por IA para mejorar la colaboración y el reconocimiento en el equipo. Con Zaplie puedes enviar recompensas en Bitcoin (sats) a tus colegas como muestra de agradecimiento, automatizar el reconocimiento de comportamientos positivos y fomentar un lugar de trabajo más comprometido y motivado. Transforma la forma en que tu equipo reconoce el buen trabajo y construye una cultura de gratitud directamente en Teams.",
+  "bots[0].commandLists[0].commands[0].description": "Envía un zap a un usuario",
+  "bots[0].commandLists[0].commands[1].description": "Consulta el saldo de tu cartera de asignación y de tu cartera privada",
+  "bots[0].commandLists[0].commands[2].description": "Muestra la clasificación de las carteras privadas de los usuarios",
+  "staticTabs[0].name": "Actividad",
+  "staticTabs[1].name": "Usuarios",
+  "staticTabs[2].name": "Recompensas",
+  "staticTabs[3].name": "Cartera",
+  "staticTabs[4].name": "Configuración"
+}

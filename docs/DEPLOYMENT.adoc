@@ -335,6 +335,16 @@ Complete these once per new environment, right after the first deployment:
 
 == Manifest and App Package
 
+The manifest is localised: `manifest.template.json` declares English as the
+default language and Spanish through `localizationInfo`, and
+`appPackage/es.json` carries the Spanish name, descriptions and tab names.
+`teamsApp/zipAppPackage` includes the file automatically. Command titles are
+left in English on purpose: Teams inserts the title as the message text when
+a user picks a command, and the bot matches those English words. Adding a
+language means one more file and one more entry in `additionalLanguages`;
+`npm run test:tooling` checks that every key in a language file points at a
+real string in the template.
+
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
 into `manifest.template.json`, takes the version from `APP_VERSION` when set
 (otherwise the template version, with the patch auto-incremented for

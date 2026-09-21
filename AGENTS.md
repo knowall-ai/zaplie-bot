@@ -44,6 +44,12 @@ deployable components in one repository:
   LNbits user (keyed by AAD object id) and ensures each user has an
   **Allowance** wallet (spending budget) and a **Private** wallet (received
   Zaps).
+- **Copy and languages** (`src/i18n/`): every user-facing bot string is a key
+  in `src/i18n/index.ts` with `en` and `es` dictionaries; replies follow the
+  Teams client language (`activity.locale`, English fallback). Add new copy
+  there, never as a literal in a handler, and throw `UserFacingError(key,
+  params)` so the catch can render it in the user's language. Command words,
+  wallet names, display names and the reward label are not translated.
 - **LNbits integration**: `src/services/lnbitsService.ts` (bot),
   `tabs/src/services/lnbits/` (browser: `auth`, `cache`, `users`, `wallets`,
   `payments`, `rewards`), and

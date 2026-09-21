@@ -63,3 +63,29 @@ describe('onTurnErrorHandler', () => {
     );
   });
 });
+
+describe('onTurnErrorHandler languages', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('sends the generic message in Spanish for a Spanish client', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const sendActivity = jest
+      .fn<() => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const context = {
+      activity: { locale: 'es-ES', from: { id: 'user-1' } },
+      sendActivity,
+      sendTraceActivity: jest
+        .fn<() => Promise<void>>()
+        .mockResolvedValue(undefined),
+    } as unknown as Parameters<typeof onTurnErrorHandler>[0];
+
+    await onTurnErrorHandler(context, new Error('boom'));
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      '¡Ups! Algo salió mal de mi lado y no se completó. Inténtalo de nuevo en un momento.',
+    );
+  });
+});

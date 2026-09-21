@@ -1,3 +1,4 @@
+import { UserFacingError } from '../messages';
 import { expect, describe, test } from '@jest/globals';
 import { validateZapSubmit } from './zapBudget';
 
@@ -69,5 +70,23 @@ describe('validateZapSubmit', () => {
     expect(() => validateZapSubmit('100', 1.5, 1000, 'Sats')).toThrow(
       'No valid recipients',
     );
+  });
+});
+
+describe('validateZapSubmit errors carry a message key', () => {
+  test('so the handler can render them in the user language', () => {
+    let caught: unknown;
+    try {
+      validateZapSubmit('100', 3, 100, 'Sats');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(UserFacingError);
+    const error = caught as UserFacingError;
+    expect(error.key).toBe('budgetExceeded');
+    expect(error.localized('es')).toBe(
+      'Eso enviaría 300 Sats entre 3 destinatario(s), pero tu saldo es 100. No se envió ningún zap.',
+    );
+    expect(error.message).toBe(error.localized('en'));
   });
 });
