@@ -360,10 +360,14 @@ const proposeZapTool: ToolDefinition = {
     additionalProperties: false,
   },
   sideEffect: true,
-  // Every refusal is shaped { proposed: false, reason } rather than the
-  // { error } the read tools return: the sideEffect guard in
-  // foundryAgentService only lets a proposal shape back to the model, and a
-  // refusal is still a proposal outcome — it says nothing was posted and why.
+  // Every refusal this handler returns is shaped { proposed: false, reason }
+  // rather than the { error } the read tools return, because the sideEffect
+  // guard in foundryAgentService rejects the turn on any handler result that
+  // is not a proposal — and a refusal is a proposal outcome, saying nothing
+  // was posted and why. The one { error } the model can still see for this
+  // tool comes from the dispatch itself, which refuses non-object arguments
+  // before the handler runs; no card is posted on that path either, so the
+  // guard has nothing to check.
   handler: async (args: unknown, turnContext: TurnContext) => {
     const options = toolArgs(args);
     const unknown = unknownArgumentsError('propose_zap', options, [
@@ -448,7 +452,11 @@ const proposeZapTool: ToolDefinition = {
     }
 
     const recipient = matches[0];
-    if (recipient.aadObjectId === sender.aadObjectId) {
+    // Compared on the LNbits id, the same identity every other zap path uses
+    // (the card's zapReceiverId, submitZaps, the ledger). aadObjectId is
+    // optional on User, so two members who both lack one would compare equal
+    // and a legitimate zap would be refused as a self-zap.
+    if (recipient.id === sender.id) {
       return {
         proposed: false,
         reason:

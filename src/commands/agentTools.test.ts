@@ -604,6 +604,39 @@ describe('agentTools', () => {
       );
     });
 
+    // The refusal compares LNbits ids, the identity the card, submitZaps and
+    // the ledger all use. aadObjectId is optional on User, so comparing it
+    // would refuse a legitimate zap between two members who both lack one.
+    test('identifies a self-zap by LNbits id, not by aadObjectId', async () => {
+      const noAad = { ...sender, aadObjectId: undefined };
+      const bobNoAad = { ...bob, aadObjectId: undefined };
+      mockGetUsers.mockResolvedValue([noAad, bobNoAad]);
+      const context = makeTurnContext(noAad);
+
+      // Both sides lack an aadObjectId, so an aadObjectId comparison would
+      // call this a self-zap. The ids differ, so it is a proposal.
+      const other = requireRecord(
+        await tool().handler(
+          { recipientName: 'Bob Smith', amountSats: 100, memo: 'thanks' },
+          context,
+        ),
+      );
+      expect(other).toMatchObject({ proposed: true, recipient: 'Bob Smith' });
+
+      // Same id, different aadObjectId: still the sender, still refused.
+      const self = requireRecord(
+        await tool().handler(
+          { recipientName: 'Alice', amountSats: 100, memo: 'me' },
+          makeTurnContext({ ...sender, aadObjectId: 'aad-changed' }),
+        ),
+      );
+      expect(self).toEqual({
+        proposed: false,
+        reason:
+          'Users cannot zap themselves — the allowance is for recognising others.',
+      });
+    });
+
     test('refuses a self-zap with its own reason, without posting a card', async () => {
       const context = makeTurnContext(sender);
       const result = requireRecord(
