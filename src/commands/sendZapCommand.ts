@@ -411,9 +411,10 @@ export async function createZapCard(
       ...(prefill && { value: prefill.message }),
     },
     {
-      // The cap comes from the live balance (#409); propose_zap already
-      // refuses an amount above it, so a prefilled value always satisfies
-      // the card's own regex.
+      // The cap comes from the live balance (#409). propose_zap refuses an
+      // amount above the balance it read, so a prefilled value normally
+      // satisfies this regex; the two reads are separate, so a balance that
+      // drops in between surfaces as the card's own validation message.
       ...zapAmountInput(currentBalance, globalRewardName),
       ...(prefill && { value: String(prefill.amountSats) }),
     },
