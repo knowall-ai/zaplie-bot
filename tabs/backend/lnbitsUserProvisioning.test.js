@@ -561,7 +561,12 @@ test('two overlapping repairs create and fund exactly one Allowance wallet', asy
 test('a repair that queues behind another does not create a second wallet', async (t) => {
   withLnbitsEnvironment(t, { LNBITS_INITIAL_ALLOWANCE: '500' });
   const requests = [];
-  console.warn = console.warn;
+  // The repair announces itself; this test asserts on requests, not warnings.
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  t.after(() => {
+    console.warn = originalWarn;
+  });
   global.fetch = halfProvisioned(requests, 'Private');
 
   const listed = await listUserWallets('user-half');
