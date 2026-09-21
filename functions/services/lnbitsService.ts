@@ -2,8 +2,8 @@ import { getCredentials } from './utils';
 import { HttpRequest } from '@azure/functions';
 
 let lnbiturl: string | null = null;
-let accessToken: string | null = null;
-let accessTokenPromise: Promise<string> | null = null;
+const accessTokenCache = new Map<string, string>();
+const accessTokenPromises = new Map<string, Promise<string>>();
 
 export function setLnbitUrl(req: HttpRequest): void {
   const { siteUrl } = getCredentials(req);
@@ -16,8 +16,8 @@ export function getLnbitUrl(): string | null {
 
 export function resetState(): void {
   lnbiturl = null;
-  accessToken = null;
-  accessTokenPromise = null;
+  accessTokenCache.clear();
+  accessTokenPromises.clear();
 }
 
 export async function getAccessToken(
@@ -25,23 +25,28 @@ export async function getAccessToken(
   username: string,
   password: string,
 ): Promise<string> {
-  if (!lnbiturl) {
-    setLnbitUrl(req);
-  }
-  if (!lnbiturl) {
+  const { siteUrl } = getCredentials(req);
+  const targetUrl = siteUrl ? siteUrl.replace(/\/+$/, '') : lnbiturl;
+  if (!targetUrl) {
     throw new Error('LNbits URL is not configured');
   }
-
-  if (accessToken) {
-    return accessToken;
-  }
-  if (accessTokenPromise) {
-    return accessTokenPromise;
+  if (!lnbiturl) {
+    lnbiturl = targetUrl;
   }
 
-  accessTokenPromise = (async (): Promise<string> => {
+  const cacheKey = `${targetUrl}:::${username}:::${password}`;
+  const cached = accessTokenCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const pending = accessTokenPromises.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const promise = (async (): Promise<string> => {
     try {
-      const response = await fetch(`${lnbiturl}/api/v1/auth`, {
+      const response = await fetch(`${targetUrl}/api/v1/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,22 +67,26 @@ export async function getAccessToken(
       if (
         !data ||
         typeof data !== 'object' ||
+        Array.isArray(data) ||
         !('access_token' in data) ||
         typeof (data as { access_token: unknown }).access_token !== 'string' ||
         !(data as { access_token: string }).access_token
       ) {
         throw new Error('Access token is missing in the response');
       }
-      accessToken = (data as { access_token: string }).access_token;
-      return accessToken;
+      const token = (data as { access_token: string }).access_token;
+      accessTokenCache.set(cacheKey, token);
+      return token;
     } catch (error) {
       console.error('Error in getAccessToken:', error);
       throw error instanceof Error ? error : new Error(String(error));
     } finally {
-      accessTokenPromise = null;
+      accessTokenPromises.delete(cacheKey);
     }
   })();
-  return accessTokenPromise;
+
+  accessTokenPromises.set(cacheKey, promise);
+  return promise;
 }
 
 export async function createInvoice(
@@ -88,15 +97,17 @@ export async function createInvoice(
   memo: string,
   extra: object,
 ): Promise<string> {
-  if (!lnbiturl) {
-    setLnbitUrl(req);
+  const { siteUrl } = getCredentials(req);
+  const targetUrl = siteUrl ? siteUrl.replace(/\/+$/, '') : lnbiturl;
+  if (!targetUrl) {
+    throw new Error('LNbits URL is not configured');
   }
   if (!lnbiturl) {
-    throw new Error('LNbits URL is not configured');
+    lnbiturl = targetUrl;
   }
 
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/payments`, {
+    const response = await fetch(`${targetUrl}/api/v1/payments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -119,6 +130,7 @@ export async function createInvoice(
     if (
       !data ||
       typeof data !== 'object' ||
+      Array.isArray(data) ||
       !('payment_request' in data) ||
       typeof (data as { payment_request: unknown }).payment_request !== 'string' ||
       !(data as { payment_request: string }).payment_request
@@ -144,15 +156,17 @@ export async function payInvoice(
   paymentRequest: string,
   extra: object,
 ): Promise<LnbitsPaymentResult> {
-  if (!lnbiturl) {
-    setLnbitUrl(req);
+  const { siteUrl } = getCredentials(req);
+  const targetUrl = siteUrl ? siteUrl.replace(/\/+$/, '') : lnbiturl;
+  if (!targetUrl) {
+    throw new Error('LNbits URL is not configured');
   }
   if (!lnbiturl) {
-    throw new Error('LNbits URL is not configured');
+    lnbiturl = targetUrl;
   }
 
   try {
-    const response = await fetch(`${lnbiturl}/api/v1/payments`, {
+    const response = await fetch(`${targetUrl}/api/v1/payments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,7 +184,14 @@ export async function payInvoice(
     }
 
     const data = (await response.json()) as unknown;
-    if (!data || typeof data !== 'object') {
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      Array.isArray(data) ||
+      !('payment_hash' in data) ||
+      typeof (data as { payment_hash: unknown }).payment_hash !== 'string' ||
+      !(data as { payment_hash: string }).payment_hash
+    ) {
       throw new Error('payInvoice: LNbits did not return a valid payment response');
     }
 

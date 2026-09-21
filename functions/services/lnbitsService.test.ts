@@ -120,6 +120,52 @@ describe('functions/services/lnbitsService', () => {
         /Access token is missing in the response/,
       );
     });
+
+    test('isolates tokens by user credentials', async () => {
+      let fetchCount = 0;
+      globalThis.fetch = async (_input, init) => {
+        fetchCount++;
+        const body = JSON.parse(init?.body as string);
+        return new Response(JSON.stringify({ access_token: `token-${body.username}` }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      };
+
+      const req = makeRequest();
+      const aliceToken = await getAccessToken(req, 'alice', 'secret-a');
+      assert.equal(aliceToken, 'token-alice');
+
+      // Bob should fetch a new token, not reuse alice's
+      const bobToken = await getAccessToken(req, 'bob', 'secret-b');
+      assert.equal(bobToken, 'token-bob');
+      assert.equal(fetchCount, 2);
+
+      // Re-requesting alice should return cached alice token without fetching
+      const aliceToken2 = await getAccessToken(req, 'alice', 'secret-a');
+      assert.equal(aliceToken2, 'token-alice');
+      assert.equal(fetchCount, 2);
+    });
+
+    test('isolates tokens by target site URL', async () => {
+      let fetchCount = 0;
+      globalThis.fetch = async (input) => {
+        fetchCount++;
+        return new Response(JSON.stringify({ access_token: `token-for-${input}` }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      };
+
+      const req1 = makeRequest('https://lnbits-one.example.com');
+      const token1 = await getAccessToken(req1, 'alice', 'secret');
+      assert.equal(token1, 'token-for-https://lnbits-one.example.com/api/v1/auth');
+
+      const req2 = makeRequest('https://lnbits-two.example.com');
+      const token2 = await getAccessToken(req2, 'alice', 'secret');
+      assert.equal(token2, 'token-for-https://lnbits-two.example.com/api/v1/auth');
+      assert.equal(fetchCount, 2);
+    });
   });
 
   describe('createInvoice', () => {
@@ -185,6 +231,20 @@ describe('functions/services/lnbitsService', () => {
       );
     });
 
+    test('rethrows when response is an array', async () => {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify([{ payment_request: 'invoice' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+
+      const req = makeRequest();
+      await assert.rejects(
+        createInvoice(req, 'inkey-456', 'wallet-target', 21, 'memo', {}),
+        /createInvoice: LNbits did not return a valid payment_request/,
+      );
+    });
+
     test('rethrows network error', async () => {
       globalThis.fetch = async () => {
         throw new Error('Connection reset');
@@ -238,6 +298,62 @@ describe('functions/services/lnbitsService', () => {
     test('rethrows when response is not an object', async () => {
       globalThis.fetch = async () =>
         new Response('null', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+
+      const req = makeRequest();
+      await assert.rejects(
+        payInvoice(req, 'adminkey-789', 'lnbc210n1testinvoice', {}),
+        /payInvoice: LNbits did not return a valid payment response/,
+      );
+    });
+
+    test('rethrows when response is an array', async () => {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify([{ payment_hash: 'paidhash456' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+
+      const req = makeRequest();
+      await assert.rejects(
+        payInvoice(req, 'adminkey-789', 'lnbc210n1testinvoice', {}),
+        /payInvoice: LNbits did not return a valid payment response/,
+      );
+    });
+
+    test('rethrows when payment_hash is missing', async () => {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({ status: 'success' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+
+      const req = makeRequest();
+      await assert.rejects(
+        payInvoice(req, 'adminkey-789', 'lnbc210n1testinvoice', {}),
+        /payInvoice: LNbits did not return a valid payment response/,
+      );
+    });
+
+    test('rethrows when payment_hash is empty string', async () => {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({ payment_hash: '' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+
+      const req = makeRequest();
+      await assert.rejects(
+        payInvoice(req, 'adminkey-789', 'lnbc210n1testinvoice', {}),
+        /payInvoice: LNbits did not return a valid payment response/,
+      );
+    });
+
+    test('rethrows when payment_hash is not a string', async () => {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({ payment_hash: 12345 }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
