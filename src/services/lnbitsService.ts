@@ -386,20 +386,169 @@ const toUser = (
   };
 };
 
+// LNbits pages the Users API (`limit`/`offset`; 10 per request by default on
+// 1.6), so one request silently drops every account past the first page. Read
+// page by page, ordered by id so page boundaries are stable (LNbits only adds
+// ORDER BY when `sortby` is set). Stop once `total` is reached or, when the
+// server sends no `total`, on an empty page: a short page may only be a
+// server-side cap on `limit`, so `offset` advances by the rows received and
+// only an empty page proves the end. Every record is checked before it is
+// read, and every failure names the page it happened on.
+export const USER_LIST_PAGE_SIZE = 100;
+// Guard against a server that ignores `offset`: 10,000 accounts is far beyond
+// any team this bot serves, so hitting it means something is wrong.
+const USER_LIST_MAX_PAGES = 100;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isOptionalString = (value: unknown): value is string | null | undefined =>
+  value === undefined || value === null || typeof value === 'string';
+
+// One record of a user-list page. LNbits sends null for unset optional
+// fields; anything else that is not a string is a malformed page, and a
+// malformed page fails the whole read rather than yielding a half-built user.
+const toRawUser = (
+  entry: unknown,
+  page: number,
+  index: number,
+): RawLnbitsUser => {
+  const where = `page ${page + 1}, record ${index + 1}`;
+  if (!isRecord(entry) || typeof entry.id !== 'string' || entry.id === '') {
+    throw new Error(`Error getting users: ${where} has no string id`);
+  }
+  const { username, email, external_id: externalId, extra } = entry;
+  if (
+    !isOptionalString(username) ||
+    !isOptionalString(email) ||
+    !isOptionalString(externalId)
+  ) {
+    const field = !isOptionalString(username)
+      ? 'username'
+      : !isOptionalString(email)
+        ? 'email'
+        : 'external_id';
+    throw new Error(
+      `Error getting users: ${where} (${entry.id}) has a non-string ${field}`,
+    );
+  }
+  let profile: RawLnbitsUser['extra'] = null;
+  if (extra !== undefined && extra !== null) {
+    if (
+      !isRecord(extra) ||
+      !isOptionalString(extra.display_name) ||
+      !isOptionalString(extra.picture)
+    ) {
+      throw new Error(
+        `Error getting users: ${where} (${entry.id}) has an invalid extra`,
+      );
+    }
+    profile = {
+      display_name: extra.display_name ?? undefined,
+      picture: extra.picture ?? undefined,
+    };
+  }
+  return {
+    id: entry.id,
+    username: username ?? undefined,
+    email: email ?? undefined,
+    external_id: externalId ?? undefined,
+    extra: profile,
+  };
+};
+
 const getUsers = async (
   _adminKey: string, // Unused: auth is the superuser Bearer token via adminFetch
   filterByExtra: { [key: string]: string } | null,
 ): Promise<User[]> => {
   const aadObjectId = filterByExtra?.aadObjectId;
-  const query = aadObjectId
-    ? `?external_id=${encodeURIComponent(aadObjectId)}`
-    : '';
-  const response = await adminFetch(`/users/api/v1/user${query}`);
-  if (!response.ok) {
-    throw new Error(`Error getting users (status: ${response.status})`);
+  const rawUsers: RawLnbitsUser[] = [];
+  let previousFirstId: string | undefined;
+  // The last `total` the server announced: an empty page that arrives before
+  // it is reached is a partial list, not the end.
+  let announcedTotal: number | undefined;
+  // One request beyond the page cap: for a server that sends no `total` it
+  // may be the empty page that proves the list complete.
+  for (let page = 0; page <= USER_LIST_MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      limit: String(USER_LIST_PAGE_SIZE),
+      offset: String(rawUsers.length),
+      sortby: 'id',
+      direction: 'asc',
+    });
+    if (aadObjectId) {
+      params.set('external_id', aadObjectId);
+    }
+    let response: Response;
+    try {
+      response = await adminFetch(`/users/api/v1/user?${params}`);
+    } catch (error) {
+      throw new Error(`Error getting users: page ${page + 1} request failed`, {
+        cause: error,
+      });
+    }
+    if (!response.ok) {
+      throw new Error(
+        `Error getting users (status: ${response.status}, page ${page + 1})`,
+      );
+    }
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch (error) {
+      throw new Error(
+        `Error getting users: page ${page + 1} is not valid JSON`,
+        {
+          cause: error,
+        },
+      );
+    }
+    if (!isRecord(body) || !Array.isArray(body.data)) {
+      throw new Error(
+        `Error getting users: page ${page + 1} has no data array`,
+      );
+    }
+    const pageUsers = body.data.map((entry, index) =>
+      toRawUser(entry, page, index),
+    );
+    if (pageUsers.length === 0) {
+      if (announcedTotal !== undefined && rawUsers.length < announcedTotal) {
+        throw new Error(
+          `Error getting users: page ${page + 1} came back empty after ${rawUsers.length} of the announced ${announcedTotal} accounts`,
+        );
+      }
+      break;
+    }
+    if (page === USER_LIST_MAX_PAGES) {
+      throw new Error(
+        `Error getting users: more than ${rawUsers.length} accounts, refusing a partial list`,
+      );
+    }
+    if (pageUsers[0].id === previousFirstId) {
+      throw new Error(
+        `Error getting users: LNbits ignored offset on page ${page + 1}`,
+      );
+    }
+    previousFirstId = pageUsers[0].id;
+    rawUsers.push(...pageUsers);
+    // A present `total` that is not a count is an invalid response, not an
+    // absent one: null must not turn into the empty-page rule.
+    const total = body.total;
+    if (
+      total !== undefined &&
+      (typeof total !== 'number' || !Number.isInteger(total) || total < 0)
+    ) {
+      throw new Error(
+        `Error getting users: page ${page + 1} has an invalid total (${String(total)})`,
+      );
+    }
+    if (typeof total === 'number') {
+      announcedTotal = total;
+      if (rawUsers.length >= total) {
+        break;
+      }
+    }
   }
-  const body = await response.json();
-  const rawUsers: RawLnbitsUser[] = body.data;
   return rawUsers.map(raw => toUser(raw));
 };
 
