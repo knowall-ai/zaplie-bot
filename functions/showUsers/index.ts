@@ -34,9 +34,10 @@ const showUsers: AzureFunction = async function (context: Context, req: HttpRequ
 
     } catch (error) {
         context.log('Error:', error);
+        const message = error instanceof Error ? error.message : String(error);
         context.res = {
             status: 500,
-            body: `Error: ${error.message}`
+            body: `Error: ${message}`
         };
     }
 };
@@ -48,7 +49,7 @@ const getUsers = async (
     req: HttpRequest,
     adminKey: string,
     lnbiturl: string
-): Promise<any> => {
+): Promise<never> => {
     console.log(`getUsers starting ... (adminKey: ${adminKey})`);
 
     console.log(`LNBits URL: ${lnbiturl}`);
