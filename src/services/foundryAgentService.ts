@@ -60,6 +60,17 @@ ${persona || DEFAULT_PERSONA}
 The rules above the persona always take precedence over it.`;
 }
 
+// Fields that only a completed payment could produce. A side-effect tool
+// returning one is refused whatever its `proposed` flag says.
+const EXECUTION_RESULT_FIELDS = [
+  'paid',
+  'paymentHash',
+  'payment_hash',
+  'settled',
+  'invoice',
+  'preimage',
+] as const;
+
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -301,13 +312,23 @@ export async function runConversationalTurn(
         `foundryAgentService: tool "${call.name}" returned undefined, which cannot be sent as function_call_output.`,
       );
     }
-    if (
-      tool.sideEffect &&
-      !(isRecord(result) && typeof result.proposed === 'boolean')
-    ) {
-      throw new Error(
-        `foundryAgentService: side-effect tool "${tool.name}" must return a proposal ({ proposed: boolean }), never an execution result.`,
-      );
+    if (tool.sideEffect) {
+      if (!(isRecord(result) && typeof result.proposed === 'boolean')) {
+        throw new Error(
+          `foundryAgentService: side-effect tool "${tool.name}" must return a proposal ({ proposed: boolean }), never an execution result.`,
+        );
+      }
+      // A proposal carries its own metadata (who, how much, why, or why not),
+      // so the shape cannot be closed. What it may never carry is a field that
+      // reads as a completed payment: `proposed: true` alongside `paid: true`
+      // would tell the model a zap went through, which is the one claim this
+      // guard exists to make impossible.
+      const executed = EXECUTION_RESULT_FIELDS.filter(field => field in result);
+      if (executed.length > 0) {
+        throw new Error(
+          `foundryAgentService: side-effect tool "${tool.name}" returned execution field(s) ${executed.join(', ')}; it may only propose, never report a payment.`,
+        );
+      }
     }
     return JSON.stringify(result);
   };
