@@ -12,7 +12,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@azure/functions": "^3.0.0",
+    "@azure/functions": "^4.16.5",
     "@types/node": "^26.x",
     "typescript": "^7.0.2",
     "rimraf": "^6.1.3"
