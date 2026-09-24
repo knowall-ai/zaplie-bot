@@ -1,87 +1,53 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import styles from './WalletTransactionHistory.module.css';
 import WalletTransactionLog from './WalletTransactionLog';
+
+type HistoryFilter = 'all' | 'sent' | 'received';
 
 interface WalletTransactionHistoryProps {
   activeMainTab?: string;
 }
 
+const FILTERS: Array<{ id: HistoryFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'sent', label: 'Sent' },
+  { id: 'received', label: 'Received' },
+];
+
 const WalletTransactionHistory: React.FC<WalletTransactionHistoryProps> = ({
   activeMainTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<string>('all');
-  const [activeWalletTabName, setActiveWalletTabName] =
-    useState<string>('Private');
+  const [activeTab, setActiveTab] = useState<HistoryFilter>('all');
 
-  const onHistoryTabClick = (tabName: string) => {
-    setActiveTab(tabName);
-  };
-
-  useEffect(() => {
-    const filterZaps = (currentActiveTab: string, currentMainTab: string) => {
-      // Define filterZaps function here or import it from WalletTransactionLog
-      setActiveWalletTabName(currentMainTab);
-    };
-
-    if (activeMainTab) {
-      filterZaps('all', activeMainTab);
-    }
-  }, [activeMainTab]);
+  if (activeMainTab !== 'Private' && activeMainTab !== 'Allowance') {
+    return (
+      <div className={styles.feedcomponent} role="alert">
+        Choose a wallet to view its transaction history.
+      </div>
+    );
+  }
 
   return (
     <div className={styles.feedcomponent}>
-      <div className={styles.tabs}>
-        <div className={styles.tab} onClick={() => onHistoryTabClick('all')}>
-          <div className={styles.base}>
-            <div className={styles.stringBadgeIconStack}>
-              <div className={styles.stringTabTitle}>All</div>
-            </div>
-            <div className={styles.borderPaddingStack}>
-              {activeTab === 'all' && <div className={styles.borderBottom} />}
-            </div>
-          </div>
-        </div>
-        <div className={styles.tab1} onClick={() => onHistoryTabClick('sent')}>
-          <div className={styles.base}>
-            <div className={styles.stringBadgeIconStack}>
-              <div className={styles.stringTabTitle}>Sent</div>
-            </div>
-            <div className={styles.borderPaddingStack}>
-              {activeTab === 'sent' && <div className={styles.borderBottom} />}
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={styles.tab1}
-          onClick={() => onHistoryTabClick('received')}
-        >
-          <div className={styles.base}>
-            <div className={styles.stringBadgeIconStack}>
-              <div className={styles.stringTabTitle}>Received</div>
-            </div>
-            <div className={styles.borderPaddingStack}>
-              {activeTab === 'received' && (
-                <div className={styles.borderBottom} />
-              )}
-            </div>
-          </div>
-        </div>
+      <div className={styles.tabs} aria-label="Filter transactions">
+        {FILTERS.map(filter => (
+          <button
+            key={filter.id}
+            type="button"
+            className={`${styles.stringTabTitle} ${
+              activeTab === filter.id ? styles.active : ''
+            }`}
+            onClick={() => setActiveTab(filter.id)}
+            aria-pressed={activeTab === filter.id}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
-
-      {activeWalletTabName === 'Private' ? (
-        <WalletTransactionLog
-          filterZaps={onHistoryTabClick}
-          activeTab={activeTab}
-          activeWallet={activeWalletTabName}
-        />
-      ) : (
-        <WalletTransactionLog
-          filterZaps={onHistoryTabClick}
-          activeTab={activeTab}
-          activeWallet={activeWalletTabName}
-        />
-      )}
+      <WalletTransactionLog
+        activeTab={activeTab}
+        activeWallet={activeMainTab}
+      />
     </div>
   );
 };
