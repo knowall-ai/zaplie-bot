@@ -1,10 +1,16 @@
 // agentTools.test.ts
 //
-// Mocks lnbitsService/zapHistoryService (external dependencies), not
-// agentTools itself.
+// Mocks lnbitsService/zapHistoryService/graphService (external dependencies),
+// not agentTools itself. createZapCard runs for real so the propose_zap tests
+// cover the card prefill end to end.
 
-import { createReadOnlyTools } from './agentTools';
-import { getUserWallets } from '../services/lnbitsService';
+import { createAgentTools } from './agentTools';
+import { MAX_ZAP_SATS } from './zapBudget';
+import {
+  getUserWallets,
+  getUsers,
+  getWalletBalance,
+} from '../services/lnbitsService';
 import {
   getZapActivity,
   getZapLeaderboard,
@@ -18,7 +24,7 @@ import {
   beforeEach,
   jest,
 } from '@jest/globals';
-import { TurnContext } from 'botbuilder';
+import { Activity, TurnContext } from 'botbuilder';
 import { isRecord } from '../utils/typeGuards';
 
 // Tool results are `unknown` by contract. Narrowing once here keeps the
@@ -89,6 +95,10 @@ const mockGetRecentMeetings = getRecentMeetings as jest.MockedFunction<
 const mockGetRelevantPeople = getRelevantPeople as jest.MockedFunction<
   typeof getRelevantPeople
 >;
+const mockGetWalletBalance = getWalletBalance as jest.MockedFunction<
+  typeof getWalletBalance
+>;
+const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
 
 const currentUser: User = {
   id: 'user-1',
@@ -103,8 +113,17 @@ const currentUser: User = {
 const makeTurnContext = (user: User | undefined): TurnContext => {
   const turnState = new Map<string, unknown>();
   if (user) turnState.set('user', user);
-  return { turnState } as unknown as TurnContext;
+  return {
+    turnState,
+    sendActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  } as unknown as TurnContext;
 };
+
+// Only the fields the propose_zap prefill assertions read: the card is built
+// by the real createZapCard, so this is a view of it, not a duplicate of it.
+interface ZapCardForTest {
+  body: { id?: string; value?: string }[];
+}
 
 const wallet = (overrides: Partial<Wallet>): Wallet => ({
   id: 'w1',
@@ -131,9 +150,7 @@ describe('agentTools', () => {
         wallet({ name: 'Private', balance_msat: 50000 }),
       ]);
 
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_my_balance',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_my_balance')!;
       const result = requireRecord(
         await tool.handler({}, makeTurnContext(currentUser)),
       );
@@ -150,9 +167,7 @@ describe('agentTools', () => {
         wallet({ name: 'PRIVATE', balance_msat: 50000 }),
       ]);
 
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_my_balance',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_my_balance')!;
       const result = requireRecord(
         await tool.handler({}, makeTurnContext(currentUser)),
       );
@@ -163,9 +178,7 @@ describe('agentTools', () => {
     });
 
     test('rejects unknown arguments rather than ignoring them', async () => {
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_my_balance',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_my_balance')!;
 
       const result = requireRecord(
         await tool.handler(
@@ -182,7 +195,7 @@ describe('agentTools', () => {
   test('every tool schema refuses properties it does not declare', () => {
     process.env.GRAPH_CONNECTION_NAME = 'GraphWorkSignals';
     try {
-      for (const tool of createReadOnlyTools()) {
+      for (const tool of createAgentTools()) {
         expect(tool.parameters).toMatchObject({ additionalProperties: false });
       }
     } finally {
@@ -205,9 +218,7 @@ describe('agentTools', () => {
         ]),
       );
 
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
       const result = requireRecord(
         await tool.handler({}, makeTurnContext(currentUser)),
       );
@@ -223,9 +234,7 @@ describe('agentTools', () => {
 
     test('accepts a days window and passes the cut-off through', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
 
       // The tool must advertise the parameter, or the model cannot answer
       // "who zapped most this week" with anything but all-time totals.
@@ -245,9 +254,7 @@ describe('agentTools', () => {
 
     test('defaults to all-time when days is omitted', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
 
       const allTime = requireRecord(
         await tool.handler({}, makeTurnContext(currentUser)),
@@ -264,9 +271,7 @@ describe('agentTools', () => {
       // different question than the one asked while still reporting the asked-
       // for window — a wrong number, stated confidently.
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
 
       for (const days of [0, -7, 400, 7.5, Number.NaN, '7' as never]) {
         const result = requireRecord(
@@ -280,9 +285,7 @@ describe('agentTools', () => {
 
     test('rejects unknown arguments rather than ignoring them', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
 
       const result = requireRecord(
         await tool.handler({ weeks: 2 } as never, makeTurnContext(currentUser)),
@@ -294,9 +297,7 @@ describe('agentTools', () => {
 
     test('reports exactly the window it measured', async () => {
       mockGetZapLeaderboard.mockResolvedValue(leaderboardResult([]));
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
 
       // Bracket the call rather than comparing against a later Date.now():
       // the clock can tick a second between the handler and the assertion.
@@ -325,9 +326,7 @@ describe('agentTools', () => {
         ),
       );
 
-      const tool = createReadOnlyTools().find(
-        t => t.name === 'get_leaderboard',
-      )!;
+      const tool = createAgentTools().find(t => t.name === 'get_leaderboard')!;
       const result = requireRecord(
         await tool.handler({}, makeTurnContext(currentUser)),
       );
@@ -353,7 +352,7 @@ describe('agentTools', () => {
         ]),
       );
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
       const result = requireRecord(
@@ -381,7 +380,7 @@ describe('agentTools', () => {
     test('clamps limit to [1, 50] and defaults to 20', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
 
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -409,7 +408,7 @@ describe('agentTools', () => {
 
     test('falls back to the default limit rather than passing NaN or a fraction through', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -426,7 +425,7 @@ describe('agentTools', () => {
 
     test('rejects unknown arguments rather than ignoring them', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -440,7 +439,7 @@ describe('agentTools', () => {
 
     test('rejects a non-boolean onlyInvolvingMe instead of reading it as false', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -459,7 +458,7 @@ describe('agentTools', () => {
 
     test('accepts onlyInvolvingMe: false as a real filter choice', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -475,7 +474,7 @@ describe('agentTools', () => {
 
     test('falls back to the defaults when the arguments are not an object', async () => {
       mockGetZapActivity.mockResolvedValue(activityResult([]));
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         t => t.name === 'get_recent_activity',
       )!;
 
@@ -489,6 +488,287 @@ describe('agentTools', () => {
           userAadObjectId: undefined,
         });
       }
+    });
+  });
+
+  describe('propose_zap', () => {
+    // The turn-state snapshot deliberately claims MORE than the live wallet
+    // (5000 vs 900 sats): any check that trusts the snapshot instead of the
+    // live getUserWallets read lets the 901-sat proposal through.
+    const sender: User = {
+      ...currentUser,
+      allowanceWallet: wallet({ name: 'Allowance', balance_msat: 5000000 }),
+    };
+    const bob: User = {
+      ...currentUser,
+      id: 'user-bob',
+      displayName: 'Bob Smith',
+      aadObjectId: 'aad-bob',
+    };
+
+    const tool = () => createAgentTools().find(t => t.name === 'propose_zap')!;
+
+    const sentCard = (context: TurnContext): ZapCardForTest => {
+      const send = context.sendActivity as unknown as {
+        mock: { calls: Partial<Activity>[][] };
+      };
+      const content = send.mock.calls[0][0].attachments?.[0]?.content as
+        ZapCardForTest | undefined;
+      if (!content) {
+        throw new Error('Expected propose_zap to send an adaptive card.');
+      }
+      return content;
+    };
+
+    beforeEach(() => {
+      mockGetUserWallets.mockResolvedValue([
+        wallet({ name: 'Allowance', balance_msat: 900000 }),
+      ]);
+      mockGetUsers.mockResolvedValue([sender, bob]);
+      mockGetWalletBalance.mockResolvedValue(900);
+    });
+
+    test('is flagged sideEffect, so the dispatch proposal guard applies', () => {
+      expect(tool().sideEffect).toBe(true);
+    });
+
+    test('posts a card pre-filled with recipient, amount and memo, and returns a proposal, not a payment', async () => {
+      const context = makeTurnContext(sender);
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 100, memo: 'for the demo' },
+          context,
+        ),
+      );
+
+      expect(result).toEqual({
+        proposed: true,
+        recipient: 'Bob Smith',
+        amountSats: 100,
+        memo: 'for the demo',
+      });
+      expect(context.sendActivity).toHaveBeenCalledTimes(1);
+
+      const inputs = new Map(
+        sentCard(context)
+          .body.filter(element => element.id !== undefined)
+          .map(element => [element.id, element.value] as const),
+      );
+      expect(inputs.get('zapReceiverId')).toBe('user-bob');
+      expect(inputs.get('zapMessage')).toBe('for the demo');
+      expect(inputs.get('zapAmount')).toBe('100');
+    });
+
+    test('refuses 901 sats against a live Allowance balance of 900, ignoring the stale snapshot', async () => {
+      const context = makeTurnContext(sender);
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 901, memo: 'Thanks' },
+          context,
+        ),
+      );
+
+      expect(result).toEqual({
+        proposed: false,
+        reason:
+          'The requested 901 sats exceeds the current Allowance balance of 900 sats.',
+      });
+      expect(context.sendActivity).not.toHaveBeenCalled();
+    });
+
+    test('proposes exactly the full live balance (900 of 900 sats)', async () => {
+      const context = makeTurnContext(sender);
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 900, memo: 'all in' },
+          context,
+        ),
+      );
+
+      expect(result.proposed).toBe(true);
+      expect(context.sendActivity).toHaveBeenCalledTimes(1);
+    });
+
+    test('throws when the sender has no Allowance wallet', async () => {
+      mockGetUserWallets.mockResolvedValue([
+        wallet({ name: 'Private', balance_msat: 900000 }),
+      ]);
+
+      await expect(
+        tool().handler(
+          { recipientName: 'bob', amountSats: 100, memo: 'x' },
+          makeTurnContext(sender),
+        ),
+      ).rejects.toThrow(
+        'Alice has no Allowance wallet, so no zap was proposed.',
+      );
+    });
+
+    // The refusal compares LNbits ids, the identity the card, submitZaps and
+    // the ledger all use. aadObjectId is optional on User, so comparing it
+    // would refuse a legitimate zap between two members who both lack one.
+    test('identifies a self-zap by LNbits id, not by aadObjectId', async () => {
+      const noAad = { ...sender, aadObjectId: undefined };
+      const bobNoAad = { ...bob, aadObjectId: undefined };
+      mockGetUsers.mockResolvedValue([noAad, bobNoAad]);
+      const context = makeTurnContext(noAad);
+
+      // Both sides lack an aadObjectId, so an aadObjectId comparison would
+      // call this a self-zap. The ids differ, so it is a proposal.
+      const other = requireRecord(
+        await tool().handler(
+          { recipientName: 'Bob Smith', amountSats: 100, memo: 'thanks' },
+          context,
+        ),
+      );
+      expect(other).toMatchObject({ proposed: true, recipient: 'Bob Smith' });
+
+      // Same id, different aadObjectId: still the sender, still refused.
+      const self = requireRecord(
+        await tool().handler(
+          { recipientName: 'Alice', amountSats: 100, memo: 'me' },
+          makeTurnContext({ ...sender, aadObjectId: 'aad-changed' }),
+        ),
+      );
+      expect(self).toEqual({
+        proposed: false,
+        reason:
+          'Users cannot zap themselves — the allowance is for recognising others.',
+      });
+    });
+
+    test('refuses a self-zap with its own reason, without posting a card', async () => {
+      const context = makeTurnContext(sender);
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'alice', amountSats: 100, memo: 'me' },
+          context,
+        ),
+      );
+
+      expect(result).toEqual({
+        proposed: false,
+        reason:
+          'Users cannot zap themselves — the allowance is for recognising others.',
+      });
+      expect(context.sendActivity).not.toHaveBeenCalled();
+    });
+
+    test('prefers an exact display-name match over substring matches', async () => {
+      mockGetUsers.mockResolvedValue([
+        sender,
+        bob,
+        {
+          ...bob,
+          id: 'user-bob2',
+          displayName: 'Bob',
+          aadObjectId: 'aad-bob2',
+        },
+      ]);
+      const context = makeTurnContext(sender);
+
+      const result = requireRecord(
+        await tool().handler(
+          { recipientName: 'Bob', amountSats: 100, memo: 'thanks' },
+          context,
+        ),
+      );
+
+      expect(result.proposed).toBe(true);
+      expect(result.recipient).toBe('Bob');
+      expect(
+        sentCard(context).body.find(element => element.id === 'zapReceiverId')
+          ?.value,
+      ).toBe('user-bob2');
+    });
+
+    test('reports ambiguous and unknown recipients instead of guessing', async () => {
+      mockGetUsers.mockResolvedValue([
+        sender,
+        bob,
+        {
+          ...bob,
+          id: 'user-bobby',
+          displayName: 'Bobby Jones',
+          aadObjectId: 'aad-bobby',
+        },
+      ]);
+      const context = makeTurnContext(sender);
+
+      const ambiguous = requireRecord(
+        await tool().handler(
+          { recipientName: 'bob', amountSats: 100, memo: 'x' },
+          context,
+        ),
+      );
+      expect(ambiguous.proposed).toBe(false);
+      expect(ambiguous.candidates).toEqual(['Bob Smith', 'Bobby Jones']);
+
+      const unknown = requireRecord(
+        await tool().handler(
+          { recipientName: 'zoe', amountSats: 100, memo: 'x' },
+          context,
+        ),
+      );
+      expect(unknown.proposed).toBe(false);
+      expect(unknown.reason).toBe('No teammate matches "zoe".');
+      expect(unknown.teammates).toContain('Bob Smith');
+
+      expect(context.sendActivity).not.toHaveBeenCalled();
+    });
+
+    test('names the offending field and value in each validation reason', async () => {
+      const context = makeTurnContext(sender);
+      const run = (args: unknown) => tool().handler(args, context);
+
+      await expect(
+        run({ recipientName: '', amountSats: 100, memo: 'x' }),
+      ).resolves.toEqual({
+        proposed: false,
+        reason: 'recipientName must be a non-empty string, received: "".',
+      });
+
+      await expect(
+        run({ recipientName: 'bob', amountSats: 10.5, memo: 'x' }),
+      ).resolves.toEqual({
+        proposed: false,
+        reason: `amountSats must be a whole number between 1 and ${MAX_ZAP_SATS}, received: 10.5.`,
+      });
+
+      // Foundry sends whatever the model wrote — a stringified number must
+      // be refused, not coerced.
+      for (const amountSats of ['100', 0, MAX_ZAP_SATS + 1]) {
+        const result = requireRecord(
+          await run({
+            recipientName: 'bob',
+            amountSats,
+            memo: 'x',
+          }),
+        );
+        expect(result.proposed).toBe(false);
+        expect(result.reason).toContain('amountSats');
+        expect(result.reason).toContain(JSON.stringify(amountSats));
+      }
+
+      await expect(
+        run({ recipientName: 'bob', amountSats: 100, memo: '  ' }),
+      ).resolves.toEqual({
+        proposed: false,
+        reason:
+          'memo must be a non-empty string saying why the recipient is recognised, received: "  ".',
+      });
+
+      expect(context.sendActivity).not.toHaveBeenCalled();
+      expect(mockGetUserWallets).not.toHaveBeenCalled();
+    });
+
+    test('throws when there is no current user in turn state', async () => {
+      await expect(
+        tool().handler(
+          { recipientName: 'bob', amountSats: 100, memo: 'x' },
+          makeTurnContext(undefined),
+        ),
+      ).rejects.toThrow(/no current user in turn state/);
     });
   });
 
@@ -524,7 +804,7 @@ describe('agentTools', () => {
 
     test('uses delegated tokens and clamps the meeting look-back window', async () => {
       mockGetRecentMeetings.mockResolvedValue([]);
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
@@ -535,7 +815,7 @@ describe('agentTools', () => {
     });
 
     test('returns a connection instruction instead of calling Graph without a token', async () => {
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
@@ -548,7 +828,7 @@ describe('agentTools', () => {
 
     test('falls back to the default window when the arguments are not an object', async () => {
       mockGetRecentMeetings.mockResolvedValue([]);
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_recent_meetings',
       )!;
 
@@ -568,7 +848,7 @@ describe('agentTools', () => {
       mockGetRelevantPeople.mockResolvedValue([]);
 
       const meetings = requireRecord(
-        await createReadOnlyTools()
+        await createAgentTools()
           .find(item => item.name === 'get_recent_meetings')!
           .handler({ weeks: 2 }, makeGraphContext('graph-token')),
       );
@@ -576,7 +856,7 @@ describe('agentTools', () => {
       expect(mockGetRecentMeetings).not.toHaveBeenCalled();
 
       const collaborators = requireRecord(
-        await createReadOnlyTools()
+        await createAgentTools()
           .find(item => item.name === 'get_frequent_collaborators')!
           .handler({ top: 3 }, makeGraphContext('graph-token')),
       );
@@ -588,7 +868,7 @@ describe('agentTools', () => {
       mockGetRelevantPeople.mockResolvedValue([
         { name: 'Ada', email: 'ada@zaplie.test' },
       ]);
-      const tool = createReadOnlyTools().find(
+      const tool = createAgentTools().find(
         item => item.name === 'get_frequent_collaborators',
       )!;
 
@@ -603,7 +883,7 @@ describe('agentTools', () => {
     test('does not register Graph tools when the connection is disabled', () => {
       delete process.env.GRAPH_CONNECTION_NAME;
 
-      expect(createReadOnlyTools().map(tool => tool.name)).not.toContain(
+      expect(createAgentTools().map(tool => tool.name)).not.toContain(
         'get_recent_meetings',
       );
     });

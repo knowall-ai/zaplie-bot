@@ -364,8 +364,18 @@ export const zapAmountInput = (liveBalance: number, rewardName: string) => {
   };
 };
 
+export interface ZapCardPrefill {
+  receiverId: string;
+  amountSats: number;
+  message: string;
+}
+
 // Function to create an adaptive card
-async function createZapCard(sender: User, globalRewardName: string) {
+export async function createZapCard(
+  sender: User,
+  globalRewardName: string,
+  prefill?: ZapCardPrefill,
+) {
   console.log('Creating Zap Card ...');
   const walletChoices = await populateWalletChoices();
 
@@ -388,6 +398,7 @@ async function createZapCard(sender: User, globalRewardName: string) {
       isRequired: true,
       isMultiSelect: true,
       errorMessage: 'You must select at least one person to zap',
+      ...(prefill && { value: prefill.receiverId }),
     },
     {
       type: 'Input.Text',
@@ -397,8 +408,16 @@ async function createZapCard(sender: User, globalRewardName: string) {
       isRequired: true,
       placeholder: 'Thanks for helping me with the proposal!',
       errorMessage: 'You should tell them why you are zapping them',
+      ...(prefill && { value: prefill.message }),
     },
-    zapAmountInput(currentBalance, globalRewardName),
+    {
+      // The cap comes from the live balance (#409). propose_zap refuses an
+      // amount above the balance it read, so a prefilled value normally
+      // satisfies this regex; the two reads are separate, so a balance that
+      // drops in between surfaces as the card's own validation message.
+      ...zapAmountInput(currentBalance, globalRewardName),
+      ...(prefill && { value: String(prefill.amountSats) }),
+    },
     {
       type: 'TextBlock',
       text: `**Current Available Balance (${globalRewardName}):** ${currentBalance}`,
