@@ -251,3 +251,9 @@ ul {
   display: flex;
   align-items: center;
 }
+
+.truncatedNotice {
+  padding: 8px 12px;
+  color: #e0b000;
+  font-size: 13px;
+}
