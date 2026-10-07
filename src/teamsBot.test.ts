@@ -22,6 +22,7 @@ import {
   getWalletBalance,
   payInvoice,
 } from './services/lnbitsService';
+import { runConversationalTurn } from './services/foundryAgentService';
 
 jest.mock('./services/lnbitsService');
 jest.mock('./services/foundryAgentService');
@@ -315,6 +316,63 @@ describe('TeamsBot command matching', () => {
     expect(guide).toContain('send zap');
     expect(guide).toContain('show my balance');
     expect(guide).toContain('show leaderboard');
+  });
+});
+
+// The conversational path is the only one that can post a pre-filled,
+// pressable zap card (propose_zap calls sendActivity with it), so the
+// 'personal' gate in onMessage is load-bearing for money, not just for
+// conversation-state hygiene: the manifests still grant the team and
+// groupchat scopes, and a card posted there would be pressable by anyone in
+// the channel — the exposure found in #256. These tests fail if a refactor
+// widens the gate.
+describe('TeamsBot keeps the conversational agent out of shared scopes', () => {
+  const mockRunConversationalTurn =
+    runConversationalTurn as jest.MockedFunction<typeof runConversationalTurn>;
+
+  beforeEach(() => {
+    mockRunConversationalTurn.mockReset();
+    mockRunConversationalTurn.mockResolvedValue({
+      replyText: 'Sure thing.',
+      foundryConversationId: 'conv_foundry',
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  for (const conversationType of ['groupChat', 'channel'] as const) {
+    test(`does not reach the agent from a ${conversationType} message, so no zap card can be posted there`, async () => {
+      const bot = new TeamsBot();
+      const { context, sendActivity } = makeContext({
+        text: 'zap bob 100 sats for the demo',
+        conversation: {
+          id: `conv-${conversationType}`,
+          conversationType,
+          tenantId: 'tenant-1',
+        },
+      });
+
+      await bot.run(context);
+
+      expect(mockRunConversationalTurn).not.toHaveBeenCalled();
+      expect(sendActivity).toHaveBeenCalledTimes(1);
+      const [guide] = sendActivity.mock.calls[0] as unknown as [string];
+      expect(guide).toContain("D'oh!");
+    });
+  }
+
+  test('still reaches the agent from a 1:1 chat', async () => {
+    const bot = new TeamsBot();
+    const { context, sendActivity } = makeContext({
+      text: 'zap bob 100 sats for the demo',
+    });
+
+    await bot.run(context);
+
+    expect(mockRunConversationalTurn).toHaveBeenCalledTimes(1);
+    expect(sendActivity).toHaveBeenCalledWith('Sure thing.');
   });
 });
 
