@@ -416,6 +416,11 @@ export async function getZapLeaderboard(
   for (const zap of activity.zaps) {
     // A sending wallet that resolves to no user cannot be ranked.
     if (!zap.from) continue;
+    // Zapping yourself is not recognition, and counting it would let anyone
+    // top the board by moving their own allowance into their own Private
+    // wallet. Skipped here rather than in getZapActivity, because the feed
+    // and a user's own history should still show the movement.
+    if (zap.to && zap.to.id === zap.from.id) continue;
     const entry = totalsByUserId.get(zap.from.id);
     if (entry) {
       entry.zappedSats += zap.amountSats;

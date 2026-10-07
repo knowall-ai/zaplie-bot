@@ -111,7 +111,12 @@ in a static `SSOCommandMap` keyed by lower-case message text:
 
 | `show leaderboard`
 | `src/commands/showLeaderboardCommand.ts`
-| Ranks users by Private wallet balance in an Adaptive Card
+| Ranks users by sats zapped out of their Allowance wallet inside
+  `LEADERBOARD_WINDOW_DAYS` (top `LEADERBOARD_TOP_N`) in an Adaptive Card;
+  the ranking itself is `zapHistoryService.getZapLeaderboard`, shared with the
+  assistant's `get_leaderboard` tool, so the card and the assistant cannot
+  disagree for the same window. The card says so when a team-wide read was
+  partial
 
 |===
 
@@ -414,9 +419,20 @@ REST API that supports programmatic user/wallet creation and payments.
 come from the LNbits allowance extension) and a Private wallet (receives
 Zaps).
 
-*Rationale:* Cleanly separates "money to give" from "money earned", enabling
-leaderboards on Private balances and periodic replenishment without touching
-earnings.
+*Rationale:* Cleanly separates "money to give" from "money earned". The
+Private wallet is private: its balance is never surfaced or ranked.
+Leaderboards measure zaps sent out of Allowance wallets that landed in a
+Private wallet, excluding the `Weekly Allowance cleared` sweep, so they
+reward giving rather than receiving or hoarding. Self-zaps do not count. The
+bot reads at most 100 payments per wallet from LNbits (no paging), so a
+sender with more than about 100 Allowance movements inside the window, or
+whose receiver has more than about 100 Private credits, is undercounted;
+the window therefore has no "all time" option and a paginated fetch is
+tracked separately. The user list has the same shape of gap: `getUsers` reads
+the first page only (10 users on LNbits 1.6.1), so senders or receivers beyond
+it are missing from the leaderboard, the feed and the recipient picker until
+`getUsers` pages. A treasury wallet must not be named `Allowance`, or its
+automation payouts would rank as a person's zaps.
 
 === Scheduled top-ups are not bot code
 
