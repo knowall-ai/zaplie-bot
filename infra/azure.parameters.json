@@ -28,6 +28,9 @@
     },
     "aadAppOauthAuthorityHost": {
       "value": "${{AAD_APP_OAUTH_AUTHORITY_HOST}}"
+    },
+    "agentId": {
+      "value": "${{AGENT_ID}}"
     }
   }
 }

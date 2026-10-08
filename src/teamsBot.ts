@@ -42,10 +42,20 @@ import {
 import { runConversationalTurn } from './services/foundryAgentService';
 import { createReadOnlyTools } from './commands/agentTools';
 import { getUser, getWalletBalance } from './services/lnbitsService';
+import {
+  commandSubject,
+  recordActivity,
+  recordZapOutcome,
+} from './services/pulse';
 
 const UNRECOGNIZED_COMMAND_MESSAGE =
   "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
 const ZAP_SUBMIT_ACTION = 'submitZaps';
+
+// The Teams message id is the upstream id of a reply; a synthetic activity
+// without one falls back to its conversation, which is still stable.
+const upstreamIdOf = (context: TurnContext): string =>
+  context.activity.id ?? `${context.activity.conversation?.id}:no-id`;
 
 //Reward Name Constants
 
@@ -256,6 +266,9 @@ export class TeamsBot extends TeamsActivityHandler {
               },
             });
 
+            if (outcome.status !== 'skipped') {
+              recordZapOutcome(outcome.status, keyFor(recId), amount);
+            }
             if (outcome.status === 'skipped') {
               alreadyHandled.push(recId);
             } else if (outcome.status === 'paid') {
@@ -362,9 +375,21 @@ export class TeamsBot extends TeamsActivityHandler {
         // collapsed and a message that starts with a known command (e.g.
         // "send zap to bob") runs that command.
         if (textMessage) {
-          const command = SSOCommandMap.match(textMessage);
-          if (command) {
+          const commandName = SSOCommandMap.matchName(textMessage);
+          const command =
+            commandName === undefined
+              ? undefined
+              : SSOCommandMap.get(commandName);
+          if (commandName !== undefined && command) {
             await command.execute(context);
+            recordActivity({
+              activityType: 'chat.answered',
+              title: `Answered command · ${commandSubject(commandName)}`,
+              level: 'success',
+              subject: commandSubject(commandName),
+              channel: 'teams',
+              upstreamId: upstreamIdOf(context),
+            });
           } else if (
             context.activity.conversation.conversationType === 'personal'
           ) {
@@ -374,14 +399,41 @@ export class TeamsBot extends TeamsActivityHandler {
             // conversation, so a team or groupchat would otherwise share one
             // agent thread across unrelated teammates.
             await this.replyConversationally(context, textMessage);
+            recordActivity({
+              activityType: 'chat.answered',
+              title: 'Answered question · assistant',
+              level: 'success',
+              subject: 'assistant',
+              channel: 'teams',
+              upstreamId: upstreamIdOf(context),
+            });
           } else {
             await context.sendActivity(
               unrecognizedCommandGuide(SSOCommandMap.commandNames()),
             );
+            recordActivity({
+              activityType: 'chat.answered',
+              title: 'Answered question · command-guide',
+              level: 'info',
+              subject: 'command-guide',
+              channel: 'teams',
+              upstreamId: upstreamIdOf(context),
+            });
           }
         }
       } catch (error) {
         console.error('Error in onMessage handler:', error);
+        const userFacing = error instanceof UserFacingError;
+        recordActivity({
+          activityType: 'chat.failed',
+          title: userFacing
+            ? 'Turned down a request · teams'
+            : 'Failed to handle a message · teams',
+          level: userFacing ? 'warning' : 'error',
+          subject: userFacing ? 'user-facing' : 'internal',
+          channel: 'teams',
+          upstreamId: upstreamIdOf(context),
+        });
         await context.sendActivity(
           error instanceof UserFacingError
             ? `D'oh! ${error.message}`

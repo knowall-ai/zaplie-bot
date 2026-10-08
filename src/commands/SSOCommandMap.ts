@@ -31,17 +31,22 @@ export class SSOCommandMap {
   // that starts with a known command name — on a word boundary — counts as
   // that command (e.g. "send zap to bob" runs "send zap").
   public static match(text: string): SSOCommand | undefined {
+    const name = this.matchName(text);
+    return name === undefined ? undefined : this.commands.get(name);
+  }
+
+  // The registered name match() resolves to, e.g. for telemetry.
+  public static matchName(text: string): string | undefined {
     const normalized = normalizeCommandText(text);
     if (!normalized) {
       return undefined;
     }
-    const exact = this.commands.get(normalized);
-    if (exact) {
-      return exact;
+    if (this.commands.has(normalized)) {
+      return normalized;
     }
-    for (const [name, command] of this.commands) {
+    for (const name of this.commands.keys()) {
       if (normalized.startsWith(`${name} `)) {
-        return command;
+        return name;
       }
     }
     return undefined;

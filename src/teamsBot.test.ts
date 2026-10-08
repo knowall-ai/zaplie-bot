@@ -16,6 +16,7 @@ import * as path from 'path';
 import { TurnContext } from 'botbuilder';
 import { GENERIC_ERROR_MESSAGE } from './messages';
 import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
+import { pulseSettled, resetPulseForTests } from './services/pulse';
 import {
   createInvoice,
   getUser,
@@ -770,5 +771,225 @@ describe('TeamsBot notifies several recipients and survives a notifier failure',
       ),
       expect.any(Error),
     );
+  });
+});
+
+// agent-pulse: a stand-in library, loaded through the wrapper's test hook
+// (jest cannot run the real ES import), so the events can be asserted.
+const mockPulseEmit = jest.fn();
+const usePulseStandIn = (): void => {
+  process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = 'InstrumentationKey=test';
+  resetPulseForTests(async () => ({
+    createPulse: () => ({
+      emit: async (event: unknown) => {
+        mockPulseEmit(event);
+      },
+      flush: async () => undefined,
+    }),
+    activityIdFrom: (id: string) => `sha256:${id}`,
+  }));
+};
+const dropPulseStandIn = (): void => {
+  delete process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+  resetPulseForTests();
+};
+
+describe('TeamsBot records AgentActivity events', () => {
+  const receiver: User = {
+    id: 'recipient-1',
+    displayName: 'Bob',
+    profileImg: '',
+    aadObjectId: 'aad-bob',
+    email: 'bob@example.test',
+    privateWallet: {
+      id: 'w-bob-priv',
+      admin: '',
+      name: 'Private',
+      user: 'recipient-1',
+      adminkey: 'adm-bob-priv',
+      inkey: 'ink-bob-priv',
+      balance_msat: 0,
+      deleted: false,
+    },
+    allowanceWallet: null,
+  };
+
+  const submit = (cardId: string): MockContext => {
+    const mock = makeContext({
+      id: `msg-${cardId}`,
+      replyToId: cardId,
+      value: {
+        action: 'submitZaps',
+        zapReceiverId: 'recipient-1',
+        zapMessage: 'thanks for the proposal!',
+        zapAmount: '10',
+      },
+    });
+    (mock.context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      displayName: 'Alice',
+      aadObjectId: 'aad-user-1',
+      privateWallet: null,
+      allowanceWallet: {
+        id: 'w-alice-allow',
+        inkey: 'ink-alice-allow',
+        adminkey: 'adm-alice-allow',
+      },
+    });
+    return mock;
+  };
+
+  const events = () =>
+    mockPulseEmit.mock.calls.map(([event]) => event as Record<string, unknown>);
+
+  beforeEach(() => {
+    usePulseStandIn();
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.mocked(getUser).mockResolvedValue(receiver);
+    jest.mocked(getWalletBalance).mockResolvedValue(1000);
+    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
+    jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
+  });
+
+  afterEach(() => {
+    dropPulseStandIn();
+    mockPulseEmit.mockReset();
+    jest.restoreAllMocks();
+  });
+
+  test('a paid zap records zap.sent with the sats and no names or message', async () => {
+    await new TeamsBot().run(submit('card-pulse-paid').context);
+    await pulseSettled();
+
+    const sent = events().filter(e => e.activityType === 'zap.sent');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      level: 'success',
+      channel: 'teams',
+      measurements: { sats: 10 },
+    });
+    expect(sent[0].activityId).toEqual(expect.stringContaining('sha256:'));
+    const serialised = JSON.stringify(events());
+    for (const pii of ['Alice', 'Bob', 'thanks for the proposal']) {
+      expect(serialised).not.toContain(pii);
+    }
+  });
+
+  test('a zap that never reaches LNbits records zap.failed at level error', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.mocked(createInvoice).mockResolvedValue(null as unknown as string);
+
+    await new TeamsBot().run(submit('card-pulse-failed').context);
+
+    await pulseSettled();
+
+    expect(events()).toContainEqual(
+      expect.objectContaining({
+        activityType: 'zap.failed',
+        level: 'error',
+        measurements: { sats: 10 },
+      }),
+    );
+  });
+
+  test('a duplicate submit records nothing new', async () => {
+    const bot = new TeamsBot();
+    await bot.run(submit('card-pulse-dup').context);
+    await pulseSettled();
+    mockPulseEmit.mockReset();
+
+    await bot.run(submit('card-pulse-dup').context);
+
+    await pulseSettled();
+
+    expect(events()).toEqual([]);
+  });
+
+  test('a telemetry failure never affects the zap', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockPulseEmit.mockImplementation(() => {
+      throw new Error('telemetry down');
+    });
+    const mock = submit('card-pulse-throws');
+
+    await new TeamsBot().run(mock.context);
+
+    await pulseSettled();
+
+    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(mock.sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining('Awesome! You sent 10'),
+    );
+    expect(mock.sendActivity).not.toHaveBeenCalledWith(GENERIC_ERROR_MESSAGE);
+  });
+
+  test('a command records chat.answered with the command as its subject', async () => {
+    // The bot registers its commands when constructed: replace one after.
+    const bot = new TeamsBot();
+    const spy = new SpyCommand();
+    SSOCommandMap.register('show leaderboard', spy);
+    const { context } = makeContext({
+      id: 'msg-cmd',
+      text: 'show leaderboard',
+    });
+
+    await bot.run(context);
+
+    await pulseSettled();
+
+    expect(spy.execute).toHaveBeenCalledTimes(1);
+    expect(events()).toEqual([
+      expect.objectContaining({
+        activityType: 'chat.answered',
+        title: 'Answered command · show-leaderboard',
+        subject: 'show-leaderboard',
+        activityId: 'sha256:msg-cmd',
+      }),
+    ]);
+  });
+
+  test('an unmatched channel message records chat.answered for the command guide', async () => {
+    const { context } = makeContext({
+      id: 'msg-guide',
+      text: 'what can you do?',
+      conversation: {
+        id: 'conv-2',
+        conversationType: 'channel',
+        tenantId: 'tenant-1',
+      },
+    });
+
+    await new TeamsBot().run(context);
+
+    await pulseSettled();
+
+    expect(events()).toEqual([
+      expect.objectContaining({
+        activityType: 'chat.answered',
+        subject: 'command-guide',
+      }),
+    ]);
+  });
+
+  test('a failed message records chat.failed at level error', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const mock = submit('card-pulse-nowallet');
+    (mock.context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      aadObjectId: 'aad-user-1',
+      allowanceWallet: null,
+    });
+
+    await new TeamsBot().run(mock.context);
+
+    await pulseSettled();
+
+    expect(events()).toEqual([
+      expect.objectContaining({
+        activityType: 'chat.failed',
+        level: 'error',
+        subject: 'internal',
+      }),
+    ]);
   });
 });

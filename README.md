@@ -79,6 +79,8 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
   2. Run command: `teamsapp provision --env dev`.
   3. Run command: `teamsapp deploy --env dev`.
 
+The bot reports what it does (zaps sent and failed, commands answered, errors) to the [Agents Portal](https://agents.knowall.ai) through [agent-pulse](https://github.com/knowall-ai/agent-pulse). It needs `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` (`zaplie` in production, `zaplie-test` in test); without the connection string it sends nothing. See the Telemetry section of `docs/DEPLOYMENT.adoc`.
+
 ### Preview the app in Teams
 
 - From VS Code:
