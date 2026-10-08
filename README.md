@@ -68,7 +68,7 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
   1.  Run command: `teamsapp deploy --env local` .
   1.  Run command: `teamsapp preview --env local` .
 
-### Deploy the app to Azure
+### Deploy the app to Azure (production)
 
 - From VS Code:
   1. Sign into Azure by clicking the `Sign in to Azure` under the `ACCOUNTS` section from sidebar.
@@ -76,17 +76,17 @@ Zaplie integrates directly with Microsoft Teams to enhance collaboration and rec
   3. Click `Deploy` or open the command palette and select: `Teams: Deploy`.
 - Or, from TeamsFx CLI:
   1. Run command: `teamsapp auth login azure`.
-  2. Run command: `teamsapp provision --env dev`.
-  3. Run command: `teamsapp deploy --env dev`.
+  2. Run command: `teamsapp provision --env prod`.
+  3. Run command: `teamsapp deploy --env prod`.
 
-The bot reports what it does (zaps sent and failed, commands answered, errors) to the [Agents Portal](https://agents.knowall.ai) through [agent-pulse](https://github.com/knowall-ai/agent-pulse). It needs `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` (`zaplie` in production, `zaplie-test` in test); without the connection string it sends nothing. See the Telemetry section of `docs/DEPLOYMENT.adoc`.
+The bot reports what it does (zaps sent and failed, commands answered, errors) to the [Agents Portal](https://agents.knowall.ai) through [agent-pulse](https://github.com/knowall-ai/agent-pulse). It needs `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` (`zaplie` in production); without the connection string it sends nothing. See the Telemetry section of `docs/DEPLOYMENT.adoc`.
 
 ### Preview the app in Teams
 
 - From VS Code:
   1. Open the `Run and Debug Activity` Panel. Select `Launch Remote (Edge)` or `Launch Remote (Chrome)` from the launch configuration drop-down.
 - Or, from TeamsFx CLI:
-  1. Run command: `teamsapp preview --env dev`.
+  1. Run command: `teamsapp preview --env prod`.
 
 ## Running Zaplie Web App (The Tabs in the bot)
 

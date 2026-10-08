@@ -12,14 +12,14 @@
 | `env/.env.local` (untracked) + `teamsapp.local.yml`
 | Developer machine with a dev tunnel; bot registered via `botFramework/create`
 
-| dev
-| `env/.env.dev` (tracked, non-secret values) + `teamsapp.yml`
-| Shared development deployment in Azure
-
-| test / prod (CI)
-| GitHub environments `Test` and `Prod`
-| GitHub Actions deploys the tabs app to App Service `zappie-dev` (resource group `rg-Zappie-dev`) slots
+| prod
+| `env/.env.prod` (untracked) + `teamsapp.yml`; GitHub environment `Prod`
+| Production in Azure (resource group `ka-zaplie-prod`: bot `zaplie-prod-bot`, portal `zaplie-prod-webapp`)
 |===
+
+The shared dev and test Azure environments (including resource group
+`ka-zaplie-test`) have been deleted; there is no non-production Azure
+deployment. Use a local environment for development.
 
 == Prerequisites
 
@@ -30,11 +30,11 @@
 - An M365 tenant with permission to upload custom Teams apps
 - An LNbits 1.0+ instance (the shared test instance runs 1.5.6); the core Users
   API replaced the User Manager extension, so no extension is required
-- Azure subscription (for dev/prod provisioning)
+- Azure subscription (for production provisioning)
 
 == Provisioning (Teams Toolkit)
 
-`teamsapp.yml` defines the lifecycle. `teamsapp provision --env dev` performs:
+`teamsapp.yml` defines the lifecycle. `teamsapp provision --env prod` performs:
 
 . `aadApp/create` — AAD app registration ("Zapp.ie", single-tenant sign-in
   audience, generates a client secret)
@@ -57,9 +57,9 @@
 [source,bash]
 ----
 teamsapp auth login azure
-teamsapp provision --env dev
-teamsapp deploy --env dev      # npm install + build, then zipDeploy to the App Service
-teamsapp preview --env dev
+teamsapp provision --env prod
+teamsapp deploy --env prod      # npm install + build, then zipDeploy to the App Service
+teamsapp preview --env prod
 ----
 
 The bot runs under iisnode on Windows App Service; `web.config` rewrites
@@ -84,27 +84,22 @@ ignored `.zaplie-data` fallback.
 
 === Web tabs (GitHub Actions)
 
-`.github/workflows/Azure_App_Service_zaplie-test.yml` and
-`Azure_App_Service_zaplie-prod.yml` trigger on push to `main` (and manually):
+`.github/workflows/Azure_App_Service_zaplie-prod.yml` triggers on push to
+`main` (and manually):
 
 . Build job (windows-latest, Node 24): `cd tabs && npm install && npm run build`
   (`CI: false`), scan the sources and the built bundle for LNbits admin
   credentials, drop the mutable backend JSON stores, upload the `tabs` artifact
 . Deploy job (ubuntu-latest): `azure/webapps-deploy@v3`
 
-The two workflows authenticate differently today:
+The workflow authenticates with a publish profile — the
+`AZURE_WEBAPP_PUBLISH_PROFILE` secret against app `zaplie-prod-webapp`, with no
+`azure/login` step. Migrating production onto federated OIDC (`azure/login`
+with `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`) is
+pending; until then the publish profile is a long-lived secret and must be
+re-downloaded whenever it is reset in Azure.
 
-Test:: Deploys with federated OIDC — `azure/login` using the repository
-secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`
-(`id-token: write`), then ensures a deployment slot exists (`pr-<number>` for
-pull requests, else `testing`) on app `zaplie-dev` before deploying to it.
-Prod:: Still deploys with a publish profile — the `AZURE_WEBAPP_PUBLISH_PROFILE`
-secret against app `zaplie-prod-webapp`, with no `azure/login` step. Migrating
-production onto the same federated OIDC credential is pending; until then the
-publish profile is a long-lived secret and must be re-downloaded whenever it is
-reset in Azure.
-
-Note: neither workflow has a bot job — CI deploys only the portal, and it
+Note: the workflow has no bot job — CI deploys only the portal, and it
 deploys the whole portal: the React build *and* the Express backend under
 `tabs/backend`. The portal App Service must therefore use the startup command
 `node backend/server.js` (with `SCM_DO_BUILD_DURING_DEPLOYMENT=false`, since
@@ -291,15 +286,15 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | Bot, Portal backend
 
 | `APPLICATIONINSIGHTS_CONNECTION_STRING`
-| Connection string of the environment's Application Insights (`appi-zaplie`
-  in `ka-zaplie-prod`, `appi-zaplie-test` in `ka-zaplie-test`). The bot sends
+| Connection string of the Application Insights `appi-zaplie` in
+  `ka-zaplie-prod`. The bot sends
   its AgentActivity events (agent-pulse) there for the Agents Portal; unset,
   it emits nothing. Set by `infra/azure.bicep`; see <<Telemetry>>
 | Bot
 
 | `AGENT_ID`
-| The Agents Portal id this deployment reports as: `zaplie` in production,
-  `zaplie-test` in test (default `zaplie`). Set by `infra/azure.bicep` from
+| The Agents Portal id this deployment reports as: `zaplie` (the default).
+  Set by `infra/azure.bicep` from
   its `agentId` parameter
 | Bot
 
@@ -324,7 +319,7 @@ portal has no references to `REACT_APP_LNBITS_PASSWORD` or
 The bot reports what it does to the
 https://agents.knowall.ai[Agents Portal] as `AgentActivity` custom events,
 through the https://github.com/knowall-ai/agent-pulse[agent-pulse] library
-(`src/services/pulse.ts`). Each environment has its own workspace-based
+(`src/services/pulse.ts`). Production has a workspace-based
 Application Insights, tagged `agent=<id>` so the portal finds it:
 
 [cols="1,1,2"]
@@ -334,17 +329,12 @@ Application Insights, tagged `agent=<id>` so the portal finds it:
 | `zaplie`
 | `ka-zaplie-prod`
 | `log-zaplie` (Log Analytics, 30 days), `appi-zaplie`
-
-| `zaplie-test`
-| `ka-zaplie-test`
-| `log-zaplie-test` (Log Analytics, 30 days), `appi-zaplie-test`
 |===
 
 `infra/azure.bicep` declares both resources from its `agentId` parameter and
 sets `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` on the bot.
 `infra/azure.parameters.json` fills `agentId` from `AGENT_ID`, so
-`teamsapp provision` needs `AGENT_ID=zaplie` (production) or
-`AGENT_ID=zaplie-test` (test) in that environment's `env/.env.<env>` file. On an App
+`teamsapp provision` needs `AGENT_ID=zaplie` in `env/.env.prod`. On an App
 Service provisioned before that, set the two app settings by hand. In
 production the bot App Service is `zaplie-prod-bot` in `ka-zaplie-prod` (the
 Bot Service's messaging endpoint points at it):
@@ -356,9 +346,6 @@ CS=$(az monitor app-insights component show -g ka-zaplie-prod -a appi-zaplie \
 az webapp config appsettings set -g ka-zaplie-prod -n zaplie-prod-bot \
   --settings APPLICATIONINSIGHTS_CONNECTION_STRING="$CS" AGENT_ID=zaplie
 ----
-
-For test, use `ka-zaplie-test`, `appi-zaplie-test`, the test bot App Service
-and `AGENT_ID=zaplie-test`.
 
 Events carry fixed titles and subjects, the zap amount as a `sats`
 measurement and a SHA-256 of the upstream id — never a name, a zap message or
@@ -380,7 +367,7 @@ so a telemetry outage cannot fail a zap or a reply.
 
 == Day One
 
-Complete these once per new environment, right after the first deployment:
+Complete these once per new deployment, right after the first deployment:
 
 . *Assign the admin app role.* The role is declared in `aad.manifest.json`,
   but it only materialises on the app registration after `teamsapp provision`
@@ -411,6 +398,6 @@ Complete these once per new environment, right after the first deployment:
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
 into `manifest.template.json`, takes the version from `APP_VERSION` when set
 (otherwise the template version, with the patch auto-incremented for
-Test/Prod), and writes `appPackage/manifest.json` (gitignored). The manifest
+Prod), and writes `appPackage/manifest.json` (gitignored). The manifest
 declares the bot (personal/team/groupchat scopes with the four commands) and
 five static tabs (Feed, Users, Rewards, Wallet, Settings).
