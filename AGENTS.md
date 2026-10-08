@@ -135,7 +135,7 @@ npm start        # func start (requires Azure Functions Core Tools)
 ### Teams app (Teams Toolkit / TeamsFx CLI)
 
 ```bash
-teamsapp provision --env local   # or --env dev
+teamsapp provision --env local   # production: --env prod
 teamsapp deploy --env local
 teamsapp preview --env local
 ```
@@ -178,7 +178,7 @@ table):
   (`tabs/.env.development`). For the browser portal on getzapl.ie the build
   also takes `PUBLIC_URL=/portal` and `REACT_APP_API_BASE_URL` (see
   `tabs/src/services/appLocation.ts` and `docs/DEPLOYMENT.adoc`)
-- Environments live in `env/` (`.env.local`, `.env.dev`); `dotenv-flow` loads
+- Environments live in `env/` (`.env.local`, `.env.prod`; `.env.dev.example` is the template for the LNbits values); `dotenv-flow` loads
   them. `scripts/writeEnv.js` and `build.js` generate derived files
   (`.localConfigs`, `appPackage/manifest.json` — both gitignored).
 
