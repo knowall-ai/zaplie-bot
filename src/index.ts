@@ -2,7 +2,7 @@
 import express from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createHash, timingSafeEqual } from 'crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { getWebhookKeyHashes } from './services/fetchWebhookKeys';
 
 // Import required bot services.
@@ -146,17 +146,11 @@ server.post('/api/v1/rewards', async (req, res) => {
   }
 
   // A reward request carries no delivery id, so each request is its own
-  // activity: the event's fields plus the time it arrived.
-  let requestKey = `reward:${Date.now()}`;
+  // activity with a random id: two identical requests in the same
+  // millisecond must still count as two.
+  const requestKey = `reward:${randomUUID()}`;
   try {
     const request = parseRewardRequest(req.body);
-    requestKey = [
-      request.source,
-      request.repo,
-      request.eventType,
-      request.recipientId,
-      Date.now(),
-    ].join(':');
     // This draft endpoint is deliberately restricted to GitHub. Generic flow
     // identities need a separate provider-aware contract before they can pay.
     await assertRepoConnected(request.repo);

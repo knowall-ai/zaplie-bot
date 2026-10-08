@@ -345,15 +345,20 @@ sets `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` on the bot.
 `infra/azure.parameters.json` fills `agentId` from `AGENT_ID`, so
 `teamsapp provision` needs `AGENT_ID=zaplie` (production) or
 `AGENT_ID=zaplie-test` (test) in that environment's `env/.env.<env>` file. On an App
-Service provisioned before that, set the two app settings by hand:
+Service provisioned before that, set the two app settings by hand. In
+production the bot App Service is `zaplie-prod-bot` in `ka-zaplie-prod` (the
+Bot Service's messaging endpoint points at it):
 
 [source,bash]
 ----
-CS=$(az monitor app-insights component show -g ka-zaplie-test -a appi-zaplie-test \
+CS=$(az monitor app-insights component show -g ka-zaplie-prod -a appi-zaplie \
   --query connectionString -o tsv)
-az webapp config appsettings set -g <rg> -n <bot app service> \
-  --settings APPLICATIONINSIGHTS_CONNECTION_STRING="$CS" AGENT_ID=zaplie-test
+az webapp config appsettings set -g ka-zaplie-prod -n zaplie-prod-bot \
+  --settings APPLICATIONINSIGHTS_CONNECTION_STRING="$CS" AGENT_ID=zaplie
 ----
+
+For test, use `ka-zaplie-test`, `appi-zaplie-test`, the test bot App Service
+and `AGENT_ID=zaplie-test`.
 
 Events carry fixed titles and subjects, the zap amount as a `sats`
 measurement and a SHA-256 of the upstream id — never a name, a zap message or
