@@ -167,7 +167,7 @@ table):
   expire: both are lost on restart and not multi-instance safe, and an LNbits
   call that never settles leaves that card locked until the bot restarts.
 - The GitHub Actions workflows (`.github/workflows/`) build only `tabs/` and
-  deploy to the `zappie-dev` App Service (slot per PR / `testing`); the bot is
+  deploy to the `zaplie-prod-webapp` App Service on push to `main`; the bot is
   deployed via `teamsapp deploy`, not CI.
 
 ## Documentation

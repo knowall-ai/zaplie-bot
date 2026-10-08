@@ -13,7 +13,7 @@
 | Developer machine with a dev tunnel; bot registered via `botFramework/create`
 
 | prod
-| `env/.env.prod` (untracked) + `teamsapp.yml`; GitHub environment `Prod`
+| `env/.env.prod` (untracked) + `teamsapp.yml`
 | Production in Azure (resource group `ka-zaplie-prod`: bot `zaplie-prod-bot`, portal `zaplie-prod-webapp`)
 |===
 
