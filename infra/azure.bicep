@@ -24,6 +24,38 @@ param aadAppOauthAuthorityHost string
 @secure()
 param aadAppClientSecret string
 
+@description('The agent id the Agents Portal knows this deployment by: zaplie for production, zaplie-test for test. Tags the telemetry resources and is the AGENT_ID the bot stamps on every AgentActivity event.')
+param agentId string = 'zaplie'
+
+// Telemetry: AgentActivity events (agent-pulse) land in this workspace-based
+// Application Insights. The Agents Portal finds the workspace by its agent tag.
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: 'log-${agentId}'
+  location: location
+  tags: {
+    agent: agentId
+  }
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: 'appi-${agentId}'
+  location: location
+  kind: 'web'
+  tags: {
+    agent: agentId
+  }
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+  }
+}
+
 // Compute resources for your Web App
 resource serverfarm 'Microsoft.Web/serverfarms@2021-02-01' = {
   kind: 'app'
@@ -77,6 +109,9 @@ resource webAppSettings 'Microsoft.Web/sites/config@2021-02-01' = {
     // D:\home on older Windows stamps, C:\home on newer ones and /home on
     // Linux - a hard-coded drive letter breaks when the app moves stamp.
     ZAPLIE_DATA_DIR: '%HOME%\\data\\zaplie'
+    // agent-pulse: without the connection string the bot emits nothing.
+    APPLICATIONINSIGHTS_CONNECTION_STRING: appInsights.properties.ConnectionString
+    AGENT_ID: agentId
   }
 }
 

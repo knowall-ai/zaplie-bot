@@ -28,6 +28,7 @@ import {
   payReward,
   RewardError,
 } from './services/rewardsService';
+import { recordRewardOutcome } from './services/pulse';
 
 // Create adapter.
 // See https://aka.ms/about-bot-adapter to learn more about adapters.
@@ -144,14 +145,25 @@ server.post('/api/v1/rewards', async (req, res) => {
     return;
   }
 
+  // A reward request carries no delivery id, so each request is its own
+  // activity: the event's fields plus the time it arrived.
+  let requestKey = `reward:${Date.now()}`;
   try {
     const request = parseRewardRequest(req.body);
+    requestKey = [
+      request.source,
+      request.repo,
+      request.eventType,
+      request.recipientId,
+      Date.now(),
+    ].join(':');
     // This draft endpoint is deliberately restricted to GitHub. Generic flow
     // identities need a separate provider-aware contract before they can pay.
     await assertRepoConnected(request.repo);
     const amountSats = await resolveAmountSats(request);
     const result = await payReward({ ...request, amountSats });
     if ('pending' in result) {
+      recordRewardOutcome({ status: 'pending', requestKey, sats: amountSats });
       res.status(202).json({
         status: 'pending',
         recipient: request.recipient,
@@ -159,6 +171,11 @@ server.post('/api/v1/rewards', async (req, res) => {
       });
       return;
     }
+    recordRewardOutcome({
+      status: 'paid',
+      paymentHash: result.paymentHash,
+      sats: amountSats,
+    });
     res.status(200).json({
       status: 'paid',
       paymentHash: result.paymentHash,
@@ -172,6 +189,7 @@ server.post('/api/v1/rewards', async (req, res) => {
     }
     // Internals (env names, LNbits ids) must not leak into Logic App run history.
     console.error('rewards payment failed:', error);
+    recordRewardOutcome({ status: 'failed', requestKey });
     res.status(500).json({ error: 'internal error' });
   }
 });

@@ -33,6 +33,7 @@
   "dependencies": {
     "@azure/ai-projects": "^2.4.0",
     "@azure/identity": "^4.4.1",
+    "@knowall-ai/agent-pulse": "github:knowall-ai/agent-pulse#v0.1.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "botbuilder": "^4.23.3",
     "botbuilder-dialogs": "^4.23.3",

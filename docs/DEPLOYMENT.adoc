@@ -290,6 +290,19 @@ created. Must be a positive integer; a failed grant is logged, not retried
   both — a component that does not read it yet simply ignores it.
 | Bot, Portal backend
 
+| `APPLICATIONINSIGHTS_CONNECTION_STRING`
+| Connection string of the environment's Application Insights (`appi-zaplie`
+  in `ka-zaplie-prod`, `appi-zaplie-test` in `ka-zaplie-test`). The bot sends
+  its AgentActivity events (agent-pulse) there for the Agents Portal; unset,
+  it emits nothing. Set by `infra/azure.bicep`; see <<Telemetry>>
+| Bot
+
+| `AGENT_ID`
+| The Agents Portal id this deployment reports as: `zaplie` in production,
+  `zaplie-test` in test (default `zaplie`). Set by `infra/azure.bicep` from
+  its `agentId` parameter
+| Bot
+
 | `SCM_DO_BUILD_DURING_DEPLOYMENT`
 | Must be `false`: CI ships a prebuilt artifact and Oryx must not rebuild it
 | Portal (App Service setting)
@@ -304,6 +317,61 @@ never in tracked files.
 `REACT_APP_*` is a public compile-time namespace, not a secret store. The
 portal has no references to `REACT_APP_LNBITS_PASSWORD` or
 `REACT_APP_LNBITS_ADMINKEY`; build workflows must not supply them.
+
+[[Telemetry]]
+== Telemetry (Agents Portal)
+
+The bot reports what it does to the
+https://agents.knowall.ai[Agents Portal] as `AgentActivity` custom events,
+through the https://github.com/knowall-ai/agent-pulse[agent-pulse] library
+(`src/services/pulse.ts`). Each environment has its own workspace-based
+Application Insights, tagged `agent=<id>` so the portal finds it:
+
+[cols="1,1,2"]
+|===
+| Agent id | Resource group | Resources
+
+| `zaplie`
+| `ka-zaplie-prod`
+| `log-zaplie` (Log Analytics, 30 days), `appi-zaplie`
+
+| `zaplie-test`
+| `ka-zaplie-test`
+| `log-zaplie-test` (Log Analytics, 30 days), `appi-zaplie-test`
+|===
+
+`infra/azure.bicep` declares both resources from its `agentId` parameter and
+sets `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` on the bot.
+`infra/azure.parameters.json` fills `agentId` from `AGENT_ID`, so
+`teamsapp provision` needs `AGENT_ID=zaplie` (production) or
+`AGENT_ID=zaplie-test` (test) in that environment's `env/.env.<env>` file. On an App
+Service provisioned before that, set the two app settings by hand:
+
+[source,bash]
+----
+CS=$(az monitor app-insights component show -g ka-zaplie-test -a appi-zaplie-test \
+  --query connectionString -o tsv)
+az webapp config appsettings set -g <rg> -n <bot app service> \
+  --settings APPLICATIONINSIGHTS_CONNECTION_STRING="$CS" AGENT_ID=zaplie-test
+----
+
+Events carry fixed titles and subjects, the zap amount as a `sats`
+measurement and a SHA-256 of the upstream id — never a name, a zap message or
+any other free text:
+
+[cols="1,1,3"]
+|===
+| Type | Level | When
+
+| `zap.sent` | success | A zap-card recipient is paid (subject `teams`) or an automation reward is paid (subject `automation`)
+| `zap.failed` | error / warning | A zap fails before payment (error), its outcome cannot be confirmed (warning), or an automation reward fails (error)
+| `zap.queued` | info | An automation reward waits for the recipient to connect a wallet
+| `chat.answered` | success / info | A command ran (subject is the command), the assistant replied, or the command guide was shown
+| `chat.failed` | error / warning | A message could not be handled (error) or was turned down with a reason (warning); also the adapter's turn error handler
+|===
+
+Telemetry is best effort: the library never throws and every call is wrapped,
+so a telemetry outage cannot fail a zap or a reply.
 
 == Day One
 

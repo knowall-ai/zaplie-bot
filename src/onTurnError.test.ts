@@ -2,8 +2,36 @@
 
 import { onTurnErrorHandler } from './onTurnError';
 import { GENERIC_ERROR_MESSAGE } from './messages';
-import { afterEach, describe, expect, jest, test } from '@jest/globals';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 import { TurnContext } from 'botbuilder';
+import { pulseSettled, resetPulseForTests } from './services/pulse';
+
+// agent-pulse: a stand-in library, loaded through the wrapper's test hook
+// (jest cannot run the real ES import), so the events can be asserted.
+const mockPulseEmit = jest.fn();
+const usePulseStandIn = (): void => {
+  process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = 'InstrumentationKey=test';
+  resetPulseForTests(async () => ({
+    createPulse: () => ({
+      emit: async (event: unknown) => {
+        mockPulseEmit(event);
+      },
+      flush: async () => undefined,
+    }),
+    activityIdFrom: (id: string) => `sha256:${id}`,
+  }));
+};
+const dropPulseStandIn = (): void => {
+  delete process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+  resetPulseForTests();
+};
 
 const makeContext = () => {
   const sendActivity = jest
@@ -86,5 +114,39 @@ describe('onTurnErrorHandler on a proactive turn', () => {
       '\n [onTurnError] unhandled error:',
       error,
     );
+  });
+});
+
+describe('onTurnErrorHandler telemetry', () => {
+  beforeEach(usePulseStandIn);
+
+  afterEach(() => {
+    dropPulseStandIn();
+    mockPulseEmit.mockReset();
+    jest.restoreAllMocks();
+  });
+
+  test('records chat.failed and still apologises when telemetry throws', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { context, sendActivity } = makeContext();
+
+    await onTurnErrorHandler(context, new Error('boom'));
+    await pulseSettled();
+    expect(mockPulseEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activityType: 'chat.failed',
+        level: 'error',
+        subject: 'turn-error',
+      }),
+    );
+
+    mockPulseEmit.mockImplementation(() => {
+      throw new Error('telemetry down');
+    });
+    await onTurnErrorHandler(context, new Error('boom'));
+    await pulseSettled();
+    expect(sendActivity).toHaveBeenCalledTimes(2);
+    expect(sendActivity).toHaveBeenLastCalledWith(GENERIC_ERROR_MESSAGE);
   });
 });
