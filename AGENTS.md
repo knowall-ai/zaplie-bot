@@ -223,7 +223,7 @@ table):
   (`bot-reward-budget.json`). The Logic App template under `docs/automation/`
   is legacy.
 - The GitHub Actions workflows (`.github/workflows/`) build only `tabs/` and
-  deploy to the `zappie-dev` App Service (slot per PR / `testing`); the bot is
+  deploy to the `zaplie-prod-webapp` App Service on push to `main`; the bot is
   deployed via `teamsapp deploy`, not CI.
 - `getUsers` pages the LNbits Users API (`sortby=id`, 100 per request, until
   `total` is reached or a page comes back empty). LNbits 1.6 returns ten
