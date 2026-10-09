@@ -182,7 +182,10 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Variable | Description | Component
 
 | `BOT_ID`, `BOT_PASSWORD`, `BOT_DOMAIN`
-| Bot Framework registration credentials and public domain
+| Bot Framework registration credentials and public domain. `BOT_ID` (the
+  Entra application id, a GUID) and `BOT_PASSWORD` are required: with an
+  empty app id botbuilder would skip inbound JWT validation, so the bot
+  refuses to start without them, as it does without `AAD_APP_TENANT_ID`
 | Bot
 
 | `AAD_APP_CLIENT_ID`, `AAD_APP_CLIENT_SECRET`, `AAD_APP_TENANT_ID`, `AAD_APP_OAUTH_AUTHORITY_HOST`

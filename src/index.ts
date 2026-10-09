@@ -18,7 +18,9 @@ import {
 // This bot's main dialog.
 import { TeamsBot } from './teamsBot';
 import { onTurnErrorHandler } from './onTurnError';
-import config from './config';
+// Imported for its side effect: it logs the (redacted) configuration at start-up.
+import './config';
+import { resolveBotCredentials } from './services/botCredentials';
 import { UserService } from './services/userService';
 import { FetchUserMiddleware } from './services/fetchUserMiddleware';
 import {
@@ -32,18 +34,15 @@ import { recordRewardOutcome } from './services/pulse';
 
 // Create adapter.
 // See https://aka.ms/about-bot-adapter to learn more about adapters.
-const tenantId = config.tenantId;
-if (!tenantId) {
-  throw new Error(
-    'AAD_APP_TENANT_ID is not set. A SingleTenant bot registration cannot authenticate without it.',
-  );
-}
+// Fails closed: an empty app id would make botbuilder skip inbound JWT
+// validation, so a missing BOT_ID/BOT_PASSWORD/tenant stops start-up (#440).
+const botCredentials = resolveBotCredentials();
 
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
-  MicrosoftAppId: config.botId,
-  MicrosoftAppPassword: config.botPassword,
+  MicrosoftAppId: botCredentials.appId,
+  MicrosoftAppPassword: botCredentials.appPassword,
   MicrosoftAppType: 'SingleTenant',
-  MicrosoftAppTenantId: tenantId,
+  MicrosoftAppTenantId: botCredentials.tenantId,
 });
 
 const botFrameworkAuthentication = new ConfigurationBotFrameworkAuthentication(
