@@ -188,3 +188,10 @@ production credentials at all times. Never serialise a `Wallet` object into
 LNbits payment `extra`, logs or Teams messages; project it with
 `toPaymentExtraWallet` from `src/services/paymentExtra.ts`. Vulnerability
 reports: see `SECURITY.md`.
+
+Any id that reaches an LNbits URL (user, wallet, invoice) goes through
+`encodeURIComponent`, and ids from a Teams card or other client input are
+checked against the plain-id pattern first (`normalizeRecipientIds` in
+`src/commands/zapRecipient.ts`, `USER_ID_PATTERN` in the portal gateway).
+Those calls carry the LNbits admin token, so a raw `../` would let a client
+steer them to any LNbits endpoint.

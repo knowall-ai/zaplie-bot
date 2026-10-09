@@ -279,7 +279,7 @@ const getUserWallets = async (
     const { userName, password } = lnbitsCredentials();
     const accessToken = await getAccessToken(userName, password);
     const response = await fetch(
-      `${lnbitsUrl()}/users/api/v1/user/${userId}/wallet`,
+      `${lnbitsUrl()}/users/api/v1/user/${encodeURIComponent(userId)}/wallet`,
       {
         method: 'GET',
         headers: {
@@ -432,7 +432,9 @@ const getUser = async (
   if (!userId) {
     return null;
   }
-  const response = await adminFetch(`/users/api/v1/user/${userId}`);
+  const response = await adminFetch(
+    `/users/api/v1/user/${encodeURIComponent(userId)}`,
+  );
   if (response.status === 404) {
     return null;
   }
@@ -456,10 +458,13 @@ const createWallet = async (
 ): Promise<Wallet> => {
   // Admin creates the wallet under the target user. POST /api/v1/wallet ignores
   // user_id and creates under the caller, so the per-user route is required.
-  const response = await adminFetch(`/users/api/v1/user/${userId}/wallet`, {
-    method: 'POST',
-    body: JSON.stringify({ name: walletName }),
-  });
+  const response = await adminFetch(
+    `/users/api/v1/user/${encodeURIComponent(userId)}/wallet`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ name: walletName }),
+    },
+  );
   if (!response.ok) {
     throw new Error(`Error creating wallet (status: ${response.status})`);
   }
@@ -482,13 +487,16 @@ const createWallet = async (
 const getWalletDetails = async (inKey: string, walletId: string) => {
   console.log(`getWalletDetails starting ... (walletId: ${walletId}))`);
   try {
-    const response = await fetch(`${lnbitsUrl()}/api/v1/wallets/${walletId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': inKey,
+    const response = await fetch(
+      `${lnbitsUrl()}/api/v1/wallets/${encodeURIComponent(walletId)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': inKey,
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       throw new Error(
@@ -682,7 +690,7 @@ const getWalletPayLinks = async (inKey: string, walletId: string) => {
 
   try {
     const response = await fetch(
-      `${lnbitsUrl()}/lnurlp/api/v1/links?all_wallets=false&wallet=${walletId}`,
+      `${lnbitsUrl()}/lnurlp/api/v1/links?all_wallets=false&wallet=${encodeURIComponent(walletId)}`,
       {
         method: 'GET',
         headers: {
@@ -720,7 +728,7 @@ const getWalletById = async (
     const { userName, password } = lnbitsCredentials();
     const accessToken = await getAccessToken(userName, password);
     const response = await fetch(
-      `${lnbitsUrl()}/users/api/v1/user/${userId}/wallet`,
+      `${lnbitsUrl()}/users/api/v1/user/${encodeURIComponent(userId)}/wallet`,
       {
         method: 'GET',
         headers: {
@@ -855,7 +863,7 @@ const getPaymentsSince = async (lnKey: string, timestamp: number) => {
     }
 
     const response = await fetch(
-      `${lnbitsUrl()}/api/v1/payments?wallet=${walletId}&limit=1`,
+      `${lnbitsUrl()}/api/v1/payments?wallet=${encodeURIComponent(walletId)}&limit=1`,
       {
         method: 'GET',
         headers: {
@@ -970,7 +978,7 @@ const getWalletIdByUserId = async (adminKey: string, userId: string) => {
 
   try {
     const response = await fetch(
-      `${lnbitsUrl()}/api/v1/wallets?user_id=${userId}`,
+      `${lnbitsUrl()}/api/v1/wallets?user_id=${encodeURIComponent(userId)}`,
       {
         method: 'GET',
         headers: {

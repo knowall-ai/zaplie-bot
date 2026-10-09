@@ -242,6 +242,25 @@ describe('processZapRecipient', () => {
     expect(normalizeRecipientIds({ recipient: 'alice' })).toEqual([]);
   });
 
+  test('drops recipient ids that are not plain LNbits ids (#441)', () => {
+    expect(
+      normalizeRecipientIds([
+        '0123abcd4567ef89',
+        '../../../../api/v1/wallet?',
+        'a/b',
+        'x?all_wallets=true',
+        '..%2F..%2Fapi',
+        'with space',
+        'a'.repeat(129),
+        'user_1-ok',
+      ]),
+    ).toEqual(['0123abcd4567ef89', 'user_1-ok']);
+    expect(normalizeRecipientIds('alice,../../x?,bob')).toEqual([
+      'alice',
+      'bob',
+    ]);
+  });
+
   test('a card update failure after payment does not re-enable the payment', async () => {
     await run(ledger);
 
