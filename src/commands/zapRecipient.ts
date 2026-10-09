@@ -39,6 +39,12 @@ export const validateSelfZap = (
   return sameUserId || sameAadObjectId ? 'you cannot zap yourself' : null;
 };
 
+// LNbits user ids are plain tokens. The card's recipient ids are client
+// controlled and end up in superuser LNbits paths, so anything else (a "/",
+// "?", "%" or "..") is dropped here rather than trusted (#441). Same shape as
+// the portal gateway's USER_ID_PATTERN (tabs/backend/lnbitsGatewayService.js).
+const LNBITS_USER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
 export const normalizeRecipientIds = (rawReceiverIds: unknown): string[] => {
   const submittedReceiverIds = Array.isArray(rawReceiverIds)
     ? rawReceiverIds
@@ -51,7 +57,7 @@ export const normalizeRecipientIds = (rawReceiverIds: unknown): string[] => {
       submittedReceiverIds
         .filter((id): id is string => typeof id === 'string')
         .map(id => id.trim())
-        .filter(id => id.length > 0),
+        .filter(id => LNBITS_USER_ID_PATTERN.test(id)),
     ),
   );
 };

@@ -740,3 +740,78 @@ describe('payment reads', () => {
     expect(String(error)).toContain('500');
   });
 });
+
+// A card recipient id is client-controlled. Interpolated raw into a superuser
+// path, "../" segments are resolved by the URL parser and the request escapes
+// /users/api/v1/user/<id> to any LNbits endpoint (#441).
+describe('untrusted user ids stay inside their path segment', () => {
+  const traversalIds = [
+    '../../../../api/v1/wallet?',
+    '../../../../admin/api/v1/settings?',
+    'a/../../b',
+    'x?all_wallets=true',
+  ];
+
+  const lnbitsPaths = () =>
+    fetchMock.mock.calls
+      .map(call => new URL(String(call[0])))
+      .filter(url => url.pathname !== '/api/v1/auth')
+      .map(url => url.pathname + url.search);
+
+  const respondWith = (body: unknown) =>
+    fetchMock.mockImplementation(async input =>
+      String(input).endsWith('/api/v1/auth')
+        ? jsonResponse({ access_token: 'tok-1' })
+        : jsonResponse(body),
+    );
+
+  const userWalletPath = (id: string) =>
+    `/users/api/v1/user/${encodeURIComponent(id)}/wallet`;
+
+  test.each(traversalIds)('getUser keeps %j in its segment', async id => {
+    respondWith({ id: 'u-1' });
+    await service.getUser('admin-key', id).catch(() => undefined);
+    const paths = lnbitsPaths();
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      expect(
+        path.startsWith(`/users/api/v1/user/${encodeURIComponent(id)}`),
+      ).toBe(true);
+    }
+  });
+
+  test.each(traversalIds)(
+    'getUserWallets keeps %j in its segment',
+    async id => {
+      respondWith([]);
+      await service.getUserWallets('admin-key', id).catch(() => undefined);
+      expect(lnbitsPaths()).toEqual([userWalletPath(id)]);
+    },
+  );
+
+  test.each(traversalIds)('getWalletById keeps %j in its segment', async id => {
+    respondWith([]);
+    await service.getWalletById(id, 'w-1').catch(() => undefined);
+    expect(lnbitsPaths()).toEqual([userWalletPath(id)]);
+  });
+
+  test.each(traversalIds)('createWallet keeps %j in its segment', async id => {
+    respondWith({
+      id: 'w-1',
+      name: 'Allowance',
+      adminkey: 'a',
+      inkey: 'i',
+      user: 'u-1',
+    });
+    await service
+      .createWallet('admin-key', id, 'Allowance')
+      .catch(() => undefined);
+    const paths = lnbitsPaths();
+    // The POST carries the untrusted id; the follow-up read uses the user id
+    // LNbits returned for the new wallet, which is not client-controlled.
+    expect(paths[0]).toBe(userWalletPath(id));
+    for (const path of paths) {
+      expect(path.startsWith('/users/api/v1/user/')).toBe(true);
+    }
+  });
+});
