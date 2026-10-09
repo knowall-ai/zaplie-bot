@@ -34,8 +34,9 @@ import { recordRewardOutcome } from './services/pulse';
 
 // Create adapter.
 // See https://aka.ms/about-bot-adapter to learn more about adapters.
-// Fails closed: an empty app id would make botbuilder skip inbound JWT
-// validation, so a missing BOT_ID/BOT_PASSWORD/tenant stops start-up (#440).
+// The SingleTenant factory below already rejects blank credentials; the
+// resolver states that requirement explicitly, with clear errors, and also
+// rejects a BOT_ID that is not a GUID (#440).
 const botCredentials = resolveBotCredentials();
 
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({

@@ -1,10 +1,12 @@
 // Single start-up check for the bot's Bot Framework identity.
 //
-// botbuilder treats an empty MicrosoftAppId as "authentication disabled": the
-// adapter then accepts activities without validating their JWT, including a
-// forged one carrying an attacker-chosen serviceUrl. Real sats move through
-// this bot, so a misdeployment that drops BOT_ID or BOT_PASSWORD must stop the
-// process at start-up instead of quietly opening /api/messages (issue #440).
+// botbuilder's SingleTenant credential factory already refuses a blank app id,
+// tenant or password when it is constructed, so the bot cannot start
+// unauthenticated today. This check makes that requirement the application's
+// own rather than a side effect of a library internal (it holds if the app
+// type or botbuilder changes), gives an operator a clear error instead of a raw
+// AssertionError, and also rejects a BOT_ID that is not a GUID, which
+// botbuilder accepts (issue #440).
 
 export class BotCredentialsError extends Error {
   constructor(message: string) {
@@ -37,7 +39,7 @@ export const resolveBotCredentials = (
   }
   if (isBlank(BOT_ID)) {
     throw new BotCredentialsError(
-      'BOT_ID is not set. Without it botbuilder skips inbound JWT validation, so the bot refuses to start.',
+      'BOT_ID is not set. The bot cannot authenticate to Bot Framework without its application id, so it refuses to start.',
     );
   }
   if (!GUID_PATTERN.test(BOT_ID!.trim())) {
