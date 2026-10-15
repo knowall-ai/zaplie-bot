@@ -17,7 +17,7 @@ that keeps the voice and look consistent between clips.
 | `images/zaplie-gift.jpg` | Handing over a glowing orange bolt. |
 | `images/zaplie-celebrate.jpg` | Arms up in a shower of sparks. |
 | `images/zaplie-wave.jpg` | A friendly hello wave. |
-| `images/zaplie-electrified.jpg` | Electrified hair mode: crest glowing and buzzing with electricity. |
+| `images/zaplie-electrified.jpg` | Full electrified hair (rare, big moments): crest luminous and buzzing. Usually it is subtler. |
 | `prompts/images.md` | The exact prompts and commands behind `images/`. |
 | `prompts/video-*.txt` | The prompts for both videos. |
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
@@ -58,10 +58,18 @@ host them and downloads the file when it is ready (`--delivery uri`).
 > nameplate reading exactly ZAPLIE. There is exactly ONE Zaplie; he never splits,
 > duplicates or changes design.
 
-## Electrified hair (use sometimes)
+## Electrified hair
 
-When he's excited, celebrating or zapping, his crest can crackle with electricity.
-Add this to the shot, not to every prompt, so it stays a special moment:
+His crest reacts to his energy at two levels. Add a level to the shot, not to the
+character block.
+
+**Subtle (the usual).** Use it when he's excited or zapping:
+
+> His crest of orange wire hair glows a little brighter, with a few faint
+> flickering orange arcs between the strands and the odd spark at the tips.
+
+**Full electrified (rare).** Save it for big moments, such as a huge zap, a
+celebration or a finale. `images/zaplie-electrified.jpg` shows it:
 
 > His crest of wire hair goes intensely LUMINOUS, glowing bright neon Bitcoin
 > orange (#F7931A) from root to tip as if lit from inside, and BUZZES with
