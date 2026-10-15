@@ -399,14 +399,48 @@ so a telemetry outage cannot fail a zap or a reply.
 
 Complete these once per new environment, right after the first deployment:
 
-. *Assign the admin app role.* The role is declared in `aad.manifest.json`,
-  but it only materialises on the app registration after `teamsapp provision`
-  runs again (the `aadApp/update` step applies the manifest) — re-run it once
-  before looking for the role. Then, in Entra ID → Enterprise applications →
-  the Zaplie app → "Users and groups", assign the "Zaplie Administrator" app
-  role (value `Zaplie.Admin`) to at least one user. The portal's
-  org-configuration endpoints reject every write until a signed-in user
-  carries this role.
+. *Production's app registration is managed by hand. Read this first.* Do
+  not run `teamsapp provision` (or anything else that applies
+  `aad.manifest.json`) against the production Zaplie app. The manifest would
+  rename the app and replace its roles, redirect URIs and token settings with
+  the development values. Production's role ids also differ from the
+  manifest's, so applying it would drop the roles people hold. In
+  production, create and change roles in Entra directly (App registrations →
+  the Zaplie app → App roles), using the same values as the manifest
+  (`Zaplie.Admin`, `Zaplie.User`).
+. *Create the app roles.* The roles are declared in `aad.manifest.json`.
+  ** *Development and other provisioned environments:* they only materialise
+     on the app registration after `teamsapp provision` runs again (the
+     `aadApp/update` step applies the manifest), so re-run it once before
+     looking for them.
+  ** *Production:* create them by hand, as above. Don't provision.
+. *Assign the admin app role.* In Entra ID → Enterprise applications → the
+  Zaplie app → "Users and groups", assign the `Zaplie.Admin` role to at least
+  one user. The portal's org-configuration endpoints reject every write until
+  a signed-in user carries this role.
+. *Restrict who can sign in to the portal.* Portal authentication accepts any
+  account that can sign in to the tenant, guests included, and the portal is
+  reachable directly in a browser, not only through the Teams tabs. Teams app
+  availability (below) controls who can open the tabs; Entra controls who can
+  sign in at all. Apply both:
+  .. Grant tenant-wide admin consent first (App registrations → the Zaplie
+     app → API permissions → "Grant admin consent", which covers the
+     `User.Read` the portal requests). *Assignment required* turns off user
+     consent for the app, so without it an assigned user who has never
+     consented can't finish signing in
+     (https://learn.microsoft.com/en-us/entra/identity-platform/howto-restrict-your-app-to-a-set-of-users#update-the-app-to-require-user-assignment[Microsoft]).
+  .. In Enterprise applications → the Zaplie app → "Users and groups", assign
+     the `Zaplie.User` role (no admin rights) to everyone who should use
+     Zaplie, and `Zaplie.Admin` to the admins. Use the role, not "Default
+     Access": Entra refuses Default Access on an app that defines roles, and
+     the portal UI would otherwise offer only `Zaplie.Admin`.
+  .. Only then set Properties → *Assignment required* to *Yes*. Anyone not
+     assigned is refused at sign-in, except Global Administrators: Entra
+     does not apply the assignment requirement to them
+     (https://learn.microsoft.com/en-us/troubleshoot/entra/entra-id/app-integration/error-code-aadsts50105-user-not-assigned-role[AADSTS50105]).
+     Keep that role to a few trusted accounts, and test the gate with an
+     ordinary unassigned user, not an administrator.
+  .. Keep this list in step with the Teams app's availability (below).
 . *Prepare LNbits.* No extension is needed for provisioning: the bot creates
   users through the core Users API, which requires an LNbits admin account.
   Create the treasury wallet that funds automation rewards and copy its admin
