@@ -17,6 +17,7 @@ that keeps the voice and look consistent between clips.
 | `images/zaplie-gift.jpg` | Handing over a glowing orange bolt. |
 | `images/zaplie-celebrate.jpg` | Arms up in a shower of sparks. |
 | `images/zaplie-wave.jpg` | A friendly hello wave. |
+| `images/zaplie-electrified.jpg` | Electrified hair mode: crest glowing and buzzing with electricity. |
 | `prompts/images.md` | The exact prompts and commands behind `images/`. |
 | `prompts/video-*.txt` | The prompts for both videos. |
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
@@ -62,9 +63,12 @@ host them and downloads the file when it is ready (`--delivery uri`).
 When he's excited, celebrating or zapping, his crest can crackle with electricity.
 Add this to the shot, not to every prompt, so it stays a special moment:
 
-> His crest of orange wire hair crackles with electricity: small Bitcoin orange
-> (#F7931A) arcs and sparks jump between the strands and the tips glow white-hot,
-> as if the hair is charged.
+> His crest of wire hair goes intensely LUMINOUS, glowing bright neon Bitcoin
+> orange (#F7931A) from root to tip as if lit from inside, and BUZZES with
+> electricity: dense crackling orange arcs jumping between the strands, small
+> electric forks leaping off the tips, a fine glowing haze and a few flying
+> sparks. It still reads as his bushy crest, not fire, and its orange light
+> spills onto his dome, ear discs and visor rim.
 
 ## Voice block
 
