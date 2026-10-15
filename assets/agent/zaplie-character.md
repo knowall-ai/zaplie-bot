@@ -36,11 +36,15 @@ run prints:
 S=assets/agent/scripts/omni_video.py
 P=assets/agent/prompts
 python3 -I $S --prompt-file $P/video-club-part1.txt \
-  --ref assets/agent/references/zaplie-identity.jpg --out part1.mp4
+  --ref assets/agent/references/zaplie-identity.jpg --out part1.mp4 | tee part1.log
+ID=$(grep -o 'interaction: [^ ]*' part1.log | cut -d' ' -f2)
 python3 -I $S --prompt-file $P/video-club-part2-extend.txt \
   --ref assets/agent/references/zaplie-identity.jpg \
-  --previous <interaction id> --out club.mp4   # returns the full 20 s
+  --previous "$ID" --out club.mp4   # returns the full 20 s
 ```
+
+1080p and 4k videos are too big to return inline, so the script asks the API to
+host them and downloads the file when it is ready (`--delivery uri`).
 
 ## Character block
 
@@ -52,6 +56,15 @@ python3 -I $S --prompt-file $P/video-club-part2-extend.txt \
 > embossed glowing orange lightning-bolt zap icon on his chest above a brass
 > nameplate reading exactly ZAPLIE. There is exactly ONE Zaplie; he never splits,
 > duplicates or changes design.
+
+## Electrified hair (use sometimes)
+
+When he's excited, celebrating or zapping, his crest can crackle with electricity.
+Add this to the shot, not to every prompt, so it stays a special moment:
+
+> His crest of orange wire hair crackles with electricity: small Bitcoin orange
+> (#F7931A) arcs and sparks jump between the strands and the tips glow white-hot,
+> as if the hair is charged.
 
 ## Voice block
 

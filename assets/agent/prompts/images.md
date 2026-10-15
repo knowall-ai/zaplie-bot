@@ -6,27 +6,23 @@ skill from [knowall-ai/claude-plugins](https://github.com/knowall-ai/claude-plug
 `references/zaplie-identity.jpg` as the only reference. Each image costs money on
 the OpenAI account, so keep `--n` small.
 
+Copy this whole block into a shell; it defines every variable it uses. Set
+`SHOT` to one of the shot lines below, in double quotes so `$ZAP` expands.
+
 ```sh
 GEN=~/GitHub/claude-plugins/skills/gen-image/generate.py
+CHAR="EXACTLY the robot in the reference image, Zaplie: very dark scratched gunmetal with a cool blue-grey sheen, a smooth rounded dome head, a wide pill-shaped dark glass visor with two big round glowing Bitcoin orange (#F7931A) eyes, NO mouth (the metal below the visor is smooth and blank), big round headphone ear discs, a full bushy crest of fiery glowing orange wire strands running front to back on top of his head, an embossed glowing orange lightning-bolt zap icon on his chest above a brass nameplate reading exactly ZAPLIE. Same design, proportions and materials as the reference; there is exactly one Zaplie. Photoreal cinematic render, worn realistic metal, never plastic."
+NO="No other text, no logos, no Bitcoin symbol, no coins, no weapons, no hat."
+ZAP="bright Bitcoin orange (#F7931A) lightning with a white-hot core"
+SHOT="Profile picture: a centred head-and-shoulders portrait looking straight at the viewer, friendly, eyes bright. The head and mohawk fill most of the frame with a little space above the hair, the chest zap icon visible at the bottom edge so it crops well into a circle. Background: plain dark charcoal with a soft warm orange glow behind his head."
+
 python3 "$GEN" --model gpt-image-2 \
   --ref assets/agent/references/zaplie-identity.jpg \
   --size 1024x1024 --background opaque --quality high \
-  --out zaplie-profile.png --prompt "$CHAR <shot line> $NO"
+  --out zaplie-profile.png --prompt "$CHAR $SHOT $NO"
 ```
 
 Use `--size 1536x1024` for the hero, and `1024x1024` for everything else.
-
-`$CHAR`:
-
-> EXACTLY the robot in the reference image, Zaplie: very dark scratched gunmetal with a cool blue-grey sheen, a smooth rounded dome head, a wide pill-shaped dark glass visor with two big round glowing Bitcoin orange (#F7931A) eyes, NO mouth (the metal below the visor is smooth and blank), big round headphone ear discs, a full bushy crest of fiery glowing orange wire strands running front to back on top of his head, an embossed glowing orange lightning-bolt zap icon on his chest above a brass nameplate reading exactly ZAPLIE. Same design, proportions and materials as the reference; there is exactly one Zaplie. Photoreal cinematic render, worn realistic metal, never plastic.
-
-`$NO`:
-
-> No other text, no logos, no Bitcoin symbol, no coins, no weapons, no hat.
-
-`$ZAP` (inside the shot lines):
-
-> bright Bitcoin orange (#F7931A) lightning with a white-hot core
 
 Shot lines:
 
