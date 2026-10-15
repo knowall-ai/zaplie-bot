@@ -23,9 +23,10 @@ that keeps the voice and look consistent between clips.
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |
 | `video/zaplie-club.mp4` | 20 s: robot club, with his voice and catchphrases. |
+| `video/zaplie-explainer.mp4` | 20 s: he explains the power of the zap (gratitude, rewards, proof of work, real value, big or small). Approved look. |
 
-The videos were made from an earlier draft with a narrower mohawk; the approved
-look has the fuller crest in `references/zaplie-identity.jpg`.
+The funk and club videos were made from an earlier draft with a narrower mohawk;
+the explainer uses the approved look in `references/zaplie-identity.jpg`.
 
 ## Making a video
 
@@ -93,14 +94,17 @@ voltage? Bzzt!", "Zap for you! Everybody gets a zap!", "Zaplie out! Bzzt!"
 
 ## Face rules (put these FIRST in any prompt where he talks)
 
+The visor is sacred: it only ever shows his two round orange eyes. In still
+images he has no mouth. In videos where he talks, a simple mouth on the metal
+**below** the visor is fine; video models add one whenever a character speaks.
+
 > His face is a dark glass visor with exactly TWO separate round glowing orange
 > eyes and nothing else. The eyes can squint into happy arcs or widen, but always
 > stay two separate orange eyes on dark glass. The visor never turns into a
 > screen, never shows a drawn or cartoon face, never merges the eyes into a bar.
-> He has NO mouth: the metal below his visor is smooth, blank gunmetal in every
-> frame, even while he talks. His voice comes from his round ear discs, which
-> pulse orange on each word. NO robot anywhere in the scene has a mouth or a
-> screen face.
+> Nothing but the two eyes ever appears inside the visor. While he talks, a
+> simple mouth may move on the smooth metal BELOW the visor; it never appears
+> inside the visor glass. NO robot in the scene has a screen face.
 
 ## Music block
 
@@ -109,14 +113,17 @@ voltage? Bzzt!", "Zap for you! Everybody gets a zap!", "Zaplie out! Bzzt!"
 
 ## Lessons
 
-- Get the face right in the FIRST clip. Extensions continue whatever the opening
-  establishes: a faint smile line under the visor in the first 10 s came back in
-  every extension, however strict the extension prompt was.
-  `prompts/video-club-part1.txt` is saved exactly as used and let that line in;
-  for a new video, put the face rules at the top of the first prompt.
-- When he talks, the model tends to give him a mouth or merge his visor into a bar
-  or a screen. Put the face rules first, and keep robots with screen faces
-  (TV heads) out of any shot where he speaks: he once blended into one.
+- Get the face right in the FIRST clip: extensions continue whatever the opening
+  establishes. Check the stills of the first 10 s before paying to extend.
+- Whenever he talks on camera, the model gives him a mouth, however the prompt
+  is worded. Banning it outright made things worse: the eyes changed shape, and
+  once a mouth appeared inside the visor. So allow a mouth below the visor and
+  protect the visor instead.
+- Don't describe his eyes as pulsing "like a sound meter": the model turned them
+  into equaliser bars.
+- Keep robots with screen faces (TV heads) out of any shot where he speaks: he
+  once blended into one. Make other robots look clearly different from him
+  (for example silver and white with blue eyes), or they come out as copies.
 - Ask for an original groove, not a named song.
 - Omni costs about $0.10 per second at 720p. A 10 s extension also re-reads the
   earlier clip, so it costs about $1.10.
