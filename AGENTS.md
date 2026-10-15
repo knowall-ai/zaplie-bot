@@ -115,7 +115,7 @@ npm start        # func start (requires Azure Functions Core Tools)
 ### Teams app (Teams Toolkit / TeamsFx CLI)
 
 ```bash
-teamsapp provision --env local   # or --env dev
+teamsapp provision --env local   # production: --env prod
 teamsapp deploy --env local
 teamsapp preview --env local
 ```
@@ -151,7 +151,7 @@ table):
 - **Tabs**: `REACT_APP_LNBITS_NODE_URL`, `REACT_APP_AAD_CLIENT_ID`,
   `REACT_APP_TENANT_ID`, and related `REACT_APP_LNBITS_*` keys
   (`tabs/.env.development`)
-- Environments live in `env/` (`.env.local`, `.env.dev`); `dotenv-flow` loads
+- Environments live in `env/` (`.env.local`, `.env.prod`; `.env.dev.example` is the template for the LNbits values); `dotenv-flow` loads
   them. `scripts/writeEnv.js` and `build.js` generate derived files
   (`.localConfigs`, `appPackage/manifest.json` — both gitignored).
 
@@ -167,7 +167,7 @@ table):
   expire: both are lost on restart and not multi-instance safe, and an LNbits
   call that never settles leaves that card locked until the bot restarts.
 - The GitHub Actions workflows (`.github/workflows/`) build only `tabs/` and
-  deploy to the `zappie-dev` App Service (slot per PR / `testing`); the bot is
+  deploy to the `zaplie-prod-webapp` App Service on push to `main`; the bot is
   deployed via `teamsapp deploy`, not CI.
 
 ## Documentation
