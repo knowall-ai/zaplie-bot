@@ -9,16 +9,22 @@ that keeps the voice and look consistent between clips.
 
 | Path | What it is |
 |---|---|
-| `references/zaplie-identity.jpg` | The approved look (design M1). Pass it as an image reference. |
+| `references/zaplie-identity.jpg` | The approved look. Pass it as an image reference. |
 | `references/zaplie-voice-sample.m4a` | 10 s of the approved voice (with music under it), for tools that accept a voice sample. |
-| `references/original-zappie.jpg` | The original Zappie, where the orange hair and wire veins come from. |
-| `references/family-style-timmie.jpg` | The KnowAll agent family style (Timmie). |
-| `designs/zaplie-designs-grid.jpg` | Every design explored, with M1 marked as approved. |
-| `prompts/images.md` | The exact image prompts and commands behind the grid. |
+| `images/zaplie-hero.jpg` | Wide 3:2 hero, space on the left for a headline. |
+| `images/zaplie-profile.jpg` | Square profile picture; crops well into a circle. |
+| `images/zaplie-zapping.jpg` | Firing a zap from his fingertips. |
+| `images/zaplie-gift.jpg` | Handing over a glowing orange bolt. |
+| `images/zaplie-celebrate.jpg` | Arms up in a shower of sparks. |
+| `images/zaplie-wave.jpg` | A friendly hello wave. |
+| `prompts/images.md` | The exact prompts and commands behind `images/`. |
 | `prompts/video-*.txt` | The prompts for both videos. |
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |
 | `video/zaplie-club.mp4` | 20 s: robot club, with his voice and catchphrases. |
+
+The videos were made from an earlier draft with a narrower mohawk; the approved
+look has the fuller crest in `references/zaplie-identity.jpg`.
 
 ## Making a video
 
@@ -38,11 +44,14 @@ python3 -I $S --prompt-file $P/video-club-part2-extend.txt \
 
 ## Character block
 
-> Zaplie, a dark gunmetal robot with a rounded dome head, a wide dark visor with
-> two big round glowing orange eyes and no mouth, round headphone-style ear discs,
-> a tall fiery glowing orange mohawk of wire strands, an orange lightning-bolt zap
-> icon on his chest and a brass nameplate reading ZAPLIE. There is exactly ONE
-> Zaplie; he never splits, duplicates or changes design.
+> Zaplie: very dark scratched gunmetal with a cool blue-grey sheen, a smooth
+> rounded dome head, a wide pill-shaped dark glass visor with two big round
+> glowing Bitcoin orange (#F7931A) eyes, NO mouth (the metal below the visor is
+> smooth and blank), big round headphone ear discs, a full bushy crest of fiery
+> glowing orange wire strands running front to back on top of his head, an
+> embossed glowing orange lightning-bolt zap icon on his chest above a brass
+> nameplate reading exactly ZAPLIE. There is exactly ONE Zaplie; he never splits,
+> duplicates or changes design.
 
 ## Voice block
 
