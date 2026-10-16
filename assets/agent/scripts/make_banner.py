@@ -21,6 +21,7 @@ W, H = 1280, 640
 
 
 def background():
+    """Return the 1280x640 backdrop: the hero on the right, its left edge mirrored and blurred to fill the rest."""
     hero = Image.open(HERO).convert("RGB")
     scaled = hero.resize((round(hero.width * H / hero.height), H), Image.LANCZOS)
     left_w = W - scaled.width

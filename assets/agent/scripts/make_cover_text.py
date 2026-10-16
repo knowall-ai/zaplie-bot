@@ -39,6 +39,7 @@ TITLE, SMALL, STACK_TOP = "ZAPLIE", "TEAMMATES | AGENTS | CUSTOMERS", "INCENTIVI
 
 
 def find_font():
+    """Return the path of Calibri Bold, or Carlito Bold as a stand-in; $CALIBRI_BOLD overrides the search."""
     names = ["calibrib.ttf", "Calibri Bold.ttf", "Calibri-Bold.ttf", "Carlito-Bold.ttf"]
     if os.environ.get("CALIBRI_BOLD"):
         return os.environ["CALIBRI_BOLD"]
@@ -67,6 +68,7 @@ def ink(text, px, font_path, tracking=0.0):
 
 
 def main():
+    """Lay out the cover text, check its alignment rules, and save the transparent text layer."""
     font_path = find_font()
     print("font:", font_path)
     layer = Image.new("L", (W * S, H * S), 0)

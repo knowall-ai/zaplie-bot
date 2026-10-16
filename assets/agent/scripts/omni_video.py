@@ -20,6 +20,7 @@ class KeepKeyOnHost(urllib.request.HTTPRedirectHandler):
     """Follow redirects, but drop the API key when one leads to another host."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Build the redirected request as usual, without the API key if the host changes."""
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is not None and urlsplit(newurl).netloc != urlsplit(req.full_url).netloc:
             new.remove_header("X-goog-api-key")
