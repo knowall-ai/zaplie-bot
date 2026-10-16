@@ -20,30 +20,52 @@ that keeps the voice and look consistent between clips.
 | `images/zaplie-electrified-subtle.jpg` | Subtle electrified hair (the usual): the crest glows brighter with a gentle shimmer. |
 | `images/zaplie-electrified.jpg` | Full electrified hair (rare, big moments): crest luminous and buzzing. Usually it is subtler. |
 | `prompts/images.md` | The exact prompts and commands behind `images/`. |
-| `prompts/video-*.txt` | The prompts for both videos. |
+| `prompts/video-*.txt` | The prompts for the videos. |
+| `prompts/music-funk-bed.txt` | The Lyria prompt for the funk music bed. |
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
+| `scripts/lyria_music.py` | Generates a music clip with Lyria. |
+| `audio/zaplie-funk-bed.mp3` | 30 s of continuous 80s funk (Lyria, instrumental), for laying under videos. |
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |
 | `video/zaplie-club.mp4` | 20 s: robot club, with his voice and catchphrases. |
-| `video/zaplie-explainer.mp4` | 20 s: he explains the power of the zap (gratitude, rewards, proof of work, real value, big or small). Approved look. |
+| `video/zaplie-explainer.mp4` | 20 s: he explains the power of the zap (gratitude, rewards, proof of work, real value, big or small). Approved look; music added separately. |
 
 The funk and club videos were made from an earlier draft with a narrower mohawk;
 the explainer uses the approved look in `references/zaplie-identity.jpg`.
 
 ## Making a video
 
-The script reads the Gemini key from `~/.config/google/gemini_api_key` and never
-prints it. Generate a 10 s clip, then extend it with the interaction id the first
-run prints:
+Make the video **without music**, then lay the music under it. Video models drop
+music in and out under speech; a separately generated track can't. The scripts
+read the Gemini key from `~/.config/google/gemini_api_key` and never print it.
+
+1. Generate a 10 s clip whose prompt asks for no music (see
+   `prompts/video-explainer-part1.txt`), and check its stills before going on.
+2. Extend it with the interaction id the first run printed:
 
 ```sh
 S=assets/agent/scripts/omni_video.py
 P=assets/agent/prompts
-python3 -I $S --prompt-file $P/video-club-part1.txt \
+python3 -I $S --prompt-file $P/video-explainer-part1.txt \
   --ref assets/agent/references/zaplie-identity.jpg --out part1.mp4 | tee part1.log
 ID=$(grep -o 'interaction: [^ ]*' part1.log | cut -d' ' -f2)
-python3 -I $S --prompt-file $P/video-club-part2-extend.txt \
+python3 -I $S --prompt-file $P/video-explainer-part2-extend.txt \
   --ref assets/agent/references/zaplie-identity.jpg \
-  --previous "$ID" --out club.mp4   # returns the full 20 s
+  --previous "$ID" --out video.mp4   # returns the full 20 s
+```
+
+3. Reuse `audio/zaplie-funk-bed.mp3`, or make a new bed with
+   `python3 -I assets/agent/scripts/lyria_music.py lyria-3-clip-preview "$(cat $P/music-funk-bed.txt)" bed.mp3`.
+4. Mix it under his voice. The music is turned down 7 dB, dips further while he
+   speaks, and fades out over the last 1.5 s (change `20.01` and `st=18.5` for
+   other lengths). The picture is copied untouched:
+
+```sh
+ffmpeg -i video.mp4 -i assets/agent/audio/zaplie-funk-bed.mp3 -filter_complex \
+  "[1:a]aresample=48000,atrim=0:20.01,asetpts=PTS-STARTPTS,afade=t=in:d=0.3,afade=t=out:st=18.5:d=1.5,volume=-7dB[m];\
+   [0:a]aresample=48000,asplit=2[v][key];\
+   [m][key]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=350[md];\
+   [v][md]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
+  -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -movflags +faststart final.mp4
 ```
 
 1080p and 4k videos are too big to return inline, so the script asks the API to
@@ -67,11 +89,13 @@ character block.
 
 **Subtle (the usual).** Use it when he's excited or zapping. `images/zaplie-electrified-subtle.jpg` shows it:
 
-> His whole hair crest glows a brighter, more luminous Bitcoin orange (#F7931A)
-> from within, with a soft shimmering buzz of tiny glints running along the wire
-> strands, as if the hair is gently charged. No lightning bolts, no zigzags, no
-> sparks or bolts flying off his head; the effect stays inside the hair and
-> stays gentle.
+> His hair crest charges up with electricity: its glow builds to a more luminous
+> Bitcoin orange (#F7931A), and thin, fine, crackling orange arcs flicker and
+> dance between the wire strands, with tiny sparks fizzing at the tips (in
+> video, a soft electric crackle and buzz). It is clearly electricity, not just
+> a light switching on, but toned down: the arcs are small and stay INSIDE the
+> crest; nothing flies off his head, no big zigzag bolts, no haze cloud, and the
+> crest keeps its normal shape and size.
 
 **Full electrified (rare).** Save it for big moments, such as a huge zap, a
 celebration or a finale. `images/zaplie-electrified.jpg` shows it:
@@ -131,10 +155,19 @@ images he has no mouth. In videos where he talks, a simple mouth on the metal
   or ring, and don't let the eyes "widen": wide or surprised eyes came out as
   cartoon eyeballs with dark pupils.
 - Keep robots with screen faces (TV heads) out of any shot where he speaks: he
-  once blended into one. Make other robots look clearly different from him
-  (for example silver and white with blue eyes), or they come out as copies.
-- Ask for an original groove, not a named song, and say it plays continuously
-  from the first frame to the last: it once dropped out under his first lines.
-  Check by measuring the bass (below 150 Hz), which his voice barely touches.
+  once blended into one. Make other robots look clearly different from him, or they come out as
+  copies: the explainer's are smaller, hairless, with white eyes and no ear
+  discs or nameplate.
+- Even with the subtle wording, the charge-up still flared quite wildly at its
+  peak in the explainer. Next time, ask for it to build more slowly and stay
+  smaller.
+- Subtle hair needs both halves of the description: asking only for "no bolts"
+  made it just light up, and asking only for "arcs" sent bolts flying off his head.
+- Ask for an original groove, not a named song.
+- Music generated inside the video dropped out under his lines in three takes,
+  even when the prompt said it must play continuously. Generate the video
+  without music and mix in a Lyria track instead. To check a soundtrack, measure
+  the bass (below 150 Hz), which his voice barely touches: a music dropout shows
+  as a sudden fall of 15 dB or more.
 - Omni costs about $0.10 per second at 720p. A 10 s extension also re-reads the
   earlier clip, so it costs about $1.10.
