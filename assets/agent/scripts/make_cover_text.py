@@ -27,13 +27,13 @@ W, H = 1280, 640
 S = 4                                    # work at 4x for sub-pixel accuracy, then scale down
 
 # From the Photoshop cover (CoverImage.psd and the previous CoverImage.png), in 1x pixels.
-TITLE_LEFT, BASELINE = 179, 620          # left ink edge and baseline of the big title
+TITLE_LEFT, BASELINE = 44, 620           # left ink edge (left-aligned margin) and baseline of the big title
 TITLE_PX = 80                            # title and colon size (320 pt at 25% scale)
 SMALL_PX = 24 * 0.9838                   # small line size (24 pt at 98.4% scale)
 TRACKING = 25 / 1000                     # INCENTIVIZING letter spacing, in em
 COLON_GAP, STACK_GAP = 15, 13            # ink gaps: title to colon, colon to the stacked lines
 COLON_RAISE = 9                          # the colon's bottom sits this far above the baseline
-LINE_GAP = 2                             # gap between INCENTIVIZING and the small line
+LINE_GAP = 5                             # gap between INCENTIVIZING and the small line's capitals
 
 TITLE, SMALL, STACK_TOP = "ZAPLIE", "TEAMMATES | AGENTS | CUSTOMERS", "INCENTIVIZING"
 
