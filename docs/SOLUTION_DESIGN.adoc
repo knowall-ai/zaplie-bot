@@ -306,6 +306,12 @@ to `/login` on failure) — plus `/login`, `/auth-start`, `/auth-end`. Providers
   assistant's persona; both are visible read-only to non-admins
 |===
 
+The Feed's totals, activity chart, and transaction list share one cached zap
+activity query; the 7-, 30-, and 60-day list filters are applied client-side.
+Wallet transaction history uses cached activity pairing data and caches the
+signed-in user's history by wallet, so changing All/Sent/Received filters does
+not reload transactions.
+
 The reward label is persisted by the Express backend
 (`GET/POST /api/reward-name` → `data.json` under `ZAPLIE_DATA_DIR`) and consumed by both
 the tabs (`RewardNameContext`) and the bot (`src/services/fetchRewardsName.ts`).

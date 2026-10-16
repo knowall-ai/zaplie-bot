@@ -1,6 +1,10 @@
+import { queryOptions } from '@tanstack/react-query';
 import { getAllPayments } from '../services/lnbits/payments';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
+
+const SECONDS_PER_DAY = 86_400;
+const ZAP_ACTIVITY_STALE_TIME_MS = 15_000;
 
 export interface ZapTransfer {
   transaction: Transaction;
@@ -23,6 +27,25 @@ export interface VerifiedZapPayments {
   payments: Transaction[];
   truncated: boolean;
 }
+
+export const zapActivityQueryOptions = (periodDays?: number) => {
+  const sinceSeconds =
+    periodDays === undefined
+      ? undefined
+      : Math.floor(
+          (Date.now() / 1000 - periodDays * SECONDS_PER_DAY) / 60,
+        ) * 60;
+  const queryKey =
+    periodDays === undefined
+      ? (['zapActivity', 'all'] as const)
+      : (['zapActivity', periodDays, sinceSeconds] as const);
+  return queryOptions({
+    queryKey,
+    queryFn: () => fetchZapActivity(sinceSeconds),
+    staleTime: ZAP_ACTIVITY_STALE_TIME_MS,
+    refetchOnWindowFocus: false,
+  });
+};
 
 export const pairId = (payment: Transaction) =>
   payment.checking_id?.replace(/^internal_/, '') || '';
@@ -123,7 +146,10 @@ export const fetchZapActivity = async (
 ): Promise<ZapActivity> => {
   assertValidWindow(sinceSeconds);
 
-  const users = await getUsers();
+  const [users, paymentHistory] = await Promise.all([
+    getUsers(),
+    fetchPayments(sinceSeconds),
+  ]);
   const walletsByUser = await Promise.all(
     users.map(async user => ({ user, wallets: await getUserWallets(user.id) })),
   );
@@ -145,7 +171,7 @@ export const fetchZapActivity = async (
     });
   });
 
-  const { payments, truncated } = await fetchPayments(sinceSeconds);
+  const { payments, truncated } = paymentHistory;
   const paymentsByPair = new Map<string, Transaction[]>();
   // /payments is a live, newest-first list, so a payment written between two
   // page reads shifts everything down and can hand back a boundary row twice.

@@ -56,7 +56,10 @@ const payment = (
 });
 
 describe('fetchZapActivity', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getAllPayments as jest.Mock).mockResolvedValue([]);
+  });
 
   test('returns only paired Allowance-to-Private transfers between users', async () => {
     const alex = user('alex');
@@ -87,12 +90,12 @@ describe('fetchZapActivity', () => {
     ]);
   });
 
-  test('rejects instead of presenting partial wallet data', async () => {
+  test('rejects incomplete wallet data while loading payments in parallel', async () => {
     (getUsers as jest.Mock).mockResolvedValue([user('alex')]);
     (getUserWallets as jest.Mock).mockRejectedValue(new Error('LNbits down'));
 
     await expect(fetchZapActivity()).rejects.toThrow('LNbits down');
-    expect(getAllPayments).not.toHaveBeenCalled();
+    expect(getAllPayments).toHaveBeenCalledTimes(1);
   });
 
   test('skips ambiguous and mismatched payment pairs', async () => {
@@ -261,7 +264,7 @@ describe('fetchZapActivity', () => {
     await expect(fetchZapActivity()).rejects.toThrow(
       'Wallet shared-wallet has conflicting owners.',
     );
-    expect(getAllPayments).not.toHaveBeenCalled();
+    expect(getAllPayments).toHaveBeenCalledTimes(1);
   });
 });
 
