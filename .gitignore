@@ -51,3 +51,6 @@ docs/TECHNICAL_SOLUTION_DOCUMENT.pdf
 docs/.asciidoctor/
 tabs/backend/github-app-credentials.json
 tabs/backend/secrets.json
+
+# Python cache (assets/agent/scripts)
+__pycache__/
