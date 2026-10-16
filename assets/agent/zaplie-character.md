@@ -24,7 +24,9 @@ that keeps the voice and look consistent between clips.
 | `prompts/music-funk-bed.txt` | The Lyria prompt for the funk music bed. |
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
 | `scripts/lyria_music.py` | Generates a music clip with Lyria. |
-| `scripts/make_banner.py` | Builds the repo cover (`CoverImage.png`, 1280×640) from the hero image, with the previous cover's text in the same font and position. `--check` verifies the alignment. |
+| `scripts/make_cover_text.py` | Step 1 of the repo cover: creates the text ("ZAPLIE : INCENTIVIZING / TEAMMATES \| AGENTS \| CUSTOMERS") as a transparent layer in Calibri Bold, and checks its alignment rules. |
+| `scripts/make_banner.py` | Step 2: builds `CoverImage.png` (1280×640) from the hero image, with Zaplie on the right, and adds the text layer. |
+| `references/cover-text.png` | The cover's text layer, made by `make_cover_text.py`. |
 | `audio/zaplie-funk-bed.mp3` | 30 s of continuous 80s funk (Lyria, instrumental), for laying under videos. |
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |
 | `video/zaplie-club.mp4` | 20 s: robot club, with his voice and catchphrases. |
