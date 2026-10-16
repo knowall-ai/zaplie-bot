@@ -16,25 +16,27 @@ Zaplie transforms traditional incentives into a powerful, value-for-value system
 
 # Design
 
-The vision of the solution (many elements still in draft) can be seen here:
+The vision of the solution (many elements still in draft) can be seen here. Select an image to open it full size.
 
 <table width="100%">
   <tr>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/aa9a5979-302f-4812-be14-4e92a874f544"/></td>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/82c97b0a-2771-40a9-ba55-95b9f9736474"/></td>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/ec7827a8-43ed-455b-93e8-e42ea8d97613"/></td>
+    <td width="33%"><a href="docs/design/chat.png"><img src="docs/design/chat.png" alt="Chat with Zaplie in Teams"/></a></td>
+    <td width="33%"><a href="docs/design/feed.png"><img src="docs/design/feed.png" alt="Feed: zap activity and recent zaps"/></a></td>
+    <td width="33%"><a href="docs/design/automations.png"><img src="docs/design/automations.png" alt="Automations: agents and what they're zapped for"/></a></td>
   </tr>
   <tr>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/dfdea569-36cd-4407-9fb5-b782b7535aa6"/></td>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/2ed3a8e4-3128-475e-baf8-5a1fc13f0ab3"/></td>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/9f904f0b-e91a-4797-a5f1-a1d06243db3a"/></td>
+    <td width="33%"><a href="docs/design/rewards.png"><img src="docs/design/rewards.png" alt="Rewards: products such as an iPad and a standing desk, priced in sats, with a Buy button"/></a></td>
+    <td width="33%"><a href="docs/design/bounties.png"><img src="docs/design/bounties.png" alt="Bounties: goals such as becoming a Microsoft MVP, each with a difficulty and a reward in sats"/></a></td>
+    <td width="33%"><a href="docs/design/raisers.png"><img src="docs/design/raisers.png" alt="Raisers: group causes such as Special Olympics Ireland, with how much has been zapped and how much is left"/></a></td>
   </tr>
   <tr>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/a9519947-26c8-4b5b-b0d8-4db7db0ccecc"/></td>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/03c1d7c7-7e86-46a9-845e-f5301bb80c45"/></td>
-    <td width="30%"><img src="https://github.com/user-attachments/assets/6ec83fd9-f9cb-4ca1-b9d7-9ef84db09bd2"/></td>
+    <td width="33%"><a href="docs/design/users.png"><img src="docs/design/users.png" alt="User profile: Sallie the Seller, an AI agent, with her business prompt, followers and automated zaps"/></a></td>
+    <td width="33%"><a href="docs/design/wallet.png"><img src="docs/design/wallet.png" alt="Wallet: a balance of 125,000 sats, Receive and Send buttons, and recent zaps received"/></a></td>
+    <td width="33%"><a href="docs/design/projects.png"><img src="docs/design/projects.png" alt="Projects: a project's customer, objective, sats earned so far, Net Promoter Score and progress on its automations"/></a></td>
   </tr>
 </table>
+
+The mockups are rendered from [`docs/design/source/`](docs/design/source/README.md).
 
 The designs can be previewed in [Figma](https://www.figma.com/proto/i0GdiVa7Dgu1FVSNwhBpjZ/Zaplie?node-id=607-67310&node-type=frame&t=FVljvFCjf72XgbJR-1&scaling=min-zoom&content-scaling=fixed&page-id=0%3A1&starting-point-node-id=607%3A67310)
 

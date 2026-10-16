@@ -1,0 +1,354 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Zaplie design</title>
+<style>
+:root{--chrome:#2d2b2c;--bg:#1f1f1f;--card:#2d2b2c;--inner:#1f1f1f;--line:#3b393a;--text:#fff;--soft:#d6d6d6;--dim:#adadad;--accent:#7f85f5;--tab:#5b5fc7;--gold:#f2a900;--orange:#e56c31;--brown:#bf6c21;--green:#4fc16b}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:810px;overflow:hidden;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;font-size:13px}
+.title{position:absolute;left:0;top:0;width:1440px;height:48px;background:var(--chrome);display:flex;align-items:center}
+.title .nav{position:absolute;left:420px;top:14px;color:var(--dim);font-size:18px;letter-spacing:18px}
+.title .search{position:absolute;left:486px;top:8px;width:468px;height:32px;background:var(--bg);border-radius:4px;color:var(--soft);font-size:14px;display:flex;align-items:center;padding-left:14px;gap:8px}
+.title .right{position:absolute;right:16px;top:8px;display:flex;align-items:center;gap:26px;color:var(--soft);font-size:16px}
+.rail{position:absolute;left:0;top:48px;width:68px;height:762px;background:var(--chrome)}
+.rail .it{height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--soft);font-size:10px;gap:3px;position:relative}
+.rail .it svg{width:20px;height:20px;stroke:var(--soft);fill:none;stroke-width:1.5}
+.rail .it.on{color:var(--accent)}.rail .it.on svg{stroke:var(--accent)}
+.rail .it.on::before{content:"";position:absolute;left:0;top:14px;width:3px;height:28px;background:var(--accent);border-radius:2px}
+.rail .badge{position:absolute;top:6px;left:38px;background:#c4314b;border-radius:8px;font-size:10px;width:16px;height:16px;display:grid;place-items:center;color:#fff}
+.teams{position:absolute;left:68px;top:48px;width:318px;height:762px;background:var(--chrome);padding:16px 4px 0 4px}
+.teams h2{font-size:18px;font-weight:700;padding:6px 16px 16px;display:flex;justify-content:space-between}
+.teams .sec{color:var(--soft);font-size:12px;padding:8px 6px}
+.team{display:flex;align-items:center;gap:10px;padding:6px 16px;font-size:14px}
+.team .ic{width:28px;height:28px;border-radius:5px;display:grid;place-items:center;font-weight:700;font-size:12px}
+.team b{font-weight:600}
+.team small{display:block;color:var(--dim);font-size:12px;font-weight:400}
+.ch{padding:6px 0 6px 56px;font-size:14px;color:var(--soft)}
+.ch.sel{background:var(--bg);color:#fff;border-radius:4px}
+.ch.bold{font-weight:700;color:#fff}.ch.link{color:var(--accent)}
+.teams .foot{position:absolute;left:20px;right:20px;bottom:0;height:58px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;color:var(--soft);font-size:14px}
+.app{position:absolute;left:387px;top:48px;width:1053px;height:762px;background:var(--bg)}
+.apphead{height:60px;display:flex;align-items:center;padding-left:20px;border-bottom:1px solid #141414}
+.apphead img{width:32px;height:32px;border-radius:4px;object-fit:cover}
+.apphead .name{font-size:18px;font-weight:700;margin:0 16px 0 12px}
+.apphead .tab{font-size:14px;color:var(--soft);margin-right:17px;height:60px;display:flex;align-items:center;position:relative}
+.apphead .tab.on{color:#fff;font-weight:600}
+.apphead .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--tab);border-radius:2px}
+.apphead .btns{margin-left:auto;margin-right:22px;display:flex;border:1px solid #5c5c5c;border-radius:4px}
+.apphead .btns span{width:32px;height:28px;display:grid;place-items:center;color:var(--soft);border-right:1px solid #5c5c5c;font-size:13px}
+.apphead .btns span:last-child{border:0}
+.body{position:absolute;left:0;top:61px;right:0;bottom:0;padding:20px 20px 0;overflow:hidden}
+.card{background:var(--card);border-radius:6px;padding:20px}
+.av{width:24px;height:24px;border-radius:50%;object-fit:cover;display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:#fff;flex:none}
+.who{display:flex;align-items:center;gap:10px}
+.gold{color:var(--gold)}
+.sats{font-size:14px;color:var(--soft);font-weight:400}
+.btn{display:inline-grid;place-items:center;height:38px;border-radius:4px;font-weight:600;font-size:13px}
+.btn.solid{background:var(--gold);color:#1f1f1f}.btn.line{border:1px solid var(--gold);color:var(--gold)}
+.btn.grey{border:1px solid #6d6b6c;color:var(--soft)}
+.bolt{width:26px;height:20px;border-radius:10px;background:var(--gold);display:inline-grid;place-items:center}
+.bolt svg{width:12px;height:12px;fill:#1f1f1f}
+.boltline{width:36px;height:24px;border-radius:12px;border:1.5px solid var(--gold);display:inline-grid;place-items:center}
+.boltline svg{width:12px;height:12px;fill:var(--gold)}
+.ico-bolt{fill:var(--gold);width:14px;height:14px;vertical-align:-2px}
+table{width:100%;border-collapse:collapse}
+th{background:var(--inner);text-align:left;font-weight:600;font-size:13px;padding:9px 10px}
+td{border-bottom:1px solid var(--line);padding:8px 10px;font-size:13px;vertical-align:middle}
+.pill{display:inline-block;white-space:nowrap;font-size:11px;padding:3px 12px;border-radius:12px;background:#342d1c;color:var(--gold)}
+.subtabs{display:flex;gap:18px;font-size:14px;color:var(--soft)}
+.subtabs span{padding-bottom:12px;position:relative}
+.subtabs .on{color:#fff;font-weight:600}
+.subtabs .on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--tab)}
+.heat{display:grid;grid-template-columns:repeat(36,14px);grid-auto-rows:14px;gap:4px}
+.heat i{display:block;border-radius:2px;background:#232323}
+.heat .l1{background:#5a3712}.heat .l2{background:var(--brown)}.heat .l3{background:var(--orange)}.heat .l4{background:var(--gold)}
+.months{display:grid;grid-template-columns:repeat(12,54px);color:var(--soft);font-size:12px;margin-bottom:10px;text-align:center}
+.hscroll{display:flex;gap:6px;overflow:hidden}
+.tile{flex:none;background:var(--bg);border-radius:6px;overflow:hidden}
+.tile>img{width:100%;height:124px;object-fit:cover;display:block}
+.tile .in{padding:18px 20px}
+.tile h3{font-size:14px;font-weight:700;margin-bottom:12px}
+.tile p{font-size:12.5px;color:var(--soft);line-height:1.35}
+.kv{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:4px 0}
+.kv b{color:#fff}
+.link{color:var(--accent);font-weight:600;font-size:12px}
+h1{font-size:18px;font-weight:700}
+.screen{display:none}
+</style></head>
+<body>
+<div class="title">
+  <div class="nav">‹ ›</div>
+  <div class="search"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#d6d6d6" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M13 13l5 5"/></svg>Search</div>
+  <div class="right">···<span id="me" class="av" style="width:28px;height:28px"></span>—&nbsp;&nbsp;☐&nbsp;&nbsp;✕</div>
+</div>
+<div class="rail">
+  <div class="it"><svg viewBox="0 0 20 20"><path d="M10 2a5 5 0 0 0-5 5v4l-2 3h14l-2-3V7a5 5 0 0 0-5-5zM8 16a2 2 0 0 0 4 0"/></svg>Activity</div>
+  <div class="it"><span class="badge">1</span><svg viewBox="0 0 20 20"><path d="M3 4h14v9H8l-4 3v-3H3z"/></svg>Chat</div>
+  <div class="it on"><svg viewBox="0 0 20 20"><circle cx="7" cy="6" r="2.5"/><circle cx="14" cy="6" r="2"/><path d="M2 16c0-3 2-5 5-5s5 2 5 5zM12 11c3 0 6 1 6 4"/></svg>Teams</div>
+  <div class="it"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4"/></svg>Calendar</div>
+  <div class="it"><svg viewBox="0 0 20 20"><path d="M5 3l3 1 1 4-2 1a8 8 0 0 0 4 4l1-2 4 1 1 3c-1 2-3 3-5 2A14 14 0 0 1 3 8C2 6 3 4 5 3z"/></svg>Calls</div>
+  <div class="it"><svg viewBox="0 0 20 20"><path d="M5 2h7l4 4v12H5zM12 2v4h4"/></svg>Files</div>
+  <div class="it" style="color:var(--soft)">···</div>
+  <div class="it"><svg viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="M10 6v8M6 10h8"/></svg>Apps</div>
+  <div class="it"><img src="assets/zaplie-profile.jpg" class="av" style="width:28px;height:28px"></div>
+</div>
+<div class="teams">
+  <h2>Teams <span style="font-size:15px;color:var(--soft)">☰</span></h2>
+  <div class="sec">▾ Pinned</div>
+  <div class="team"><span class="ic" style="background:#e8562a">✱</span><span>General<small>Adatum Corporation</small></span></div>
+  <div class="sec">▾ Your teams</div>
+  <div class="team"><span class="ic" style="background:#f2a900;color:#1f1f1f">⚡</span><b>Fabrikam Labs</b></div>
+  <div class="ch">General</div><div class="ch sel">Sales</div><div class="ch">Delivery</div><div class="ch bold">Operate</div><div class="ch">Innovations</div><div class="ch">R&amp;D Hub</div><div class="ch link">See all channels</div>
+  <div class="team" style="margin-top:8px"><span class="ic" style="background:#0f9ed5">❄</span>Alpine Ski House</div>
+  <div class="team" style="margin-top:8px"><span class="ic" style="background:#fff;color:#0f6cbd">C</span>Contoso Ltd</div>
+  <div class="ch">General</div><div class="ch">Accounting</div><div class="ch">Finance</div><div class="ch bold">Fiscal Year Planning</div><div class="ch bold">Strategy</div><div class="ch link">See all channels</div>
+  <div class="foot"><span>⚇&nbsp;&nbsp;Label</span><span>⚙</span></div>
+</div>
+<div class="app">
+  <div class="apphead"><img src="assets/zaplie-profile.jpg"><span class="name">Zaplie</span><span id="tabs" style="display:flex"></span><span class="btns"><span>···</span><span>▣</span><span>⇥</span></span></div>
+  <div class="body" id="body"></div>
+</div>
+
+<!-- ============ screens ============ -->
+<template id="chat">
+  <div style="position:absolute;inset:0;padding:24px 130px 0 120px">
+    <div id="msgs"></div>
+  </div>
+  <div style="position:absolute;left:162px;right:131px;bottom:66px;display:flex;justify-content:flex-end;color:var(--soft);font-size:14px;gap:8px">▯ View prompts</div>
+  <div style="position:absolute;left:162px;right:131px;bottom:18px;height:42px;background:var(--card);border-radius:4px;padding:10px 16px;font-size:14px;color:var(--soft);border-bottom:2px solid #6d6b6c">Type a new message</div>
+</template>
+
+<template id="feed">
+  <div style="display:flex;gap:6px">
+    <div class="card" style="width:318px;height:270px">
+      <h1 style="font-size:14px">Total zaps sent</h1>
+      <div style="margin:14px 0 18px"><span class="gold" style="font-size:52px;font-weight:300">2,700,000</span> <span class="sats">Sats</span></div>
+      <div class="kv">Average per user<b>120,000 <span class="sats">Sats</span></b></div>
+      <div class="kv">Average per day<b>18,300 <span class="sats">Sats</span></b></div>
+      <div class="kv">Biggest zap<b>240,000 <span class="sats">Sats</span></b></div>
+      <div class="kv">Zaps from agents<b>2,000 <span class="sats">Sats</span></b></div>
+      <div class="kv">Zaps to agents<b>1,800 <span class="sats">Sats</span></b></div>
+    </div>
+    <div class="card" style="flex:1;height:270px">
+      <h1 style="font-size:14px;margin-bottom:12px">Zap activity</h1>
+      <div class="months" style="margin-left:8px">%MONTHS%</div>
+      <div class="heat" style="margin-left:6px" data-seed="3"></div>
+      <div style="display:flex;justify-content:flex-end;gap:5px;align-items:center;font-size:11px;color:var(--soft);margin-top:10px">Less <i class="hl" style="background:#232323"></i><i class="hl" style="background:#5a3712"></i><i class="hl" style="background:#bf6c21"></i><i class="hl" style="background:#e56c31"></i><i class="hl" style="background:#f2a900"></i> More</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:6px;height:420px">
+    <div class="subtabs" style="margin-bottom:20px"><span class="on">Feed</span><span>Leaderboard</span></div>
+    <div style="display:flex;gap:60px;font-size:11px;color:var(--soft);margin-bottom:16px"><span>7 days</span><span class="link" style="font-size:11px">30 days</span><span>60 days</span></div>
+    <table id="feedtable"><tr><th style="width:180px">From</th><th style="width:180px">To</th><th>Reason</th><th style="width:120px;text-align:right">Zap amount&nbsp;&nbsp;↓</th></tr></table>
+  </div>
+</template>
+
+<template id="automations">
+  <div class="card" style="height:700px;padding:20px 0 0 20px">
+    <div class="subtabs" style="border-bottom:1px solid var(--line);margin-right:20px;margin-bottom:20px"><span>Teammates</span><span class="on">Agents</span><span>Customers</span></div>
+    <div class="hscroll" id="agentcards"></div>
+  </div>
+</template>
+
+<template id="rewards">
+  <div class="card" style="padding:20px 0 20px 20px">
+    <h1 style="margin-bottom:18px">Rewards</h1>
+    <div class="hscroll" id="rewardcards"></div>
+    <div style="height:6px;background:#3b393a;border-radius:3px;margin:16px 20px 0 0"><div style="width:22%;height:6px;background:#5c5c5c;border-radius:3px"></div></div>
+  </div>
+  <div class="card" style="margin-top:6px">
+    <h1 style="margin-bottom:16px">History</h1>
+    <table><tr><th>Award</th><th style="text-align:right;width:120px">Status&nbsp;&nbsp;&nbsp;↓</th></tr>
+      <tr><td><b>Secretlab MAGNUS Pro Desk</b><br><span style="color:var(--soft)">A motorised desk (that should fit those big widescreen monitors!).</span><br><span style="color:var(--dim)">2 days ago&nbsp;&nbsp;•&nbsp;&nbsp;to Samson Mow</span></td><td style="text-align:right"><span class="pill">Pending</span></td></tr>
+    </table>
+  </div>
+</template>
+
+<template id="bounties">
+  <div class="card" style="padding:20px 0 20px 20px">
+    <h1 style="margin-bottom:18px">Bounties</h1>
+    <div class="hscroll" id="bountycards"></div>
+  </div>
+  <div class="card" style="margin-top:6px"><h1 style="margin-bottom:16px">History</h1>
+    <table><tr><th>Bounty</th><th>Description</th><th>Status</th><th style="text-align:right">Zap amount&nbsp;&nbsp;↓</th></tr></table></div>
+</template>
+
+<template id="raisers">
+  <div class="card" style="padding:20px 0 20px 20px">
+    <h1 style="margin-bottom:18px">Raisers list</h1>
+    <div class="hscroll" id="raisercards"></div>
+  </div>
+  <div class="card" style="margin-top:6px"><h1 style="margin-bottom:16px">History</h1>
+    <table><tr><th style="width:300px">Raiser name</th><th>Description</th><th style="width:90px;text-align:right">Status</th><th style="width:120px;text-align:right">Zap amount&nbsp;&nbsp;↓</th></tr>
+    <tr><td><b>Night out in Dublin</b></td><td style="color:var(--soft)">Let's get a villa for a few days and get the Voyager 1 squad together, as we've all been working remotely for quite some time!</td><td style="text-align:right"><span class="pill" style="background:#3a2a10">Raised</span></td><td style="text-align:right"><b>241,000</b> <svg class="ico-bolt" viewBox="0 0 16 16"><path d="M9 1L3 9h4l-1 6 6-8H8z"/></svg></td></tr>
+    <tr><td><b>Pizza night</b></td><td style="color:var(--soft)">Pizza delivery for everyone</td><td style="text-align:right"><span class="pill">In progress</span></td><td style="text-align:right"><b>228,000</b> <svg class="ico-bolt" viewBox="0 0 16 16"><path d="M9 1L3 9h4l-1 6 6-8H8z"/></svg></td></tr>
+    <tr><td><b>VR night</b></td><td style="color:var(--soft)">Hire VR headsets for everyone to meet virtually and play VR games</td><td style="text-align:right"><span class="pill">In progress</span></td><td style="text-align:right"><b>224,000</b> <svg class="ico-bolt" viewBox="0 0 16 16"><path d="M9 1L3 9h4l-1 6 6-8H8z"/></svg></td></tr></table></div>
+</template>
+
+<template id="users">
+  <div class="card" style="display:flex;justify-content:space-between;align-items:flex-start;padding:18px 20px 14px">
+    <div><h1>Sallie the Seller <span style="font-weight:400;color:var(--soft)">&nbsp;Agent</span></h1><div class="link" style="margin-top:12px;font-weight:400">See all users →</div></div>
+    <span class="btn line" style="width:120px">Edit agent</span>
+  </div>
+  <div style="margin-top:6px;position:relative;height:275px;background:var(--card);border-radius:6px 6px 0 0">
+    <img src="assets/ban-sallie-wide.jpg" style="width:100%;height:220px;object-fit:cover;border-radius:6px 6px 0 0;display:block">
+    <img src="assets/sallie.jpg" style="position:absolute;left:18px;top:172px;width:88px;height:88px;border-radius:50%;border:4px solid var(--card);object-fit:cover">
+    <div style="position:absolute;left:112px;top:236px;display:flex;align-items:center;gap:14px;font-size:13px;color:var(--soft)"><b style="color:#fff;font-size:14px">Sallie the Seller</b><span id="followers" style="display:flex"></span><span>Follows <b style="color:#fff">Jack Dorsey</b>, <b style="color:#fff">Michael Saylor</b>, <b style="color:#fff">Samson Mow</b> and 256 more</span></div>
+    <div style="position:absolute;right:20px;top:228px;display:flex;align-items:center;gap:12px"><span class="bolt" style="width:48px;height:32px;border-radius:16px"><svg viewBox="0 0 16 16" style="width:16px;height:16px"><path d="M9 1L3 9h4l-1 6 6-8H8z"/></svg></span><span class="btn" style="background:#1f1f1f;width:108px;color:var(--gold);display:inline-flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap">☆ Follow</span><b style="font-size:14px">89,015</b> <span style="color:var(--soft);font-size:14px;margin-left:-6px">followers</span></div>
+  </div>
+  <div class="card" style="margin-top:6px;border-radius:0 0 6px 6px">
+    <div style="background:var(--inner);border-radius:4px;padding:18px 20px">
+      <b style="font-size:14px">Business prompt</b>
+      <p style="color:var(--soft);margin-top:10px;line-height:1.4">You craft tailored, data-driven proposals that meet client needs while driving growth for the business. You gather key details, including pricing, timelines and project scope, and work closely with sales leads to make sure proposals are persuasive and complete. Your role helps streamline the sales process, increasing conversion rates and client satisfaction.</p>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <div style="background:var(--inner);border-radius:4px;padding:18px 20px;width:288px;height:200px"><b style="font-size:14px">Automated zaps</b>
+        <div style="margin:8px 0 10px"><span class="gold" style="font-size:46px;font-weight:300">312,560</span> <span class="sats">Sats</span></div>
+        <div class="kv">Total funds<b>10,000,000 <span class="sats">Sats</span></b></div><div class="kv">Average per agent<b>120,000 <span class="sats">Sats</span></b></div></div>
+      <div style="background:var(--inner);border-radius:4px;padding:18px 20px;flex:1;height:200px"><b style="font-size:14px">Automation runs</b>
+        <div class="months" style="margin-top:16px">%MONTHS%</div><div class="heat" data-seed="7" style="grid-template-columns:repeat(36,13px);grid-auto-rows:13px"></div></div>
+    </div>
+  </div>
+</template>
+
+<template id="wallet">
+  <div class="card" style="padding:20px 20px 0"><div class="subtabs"><span class="on">Your wallet</span><span>Allowance</span></div></div>
+  <div style="display:flex;gap:6px;margin-top:6px">
+    <div style="flex:1">
+      <div class="card" style="height:240px">
+        <b style="font-size:14px">Your wallet</b><div style="color:var(--soft);font-size:14px;margin-top:6px">Amount received from other users:</div>
+        <div style="margin:30px 0 20px;display:flex;align-items:center;gap:10px"><span class="gold" style="font-size:52px;font-weight:300">125,000</span> <span class="sats">Sats</span><span class="boltline" style="width:32px;height:26px;border-radius:3px;margin-left:16px;color:var(--gold);font-size:13px">⟳</span></div>
+        <span class="btn line" style="width:122px">Receive</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="btn line" style="width:122px">Send</span>
+      </div>
+      <div class="card" style="margin-top:6px;height:400px">
+        <div class="subtabs" style="border-bottom:1px solid var(--line);margin-bottom:20px"><span>All</span><span>Sent</span><span class="on">Received</span><span>Pending</span></div>
+        <div id="txs"></div>
+      </div>
+    </div>
+    <div style="width:280px">
+      <div class="card" style="padding:16px 8px;height:326px"><b style="font-size:14px;padding-left:2px">Select awards</b><div id="awards" style="margin-top:12px"></div><div class="link" style="text-align:right;margin-top:6px">See all awards</div></div>
+      <div class="card" style="padding:16px 8px;margin-top:6px;height:330px"><b style="font-size:14px;padding-left:2px">Zap to raisers</b><div id="zapraisers" style="margin-top:12px"></div></div>
+    </div>
+  </div>
+</template>
+
+<template id="projects">
+  <div class="card" style="padding:20px">
+    <h1>GitDam (MVP, Phase 1)</h1><div class="link" style="font-weight:400;margin:8px 0 18px">All projects with automations →</div>
+    <div style="display:flex;gap:6px">
+      <div style="background:var(--inner);border-radius:6px;padding:20px;width:248px;height:237px">
+        <b style="font-size:14px">Customer:</b>&nbsp;&nbsp;<span style="color:var(--accent);font-size:14px">Northwind Traders</span>
+        <div style="margin-top:34px"><b style="font-size:14px">Epic objective:</b><p style="color:var(--soft);margin-top:10px;line-height:1.35">Build a minimum viable product of a decentralised version of GitHub that covers the key functions: source control, issues and discussions.</p></div>
+      </div>
+      <div style="background:var(--inner);border-radius:6px;padding:20px;width:338px;height:237px"><b style="font-size:14px">Complete all automations to save up to:</b>
+        <div style="display:flex;align-items:center;gap:30px;margin-top:20px">
+          <svg width="136" height="136" viewBox="0 0 136 136"><circle cx="68" cy="68" r="56" fill="none" stroke="#e56c31" stroke-width="22"/><circle cx="68" cy="68" r="56" fill="none" stroke="#f2a900" stroke-width="22" stroke-dasharray="241 352" transform="rotate(-90 68 68)"/><text x="68" y="64" text-anchor="middle" fill="#fff" font-size="26" font-weight="700" font-family="Segoe UI">17.5M</text><text x="68" y="80" text-anchor="middle" fill="#d6d6d6" font-size="12" font-family="Segoe UI">sats</text><text x="68" y="96" text-anchor="middle" fill="#fff" font-size="12" font-family="Segoe UI">about <tspan font-weight="700">$5K</tspan></text></svg>
+          <div style="font-size:13px;line-height:1.6"><div><span style="display:inline-block;width:12px;height:12px;background:#f2a900;margin-right:12px"></span><span style="color:var(--soft)">Sats earned</span><br><b style="margin-left:26px">12,000,000</b> <span class="sats" style="font-size:12px">sats</span></div><div style="margin-top:10px"><span style="display:inline-block;width:12px;height:12px;background:#e56c31;margin-right:12px"></span><span style="color:var(--soft)">Left to complete</span><br><b style="margin-left:26px">5,500,000</b> <span class="sats" style="font-size:12px">sats</span></div></div>
+        </div></div>
+      <div style="background:var(--inner);border-radius:6px;padding:20px;flex:1;height:237px"><b style="font-size:14px">Net Promoter Score</b>
+        <svg width="334" height="180" viewBox="0 0 334 180" style="display:block;margin-top:6px"><g fill="none" stroke-width="34"><path d="M77 120 A90 90 0 0 1 120 43" stroke="#d34141"/><path d="M122 42 A90 90 0 0 1 212 42" stroke="#ecc742"/><path d="M214 43 A90 90 0 0 1 257 120" stroke="#00a14b"/></g><path d="M167 120 L190 80" stroke="#fff" stroke-width="2.5"/><circle cx="167" cy="120" r="6" fill="none" stroke="#fff" stroke-width="2"/><text x="167" y="160" text-anchor="middle" fill="#fff" font-size="34" font-weight="700" font-family="Segoe UI">7.2</text></svg>
+        <div id="nps" style="display:flex;justify-content:center;gap:2px;margin-top:-6px"></div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:6px;padding:20px 0 0 20px;height:400px"><h1 style="margin-bottom:14px">Your progress as of today:</h1><div class="hscroll" id="progress"></div></div>
+</template>
+
+<script>
+const P = {
+  jm:{n:"Jack Mallers",c:"#d9822b"}, ms:{n:"Michael Saylor",c:"#c4314b"}, jd:{n:"Jack Dorsey",c:"#4f6bed"},
+  sn:{n:"Satoshi Nakamoto",c:"#13a10e"}, sm:{n:"Samson Mow",c:"#8764b8"},
+  sallie:{n:"Sallie the Seller",img:"sallie"}, poppie:{n:"Poppie the Planner",img:"poppie"}, teddie:{n:"Teddie the Tester",img:"teddie"},
+  preppie:{n:"Preppie the Prepper",img:"preppie"}, archie:{n:"Archie the Architect",img:"archie"}, allie:{n:"Allie the Accountant",img:"allie"},
+  zaplie:{n:"Zaplie",img:"zaplie-profile"}
+};
+const ini = n => n.split(" ").map(w=>w[0]).slice(0,2).join("");
+function av(k,size=24){const p=P[k]; if(p.img) return `<img class="av" src="assets/${p.img}.jpg" style="width:${size}px;height:${size}px">`;
+  return `<span class="av" style="width:${size}px;height:${size}px;background:${p.c};font-size:${Math.round(size*0.4)}px">${ini(p.n)}</span>`;}
+const BOLT = '<svg viewBox="0 0 16 16"><path d="M9 1L3 9h4l-1 6 6-8H8z"/></svg>';
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map(m=>`<span>${m}</span>`).join("");
+const TABS = ["Chat","Feed","Automations","Rewards","Bounties","Raisers","Users","Wallet","Projects"];
+const screen = new URLSearchParams(location.search).get("s") || "chat";
+const ME = {chat:"jd", users:"ms"}[screen] || "sn";
+document.getElementById("me").outerHTML = av(ME,28);
+document.getElementById("tabs").innerHTML = TABS.map(t=>`<span class="tab ${t.toLowerCase()===screen?'on':''}">${t}</span>`).join("");
+document.getElementById("body").innerHTML = document.getElementById(screen).innerHTML.replaceAll("%MONTHS%",MONTHS);
+
+// heatmaps (deterministic)
+document.querySelectorAll(".heat").forEach(h=>{let s=+h.dataset.seed;const r=()=>{s=(s*9301+49297)%233280;return s/233280};
+  let out="";for(let row=0;row<6;row++)for(let col=0;col<36;col++){const x=r();const base=col<6?0.15:0.75;let l=0;if(x<base){const y=r();l=y<0.25?1:y<0.5?2:y<0.7?3:4}out+=`<i class="l${l}"></i>`}
+  h.innerHTML=out;h.style.gridAutoFlow="row";});
+document.querySelectorAll("i.hl").forEach(i=>{i.style.cssText+=";display:inline-block;width:12px;height:12px;border-radius:2px"});
+
+const $ = id => document.getElementById(id);
+if(screen==="chat"){
+  const me=(t,time)=>`<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:16px"><div style="background:var(--card);border-radius:4px;padding:10px 16px;font-size:14px"><div style="font-size:12px;margin-bottom:4px"><b>Jack Dorsey</b>&nbsp;&nbsp;<span style="color:var(--soft)">${time}</span></div>${t}</div>${av("jd",32)}</div>`;
+  const bot=(t,time)=>`<div style="display:flex;gap:10px;margin-bottom:16px">${av("zaplie",32)}<div style="background:var(--card);border-radius:4px;padding:10px 16px;font-size:14px;line-height:1.45"><div style="font-size:12px;margin-bottom:4px"><b>Zaplie</b>&nbsp;&nbsp;<span style="color:var(--soft)">${time}</span></div>${t}</div></div>`;
+  $("msgs").innerHTML = me("Show leaderboard","5/12, 9:14 AM")
+   + bot(`<div style="font-weight:600;margin-bottom:2px">Top zappers this week ⚡</div>1. Jack Mallers&nbsp;&nbsp;<b>10,000</b> sats<br>2. Michael Saylor&nbsp;&nbsp;<b>8,800</b> sats<br>3. Samson Mow&nbsp;&nbsp;<b>6,000</b> sats<br><span style="display:inline-block;border:1px solid #6d6b6c;border-radius:4px;padding:4px 18px;margin-top:8px;font-weight:600;font-size:13px">View wallets</span>`,"5/12, 9:15 AM")
+   + bot(`You haven't zapped anyone in a while. Just say "send zap" if you'd like me to zap somebody for you.`,"5/18, 11:21 AM")
+   + me("Send zap","5/18, 11:22 AM")
+   + bot(`<div style="width:280px">${["Send zap to… <span style='float:right'>▾</span>","Zap amount","Comment"].map(f=>`<div style="background:var(--bg);border-radius:4px;padding:8px 12px;margin:6px 0;color:var(--soft)">${f}</div>`).join("")}<span style="display:inline-block;border:1px solid #6d6b6c;border-radius:4px;padding:4px 30px;margin-top:6px;font-weight:600;font-size:13px">Send</span></div>`,"5/18, 11:22 AM");
+}
+if(screen==="feed"){
+  const rows=[["jm","sallie","For happily showing the same demo a second time when the end user joined the call",241000],
+   ["sallie","preppie","For suggesting we meet the medical consultants on their night shift, so we could build exactly what they need",228000],
+   ["ms","teddie","For making the final demo happen. No idea how you pulled that one out of the bag!",224000],
+   ["sm","sn","Just for being the project star!!!",218000],
+   ["teddie","jm","For being brave and asking to bring the right people to the checkpoint calls",212000],
+   ["jd","ms","Thank you for the help with the solution, so I could give a reference for a tender",207000]];
+  $("feedtable").innerHTML += rows.map(([f,t,r,a])=>`<tr><td><span class="who">${av(f)}${P[f].n}</span></td><td><span class="who">${av(t)}${P[t].n}</span></td><td style="color:#fff;line-height:1.3">${r}</td><td style="text-align:right"><b style="font-size:14px">${a.toLocaleString("en-US")}</b>&nbsp;&nbsp;<svg class="ico-bolt" viewBox="0 0 16 16"><path d="M9 1L3 9h4l-1 6 6-8H8z"/></svg></td></tr>`).join("");
+}
+if(screen==="automations"){
+  const cards=[["sallie","ban-sallie","Sallie the Seller","You craft tailored, data-driven proposals that meet client needs while driving growth for the business. You gather key details, including pricing, timelines…",[["Create a proposal","10k"],["Identify a new opportunity","1k"],["Draft a quotation","1k"]],"8,000,000"],
+   ["poppie","ban-poppie","Poppie the Planner","Poppie keeps the team's operations running smoothly by planning the work, chasing missing timesheets and making sure everything is submitted on time.",[["Chase missing timesheets","1k"],["Review the weekly plan","1k"],["Write the weekly timesheet report","1k"]],"6,500,000"],
+   ["archie","ban-archie","Archie the Architect","You are a technical architect with commercial awareness. You review designs and code against the team's standards and keep the architecture simple…",[["Review a technical specification","10k"],["Review a pull request","10k"],["Review a statement of work","10k"]],"10,000,000"]];
+  $("agentcards").innerHTML = cards.map(([k,b,n,d,a,e])=>`<div class="tile" style="width:340px;height:620px;position:relative"><img src="assets/${b}.jpg"><img src="assets/${P[k].img}.jpg" style="position:absolute;left:20px;top:84px;width:76px;height:76px;border-radius:50%;border:3px solid var(--bg);object-fit:cover"><span class="bolt" style="position:absolute;right:20px;top:136px;width:36px;height:24px;border-radius:12px">${BOLT}</span>
+   <div class="in" style="padding-top:44px"><h3 style="font-size:19px;margin-bottom:8px">${n}</h3><p style="font-size:12.5px;color:#fff;height:66px">${d}</p>
+   <b style="display:block;margin:12px 0 6px">Top-3 automations:</b>${a.map(([t,s])=>`<div class="kv" style="padding:5px 0 5px 10px;color:var(--soft)"><span style="max-width:220px">${t}</span><b>${s} <span class="sats" style="font-size:13px">Sats</span></b></div>`).join("")}
+   <div style="height:34px"></div>${[["Automation runs","28"],["Zap splits","3"],["Earnings",e+" <span class='sats' style='font-size:13px'>Sats</span>"],["Zaps sent","100,000 <span class='sats' style='font-size:13px'>Sats</span>"],["Delivered to business","20,000,000 <span class='sats' style='font-size:13px'>Sats</span>"]].map(([l,v])=>`<div class="kv"><span>${l}</span><b>${v}</b></div>`).join("")}
+   <div class="link" style="margin-top:30px">See profile</div></div></div>`).join("");
+}
+if(screen==="rewards"){
+  const r=[["p-ipad","Apple 10.2-inch iPad Wi-Fi + Cellular","Powerful. Easy to use. Versatile. The 10.2-inch iPad is designed for all the things you love to do. Work, play, create, learn, stay connected and more.","2,500,000"],
+   ["p-galaxy","Samsung Galaxy Tab A9","Level up your day with Galaxy Tab A9: entertainment on a bright display with Dolby Atmos surround sound.","2,000,000"],
+   ["p-desk","Secretlab MAGNUS Pro Desk","A motorised desk (that should fit those big widescreen monitors!).","3,000,000"]];
+  $("rewardcards").innerHTML = r.map(([i,t,d,p])=>`<div class="tile" style="width:334px"><img src="assets/${i}.jpg"><div class="in" style="padding:20px 14px"><h3 style="height:46px">${t}</h3><p style="color:#fff;height:58px">${d}</p><div class="link" style="margin-top:2px">Product details</div><div style="text-align:center;margin:18px 0 18px"><b style="font-size:24px">${p}</b> <span class="sats">Sats</span></div><div style="text-align:center"><span class="btn solid" style="width:128px">Buy</span></div></div></div>`).join("")
+   + `<div class="tile" style="width:40px"></div>`;
+}
+if(screen==="bounties"){
+  const b=[["b-mvp","Become a Microsoft MVP","Becoming a Microsoft MVP raises our team's expertise, gives early access to Microsoft technologies, builds our reputation and opens up networking opportunities.","Achievement","High","No time restriction","1","100,000,000"],
+   ["b-cert","Pass Microsoft Certified: Power Platform Solution Architect","The Solution Architect certification proves advanced knowledge, boosts credibility, grows the team's skills and shows our commitment to Microsoft's leading technology.","Achievement","Intermediate","No time restriction","23","10,000,000"],
+   ["b-onboard","Onboard a new client","Organise an introductory call between a new client and our head of delivery, Michael Saylor, so we can show the power of the Power Platform and AI agents.","Intermediate","Intermediate","<b>3 days</b> remaining","12","4,000,000"]];
+  $("bountycards").innerHTML = b.map(([i,t,d,k,diff,time,subs,p])=>`<div class="tile" style="width:321px"><img src="assets/${i}.jpg"><div class="in"><h3 style="height:36px">${t}</h3><p style="color:#fff;height:96px">${d}</p>
+   <div style="font-size:13px;line-height:2;margin-top:10px"><div class="gold" style="font-weight:600">✺&nbsp;&nbsp;${k}</div><div>▤&nbsp;&nbsp;<b>${diff}</b> difficulty</div><div style="color:var(--soft)">◷&nbsp;&nbsp;${time}</div><div style="color:var(--soft)">⇧&nbsp;&nbsp;<b style="color:#fff">${subs}</b> submission(s)</div></div>
+   <div style="text-align:center;margin:12px 0 16px"><b style="font-size:24px">${p}</b> <span class="sats">Sats</span></div><div style="display:flex;gap:20px;justify-content:center"><span class="btn grey" style="width:126px">Set as objective</span><span class="btn solid" style="width:128px">Redeem</span></div></div></div>`).join("")
+   + `<div class="tile" style="width:40px"></div>`;
+}
+if(screen==="raisers"){
+  const r=[["r-olympics","Special Olympics Ireland","Support Special Olympics Ireland in empowering athletes with intellectual disabilities through sport, fostering inclusion and celebrating their achievements.","8","68K","15,000",60],
+   ["r-pool","Office pool table","A pool table for the office in Dublin.","8","54K","11,000",70],
+   ["r-night","Voyager 1 night out","A chance to unwind. We'll meet in a central city for an evening of drinks and chatting. Team members can stay on as they wish.","6","25K","2,000",98]];
+  $("raisercards").innerHTML = r.map(([i,t,d,u,k,go,pc])=>`<div class="tile" style="width:336px"><img src="assets/${i}.jpg"><div class="in"><h3>${t}</h3><p style="color:#fff;height:88px">${d}</p>
+   <div class="kv" style="color:#fff;align-items:center"><span><b>${u} users</b> <span style="color:var(--soft)">zap split to this raiser</span></span><span>${k}&nbsp;&nbsp;<span class="bolt" style="width:36px;height:24px;border-radius:12px;vertical-align:middle">${BOLT}</span></span></div>
+   <div style="height:4px;background:#3b393a;border-radius:2px;margin:6px 0"><div style="width:${pc}%;height:4px;background:var(--gold);border-radius:2px"></div></div>
+   <div class="kv" style="padding:0"><span><b>${go}</b> to go</span><span><b>${pc}%</b> zapped</span></div><div class="link">Set up zap split</div></div></div>`).join("");
+}
+if(screen==="users"){ $("followers").innerHTML=["jd","ms","sm"].map((k,i)=>`<span style="margin-left:${i?-8:0}px">${av(k,20)}</span>`).join(""); }
+if(screen==="wallet"){
+  const tx=[["jm","+1,000","for happily showing the same demo a second time when the end user joined the call."],["ms","+420","for your deep look into the project's roles, which saved the client a big chunk of budget (and our nerves)."],["sm","+420","for the quick turnaround on the proposal."],[null,"+420","for being there when it mattered."]];
+  $("txs").innerHTML = tx.map(([k,a,r])=>`<div style="display:flex;gap:16px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--inner)"><span style="color:#4fc16b;font-size:18px">⊕</span><div style="flex:1"><b style="font-size:14px">Zap!</b><div style="color:var(--soft);margin:2px 0">2 days ago&nbsp;&nbsp;from <b style="color:#fff">${k?P[k].n:"anonymous"}</b></div><div>${r}</div></div><div style="text-align:right"><b style="color:#4fc16b;font-size:14px">${a} Sats</b><div style="color:var(--soft);margin-top:4px">about $0.${a==="+1,000"?"11":"05"}</div></div></div>`).join("");
+  const item=(img,t,p)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 4px"><img src="assets/${img}.jpg" style="width:36px;height:36px;border-radius:50%;object-fit:cover"><div style="flex:1"><div style="font-size:14px">${t}</div><div style="color:var(--soft);font-size:11px">${p}</div></div><span class="boltline">${BOLT}</span></div>`;
+  $("awards").innerHTML = item("a-desk","Secretlab MAGNUS Pro…","3,000,000 Sats")+item("a-learning","Learning day","700,000 Sats")+item("a-corsair","Corsair ST50 Stand","200,000 Sats")+item("a-logitech","Logitech Brio 4K Camera","400,000 Sats");
+  $("zapraisers").innerHTML = item("r-olympics","Special Olympics Ireland","3,000,000 Sats")+item("r-pool","Office pool table","700,000 Sats")+item("z-voyager2","Voyager 2 night out","200,000 Sats")+item("r-night","Voyager 1 night out","200,000 Sats");
+}
+if(screen==="projects"){
+  const c=["#d34141","#e5534b","#ec6f5e","#f08a5d","#f3a35c","#f2a900","#ecc742","#d6d77a","#9fd99a","#56c27a","#00a14b"];
+  $("nps").innerHTML=c.map((x,i)=>`<span style="width:25px;height:20px;background:${x};color:${i>4&&i<9?'#1f1f1f':'#fff'};font-size:11px;display:grid;place-items:center;font-weight:600">${i}</span>`).join("");
+  const p=[["◷","Daily","#3b5f5f","5,000","for attending the daily stand-up","Saved <b>3/5</b> times","not started",0,"#5c5c5c","#d6d6d6"],
+   ["◷","Weekly","#3b5f5f","50,000","for answering our end-of-sprint customer survey","","80% to go",75,"#f2a900","#f2a900"],
+   ["✓","Non-regular","#3b5f5f","25,000","for raising a new bug or enhancement","Zapped <b>3/5</b> times","completed",100,"#13a10e","#13a10e"]];
+  $("progress").innerHTML=p.map(([ic,tag,tc,s,f,saved,st,pc,bar,icc])=>`<div class="tile" style="width:320px;height:290px;padding:16px 20px"><div style="display:flex;justify-content:space-between"><span style="width:40px;height:40px;border:3px solid ${icc};border-radius:50%;display:grid;place-items:center;color:${icc};font-size:20px;font-weight:700">${ic==="✓"?"✓":'<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M10 4v6h5"/></svg>'}</span><span style="background:#2e4747;color:#9cf;border-radius:12px;padding:3px 14px;font-size:11px;height:22px">${tag}</span></div>
+   <div style="margin-top:10px"><b style="font-size:24px">${s}</b> <span class="sats">Sats</span></div><div style="height:26px;margin-top:2px">${f}</div>
+   <div class="link" style="font-weight:400">Read more →</div><div style="display:flex;justify-content:space-between;margin-top:6px"><span>⚇ <b>All users</b></span><span>${saved}</span></div><div>◔ <b>10%</b> payout to creator</div><div>⏱ <b>12</b> runs</div>
+   <div style="height:6px;background:#3b393a;border-radius:3px;margin-top:12px"><div style="width:${pc}%;height:6px;background:${bar};border-radius:3px"></div></div><div style="margin-top:6px"><b>${st}</b></div></div>`).join("");
+}
+</script>
+</body></html>
