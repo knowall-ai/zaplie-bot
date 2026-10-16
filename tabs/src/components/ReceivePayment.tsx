@@ -5,6 +5,7 @@ import copyDoc from '../images/DocumentCopy.svg';
 import copySuccess from '../images/CheckmarkCircleGreen.svg';
 import { createInvoice, getWalletPayments } from '../services/lnbits/payments';
 import { getWalletBalance } from '../services/lnbits/wallets';
+import { logger } from '../utils/logger';
 
 interface ReceivePopupProps {
   onClose: () => void;
@@ -22,7 +23,6 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   };
   const [inputValue, setInputValue] = useState('');
   const [inputNotes, setInputNotes] = useState('');
-  const [textToCopy, setTextToCopy] = useState('');
   const [buttonText, setButtonText] = useState('Copy');
   const [isSuccessFailurePopupVisible, setIsSuccessFailurePopupVisible] =
     useState(false);
@@ -31,20 +31,25 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
   const myLNbitDetails = currentUserLNbitDetails;
   const [invoice, setInvoice] = useState('');
   const [invoiceError, setInvoiceError] = useState('');
-  const [walletBalance, setWalletBalance] = useState(0);
-  const intervalId = useRef<NodeJS.Timeout | null>(null);
+  const [, setWalletBalance] = useState(0);
+  const timeoutId = useRef<number | null>(null);
+  const isMounted = useRef(false);
   // The button state only settles on the next render, so the ref is what stops
   // two rapid clicks from each creating an invoice and a poller.
   const invoicePending = useRef(false);
 
   useEffect(() => {
-    console.log('walletBalance changed:', walletBalance);
+    isMounted.current = true;
     return () => {
-      if (intervalId.current !== null) {
-        window.clearInterval(intervalId.current);
+      // In-flight requests cannot be cancelled here, so make their continuations
+      // no-ops before clearing any check that has not started yet.
+      isMounted.current = false;
+      if (timeoutId.current !== null) {
+        window.clearTimeout(timeoutId.current);
+        timeoutId.current = null;
       }
     };
-  }, [walletBalance]);
+  }, []);
 
   const handleCancelClick = () => {
     onClose();
@@ -74,59 +79,90 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
     setInvoiceError('');
 
     // A second Next click must not strand the poller the first one started.
-    if (intervalId.current !== null) {
-      window.clearInterval(intervalId.current);
-      intervalId.current = null;
+    if (timeoutId.current !== null) {
+      window.clearTimeout(timeoutId.current);
+      timeoutId.current = null;
     }
     invoicePending.current = true;
     setIsCreatingInvoice(true);
 
     createInvoice(walletId, amount, inputNotes)
       .then(invoice => {
-        console.log(invoice);
+        if (!isMounted.current) {
+          return;
+        }
         setInvoice(invoice);
+        logger.debug('Invoice created; payment status polling started.');
 
-        // Start polling for payment
-        intervalId.current = setInterval(() => {
-          getWalletPayments(walletId)
-            .then(payments => {
-              if (payments.length > 0) {
-                console.log('Payment received');
-                if (intervalId.current !== null) {
-                  window.clearInterval(intervalId.current);
-                }
+        // Schedule the next one-shot check only after the current request
+        // finishes, so a slow gateway response cannot create overlapping polls.
+        const schedulePaymentCheck = () => {
+          if (!isMounted.current) {
+            return;
+          }
+          timeoutId.current = window.setTimeout(() => {
+            timeoutId.current = null;
+            void checkPayment();
+          }, 5000);
+        };
 
-                console.log('Update the wallet balance in the context balance');
-                // Update the wallet balance in the context balance
-                getWalletBalance(walletId).then(balance => {
-                  console.log('getWalletBalance:', balance);
-                  // Use the new function to set the balance
-                  if (balance !== null) {
-                    console.log('setWalletBalance to ', balance);
-                    setWalletBalance(balance);
-                  } else {
-                    // Handle the case when balance is null
-                    // For example, set a default value or show an error message
-                    setWalletBalance(0);
-                  }
-                });
-              }
-            })
-            .catch(error => {
-              console.error('Polling wallet payments failed, stopping:', error);
-              if (intervalId.current !== null) {
-                window.clearInterval(intervalId.current);
-              }
-            });
-        }, 5000); // Check every 5 seconds
+        const checkPayment = async () => {
+          if (!isMounted.current) {
+            return;
+          }
+
+          let payments: Transaction[];
+          try {
+            payments = await getWalletPayments(walletId);
+          } catch {
+            if (!isMounted.current) {
+              return;
+            }
+            logger.error('Payment status polling failed, polling stopped.');
+            setInvoiceError(
+              'Unable to check payment status. Close and try again.',
+            );
+            return;
+          }
+
+          if (!isMounted.current) {
+            return;
+          }
+          if (payments.length === 0) {
+            schedulePaymentCheck();
+            return;
+          }
+
+          logger.debug('Payment received.');
+          try {
+            const balance = await getWalletBalance(walletId);
+            if (isMounted.current) {
+              setWalletBalance(balance ?? 0);
+              logger.debug('Wallet balance refresh completed.');
+            }
+          } catch {
+            logger.error('Wallet balance refresh failed after payment.');
+            if (isMounted.current) {
+              setInvoiceError(
+                'Payment received, but the balance could not be refreshed.',
+              );
+            }
+          }
+        };
+
+        schedulePaymentCheck();
       })
-      .catch(error => {
-        console.error('Creating the invoice failed:', error);
-        setInvoiceError('Creating the invoice failed. Close and try again.');
+      .catch(() => {
+        logger.error('Invoice creation failed.');
+        if (isMounted.current) {
+          setInvoiceError('Creating the invoice failed. Close and try again.');
+        }
       })
       .finally(() => {
         invoicePending.current = false;
-        setIsCreatingInvoice(false);
+        if (isMounted.current) {
+          setIsCreatingInvoice(false);
+        }
       });
   };
 
@@ -134,15 +170,11 @@ const ReceivePayment: React.FC<ReceivePopupProps> = ({
     // Logic to copy the text to clipboard
     const textToCopy = invoice;
     navigator.clipboard.writeText(textToCopy);
-    console.log('Text copied to clipboard: ', textToCopy);
     setButtonText('Copied');
-    console.log('Text copied to clipboard: ', setButtonText);
   };
 
   const handleCloseClick = () => {
-    setTextToCopy('');
     onClose();
-    console.log('Text copied to clipboard: ', textToCopy);
   };
 
   return (
