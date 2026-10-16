@@ -25,7 +25,8 @@ that keeps the voice and look consistent between clips.
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
 | `scripts/lyria_music.py` | Generates a music clip with Lyria. |
 | `scripts/make_cover_text.py` | Step 1 of the repo cover: creates the text ("ZAPLIE : INCENTIVIZING / TEAMMATES \| AGENTS \| CUSTOMERS") as a transparent layer in Calibri Bold, and checks its alignment rules. |
-| `scripts/make_banner.py` | Step 2: builds `CoverImage.png` (1280×640) from the hero image, with Zaplie on the right, and adds the text layer. |
+| `scripts/make_banner.py` | Step 2: builds `CoverImage.png` (1280×640) from the hero image, with Zaplie on the right, adds the white KnowAll AI logo top left, and adds the text layer. |
+| `references/knowall-logo.png` | The official KnowAll AI logo (dark on transparent); the cover script turns it white. |
 | `references/cover-text.png` | The cover's text layer, made by `make_cover_text.py`. |
 | `audio/zaplie-funk-bed.mp3` | 30 s of continuous 80s funk (Lyria, instrumental), for laying under videos. |
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |

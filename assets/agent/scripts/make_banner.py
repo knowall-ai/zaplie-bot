@@ -2,8 +2,9 @@
 """Build the 1280x640 repo cover (CoverImage.png) from the Zaplie hero image (step 2 of 2).
 
 The hero is scaled to the cover height with Zaplie kept on the right, the empty dark
-background is extended to the left, and the text layer made by make_cover_text.py is
-overlaid straight on the image.
+background is extended to the left, the white KnowAll AI logo goes top left (same 44 px
+margin as the text), and the text layer made by make_cover_text.py is overlaid straight on
+the image.
 
 usage (from the repo root):
   python3 assets/agent/scripts/make_cover_text.py
@@ -13,6 +14,8 @@ from PIL import Image, ImageFilter
 
 HERO = "assets/agent/images/zaplie-hero.jpg"
 TEXT = "assets/agent/references/cover-text.png"
+LOGO = "assets/agent/references/knowall-logo.png"      # official logo, dark on transparent
+LOGO_POS, LOGO_HEIGHT = (44, 44), 96
 OUT = "CoverImage.png"
 W, H = 1280, 640
 
@@ -38,6 +41,12 @@ def background():
 
 if __name__ == "__main__":
     cover = background().convert("RGBA")
+    logo = Image.open(LOGO).convert("RGBA")
+    logo = logo.crop(logo.getchannel("A").getbbox())                  # trim transparent padding
+    white = Image.new("RGBA", logo.size, (255, 255, 255, 0))
+    white.putalpha(logo.getchannel("A"))                              # white logo, same shape
+    white = white.resize((round(logo.width * LOGO_HEIGHT / logo.height), LOGO_HEIGHT), Image.LANCZOS)
+    cover.alpha_composite(white, LOGO_POS)
     cover.alpha_composite(Image.open(TEXT).convert("RGBA"))
     cover.convert("RGB").save(OUT)
     print("wrote", OUT, cover.size)
