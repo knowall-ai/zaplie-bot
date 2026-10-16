@@ -24,6 +24,8 @@ that keeps the voice and look consistent between clips.
 | `prompts/music-funk-bed.txt` | The Lyria prompt for the funk music bed. |
 | `scripts/omni_video.py` | Generates or extends a Gemini Omni video. |
 | `scripts/lyria_music.py` | Generates a music clip with Lyria. |
+| `scripts/make_banner.py` | Builds the repo cover (`CoverImage.png`, 1280×640) from the hero image: title band, Mulish text and LNbits badge. |
+| `references/lnbits-badge.png` | The "Powered by LNbits" badge used on the cover. |
 | `audio/zaplie-funk-bed.mp3` | 30 s of continuous 80s funk (Lyria, instrumental), for laying under videos. |
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |
 | `video/zaplie-club.mp4` | 20 s: robot club, with his voice and catchphrases. |
