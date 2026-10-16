@@ -9,9 +9,24 @@ The key is read from ~/.config/google/gemini_api_key and never printed.
 """
 import argparse, base64, json, mimetypes, re, sys, time, urllib.request, urllib.error
 from pathlib import Path
+from urllib.parse import urlsplit
 
-API = "https://generativelanguage.googleapis.com/v1beta/interactions"
+API_HOST = "generativelanguage.googleapis.com"
+API = f"https://{API_HOST}/v1beta/interactions"
 MODEL = "gemini-omni-1.1-flash"
+
+
+class KeepKeyOnHost(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but drop the API key when one leads to another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urlsplit(newurl).netloc != urlsplit(req.full_url).netloc:
+            new.remove_header("X-goog-api-key")
+        return new
+
+
+opener = urllib.request.build_opener(KeepKeyOnHost)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--prompt-file", type=Path, required=True)
@@ -58,6 +73,10 @@ if v.get("data"):
     args.out.write_bytes(base64.b64decode(v["data"]))
 elif v.get("uri"):
     uri = v["uri"]
+    # Only send the key to the Gemini API itself.
+    loc = urlsplit(uri)
+    if loc.scheme != "https" or loc.hostname != API_HOST:
+        sys.exit(f"Video URI is not on {API_HOST}; download it manually: {uri}")
     # The URI may be a download link (".../files/ID:download?alt=media"), which returns video
     # bytes, so poll the file's status endpoint instead until it is ACTIVE.
     m = re.search(r"/files/([A-Za-z0-9_-]+)", uri)
@@ -65,8 +84,8 @@ elif v.get("uri"):
         sys.exit(f"Unrecognised video URI; download it manually: {uri}")
     status_url = f"https://generativelanguage.googleapis.com/v1beta/files/{m.group(1)}"
     for _ in range(60):
-        with urllib.request.urlopen(urllib.request.Request(status_url, headers={"x-goog-api-key": key}),
-                                    timeout=60) as r:
+        with opener.open(urllib.request.Request(status_url, headers={"x-goog-api-key": key}),
+                         timeout=60) as r:
             meta = json.load(r)
         state = (meta.get("file") or meta).get("state", "ACTIVE")
         if state == "ACTIVE":
@@ -78,6 +97,6 @@ elif v.get("uri"):
         sys.exit(f"Hosted video still not ACTIVE after 5 minutes; download it later: {uri}")
     download = uri if "alt=media" in uri else uri + ("&" if "?" in uri else "?") + "alt=media"
     dl = urllib.request.Request(download, headers={"x-goog-api-key": key})
-    with urllib.request.urlopen(dl, timeout=300) as r:
+    with opener.open(dl, timeout=300) as r:
         args.out.write_bytes(r.read())
 print(args.out, "interaction:", resp.get("id"), "usage:", json.dumps(resp.get("usage", {})))
