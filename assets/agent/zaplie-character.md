@@ -17,6 +17,7 @@ that keeps the voice and look consistent between clips.
 | `images/zaplie-gift.jpg` | Handing over a glowing orange bolt. |
 | `images/zaplie-celebrate.jpg` | Arms up in a shower of sparks. |
 | `images/zaplie-wave.jpg` | A friendly hello wave. |
+| `images/zaplie-electrified-subtle.jpg` | Subtle electrified hair (the usual): the crest glows brighter with a gentle shimmer. |
 | `images/zaplie-electrified.jpg` | Full electrified hair (rare, big moments): crest luminous and buzzing. Usually it is subtler. |
 | `prompts/images.md` | The exact prompts and commands behind `images/`. |
 | `prompts/video-*.txt` | The prompts for both videos. |
@@ -64,10 +65,13 @@ host them and downloads the file when it is ready (`--delivery uri`).
 His crest reacts to his energy at two levels. Add a level to the shot, not to the
 character block.
 
-**Subtle (the usual).** Use it when he's excited or zapping:
+**Subtle (the usual).** Use it when he's excited or zapping. `images/zaplie-electrified-subtle.jpg` shows it:
 
-> His crest of orange wire hair glows a little brighter, with a few faint
-> flickering orange arcs between the strands and the odd spark at the tips.
+> His whole hair crest glows a brighter, more luminous Bitcoin orange (#F7931A)
+> from within, with a soft shimmering buzz of tiny glints running along the wire
+> strands, as if the hair is gently charged. No lightning bolts, no zigzags, no
+> sparks or bolts flying off his head; the effect stays inside the hair and
+> stays gentle.
 
 **Full electrified (rare).** Save it for big moments, such as a huge zap, a
 celebration or a finale. `images/zaplie-electrified.jpg` shows it:
@@ -99,12 +103,15 @@ images he has no mouth. In videos where he talks, a simple mouth on the metal
 **below** the visor is fine; video models add one whenever a character speaks.
 
 > His face is a dark glass visor with exactly TWO separate round glowing orange
-> eyes and nothing else. The eyes can squint into happy arcs or widen, but always
-> stay two separate orange eyes on dark glass. The visor never turns into a
-> screen, never shows a drawn or cartoon face, never merges the eyes into a bar.
-> Nothing but the two eyes ever appears inside the visor. While he talks, a
-> simple mouth may move on the smooth metal BELOW the visor; it never appears
-> inside the visor glass. NO robot in the scene has a screen face.
+> eyes and nothing else. Each eye is a SOLID, evenly glowing orange disc with no
+> pupil, no iris, no dark centre and no ring. The eyes are only ever solid round
+> discs or squinted happy arcs, never wider, never with pupils, always two
+> separate orange eyes on dark glass, even when he is surprised or excited. The
+> visor never turns into a screen, never shows a drawn or cartoon face, never
+> merges the eyes into a bar. Nothing but the two eyes ever appears inside the
+> visor. While he talks, a simple mouth may move on the smooth metal BELOW the
+> visor; it never appears inside the visor glass. NO robot in the scene has a
+> screen face.
 
 ## Music block
 
@@ -120,10 +127,14 @@ images he has no mouth. In videos where he talks, a simple mouth on the metal
   once a mouth appeared inside the visor. So allow a mouth below the visor and
   protect the visor instead.
 - Don't describe his eyes as pulsing "like a sound meter": the model turned them
-  into equaliser bars.
+  into equaliser bars. Say each eye is a solid, evenly glowing disc with no pupil
+  or ring, and don't let the eyes "widen": wide or surprised eyes came out as
+  cartoon eyeballs with dark pupils.
 - Keep robots with screen faces (TV heads) out of any shot where he speaks: he
   once blended into one. Make other robots look clearly different from him
   (for example silver and white with blue eyes), or they come out as copies.
-- Ask for an original groove, not a named song.
+- Ask for an original groove, not a named song, and say it plays continuously
+  from the first frame to the last: it once dropped out under his first lines.
+  Check by measuring the bass (below 150 Hz), which his voice barely touches.
 - Omni costs about $0.10 per second at 720p. A 10 s extension also re-reads the
   earlier clip, so it costs about $1.10.
