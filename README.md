@@ -14,6 +14,14 @@ With Zaplie, users, copilots, and customers can:
 
 Zaplie transforms traditional incentives into a powerful, value-for-value system where AI copilots, human teammates, and customers work together, driving continuous improvement and engagement in a transparent, rewarding manner.
 
+## Meet Zaplie
+
+Zaplie explains the power of the zap: gratitude, rewards, proof of work, and real value, big or small. Click the preview to watch the full video with sound.
+
+[![Zaplie explains the power of the zap](assets/agent/video/zaplie-explainer-preview.gif)](assets/agent/video/zaplie-explainer.mp4)
+
+Zaplie's look, voice, prompts and more videos are in the [character kit](assets/agent/zaplie-character.md).
+
 # Design
 
 The vision of the solution (many elements still in draft) can be seen here:
