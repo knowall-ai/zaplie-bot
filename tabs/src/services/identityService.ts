@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { apiUrl } from './appLocation';
 
-const API_URL = '/api/identities';
+const API_URL = apiUrl('/api/identities');
 
 export interface LinkedIdentity {
   provider: string;

@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const {
+  createEnsureCaller,
   createInvoice,
   createSendZap,
   getWalletBalance,
@@ -782,4 +783,115 @@ test('numeric wallet balances survive sanitisation, strings included', () => {
   assert.equal(sanitizeBalanceMsat(42000), 42000);
   assert.equal(sanitizeBalanceMsat(-1000), -1000);
   assert.equal(sanitizeBalanceMsat('42000'), 42000);
+});
+
+// Provisioning for people who never met the bot in Teams. The portal creates
+// only the LNbits user and wallets that are missing, and never pays anything.
+const ensureCallerHarness = ({ users = [], wallets = {} } = {}) => {
+  const calls = [];
+  const ensureCaller = createEnsureCaller({
+    listUsersForCaller: async () => {
+      calls.push(['list-users']);
+      return users;
+    },
+    createUserForCaller: async (input) => {
+      calls.push(['create-user', input]);
+      const user = { id: `user-${input.aadObjectId}`, external_id: input.aadObjectId, email: input.email };
+      users.push(user);
+      wallets[user.id] = [];
+      return user;
+    },
+    listWalletsForCaller: async (userId) => {
+      calls.push(['list-wallets', userId]);
+      return wallets[userId] || [];
+    },
+    createWalletForCaller: async (userId, name) => {
+      calls.push(['create-wallet', userId, name]);
+      const wallet = { id: `${userId}-${name.toLowerCase()}`, name, inkey: 'in', adminkey: 'ad' };
+      (wallets[userId] ||= []).push(wallet);
+      return wallet;
+    },
+  });
+  return { ensureCaller, calls };
+};
+
+test('a signed-in person with no LNbits user gets one with both wallets, and no payment', async () => {
+  const { ensureCaller, calls } = ensureCallerHarness();
+
+  const result = await ensureCaller({
+    aadObjectId: 'new-oid',
+    displayName: '  Ada Lovelace ',
+    email: 'ada@example.test',
+  });
+
+  assert.equal(result.created, true);
+  assert.deepEqual(result.createdWallets, ['Allowance', 'Private']);
+  assert.equal(result.user.aadObjectId, 'new-oid');
+  assert.equal('inkey' in result.user, false);
+  assert.deepEqual(calls[1], [
+    'create-user',
+    { aadObjectId: 'new-oid', displayName: 'Ada Lovelace', email: 'ada@example.test' },
+  ]);
+  assert.deepEqual(
+    calls.filter(([kind]) => kind === 'create-wallet'),
+    [
+      ['create-wallet', 'user-new-oid', 'Allowance'],
+      ['create-wallet', 'user-new-oid', 'Private'],
+    ],
+  );
+  assert.ok(calls.every(([kind]) => !/pay|invoice/.test(kind)));
+});
+
+test('an existing user only gets the wallet that is missing', async () => {
+  const { ensureCaller, calls } = ensureCallerHarness({
+    users: [{ id: 'user-1', external_id: 'oid-1' }],
+    wallets: { 'user-1': [{ id: 'w-1', name: 'allowance ' }] },
+  });
+
+  const result = await ensureCaller({ aadObjectId: 'oid-1' });
+
+  assert.equal(result.created, false);
+  assert.deepEqual(result.createdWallets, ['Private']);
+  assert.equal(calls.some(([kind]) => kind === 'create-user'), false);
+  assert.deepEqual(
+    calls.filter(([kind]) => kind === 'create-wallet'),
+    [['create-wallet', 'user-1', 'Private']],
+  );
+});
+
+test('a fully provisioned user is left alone', async () => {
+  const { ensureCaller, calls } = ensureCallerHarness({
+    users: [{ id: 'user-1', external_id: 'oid-1' }],
+    wallets: { 'user-1': [{ id: 'w-1', name: 'Allowance' }, { id: 'w-2', name: 'Private' }] },
+  });
+
+  const result = await ensureCaller({ aadObjectId: 'oid-1' });
+
+  assert.deepEqual(
+    { created: result.created, createdWallets: result.createdWallets },
+    { created: false, createdWallets: [] },
+  );
+  assert.deepEqual(calls.map(([kind]) => kind), ['list-users', 'list-wallets']);
+});
+
+test('two sign-ins at once create one LNbits user, not two', async () => {
+  const { ensureCaller, calls } = ensureCallerHarness();
+
+  const [first, second] = await Promise.all([
+    ensureCaller({ aadObjectId: 'new-oid' }),
+    ensureCaller({ aadObjectId: 'new-oid' }),
+  ]);
+
+  assert.equal(first.user.id, second.user.id);
+  assert.equal(calls.filter(([kind]) => kind === 'create-user').length, 1);
+});
+
+test('provisioning refuses an oid that is not a plain id', async () => {
+  const { ensureCaller, calls } = ensureCallerHarness();
+
+  await assert.rejects(
+    ensureCaller({ aadObjectId: '../admin' }),
+    (error) => error.status === 400,
+  );
+  assert.deepEqual(calls, []);
 });

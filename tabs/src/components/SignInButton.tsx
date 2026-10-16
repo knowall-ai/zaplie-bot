@@ -4,6 +4,7 @@ import { DefaultButton } from '@fluentui/react';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { InteractionStatus } from '@azure/msal-browser';
 import { loginRequest } from '../services/authConfig';
+import { appUrl } from '../services/appLocation';
 
 export const SignInButton = () => {
   const { instance, inProgress } = useMsal();
@@ -32,7 +33,7 @@ export const SignInButton = () => {
       try {
         await microsoftTeams.app.initialize();
         await microsoftTeams.app.getContext();
-        const authUrl = new URL('/auth-start', window.location.origin);
+        const authUrl = new URL(appUrl('/auth-start'));
         authUrl.searchParams.set('teamsAuth', '1');
         authUrl.searchParams.set('redirectUrl', redirectUrl);
 

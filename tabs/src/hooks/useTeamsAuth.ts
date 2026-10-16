@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { clearApiCache } from '../services/lnbits/cache';
 import { teamsContextQueryOptions } from '../services/teamsContextService';
+import { appUrl } from '../services/appLocation';
 
 interface UseTeamsAuthReturn {
   isInTeams: boolean;
@@ -43,7 +44,7 @@ export const useTeamsAuth = (): UseTeamsAuthReturn => {
       clearApiCache();
 
       await instance.logoutPopup({
-        postLogoutRedirectUri: window.location.origin + '/login',
+        postLogoutRedirectUri: appUrl('/login'),
         account: accounts[0] || null,
       });
     } catch (error) {

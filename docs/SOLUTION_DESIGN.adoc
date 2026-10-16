@@ -285,6 +285,25 @@ Routes (`tabs/src/App.tsx`): `/feed`, `/users`, `/rewards`, `/wallet`,
 to `/login` on failure) — plus `/login`, `/auth-start`, `/auth-end`. Providers:
 `MsalProvider` → `RewardNameProvider` → `PageLayout`.
 
+The app serves two hosts from one bundle: the Teams tabs at the root of the
+portal App Service, and the browser portal at `https://getzapl.ie/portal/`
+(static files on the website's Static Web App, API calls to the App Service).
+`tabs/src/services/appLocation.ts` turns the build-time `PUBLIC_URL` into the
+router basename and the MSAL redirect URIs, and `REACT_APP_API_BASE_URL` into
+the prefix of every `/api` call. In a browser the header and footer are shown;
+inside Teams (`useTeamsAuth` → `teams-js` context) they stay hidden.
+
+`RequireAuth` also calls `POST /api/lnbits/users/me` once per page load before
+rendering a guarded route. The bot creates LNbits users on a person's first
+Teams turn, so outside Teams nobody had one and every gateway route refused
+them. The route is the only one mounted before the gateway's `assertCaller`
+check; it acts on the verified token's `oid` alone, creates only the user and
+the `Allowance`/`Private` wallets that are missing, and never moves sats. It
+applies the bot's member rule (`tabs/backend/memberGate.js`, a mirror of
+`src/services/memberGate.ts`) to the token's `tid` and `acct` claims: members
+of the home tenant and allowlisted guests are provisioned, everyone else, and
+any token whose membership cannot be read, gets 403 and nothing is created.
+
 [cols="1,3"]
 |===
 | Page | Purpose

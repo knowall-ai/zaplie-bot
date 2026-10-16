@@ -1,3 +1,8 @@
+// The provisioning gate reads the home tenant and the guest allowlist from
+// the environment, like the bot does; set before the router is created.
+process.env.AAD_TENANT_ID = 'home-tenant';
+process.env.ZAPLIE_GUEST_ALLOWLIST = 'guest.ok@partner.test';
+
 const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const express = require('express');
@@ -49,6 +54,10 @@ const service = {
     calls.push(['zap', input]);
     return { payment_hash: 'hash-2' };
   },
+  ensureCaller: async (input) => {
+    calls.push(['ensure', input]);
+    return { user: { id: 'user-new' }, created: true, createdWallets: [] };
+  },
 };
 
 const extractBearerToken = (req) => {
@@ -58,7 +67,22 @@ const extractBearerToken = (req) => {
 
 const verifyMsalPayload = async (token) => {
   if (token === 'valid-token') return { oid: 'caller-oid' };
-  if (token === 'unlinked-token') return { oid: 'unlinked-oid' };
+  if (token === 'unlinked-token')
+    return {
+      oid: 'unlinked-oid',
+      tid: 'home-tenant',
+      acct: 0,
+      name: 'New Person',
+      preferred_username: 'new.person@example.test',
+    };
+  if (token === 'guest-token')
+    return { oid: 'unlinked-oid', tid: 'home-tenant', acct: 1, preferred_username: 'g@other.test' };
+  if (token === 'allowlisted-guest-token')
+    return { oid: 'unlinked-oid', tid: 'home-tenant', acct: 1, preferred_username: 'Guest.OK@partner.test' };
+  if (token === 'other-tenant-token')
+    return { oid: 'unlinked-oid', tid: 'elsewhere', acct: 0 };
+  if (token === 'no-claims-token') return { oid: 'unlinked-oid' };
+  if (token === 'no-acct-token') return { oid: 'unlinked-oid', tid: 'home-tenant' };
   throw new Error('bad token');
 };
 
@@ -246,4 +270,69 @@ test('rejects pagination values that are not plain integers', async () => {
     assert.equal(response.status, 400);
     assert.equal(calls.length, callsBefore);
   }
+});
+
+// POST /users/me is the one route a person without an LNbits user may reach:
+// it is how they get one. It still needs a verified token, and it acts on the
+// token's oid, never on anything in the body.
+test('only members and allowlisted guests can provision; nothing is created otherwise', async () => {
+  for (const token of ['guest-token', 'other-tenant-token', 'no-claims-token', 'no-acct-token']) {
+    const before = calls.length;
+    const response = await request('/api/lnbits/users/me', { method: 'POST', token });
+    assert.equal(response.status, 403, token);
+    assert.equal(calls.length, before, `${token} must create nothing`);
+  }
+
+  const response = await request('/api/lnbits/users/me', {
+    method: 'POST',
+    token: 'allowlisted-guest-token',
+  });
+  assert.equal(response.status, 200);
+  assert.equal(calls.at(-1)[0], 'ensure');
+  assert.equal(calls.at(-1)[1].email, 'Guest.OK@partner.test');
+});
+
+test('a person already in LNbits keeps every route, whatever their membership', async () => {
+  // valid-token carries no tid or acct at all: existing users are not gated.
+  const response = await request('/api/lnbits/users', { token: 'valid-token' });
+  assert.equal(response.status, 200);
+});
+
+test('an unlinked member can provision themselves, from the token alone', async () => {
+  assert.equal(
+    (await request('/api/lnbits/users/me', { method: 'POST' })).status,
+    401,
+  );
+
+  const response = await request('/api/lnbits/users/me', {
+    method: 'POST',
+    token: 'unlinked-token',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    user: { id: 'user-new' },
+    created: true,
+    createdWallets: [],
+  });
+  assert.deepEqual(calls.at(-1), [
+    'ensure',
+    {
+      aadObjectId: 'unlinked-oid',
+      displayName: 'New Person',
+      email: 'new.person@example.test',
+    },
+  ]);
+});
+
+test('provisioning refuses a body that tries to name the identity', async () => {
+  const before = calls.length;
+  const response = await request('/api/lnbits/users/me', {
+    method: 'POST',
+    token: 'valid-token',
+    body: { aadObjectId: 'forged-oid' },
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, before);
 });

@@ -63,7 +63,11 @@ deployable components in one repository:
   the automation reward's `from` is `{ displayName }` only, because the bot
   holds the treasury wallet's admin key, not its wallet object.
 - **Tabs app**: routes `/feed`, `/users`, `/rewards`, `/wallet`, `/settings`
-  (MSAL-guarded via `RequireAuth`), plus `/login`, `/auth-start`, `/auth-end`.
+  (MSAL-guarded via `RequireAuth`, which also provisions the signed-in
+  person's LNbits user and wallets through `POST /api/lnbits/users/me` on
+  first use outside Teams), plus `/login`, `/auth-start`, `/auth-end`. The
+  same bundle is also served at `https://getzapl.ie/portal/` (built with
+  `PUBLIC_URL=/portal`).
   `tabs/backend/server.js` is a tiny Express API that persists the renamable
   reward label ("Sats") to `tabs/backend/data.json` and serves the production
   build.
@@ -150,7 +154,9 @@ table):
   never names or zap messages)
 - **Tabs**: `REACT_APP_LNBITS_NODE_URL`, `REACT_APP_AAD_CLIENT_ID`,
   `REACT_APP_TENANT_ID`, and related `REACT_APP_LNBITS_*` keys
-  (`tabs/.env.development`)
+  (`tabs/.env.development`). For the browser portal on getzapl.ie the build
+  also takes `PUBLIC_URL=/portal` and `REACT_APP_API_BASE_URL` (see
+  `tabs/src/services/appLocation.ts` and `docs/DEPLOYMENT.adoc`)
 - Environments live in `env/` (`.env.local`, `.env.dev`); `dotenv-flow` loads
   them. `scripts/writeEnv.js` and `build.js` generate derived files
   (`.localConfigs`, `appPackage/manifest.json` — both gitignored).

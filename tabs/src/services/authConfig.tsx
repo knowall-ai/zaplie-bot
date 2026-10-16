@@ -1,4 +1,5 @@
 import { Configuration, PopupRequest } from '@azure/msal-browser';
+import { getAppOrigin } from './appLocation';
 
 // Tagged so the startup error UI can tell a missing environment variable
 // (safe to show: the message names the variable, never its value) from any
@@ -34,8 +35,10 @@ export const createMsalConfig = (): Configuration => {
     auth: {
       clientId: AADclientid,
       authority: `https://login.microsoftonline.com/${TenantId}`,
-      redirectUri: window.location.origin,
-      postLogoutRedirectUri: window.location.origin,
+      // The app's origin plus its base path (/portal on getzapl.ie), so each
+      // home of this bundle has its own registered redirect URI.
+      redirectUri: getAppOrigin(),
+      postLogoutRedirectUri: getAppOrigin(),
     },
     system: {
       allowPlatformBroker: false, // Disables WAM Broker

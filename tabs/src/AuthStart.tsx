@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { InteractionStatus } from '@azure/msal-browser';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from './services/authConfig';
+import { appUrl } from './services/appLocation';
 import {
   AUTH_FLOW_STORAGE_KEY,
   notifyTeams,
@@ -46,7 +47,7 @@ const AuthStart: React.FC = () => {
           if (!instance.getActiveAccount()) {
             instance.setActiveAccount(accounts[0]);
           }
-          window.location.assign(`${window.location.origin}/auth-end`);
+          window.location.assign(appUrl('/auth-end'));
           return;
         }
 
@@ -56,7 +57,7 @@ const AuthStart: React.FC = () => {
 
         await instance.loginRedirect({
           ...loginRequest,
-          redirectUri: `${window.location.origin}/auth-end`,
+          redirectUri: appUrl('/auth-end'),
         });
       } catch {
         // TeamsJS leaves the host promise pending until the popup notifies,

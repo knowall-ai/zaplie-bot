@@ -4,6 +4,7 @@ const {
   extractBearerToken: defaultExtractBearerToken,
   verifyMsalPayload: defaultVerifyMsalPayload,
 } = require('./msalValidator');
+const { tokenMemberVerdict } = require('./memberGate');
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const INVOICE_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
@@ -76,11 +77,67 @@ const createLnbitsRouter = ({
       if (!claims || typeof claims.oid !== 'string' || claims.oid.length === 0) {
         throw new Error('token is missing the oid claim');
       }
-      req.auth = { oid: claims.oid, roles: claims.roles || [] };
+      req.auth = {
+        oid: claims.oid,
+        roles: claims.roles || [],
+        // Profile claims from the same verified token, used only to label a
+        // newly provisioned LNbits user; authorization never reads them.
+        name: typeof claims.name === 'string' ? claims.name : undefined,
+        email:
+          typeof claims.preferred_username === 'string'
+            ? claims.preferred_username
+            : typeof claims.email === 'string'
+              ? claims.email
+              : undefined,
+        // Membership facts for the provisioning gate (memberGate.js): the
+        // tenant and the acct optional claim (0 member, 1 guest). Kept as
+        // issued; the gate decides what they mean.
+        tid: typeof claims.tid === 'string' ? claims.tid : undefined,
+        acct: claims.acct,
+      };
       next();
     } catch (error) {
       console.error('LNbits gateway token validation failed:', error.message);
       res.status(401).json({ error: 'invalid token' });
+    }
+  });
+
+  // Registered before assertCaller on purpose: this is how a signed-in
+  // person who has no LNbits user yet (nobody outside Teams had one) gets
+  // one. It only ever acts on the verified token's own oid, creates nothing
+  // that already exists and moves no sats.
+  //
+  // It serves the same people the bot serves (src/services/memberGate.ts,
+  // mirrored in memberGate.js): members of this tenant, and guests listed in
+  // ZAPLIE_GUEST_ALLOWLIST. A verified token alone is not enough, as the
+  // tenant's guests can obtain one too. Anyone the gate cannot place is
+  // refused and nothing is created.
+  router.post('/users/me', async (req, res, next) => {
+    if (req.body !== undefined && !hasOnlyKeys(req.body, new Set())) {
+      res.status(400).json({ error: 'invalid setup request' });
+      return;
+    }
+    const verdict = tokenMemberVerdict({
+      oid: req.auth.oid,
+      tid: req.auth.tid,
+      acct: req.auth.acct,
+      preferred_username: req.auth.email,
+    });
+    if (!verdict.allowed) {
+      console.warn(`LNbits provisioning refused (${verdict.reason}) for ${req.auth.oid}`);
+      res.status(403).json({ error: 'not a member of this organisation' });
+      return;
+    }
+    try {
+      res.json(
+        await service.ensureCaller({
+          aadObjectId: req.auth.oid,
+          displayName: req.auth.name,
+          email: req.auth.email,
+        }),
+      );
+    } catch (error) {
+      next(error);
     }
   });
 

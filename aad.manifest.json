@@ -17,7 +17,14 @@
         }
     ],
     "optionalClaims": {
-        "idToken": [],
+        "idToken": [
+            {
+                "name": "acct",
+                "source": null,
+                "essential": false,
+                "additionalProperties": []
+            }
+        ],
         "accessToken": [
             {
                 "name": "idtyp",

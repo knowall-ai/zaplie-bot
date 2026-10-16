@@ -111,6 +111,65 @@ deploys the whole portal: the React build *and* the Express backend under
 the artifact arrives prebuilt). The bot deploys separately via
 `teamsapp deploy`.
 
+=== The portal on getzapl.ie (/portal/)
+
+The tabs app has a second home: the **Login** button on
+https://getzapl.ie opens the same React app at `https://getzapl.ie/portal/`,
+served as static files by the website's Azure Static Web App
+(`knowall-ai/zaplie-website`, `website/build.mjs` copies the build into
+`dist/portal`). Nothing else is deployed there: the Express backend stays on
+the portal App Service, and the browser calls it across origins.
+
+The build for that path is the ordinary CRA build with two more settings, both
+public values:
+
+[source,bash]
+----
+cd tabs
+PUBLIC_URL=/portal \
+REACT_APP_API_BASE_URL=https://<portal App Service host> \
+REACT_APP_AAD_CLIENT_ID=... REACT_APP_TENANT_ID=... \
+npm run build
+----
+
+`PUBLIC_URL` is read once, at build time, by `tabs/src/services/appLocation.ts`:
+it becomes the router `basename`, the prefix of the auth routes
+(`/portal/auth-start`, `/portal/auth-end`, `/portal/login`) and the MSAL
+redirect URI (`https://getzapl.ie/portal`, no trailing slash, like
+`TAB_ENDPOINT`). `REACT_APP_API_BASE_URL` prefixes every `/api/...` call;
+unset, calls stay same-origin, so the Teams deployment is unchanged.
+
+Before the portal can sign anyone in there, the app registration
+(`aad.manifest.json`, single tenant) needs four more single-page application
+redirect URIs: `https://getzapl.ie/portal`, `https://getzapl.ie/portal/auth-end`,
+`https://www.getzapl.ie/portal` and `https://www.getzapl.ie/portal/auth-end`.
+The backend already answers cross-origin requests (`cors()` in
+`tabs/backend/server.js`); `PORTAL_URL` on the App Service should point at
+`https://getzapl.ie/portal` once the GitHub identity and connection redirects
+are meant to land there.
+
+People who have never used the bot in Teams have no LNbits user. The portal
+provisions one on first sign-in: `POST /api/lnbits/users/me` (the one gateway
+route that does not require an existing LNbits user) creates the user, keyed
+by the Entra `oid` in `external_id` like the bot does, and its empty
+`Allowance` and `Private` wallets. It moves no sats: the opening allowance
+(`LNBITS_INITIAL_ALLOWANCE`) remains the bot's doing, so a person set up this
+way can receive zaps at once and send them once their Allowance wallet is
+funded.
+
+The route serves exactly the people the bot serves. `tabs/backend/memberGate.js`
+mirrors `src/services/memberGate.ts`: members of the home tenant are
+provisioned; guests and users from other tenants only if listed in
+`ZAPLIE_GUEST_ALLOWLIST` (same format, set it on the portal App Service as
+well as the bot's); anyone else is refused with 403 and nothing is created.
+The portal backend has no Graph access, so membership comes from the verified
+idToken: `tid` is the tenant and the optional claim `acct` is the role
+(0 member, 1 guest). `aad.manifest.json` requests `acct` in idTokens; until
+that is applied to the app registration (`teamsapp provision`, or
+*Token configuration* in the Entra portal) no token carries it and the route
+refuses everyone, by design. People who already have an LNbits user are not
+affected: only creation is gated.
+
 === Persistent application state
 
 The bot keeps its mutable state — currently the durable Zap ledger
@@ -219,6 +278,17 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | MSAL configuration for the tabs SPA
 | Tabs
 
+| `PUBLIC_URL`
+| Base path of the tabs build (`/portal` for getzapl.ie/portal/; unset at the
+  root). Sets asset paths, the router basename and the MSAL redirect URI
+| Tabs (build time)
+
+| `REACT_APP_API_BASE_URL`
+| Origin of the Express backend when the tabs are served from another host
+  (`https://<portal App Service host>` for getzapl.ie); unset, `/api` calls stay
+  same-origin
+| Tabs (build time)
+
 | `WEBSITE_URL`, `CONTENT_URL`
 | Public URLs substituted into the Teams manifest by `build.js`
 | Manifest
@@ -310,8 +380,9 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | Guests (or users from other tenants) the bot may serve, besides members of
   its own tenant. Comma-separated: `person@example.com`, `@example.com` for a
   whole domain, or an Entra object id. Empty or unset (the default): members
-  only. Anonymous meeting participants are never served
-| Bot
+  only. Anonymous meeting participants are never served. The portal backend
+  reads the same setting for `POST /api/lnbits/users/me`
+| Bot, Portal backend
 
 | `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL`
 | Azure AI Foundry project endpoint and model for the conversational

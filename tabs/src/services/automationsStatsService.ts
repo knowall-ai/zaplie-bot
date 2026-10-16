@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { isFiniteNumber } from './validators';
+import { apiUrl } from './appLocation';
 
 export type AutomationAudience = 'teammates' | 'copilots' | 'customers';
 
@@ -117,7 +118,7 @@ export const parseAutomationsStats = (value: unknown): AutomationsStats => {
 export const getAutomationsStats = async (
   idToken: string,
 ): Promise<AutomationsStats> => {
-  const response = await axios.get('/api/automations-stats', {
+  const response = await axios.get(apiUrl('/api/automations-stats'), {
     headers: { Authorization: `Bearer ${idToken}` },
   });
   return parseAutomationsStats(response.data);

@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { apiUrl } from './services/appLocation';
 import { isFiniteNumber } from './services/validators';
 
-const API_URL = '/api';
+const API_URL = apiUrl('/api');
 
 export interface RewardNameResponse {
   rewardName: string;

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { apiUrl } from './appLocation';
 
 export interface GithubSetupStatus {
   created: boolean;
@@ -15,7 +16,10 @@ const auth = (idToken: string) => ({
 export const getGithubSetupStatus = async (
   idToken: string,
 ): Promise<GithubSetupStatus> => {
-  const response = await axios.get('/api/setup/github/status', auth(idToken));
+  const response = await axios.get(
+    apiUrl('/api/setup/github/status'),
+    auth(idToken),
+  );
   return response.data;
 };
 
@@ -24,7 +28,10 @@ export const getGithubSetupStatus = async (
 export const startGithubAppCreation = async (
   idToken: string,
 ): Promise<void> => {
-  const response = await axios.get('/api/setup/github/manifest', auth(idToken));
+  const response = await axios.get(
+    apiUrl('/api/setup/github/manifest'),
+    auth(idToken),
+  );
   const { action, manifest } = response.data;
   const form = document.createElement('form');
   form.method = 'post';

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import * as microsoftTeams from '@microsoft/teams-js';
+import { getAppOrigin } from './services/appLocation';
 
 export const AUTH_FLOW_STORAGE_KEY = 'zaplie.auth.flow';
 
@@ -20,15 +21,18 @@ export const resolveSameOriginRedirect = (
   value: string | null,
   origin = window.location.origin,
 ): string => {
+  // The fallback is the app itself (origin plus base path), so a missing or
+  // foreign target lands on the portal, not on the marketing page.
+  const fallback = getAppOrigin(origin);
   if (!value) {
-    return origin;
+    return fallback;
   }
 
   try {
     const target = new URL(value, origin);
-    return target.origin === origin ? target.href : origin;
+    return target.origin === origin ? target.href : fallback;
   } catch {
-    return origin;
+    return fallback;
   }
 };
 
