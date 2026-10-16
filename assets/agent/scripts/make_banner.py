@@ -33,7 +33,7 @@ def background():
         ext.paste(strip if i % 2 == 0 else strip.transpose(Image.FLIP_LEFT_RIGHT), (x, 0))
     canvas.paste(ext.filter(ImageFilter.GaussianBlur(30)), (0, 0))
     fade = 120
-    grad = Image.linear_gradient("L").rotate(-90, expand=True).resize((fade, H))   # 0 -> 255 left to right
+    grad = Image.linear_gradient("L").rotate(90, expand=True).resize((fade, H))    # 0 -> 255 left to right: blurred -> sharp
     seam = scaled.crop((0, 0, fade, H))
     canvas.paste(Image.composite(seam, seam.filter(ImageFilter.GaussianBlur(30)), grad), (left_w, 0))
     return canvas

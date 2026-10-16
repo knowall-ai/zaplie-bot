@@ -7,7 +7,7 @@ Large videos (1080p and 4k) use URI delivery by default: the API hosts the file 
 the script waits until it is ACTIVE before downloading it.
 The key is read from ~/.config/google/gemini_api_key and never printed.
 """
-import argparse, base64, json, mimetypes, sys, time, urllib.request, urllib.error
+import argparse, base64, json, mimetypes, re, sys, time, urllib.request, urllib.error
 from pathlib import Path
 
 API = "https://generativelanguage.googleapis.com/v1beta/interactions"
@@ -58,9 +58,14 @@ if v.get("data"):
     args.out.write_bytes(base64.b64decode(v["data"]))
 elif v.get("uri"):
     uri = v["uri"]
-    # The hosted file may still be processing: wait until it is ACTIVE.
+    # The URI may be a download link (".../files/ID:download?alt=media"), which returns video
+    # bytes, so poll the file's status endpoint instead until it is ACTIVE.
+    m = re.search(r"/files/([A-Za-z0-9_-]+)", uri)
+    if not m:
+        sys.exit(f"Unrecognised video URI; download it manually: {uri}")
+    status_url = f"https://generativelanguage.googleapis.com/v1beta/files/{m.group(1)}"
     for _ in range(60):
-        with urllib.request.urlopen(urllib.request.Request(uri, headers={"x-goog-api-key": key}),
+        with urllib.request.urlopen(urllib.request.Request(status_url, headers={"x-goog-api-key": key}),
                                     timeout=60) as r:
             meta = json.load(r)
         state = (meta.get("file") or meta).get("state", "ACTIVE")
@@ -71,8 +76,8 @@ elif v.get("uri"):
         time.sleep(5)
     else:
         sys.exit(f"Hosted video still not ACTIVE after 5 minutes; download it later: {uri}")
-    dl = urllib.request.Request(uri + ("&" if "?" in uri else "?") + "alt=media",
-                                headers={"x-goog-api-key": key})
+    download = uri if "alt=media" in uri else uri + ("&" if "?" in uri else "?") + "alt=media"
+    dl = urllib.request.Request(download, headers={"x-goog-api-key": key})
     with urllib.request.urlopen(dl, timeout=300) as r:
         args.out.write_bytes(r.read())
 print(args.out, "interaction:", resp.get("id"), "usage:", json.dumps(resp.get("usage", {})))
