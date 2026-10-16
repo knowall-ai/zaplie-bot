@@ -28,9 +28,20 @@ that keeps the voice and look consistent between clips.
 | `video/zaplie-funk.mp4` | 10 s: dancing on a disco floor, zapping bulbs (no dialogue). |
 | `video/zaplie-club.mp4` | 20 s: robot club, with his voice and catchphrases. |
 | `video/zaplie-explainer.mp4` | 20 s: he explains the power of the zap (gratitude, rewards, proof of work, real value, big or small). Approved look; music added separately. |
+| `video/zaplie-explainer-preview.gif` | A 6 s animated preview of the explainer, used in the README. |
 
-The funk and club videos were made from an earlier draft with a narrower mohawk;
-the explainer uses the approved look in `references/zaplie-identity.jpg`.
+### What future videos should change
+
+The videos stay in the repo for now, but they don't fully match the current look:
+
+- **Nameplate:** all three show a brass ZAPLIE nameplate on his chest. It has
+  been dropped from the look, so new videos and images should leave it off.
+- **Hair:** the explainer's hair charges up more wildly at the end than the
+  subtle level allows, and the club video's crest blazes. New videos should use
+  the subtle level and save the full one for big moments.
+- **Mohawk:** the funk and club videos come from an earlier draft with a
+  narrower mohawk. The explainer uses the approved look in
+  `references/zaplie-identity.jpg`.
 
 ## Making a video
 
@@ -78,9 +89,9 @@ host them and downloads the file when it is ready (`--delivery uri`).
 > glowing Bitcoin orange (#F7931A) eyes, NO mouth (the metal below the visor is
 > smooth and blank), big round headphone ear discs, a full bushy crest of fiery
 > glowing orange wire strands running front to back on top of his head, an
-> embossed glowing orange lightning-bolt zap icon on his chest above a brass
-> nameplate reading exactly ZAPLIE. There is exactly ONE Zaplie; he never splits,
-> duplicates or changes design.
+> embossed glowing orange lightning-bolt zap icon on his chest, and NO
+> nameplate: no plate, text or letters anywhere on him. There is exactly ONE
+> Zaplie; he never splits, duplicates or changes design.
 
 ## Electrified hair
 
