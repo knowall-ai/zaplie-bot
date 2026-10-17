@@ -20,10 +20,12 @@ SS = 16                          # supersampling factor for a smooth outline bol
 
 
 def head(size):
+    """Return Zaplie's head cropped square from the profile image at size x size."""
     return Image.open(PROFILE).convert("RGB").crop(HEAD_BOX).resize((size, size), Image.LANCZOS)
 
 
 def outline():
+    """Return the 32x32 Teams outline icon: a white bolt, anti-aliased by drawing it large and scaling down."""
     big = Image.new("L", (32 * SS, 32 * SS), 0)
     ImageDraw.Draw(big).polygon([(x * SS, y * SS) for x, y in BOLT], fill=255)
     icon = Image.new("RGBA", (32, 32), (255, 255, 255, 0))
@@ -32,6 +34,7 @@ def outline():
 
 
 def main():
+    """Build and save every icon."""
     head(192).save("appPackage/color.png")
     outline().save("appPackage/outline.png")
     head(192).save("tabs/public/logo192.png")
