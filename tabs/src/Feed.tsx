@@ -1,80 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import FeedComponent from './components/FeedComponent';
 import ZapActivityChartComponent from './components/ZapActivityChartComponent';
 import TotalZapsComponent from './components/TotalZapsComponent';
-import { getUsers } from './services/lnbits/users';
 import { useCache } from '../src/utils/CacheContext';
-import {
-  fetchVerifiedZapPayments,
-  VerifiedZapPayments,
-} from './utils/walletUtilities';
+import { zapActivityQueryOptions } from './utils/walletUtilities';
 
 const Home: React.FC = () => {
   const [timestamp] = useState(() => {
     return Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 365 * (8.5 / 12); // Last 8.5 months
   });
-  const { cache, setCache } = useCache();
-  const [loading, setLoading] = useState<boolean>(true);
-  const [, setError] = useState<string | null>(null);
-
-  const [zaps, setZaps] = useState<Transaction[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [truncated, setTruncated] = useState<boolean>(false);
+  const { setCache } = useCache();
+  const { data: activity, isPending, error, refetch } = useQuery(
+    zapActivityQueryOptions(),
+  );
+  const users = activity?.users ?? [];
+  const zaps = useMemo(
+    () => activity?.transfers.map(({ transaction }) => transaction) ?? [],
+    [activity],
+  );
 
   useEffect(() => {
-    const fetchZaps = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        if (!cache['allUsers']) {
-          const allUsers = await getUsers({});
-          console.log('allUsers', allUsers);
-          if (allUsers) {
-            setCache('allUsers', allUsers);
-            setUsers(allUsers);
-          }
-        } else {
-          console.log('Loading Users from cache....');
-          setUsers(cache['allUsers']);
-        }
-      } catch (error) {
-        if (error instanceof Error) {
-          setError(`Failed to fetch users: ${error.message}`);
-        } else {
-          setError('An unknown error occurred while fetching users');
-        }
-        console.error(error);
-      }
-      // Load zaps and set in cache.
-      try {
-        // The truncation flag is cached with the payments it describes: a
-        // remount that restored the rows but not the warning would present a
-        // capped history as the whole story.
-        if (!cache['allZaps']) {
-          const zapActivity = await fetchVerifiedZapPayments();
-          console.log('allZaps', zapActivity.payments);
-          setCache('allZaps', zapActivity);
-          setZaps(zapActivity.payments);
-          setTruncated(zapActivity.truncated);
-        } else {
-          console.log('Loading Zaps from cache:', cache['allZaps']);
-          const cached = cache['allZaps'] as VerifiedZapPayments;
-          setZaps(cached.payments);
-          setTruncated(cached.truncated);
-        }
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'An unknown error occurred',
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchZaps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // cache and setCache are from context and are stable, intentionally excluded
+    if (!activity) return;
+    setCache('allUsers', activity.users);
+    setCache('allZaps', { payments: zaps, truncated: activity.truncated });
+  }, [activity, setCache, zaps]);
 
   return (
     <div
@@ -109,7 +59,7 @@ const Home: React.FC = () => {
             flexWrap: 'wrap',
           }}
         >
-          {truncated && (
+          {activity?.truncated && (
             <div
               role="status"
               style={{ width: '100%', color: '#E0B000', paddingBottom: 8 }}
@@ -119,17 +69,29 @@ const Home: React.FC = () => {
             </div>
           )}
           <TotalZapsComponent
-            isLoading={loading}
+            isLoading={isPending}
             allZaps={zaps}
             allUsers={users}
           />
           <ZapActivityChartComponent
             lnKey={''}
-            isLoading={loading}
+            isLoading={isPending}
             timestamp={timestamp}
             allZaps={zaps}
             allUsers={users}
           />
+          {error && (
+            <div role="alert" style={{ width: '100%' }}>
+              <span>
+                {error instanceof Error
+                  ? error.message
+                  : 'Activity could not be loaded.'}
+              </span>{' '}
+              <button type="button" onClick={() => void refetch()}>
+                Try again
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div

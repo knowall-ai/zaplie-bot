@@ -152,6 +152,78 @@
   color: #fff;
   font-family: Inter;
 }
+
+.loadingState {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.skeletonRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--surface-page);
+}
+
+.skeletonBlock {
+  width: 35%;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-page) 25%,
+    var(--surface-raised) 50%,
+    var(--surface-page) 75%
+  );
+  background-size: 200% 100%;
+  animation: feedSkeleton 1.5s ease-in-out infinite;
+}
+
+.skeletonBlock:first-child {
+  width: 55%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonBlock {
+    animation: none;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.errorState,
+.truncatedNotice {
+  padding: var(--space-3) var(--space-4);
+}
+
+.errorState {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--danger);
+}
+
+.truncatedNotice {
+  color: var(--text-muted);
+}
+
+@keyframes feedSkeleton {
+  to {
+    background-position: -200% 0;
+  }
+}
 .pagination {
   display: flex;
   justify-content: center; /* Centers buttons horizontally */
