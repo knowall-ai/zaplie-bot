@@ -2,8 +2,10 @@
 """Build the app icons from the Zaplie profile image.
 
 Teams app package (appPackage/):
-  color.png    192x192 full-colour icon: Zaplie's head
   outline.png  32x32 white lightning bolt on transparent (Teams requires white + transparent)
+  color.png is not written here: the Teams colour icon is the head-and-shoulders crop chosen
+  in PR 506, and the production bot's fallback iconUrl points at it, so a re-run must not
+  replace it.
 Tab app (tabs/public/):
   favicon.ico  16/24/32/64 px, logo192.png, logo512.png: Zaplie's head
 
@@ -35,7 +37,6 @@ def outline():
 
 def main():
     """Build and save every icon."""
-    head(192).save("appPackage/color.png")
     outline().save("appPackage/outline.png")
     head(192).save("tabs/public/logo192.png")
     head(512).save("tabs/public/logo512.png")
