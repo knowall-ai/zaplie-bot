@@ -292,6 +292,28 @@ describe('ConnectionsSetting', () => {
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
+  test.each([
+    ['repos_updated', 'Repository access updated on GitHub.'],
+    [
+      'install_requested',
+      'Install requested. An owner of the GitHub organisation must approve it.',
+    ],
+  ])(
+    'announces a %s return from the App setup URL',
+    async (status, message) => {
+      window.history.replaceState({}, '', `/settings?github=${status}`);
+      mockGetMyIdentities.mockResolvedValue([]);
+
+      await renderConnections();
+      await eventually(() =>
+        expect(mockToastSuccess).toHaveBeenCalledWith(message),
+      );
+
+      expect(window.location.search).toBe('');
+      expect(mockToastError).not.toHaveBeenCalled();
+    },
+  );
+
   test('reports a conflicting GitHub account without reassigning it', async () => {
     window.history.replaceState({}, '', '/settings?github=conflict');
     mockGetMyIdentities.mockResolvedValue([]);

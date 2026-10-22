@@ -5,8 +5,9 @@ pull request is merged**, delivered as an
 Azure Logic App (Consumption) ARM template that each organisation deploys and
 customises in the workflow designer (trigger conditions and non-payment steps).
 
-> **Not production-ready:** the endpoint still needs durable idempotency,
-> aggregate budget enforcement and reconciliation of unknown payment outcomes.
+> **Not production-ready:** the endpoint still needs aggregate budget
+> enforcement, and a payment with an unknown outcome is held for an operator to
+> reconcile by hand rather than reconciled automatically.
 > The sample Request trigger also does not yet verify GitHub's webhook signature,
 > so `source: "github"` is a payload claim rather than authenticated provenance.
 > Keep the PR in draft and do not connect a funded treasury yet.
@@ -15,8 +16,9 @@ customises in the workflow designer (trigger conditions and non-payment steps).
 GitHub webhook ──► Logic App (Request trigger)
                      │ condition: action == 'closed' && pull_request.merged == true
                      ▼
-                   HTTP POST ► Zaplie POST /api/v1/rewards  (X-Api-Key)
+                   HTTP POST ► Zaplie POST /api/v1/rewards  (X-Api-Key, Idempotency-Key)
                                  │ validates key + payload
+                                 │ claims the Idempotency-Key (a repeat replays the first result)
                                  │ checks repository against the connected allowlist
                                  │ resolves GitHub numeric id → verified identity → LNbits user
                                  │ records an unlinked recipient as pending (no auto-settlement yet)
@@ -49,7 +51,10 @@ Generate `REWARDS_API_KEY` and `TAB_BACKEND_TOKEN` independently with e.g.
 
 Rewards are paid from a dedicated treasury, never from a teammate's Allowance:
 
-1. In LNbits, create a user named `Automation` with one wallet.
+1. In LNbits, create a user named `automation` (lower case) with one wallet.
+   The portal backend finds the treasury by that username for its Automations
+   and reports pages; set `TREASURY_USERNAME` on the portal backend if you use
+   a different name.
 2. Fund that wallet (admin top-up).
 3. Set `REWARDS_TREASURY_ADMINKEY` to that wallet's **Admin key**.
 
@@ -58,12 +63,44 @@ and show in the recipient's wallet transaction log as sent by "Automation"
 (the shared feed resolves senders from teammate wallets, so treasury payments
 may display an unattributed sender there — known limitation).
 
-The HTTP action in the template has its retry policy disabled on purpose:
-the endpoint is not idempotent, and a retry after a timed-out-but-executed
-payment could pay the same PR twice. This only reduces the duplicate-payment
-risk; manual redelivery and an unknown network outcome remain unsafe. Durable
-storage keyed by GitHub's `X-GitHub-Delivery` id, plus payment reconciliation,
-is required before this flow can provide at-most-once behavior.
+### Idempotency
+
+Every request must carry an `Idempotency-Key` header: 1 to 256 printable ASCII
+characters, unique per reward. The template sends GitHub's `X-GitHub-Delivery`
+id, which stays the same when GitHub redelivers a webhook or a Logic App run is
+resubmitted. A missing key is rejected with
+`400 {"error":"Idempotency-Key header is required"}`, a malformed one with
+`400 {"error":"Idempotency-Key header is invalid"}`. The key is required, not
+derived from the payload, because two genuine rewards can have identical
+bodies.
+
+The bot records each key in `bot-reward-ledger.json` under `ZAPLIE_DATA_DIR`
+before it pays (see `docs/DEPLOYMENT.adoc`). A repeat of a key gets:
+
+| Earlier outcome | Response to the repeat |
+| --- | --- |
+| Paid | `200` with the original body and `Idempotency-Replayed: true`. Nothing is paid. |
+| Pending (recipient not linked yet) | `202` with the original body and `Idempotency-Replayed: true`. Nothing is queued again. |
+| Still being processed | `409 {"status":"processing","error":"reward is already being processed"}` |
+| Payment or pending-reward outcome unknown | `409 {"status":"uncertain","error":"payment outcome unknown; needs reconciliation"}` |
+| Same key, different reward (source, repo, event or recipient id) | `409 {"error":"Idempotency-Key was already used for a different reward"}` |
+| Rejected before taking effect (bad payload, repo not connected, LNbits error before the payment call, or a pending reward the portal refused with a 4xx) | Nothing was recorded, so the repeat is processed normally. |
+
+When the payment call itself fails or returns no payment hash, the reward may
+have been paid. The same applies to queuing a pending reward: if the portal
+call fails in flight or answers with a 5xx, the portal may have stored it, and
+a queued reward is paid once the recipient links GitHub. In both cases the
+endpoint answers `500 {"error":"payment outcome unknown"}` and holds the key as
+`uncertain`: no retry or redelivery pays or queues it again until an operator
+has checked LNbits or the portal's pending rewards and cleared it.
+
+Because of this, the HTTP action's retry policy is enabled (three retries, 30
+seconds apart). A retry of a reward that already paid replays the result; a
+retry after a failure known to have taken no effect tries again.
+
+A pending reward is recorded in the portal before the ledger marks it pending.
+If the bot stops between the two, the key stays `processing` (no money moved)
+and the pending entry may later need deduplicating by hand.
 
 ## 2. Deploy the Logic App
 
@@ -132,8 +169,13 @@ this payload — GitHub webhooks cannot target the endpoint directly):
 curl -s -X POST https://<bot-domain>/api/v1/rewards \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $REWARDS_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
   -d '{"recipient":"octocat","recipientId":"583231","eventType":"githubPrMerged","repo":"octo-org/octo-repo","reason":"GitHub: PR #1 merged","source":"github"}'
 ```
+
+Each `uuidgen` makes a new reward. To check replay, save the key in a variable
+and send the same request twice: the second answer is identical, carries
+`Idempotency-Replayed: true` (visible with `curl -i`), and pays nothing.
 
 `repo` must exactly match a repository configured under **Automations →
 Connections**. `recipientId` is GitHub's stable numeric user id; the login is

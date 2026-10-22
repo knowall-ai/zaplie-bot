@@ -139,9 +139,13 @@ export const recordZapOutcome = (
 export type RewardOutcome =
   | { status: 'paid'; paymentHash: string; sats: number }
   | { status: 'pending'; requestKey: string; sats: number }
+  | { status: 'needs-checking'; requestKey: string; sats: number }
   | { status: 'failed'; requestKey: string };
 
-// An automation reward from POST /api/v1/rewards.
+/**
+ * Records an automation reward from POST /api/v1/rewards: sent, queued for an
+ * unlinked recipient, needing an admin check (outcome unknown), or failed.
+ */
 export const recordRewardOutcome = (outcome: RewardOutcome): void => {
   if (outcome.status === 'paid') {
     recordActivity({
@@ -160,6 +164,18 @@ export const recordRewardOutcome = (outcome: RewardOutcome): void => {
       level: 'info',
       subject: 'automation',
       detail: 'Recipient has not connected a wallet yet.',
+      channel: 'api',
+      upstreamId: outcome.requestKey,
+      measurements: { sats: outcome.sats },
+    });
+  } else if (outcome.status === 'needs-checking') {
+    // Sent but never confirmed: the ledger holds it for an admin to check.
+    recordActivity({
+      activityType: 'zap.failed',
+      title: 'Zap outcome needs checking · automation',
+      level: 'warning',
+      subject: 'outcome-unknown',
+      detail: 'Payment sent but not confirmed; an admin should verify.',
       channel: 'api',
       upstreamId: outcome.requestKey,
       measurements: { sats: outcome.sats },

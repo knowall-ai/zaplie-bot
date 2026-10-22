@@ -6,7 +6,10 @@ import {
 import { getRewardAmounts } from './fetchRewardAmounts';
 import { getAutomations } from './fetchAutomations';
 import { resolveRewardRecipientByGithubId } from './identityService';
-import { createPendingReward } from './pendingRewardsService';
+import {
+  createPendingReward,
+  PendingRewardWriteUncertainError,
+} from './pendingRewardsService';
 import { toPaymentExtraWallet } from './paymentExtra';
 import { positiveIntFromEnv } from './envNumbers';
 
@@ -34,6 +37,21 @@ export class RewardError extends Error {
     public readonly statusCode: number,
   ) {
     super(message);
+  }
+}
+
+/**
+ * The treasury payment, or the pending-reward write, was sent but its outcome
+ * is unknown: it may have taken effect. Never retried automatically; an
+ * operator reconciles it.
+ */
+export class RewardPaymentUncertainError extends Error {
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'RewardPaymentUncertainError';
   }
 }
 
@@ -201,6 +219,15 @@ async function resolveRecipientUserId(
   return resolvedRecipient.lnbitsUserId;
 }
 
+/**
+ * Pays a configured reward from the treasury, or queues it in the portal when
+ * the recipient has not linked GitHub yet.
+ *
+ * @throws RewardPaymentUncertainError once the payment or pending-reward
+ *   request has left this process and its outcome is unknown; never retry it
+ * @throws RewardError or Error for failures known to happen before that,
+ *   which a retry may safely repeat
+ */
 export async function payReward(
   reward: ResolvedRewardRequest,
 ): Promise<{ paymentHash: string } | { pending: true }> {
@@ -208,14 +235,26 @@ export async function payReward(
 
   const userId = await resolveRecipientUserId(reward);
   if (userId === null) {
-    await createPendingReward({
-      provider: 'github',
-      providerId: reward.recipientId as string,
-      recipientLabel: reward.recipient,
-      amountSats: reward.amountSats,
-      reason: reward.reason,
-      source: reward.source,
-    });
+    try {
+      await createPendingReward({
+        provider: 'github',
+        providerId: reward.recipientId as string,
+        recipientLabel: reward.recipient,
+        amountSats: reward.amountSats,
+        reason: reward.reason,
+        source: reward.source,
+      });
+    } catch (error) {
+      // The portal may have stored it. A queued reward is paid when the
+      // recipient links, so a second copy would pay twice: never retry it.
+      if (error instanceof PendingRewardWriteUncertainError) {
+        throw new RewardPaymentUncertainError(
+          'The pending reward write failed after being sent to the portal.',
+          error,
+        );
+      }
+      throw error;
+    }
     return { pending: true };
   }
 
@@ -260,9 +299,21 @@ export async function payReward(
     throw new Error(`creating reward invoice failed: ${paymentRequest}`);
   }
 
-  const result = await payInvoice(treasuryAdminKey, paymentRequest, extra);
-  if (!result || !result.payment_hash) {
-    throw new Error(`paying reward invoice failed: ${JSON.stringify(result)}`);
+  // From here the request has left this process, so a failure no longer
+  // means "nothing was paid". Only the errors above may be retried.
+  let result;
+  try {
+    result = await payInvoice(treasuryAdminKey, paymentRequest, extra);
+  } catch (error) {
+    throw new RewardPaymentUncertainError(
+      'The reward payment request failed after being sent to LNbits.',
+      error,
+    );
+  }
+  if (!result?.payment_hash) {
+    throw new RewardPaymentUncertainError(
+      'The reward payment returned no payment hash, so it cannot be confirmed.',
+    );
   }
   return { paymentHash: result.payment_hash };
 }

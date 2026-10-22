@@ -22,3 +22,6 @@ tsconfig.json
 bot-zap-ledger.json
 bot-zap-ledger.json.lock
 bot-zap-ledger.json.*.tmp
+bot-reward-ledger.json
+bot-reward-ledger.json.lock
+bot-reward-ledger.json.*.tmp

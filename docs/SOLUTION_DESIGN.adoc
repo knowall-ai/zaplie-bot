@@ -228,6 +228,62 @@ uses development mode and falls back to the ignored `.zaplie-data` directory
 when no override is configured. This fallback is never selected by a deployed
 bot.
 
+=== Reward Idempotency Ledger
+
+`POST /api/v1/rewards` (`src/rewardsRoute.ts`) is called by an automation such
+as the GitHub Logic App, which may deliver the same event more than once.
+Every request must carry an `Idempotency-Key` header (1 to 256 printable ASCII
+characters; the Logic App sends GitHub's `X-GitHub-Delivery`). The key is
+required rather than derived from the body because two genuine rewards can
+have identical bodies, and only the caller knows which deliveries are the
+same.
+
+After the API key and payload are validated, and before anything else, the
+bot reserves the key in `${ZAPLIE_DATA_DIR}/bot-reward-ledger.json`
+(`src/services/rewardLedger.ts`). The record key is a SHA-256 digest of the
+Idempotency-Key, and each record carries a fingerprint, a SHA-256 digest of
+the reward's source, repository, event type and recipient GitHub id. The
+states are:
+
+* `processing` — written by the one request allowed to pay. A repeat gets a
+  `409`.
+* `paid` and `pending` — the reward was paid, or held for a recipient who has
+  not linked GitHub yet. The record stores the exact response body, so a
+  repeat gets the same `200` or `202` body with `Idempotency-Replayed: true`
+  and nothing is paid or queued again.
+* `uncertain` — the call to LNbits `payInvoice` threw or returned no payment
+  hash, or the portal's pending-reward `POST` failed in flight or answered
+  with a 5xx (`RewardPaymentUncertainError`). The reward may have been paid,
+  or queued to be paid when the recipient links GitHub, and that `POST` is not
+  idempotent. A repeat gets a `409` until an operator reconciles it (see
+  `docs/DEPLOYMENT.adoc`).
+
+A repeat whose fingerprint differs from the record's is a different reward
+under a reused key and gets a `409` without replaying anyone's result. A
+failure known to have taken no effect (repository not connected, no
+configured amount, an LNbits error while resolving wallets or creating the
+invoice, a pending-reward request that was never sent or that the portal
+refused with a 4xx) removes the `processing` record so the caller's retry can
+pay. Once a
+payment has settled, a failure to record it leaves the key `processing`, which
+blocks redelivery: the response still reports the payment, and the operator
+reconciles the record.
+
+The store shares the zap ledger's file machinery (`src/services/ledgerFile.ts`):
+the exclusive `.lock` file with an owner token and a five-second timeout,
+atomic temp-file replacement with file and directory sync, the sweep of stale
+temporaries, and fail-closed validation on startup and on every write. It has
+its own schema because a reward replay needs the original response and a
+pending reward is a settled outcome that paid nothing. `paid` and `pending`
+records are pruned after ninety days, which covers GitHub redeliveries and the
+default Logic App run-history window; `processing` and `uncertain` records are
+never pruned. The bot constructs the ledger at startup, so a missing
+`ZAPLIE_DATA_DIR` or an unreadable store stops it before it serves a request.
+
+With the ledger in place the Logic App's HTTP action retries (three times, 30
+seconds apart): a retry after a settled payment replays it, and a retry after
+a failure known to have taken no effect tries again.
+
 === Recipient Notifications
 
 Once every recipient of a submit has been processed and the sender's receipt
@@ -284,6 +340,29 @@ Routes (`tabs/src/App.tsx`): `/feed`, `/users`, `/rewards`, `/wallet`,
 `/settings` — all wrapped in `RequireAuth` (MSAL `acquireTokenSilent`, redirect
 to `/login` on failure) — plus `/login`, `/auth-start`, `/auth-end`. Providers:
 `MsalProvider` → `RewardNameProvider` → `PageLayout`.
+
+The app has two homes, built separately from the same source: the Teams tabs
+at the root of the portal App Service, and the browser portal at
+`https://getzapl.ie/portal/` (static files on the website's Static Web App,
+API calls to the App Service). A build fixes its asset paths and router
+basename, so one build cannot serve both.
+`tabs/src/services/appLocation.ts` turns the build-time `PUBLIC_URL` into the
+router basename and the MSAL redirect URIs, and `REACT_APP_API_BASE_URL` into
+the prefix of every `/api` call. In a browser the header and footer are shown;
+inside Teams (`useTeamsAuth` → `teams-js` context) they stay hidden.
+
+`RequireAuth` also calls `POST /api/lnbits/users/me` before rendering a guarded
+route. The call is shared by every guarded route and keyed to the signed-in
+account: a different person signing in without a reload is set up afresh, and
+a failed call is retried on the next guarded route instead of being remembered. The bot creates LNbits users on a person's first
+Teams turn, so outside Teams nobody had one and every gateway route refused
+them. The route is the only one mounted before the gateway's `assertCaller`
+check; it acts on the verified token's `oid` alone, creates only the user and
+the `Allowance`/`Private` wallets that are missing, and never moves sats. It
+applies the bot's member rule (`tabs/backend/memberGate.js`, a mirror of
+`src/services/memberGate.ts`) to the token's `tid` and `acct` claims: members
+of the home tenant and allowlisted guests are provisioned, everyone else, and
+any token whose membership cannot be read, gets 403 and nothing is created.
 
 [cols="1,3"]
 |===
@@ -357,15 +436,15 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 | `bot-zap-ledger.json` under the bot's `ZAPLIE_DATA_DIR`
 | Hashed per-recipient processing, uncertain, and paid barriers used to prevent another LNbits payment across retries, restarts, and bot processes
 
+| Automation reward records
+| `bot-reward-ledger.json` under the bot's `ZAPLIE_DATA_DIR`
+| One record per hashed `Idempotency-Key` sent to `POST /api/v1/rewards`:
+  processing, paid, pending or uncertain, with the response a repeat replays.
+  Prevents a redelivered webhook from paying twice
+
 | Bot conversation state
 | `MemoryStorage` (in-process)
 | Ephemeral — lost on restart, not multi-instance safe
-
-| Zap card payment ledger
-| `ZapLedger` (in-process `Map`, `src/services/zapLedger.ts`)
-| One payment per card recipient for the life of the process; paid and
-  unknown slots never expire. Lost on restart, not multi-instance safe
-  (durable ledger tracked in #187)
 |===
 
 == Design Decisions
@@ -460,8 +539,8 @@ and manifest packaging across local/dev environments.
 == Known Limitations
 
 - Conversation and user state are in-memory; a restart clears them. Zap
-  submission records are the exception: they persist under
-  `ZAPLIE_DATA_DIR` so a restart cannot pay a recipient twice.
+  submission and automation reward records are the exception: they persist
+  under `ZAPLIE_DATA_DIR` so a restart cannot pay a recipient twice.
 - The reward-name API is guarded by a placeholder shared secret and a JSON
   file rather than a real datastore.
 - The Azure Functions are anonymous at the platform level and receive LNbits
@@ -470,6 +549,8 @@ and manifest packaging across local/dev environments.
   Service instance but are not a multi-instance transactional datastore.
 - The bot's durable ledger depends on a shared, durable filesystem within its
   App Service; it is not a cross-App-Service or cross-region database.
-- Recovery of a bot Zap left `processing` or `unknown` requires manual
-  reconciliation with the LNbits payment ledger. The application deliberately
-  does not guess the payment outcome.
+- Recovery of a bot Zap left `processing` or `unknown`, or an automation
+  reward left `processing` or `uncertain`, requires manual reconciliation with
+  the LNbits payment ledger (and, for a reward to an unlinked recipient, the
+  portal's pending rewards). The application deliberately does not guess the
+  outcome.

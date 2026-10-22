@@ -31,6 +31,26 @@ closing the gaps.
   `src/teamsBot.test.ts` pins that the chat is opened after the receipt;
   `src/services/fetchUserMiddleware.proactive.test.ts` pins that the
   synthetic proactive event skips the Teams and LNbits lookups.
+- `src/services/rewardLedger.test.ts` covers the reward idempotency ledger:
+  reserve, replay of each state, fingerprint conflicts, release of only a
+  `processing` record, restart durability, ten concurrent reserves acquiring
+  exactly once, pruning of settled records only, the lock-timeout message,
+  and strict schema and key validation.
+- `src/rewardsRoute.test.ts` drives `POST /api/v1/rewards` over HTTP against a
+  real ledger in a temporary directory and the real `payReward`, with LNbits
+  and the portal stubbed. It pins that a redelivery, a concurrent duplicate, a
+  restart, or an unknown payment outcome never calls `payInvoice` twice; that
+  a pending-reward write with an unknown outcome is held and never queued
+  again; that a failure known to have taken no effect releases the key so a
+  retry pays; that a reused key for a different reward is a `409`; and that a
+  missing or malformed `Idempotency-Key` or a bad API key never reaches the
+  ledger.
+- The `payReward` blocks in `src/services/rewardsService.test.ts` and
+  `src/services/identityService.test.ts`, with
+  `src/services/pendingRewardsService.test.ts`, pin which failures are a
+  `RewardPaymentUncertainError`: a `payInvoice` failure or missing payment
+  hash, or a pending-reward request that failed in flight or got a 5xx. A 4xx
+  from the portal, or anything before the request, stays a plain error.
 - The `TeamsBot free text in a 1:1 chat` block in `src/teamsBot.test.ts` pins
   that unmatched 1:1 text gets the command guide, never the assistant or an
   error, unless both `FOUNDRY_PROJECT_ENDPOINT` and `FOUNDRY_MODEL` are set.
@@ -53,8 +73,14 @@ npm run coverage:ratchet
 - Framework: Jest via react-scripts, with React Testing Library and jest-dom
 - Test files: `tabs/src/services/lnbits/*.test.ts` (mock global `fetch` and
   localStorage; cover `getAccessToken`, `getWallets`, `getWalletBalance`,
-  `getUserWallets`, `createInvoice`, `payInvoice`) and
-  `tabs/src/setupTests.test.tsx` (environment smoke test)
+  `getUserWallets`, `createInvoice`, `payInvoice`),
+  `tabs/src/setupTests.test.tsx` (environment smoke test) and the component
+  suites under `tabs/src/components/`. Among them,
+  `AutomationsComponent.test.tsx` covers the GitHub App setup block (create
+  with or without an organisation, the created and env states, gating
+  "Connect repositories", the `?setup=` toasts), and
+  `ConnectionsSetting.test.tsx` covers the `?github=` returns from the
+  identity and install flows
 - Run:
 
 [source,bash]
@@ -70,7 +96,33 @@ npm test                               # watch mode
   extra dependencies
 - Test files: `tabs/backend/*.test.js` (auth middleware, config routes, rate
   limiting, reward amounts, automation payments, LNbits user directory, SPA
-  fallback route)
+  fallback route). The GitHub App suites:
+** `githubAppConfig.test.js`: env-over-stored precedence per group, the
+   redirect URI, readiness, corrupt-store and malformed-`PORTAL_URL`
+   handling, and the documented 409 wording.
+** `githubAppAuth.test.js`: App JWT signing with the stored or env key.
+** `githubOAuthState.test.js`: the purpose-tagged states (identity, install,
+   each with the oid and a browser binding hash) never pass as one another or
+   as the plain state, and a wrong field count is refused.
+** `githubRoutes.test.js`: the GitHub routes before and after the manifest
+   flow stores credentials, the manifest's organisation target and its
+   validation, status `source` and `installationReady`, and bad config.
+** `githubSetupFlow.test.js`: the whole zero-config path with no `GITHUB_*`
+   env vars, with GitHub and LNbits stubbed at `fetch`. It covers manifest
+   conversion (including the stored owner login), the install link, and the
+   setup URL's App-JWT check: `GET /app/installations/{id}` with the
+   account matched to the App owner, and no user sign-in. It then covers
+   listing repositories with the stored key, identity linking with the
+   stored OAuth client, and the identity resolution the reward flow uses.
+   Each simulated browser keeps its own cookie jar: the install and identity
+   links set the binding cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, its
+   path, `Max-Age=600`) and the callbacks clear it. A link opened in another
+   browser, with no cookie or another flow's cookie, records nothing and
+   makes no GitHub call.
+   Rejections cover an installation on another account, a 404, a GitHub
+   error, forged and crossed states, and non-numeric or non-canonical ids.
+   An env-configured App takes its owner from `GET /app`, cached, and the
+   identity user token never reaches disk or logs.
 - `server.js` only calls `listen()` when run directly, so each test file can
   `require('./server')` and bind an ephemeral port
 - Needs no credentials: each file that loads the server sets placeholder
@@ -118,6 +170,12 @@ New E2E tests should reference the feature `id` (e.g. `total-zaps`,
   crash exercise, stop after `processing` is durable and confirm the restarted
   bot does not call LNbits for that recipient. Reconcile LNbits before any
   record or orphan-lock repair; do not delete a barrier merely to retry.
+- *Automation reward retries:* with the same setup, send one reward request
+  twice with the same `Idempotency-Key` (see the smoke test in
+  `docs/automation/README.md`). The second response must match the first,
+  carry `Idempotency-Replayed: true`, and LNbits must show one payment. Then
+  redeliver a merged-PR webhook from GitHub's webhook settings and confirm the
+  Logic App run gets the replayed result.
 - *Tabs:* `cd tabs && npm start` (Express backend on 5000, CRA dev server on
   3000) and verify Feed, Users, Rewards, Wallet, and Settings against a dev
   LNbits instance.

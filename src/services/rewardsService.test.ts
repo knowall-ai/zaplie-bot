@@ -1,16 +1,54 @@
 import {
   parseRewardRequest,
+  payReward,
   resolveAmountSats,
   RewardError,
+  RewardPaymentUncertainError,
 } from './rewardsService';
 import { getRewardAmounts } from './fetchRewardAmounts';
-import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import {
+  createInvoice,
+  getUserWalletsByUserId,
+  payInvoice,
+} from './lnbitsService';
+import { resolveRewardRecipientByGithubId } from './identityService';
+import {
+  createPendingReward,
+  PendingRewardWriteUncertainError,
+} from './pendingRewardsService';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals';
 
 jest.mock('./fetchRewardAmounts');
+jest.mock('./lnbitsService', () => ({
+  getUserWalletsByUserId: jest.fn(),
+  createInvoice: jest.fn(),
+  payInvoice: jest.fn(),
+}));
+jest.mock('./identityService', () => ({
+  resolveRewardRecipientByGithubId: jest.fn(),
+}));
+jest.mock('./pendingRewardsService', () => ({
+  ...jest.requireActual<object>('./pendingRewardsService'),
+  createPendingReward: jest.fn(),
+}));
 
+const mockedCreatePendingReward = createPendingReward as unknown as AsyncMock;
 const mockedGetRewardAmounts = getRewardAmounts as jest.MockedFunction<
   typeof getRewardAmounts
 >;
+type AsyncMock = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
+const mockedPayInvoice = payInvoice as unknown as AsyncMock;
+const mockedCreateInvoice = createInvoice as unknown as AsyncMock;
+const mockedGetWallets = getUserWalletsByUserId as unknown as AsyncMock;
+const mockedResolveRecipient =
+  resolveRewardRecipientByGithubId as unknown as AsyncMock;
 
 const validReward = {
   recipient: 'octocat',
@@ -125,5 +163,98 @@ describe('resolveAmountSats', () => {
     await expect(
       resolveAmountSats(parseRewardRequest(validReward)),
     ).rejects.toThrow('backend unreachable');
+  });
+});
+
+describe('payReward', () => {
+  const savedTreasuryKey = process.env.REWARDS_TREASURY_ADMINKEY;
+  const reward = {
+    recipient: 'octocat',
+    recipientId: '583231',
+    amountSats: 21,
+    eventType: 'githubPrMerged',
+    repo: 'octo-org/octo-repo',
+    reason: 'GitHub: PR #7 merged',
+    source: 'github',
+  };
+
+  beforeEach(() => {
+    process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
+    mockedResolveRecipient.mockResolvedValue({ lnbitsUserId: 'user-1' });
+    mockedGetWallets.mockResolvedValue([
+      { id: 'wallet-private', name: 'Private', user: 'user-1', inkey: 'in' },
+    ]);
+    mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
+    mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+  });
+
+  afterEach(() => {
+    if (savedTreasuryKey === undefined) {
+      delete process.env.REWARDS_TREASURY_ADMINKEY;
+    } else {
+      process.env.REWARDS_TREASURY_ADMINKEY = savedTreasuryKey;
+    }
+  });
+
+  test('returns the payment hash of a settled payment', async () => {
+    await expect(payReward(reward)).resolves.toEqual({ paymentHash: 'hash-1' });
+  });
+
+  test('a payInvoice that throws is an uncertain outcome', async () => {
+    mockedPayInvoice.mockRejectedValue(new Error('socket hang up'));
+
+    await expect(payReward(reward)).rejects.toBeInstanceOf(
+      RewardPaymentUncertainError,
+    );
+  });
+
+  test('a payInvoice with no payment hash is an uncertain outcome', async () => {
+    mockedPayInvoice.mockResolvedValue({ detail: 'something odd' });
+
+    await expect(payReward(reward)).rejects.toBeInstanceOf(
+      RewardPaymentUncertainError,
+    );
+  });
+
+  test('a failure before payInvoice is a plain error', async () => {
+    mockedCreateInvoice.mockResolvedValue(new Error('LNbits down'));
+
+    const error = await payReward(reward).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
+    expect(mockedPayInvoice).not.toHaveBeenCalled();
+  });
+
+  test('a pending write with an unknown outcome is an uncertain outcome', async () => {
+    mockedResolveRecipient.mockResolvedValue(null);
+    mockedCreatePendingReward.mockRejectedValue(
+      new PendingRewardWriteUncertainError('socket hang up'),
+    );
+
+    await expect(payReward(reward)).rejects.toBeInstanceOf(
+      RewardPaymentUncertainError,
+    );
+  });
+
+  test('a pending write the portal rejected stays a plain error', async () => {
+    mockedResolveRecipient.mockResolvedValue(null);
+    mockedCreatePendingReward.mockRejectedValue(
+      new Error('pending reward write failed: 400'),
+    );
+
+    const error = await payReward(reward).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
+  });
+
+  test('a recipient without a Private wallet fails before payInvoice', async () => {
+    mockedGetWallets.mockResolvedValue([]);
+
+    const error = await payReward(reward).catch((caught: unknown) => caught);
+
+    expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
+    expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { apiUrl } from './appLocation';
 
-const API_URL = '/api/connections';
+const API_URL = apiUrl('/api/connections');
 
 export interface RepoConnection {
   id: number;

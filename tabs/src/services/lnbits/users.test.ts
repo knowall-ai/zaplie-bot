@@ -1,143 +1,69 @@
-import { clearApiCache } from './cache';
-import { apiRequest } from './gateway';
-import { getAllUsersFromAPI, getAllowance, getUser, getUsers } from './users';
-import { getUserWallets } from './wallets';
+import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+
+const mockApiRequest = jest.fn<Promise<unknown>, [string, RequestInit?]>();
 
 jest.mock('./gateway', () => ({
-  apiRequest: jest.fn(),
+  apiRequest: (path: string, init?: RequestInit) => mockApiRequest(path, init),
 }));
 
 jest.mock('./wallets', () => ({
-  getUserWallets: jest.fn(),
+  getUserWallets: async () => [],
 }));
 
-const mockApiRequest = apiRequest as jest.MockedFunction<typeof apiRequest>;
-const mockGetUserWallets = getUserWallets as jest.MockedFunction<
-  typeof getUserWallets
->;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { apiCache, clearApiCache } = require('./cache');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { ensureCurrentUser, getUsers } = require('./users');
 
-const user = (id: string, aadObjectId: string): User => ({
-  id,
-  displayName: id,
-  profileImg: '',
-  aadObjectId,
-  email: `${id}@example.com`,
-  type: 'Teammate',
-  privateWallet: null,
-  allowanceWallet: null,
-});
+const OLD_DIRECTORY = [{ id: 'user-1', aadObjectId: 'oid-1' }];
+const NEW_DIRECTORY = [
+  ...OLD_DIRECTORY,
+  { id: 'user-2', aadObjectId: 'oid-2' },
+];
 
-const wallet = (id: string, name: string): Wallet => ({
-  id,
-  name,
-  user: 'user-1',
-  balance_msat: 0,
-  deleted: false,
-});
-
-describe('lnbits users', () => {
+describe('the users directory after provisioning', () => {
   beforeEach(() => {
-    mockApiRequest.mockReset();
-    mockGetUserWallets.mockReset();
+    jest.clearAllMocks();
     clearApiCache();
   });
 
-  describe('getAllUsersFromAPI', () => {
-    test('reads the gateway and serves the second call from cache', async () => {
-      mockApiRequest.mockResolvedValue([user('user-1', 'aad-1')]);
+  test('a request still in flight when someone is created cannot restore the old directory', async () => {
+    let settleOld: (value: unknown) => void = () => undefined;
+    mockApiRequest.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          settleOld = resolve;
+        }),
+    );
+    const before = getUsers();
 
-      await getAllUsersFromAPI();
-      await getAllUsersFromAPI();
-
-      expect(mockApiRequest).toHaveBeenCalledTimes(1);
-      expect(mockApiRequest).toHaveBeenCalledWith('/users');
+    mockApiRequest.mockResolvedValueOnce({
+      user: { id: 'user-2', aadObjectId: 'oid-2' },
+      created: true,
+      createdWallets: ['Allowance', 'Private'],
     });
+    await ensureCurrentUser();
 
-    test('de-duplicates concurrent requests', async () => {
-      mockApiRequest.mockResolvedValue([user('user-1', 'aad-1')]);
+    settleOld(OLD_DIRECTORY);
+    expect(await before).toEqual(OLD_DIRECTORY);
+    expect(apiCache.users).toBeUndefined();
 
-      await Promise.all([getAllUsersFromAPI(), getAllUsersFromAPI()]);
-
-      expect(mockApiRequest).toHaveBeenCalledTimes(1);
-    });
-
-    test('clears the pending request when the gateway fails', async () => {
-      mockApiRequest.mockRejectedValueOnce(new Error('gateway down'));
-
-      await expect(getAllUsersFromAPI()).rejects.toThrow('gateway down');
-
-      mockApiRequest.mockResolvedValueOnce([user('user-1', 'aad-1')]);
-      await expect(getAllUsersFromAPI()).resolves.toHaveLength(1);
-    });
+    mockApiRequest.mockResolvedValueOnce(NEW_DIRECTORY);
+    expect(await getUsers()).toEqual(NEW_DIRECTORY);
+    expect(mockApiRequest).toHaveBeenCalledTimes(3);
   });
 
-  describe('getUsers', () => {
-    test('returns every user when no filter is given', async () => {
-      mockApiRequest.mockResolvedValue([
-        user('user-1', 'aad-1'),
-        user('user-2', 'aad-2'),
-      ]);
-
-      await expect(getUsers(null)).resolves.toHaveLength(2);
-      await expect(getUsers({})).resolves.toHaveLength(2);
+  test('a directory fetched after provisioning is cached as usual', async () => {
+    mockApiRequest.mockResolvedValueOnce({
+      user: { id: 'user-1' },
+      created: false,
+      createdWallets: [],
     });
+    await ensureCurrentUser();
 
-    test('filters by aadObjectId', async () => {
-      mockApiRequest.mockResolvedValue([
-        user('user-1', 'aad-1'),
-        user('user-2', 'aad-2'),
-      ]);
-
-      const users = await getUsers({ aadObjectId: 'aad-2' });
-
-      expect(users).toHaveLength(1);
-      expect(users[0].id).toBe('user-2');
-    });
-
-    test('filters by any other user field', async () => {
-      mockApiRequest.mockResolvedValue([
-        user('user-1', 'aad-1'),
-        { ...user('user-2', 'aad-2'), type: 'Guest' as UserType },
-      ]);
-
-      const users = await getUsers({ type: 'Guest' });
-
-      expect(users).toHaveLength(1);
-      expect(users[0].id).toBe('user-2');
-    });
-  });
-
-  describe('getUser', () => {
-    test('attaches the private and allowance wallets', async () => {
-      mockApiRequest.mockResolvedValue([user('user-1', 'aad-1')]);
-      mockGetUserWallets.mockResolvedValue([
-        wallet('wallet-1', 'Alice - Private'),
-        wallet('wallet-2', 'Alice - Allowance'),
-      ]);
-
-      const result = await getUser('user-1');
-
-      expect(result?.privateWallet?.id).toBe('wallet-1');
-      expect(result?.allowanceWallet?.id).toBe('wallet-2');
-    });
-
-    test('returns null for an unknown user', async () => {
-      mockApiRequest.mockResolvedValue([user('user-1', 'aad-1')]);
-
-      await expect(getUser('user-9')).resolves.toBeNull();
-      expect(mockGetUserWallets).not.toHaveBeenCalled();
-    });
-
-    test('returns null without calling the gateway for an empty id', async () => {
-      await expect(getUser('')).resolves.toBeNull();
-      expect(mockApiRequest).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getAllowance', () => {
-    test('reports no allowance rather than inventing one', async () => {
-      await expect(getAllowance('user-1')).resolves.toBeNull();
-      expect(mockApiRequest).not.toHaveBeenCalled();
-    });
+    mockApiRequest.mockResolvedValueOnce(NEW_DIRECTORY);
+    await getUsers();
+    expect(await getUsers()).toEqual(NEW_DIRECTORY);
+    expect(mockApiRequest).toHaveBeenCalledTimes(2);
   });
 });

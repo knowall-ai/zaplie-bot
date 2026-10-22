@@ -44,4 +44,54 @@ const verifyState = (state) => {
   return oid;
 };
 
-module.exports = { signState, verifyState };
+// Purpose-tagged state for the GitHub round trips that must not be mixed up:
+// 'identity' (oid, browser binding hash) for "Connect GitHub" and 'install'
+// (oid, browser binding hash) for "Connect repositories". The tag and the
+// field count must both match, so neither passes as the other, and neither
+// passes verifyState (which takes exactly three parts) or the reverse: the
+// manifest callback still accepts only the plain 'admin' state.
+const PURPOSE_FIELDS = { identity: 2, install: 2 };
+
+const signPurposeState = (purpose, fields) => {
+  if (
+    fields.length !== PURPOSE_FIELDS[purpose] ||
+    fields.some((field) => typeof field !== 'string' || field.includes('|'))
+  ) {
+    throw new Error(`invalid ${purpose} state fields`);
+  }
+  const expiry = Date.now() + STATE_TTL_MS;
+  const payload = [purpose, ...fields, expiry].join('|');
+  return Buffer.from(`${payload}|${sign(payload)}`).toString('base64url');
+};
+
+// Returns the fields, or null for anything forged, expired or of another flow.
+const verifyPurposeState = (purpose, state) => {
+  if (typeof state !== 'string' || !PURPOSE_FIELDS[purpose]) {
+    return null;
+  }
+  const parts = Buffer.from(state, 'base64url').toString('utf8').split('|');
+  if (parts.length !== PURPOSE_FIELDS[purpose] + 3 || parts[0] !== purpose) {
+    return null;
+  }
+  const signature = parts.pop();
+  const expectedBuf = Buffer.from(sign(parts.join('|')), 'hex');
+  const signatureBuf = Buffer.from(signature, 'hex');
+  if (
+    expectedBuf.length !== signatureBuf.length ||
+    !crypto.timingSafeEqual(expectedBuf, signatureBuf)
+  ) {
+    return null;
+  }
+  const expiry = Number(parts.pop());
+  if (!Number.isFinite(expiry) || Date.now() > expiry) {
+    return null;
+  }
+  return parts.slice(1);
+};
+
+module.exports = {
+  signState,
+  verifyState,
+  signPurposeState,
+  verifyPurposeState,
+};

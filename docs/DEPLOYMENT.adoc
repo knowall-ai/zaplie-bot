@@ -111,10 +111,70 @@ deploys the whole portal: the React build *and* the Express backend under
 the artifact arrives prebuilt). The bot deploys separately via
 `teamsapp deploy`.
 
+=== The portal on getzapl.ie (/portal/)
+
+The tabs app has a second home: the **Login** button on
+https://getzapl.ie opens the same React app at `https://getzapl.ie/portal/`,
+served as static files by the website's Azure Static Web App
+(`knowall-ai/zaplie-website`, `website/build.mjs` copies the build into
+`dist/portal`). Nothing else is deployed there: the Express backend stays on
+the portal App Service, and the browser calls it across origins.
+
+The build for that path is the ordinary CRA build with two more settings, both
+public values:
+
+[source,bash]
+----
+cd tabs
+PUBLIC_URL=/portal \
+REACT_APP_API_BASE_URL=https://<portal App Service host> \
+REACT_APP_AAD_CLIENT_ID=... REACT_APP_TENANT_ID=... \
+npm run build
+----
+
+`PUBLIC_URL` is read once, at build time, by `tabs/src/services/appLocation.ts`:
+it becomes the router `basename`, the prefix of the auth routes
+(`/portal/auth-start`, `/portal/auth-end`, `/portal/login`) and the MSAL
+redirect URI (`https://getzapl.ie/portal`, no trailing slash, like
+`TAB_ENDPOINT`). `REACT_APP_API_BASE_URL` prefixes every `/api/...` call;
+unset, calls stay same-origin, so the Teams deployment is unchanged.
+
+Before the portal can sign anyone in there, the app registration
+(`aad.manifest.json`, single tenant) needs four more single-page application
+redirect URIs: `https://getzapl.ie/portal`, `https://getzapl.ie/portal/auth-end`,
+`https://www.getzapl.ie/portal` and `https://www.getzapl.ie/portal/auth-end`.
+The backend already answers cross-origin requests (`cors()` in
+`tabs/backend/server.js`); `PORTAL_URL` on the App Service should point at
+`https://getzapl.ie/portal` once the GitHub identity and connection redirects
+are meant to land there.
+
+People who have never used the bot in Teams have no LNbits user. The portal
+provisions one on first sign-in: `POST /api/lnbits/users/me` (the one gateway
+route that does not require an existing LNbits user) creates the user, keyed
+by the Entra `oid` in `external_id` like the bot does, and its empty
+`Allowance` and `Private` wallets. It moves no sats: the opening allowance
+(`LNBITS_INITIAL_ALLOWANCE`) remains the bot's doing, so a person set up this
+way can receive zaps at once and send them once their Allowance wallet is
+funded.
+
+The route serves exactly the people the bot serves. `tabs/backend/memberGate.js`
+mirrors `src/services/memberGate.ts`: members of the home tenant are
+provisioned; guests and users from other tenants only if listed in
+`ZAPLIE_GUEST_ALLOWLIST` (same format, set it on the portal App Service as
+well as the bot's); anyone else is refused with 403 and nothing is created.
+The portal backend has no Graph access, so membership comes from the verified
+idToken: `tid` is the tenant and the optional claim `acct` is the role
+(0 member, 1 guest). `aad.manifest.json` requests `acct` in idTokens; until
+that is applied to the app registration (`teamsapp provision`, or
+*Token configuration* in the Entra portal) no token carries it and the route
+refuses everyone, by design. People who already have an LNbits user are not
+affected: only creation is gated.
+
 === Persistent application state
 
-The bot keeps its mutable state — currently the durable Zap ledger
-`bot-zap-ledger.json` — under `ZAPLIE_DATA_DIR`. Bicep sets
+The bot keeps its mutable state — the durable Zap ledger
+`bot-zap-ledger.json` and the automation reward ledger
+`bot-reward-ledger.json` — under `ZAPLIE_DATA_DIR`. Bicep sets
 `ZAPLIE_DATA_DIR=+%HOME%\data\zaplie+` on the App Service it provisions
 (Windows: `kind: 'app'`, no `reserved`/`linuxFxVersion`), outside `wwwroot`, so
 a clean deployment cannot replace it. App Service passes app settings to the
@@ -130,38 +190,71 @@ every deployed (non-development) runtime must set it to an absolute path or
 the bot refuses to start.
 
 Never include mutable JSON in a deployment artifact: `.webappignore` excludes
-the ledger, its `.lock` file, and `bot-zap-ledger.json.<pid>.<random>.tmp`
+both ledgers, their `.lock` files, and their `<ledger>.json.<pid>.<random>.tmp`
 replacements. The bot creates the data directory with mode `0700` and ledger,
 lock, and temporary files with mode `0600` on supporting filesystems.
 
 Back up and restore the data directory as an application-consistent unit:
 
 . Stop or drain every bot process sharing the directory before copying it.
-. Copy the canonical `bot-zap-ledger.json`; never copy `.lock` or `.tmp`
-  artifacts. Keep backups access-controlled: payment hashes are operational
-  metadata.
+. Copy the canonical `bot-zap-ledger.json` and `bot-reward-ledger.json`; never
+  copy `.lock` or `.tmp` artifacts. Keep backups access-controlled: payment
+  hashes are operational metadata, and the reward ledger also holds the GitHub
+  login of each rewarded recipient.
 . To restore, keep the bot stopped, preserve a copy of the current directory,
   restore the canonical backup into `ZAPLIE_DATA_DIR`, restore restrictive
   permissions, and then start the bot.
-. If a restore moves the ledger backward in time, reconcile every potentially
-  affected Zap against the LNbits ledger before accepting submissions. Never
-  delete or rewrite `processing` or `unknown` records merely to make a retry
-  succeed.
+. If a restore moves a ledger backward in time, reconcile every potentially
+  affected Zap or reward against the LNbits ledger before accepting
+  submissions: a reward key missing from a restored file pays again when its
+  webhook is redelivered. Never delete or rewrite `processing`, `unknown` or
+  `uncertain` records merely to make a retry succeed.
 
-The bot deliberately never evicts `bot-zap-ledger.json.lock` by age: ownership
+The bot deliberately never evicts a ledger's `.lock` file by age: ownership
 is uncertain, and an eviction rule that guessed wrong could re-enable a payment
-that already settled. Treat a crash-left lock as a *manual outage*: while it is
-present, every zap submission fails after the five-second lock timeout with an
-error naming this procedure, and it stays that way until an operator clears it.
-After an unclean shutdown, stop/drain every bot process, inspect the canonical
-store, reconcile any `processing` or `unknown` record with LNbits, and only
-then remove the orphaned lock. Store corruption, an unreadable data directory,
-or lock acquisition failure prevents payment.
+that already settled. Treat a crash-left lock as a *manual outage*: while
+`bot-zap-ledger.json.lock` is present every zap submission fails, and while
+`bot-reward-ledger.json.lock` is present every reward request fails, after the
+five-second lock timeout with an error naming this procedure. It stays that way
+until an operator clears it. After an unclean shutdown, stop/drain every bot
+process, inspect the canonical store, reconcile any `processing`, `unknown` or
+`uncertain` record with LNbits, and only then remove the orphaned lock. Store
+corruption, an unreadable data directory, or lock acquisition failure prevents
+payment.
 
-Writes sweep this store's own `.tmp` files once they are older than an hour, so
-a crash between writing a temporary and renaming it cannot accumulate ledger
-snapshots on the share; nothing younger is touched, because it may belong to a
-write in flight.
+Each ledger sweeps its own `.tmp` files older than an hour once, when the bot
+starts, so a crash between writing a temporary and renaming it cannot
+accumulate ledger snapshots on the share; nothing younger is touched, because
+it may belong to a write in flight.
+
+==== Reconciling the reward ledger
+
+`bot-reward-ledger.json` records one entry per `Idempotency-Key` sent to
+`POST /api/v1/rewards` (stored as a SHA-256 digest, never the raw key). `paid`
+and `pending` entries hold the response a repeat replays and are pruned after
+90 days. Two states never expire and always need a person:
+
+* `uncertain`: the payment call to LNbits failed or returned no payment hash,
+  so the reward may have been paid. Every redelivery gets a `409`. Search the
+  treasury wallet's outgoing payments in LNbits around the entry's `at` time
+  (milliseconds since the epoch) for the recipient and amount. If it settled,
+  the entry can stay as it is, since the reward is paid. If it did not, stop
+  the bot, delete that one entry from `records`, start the bot, and resubmit
+  the Logic App run. When the recipient had not linked GitHub, the uncertain
+  call was the portal's pending-reward write instead (the bot logs
+  `pending reward write`): look in the portal's `pending-rewards.json` for an
+  entry for that GitHub id and amount. If it is there, leave the ledger entry
+  as it is; if not, delete the ledger entry and resubmit.
+* `processing` that is older than a few minutes: the bot stopped mid-request,
+  or the payment settled but the ledger could not record it (the bot logs
+  `rewards ledger could not record a settled reward`). Reconcile it the same
+  way. Also check the portal's pending rewards for a duplicate entry for the
+  recipient: a pending reward is written to the portal before the ledger
+  records it.
+
+Edit the file only with every bot process stopped, keep the JSON valid, and
+keep a copy of the file you started from. The bot refuses to start on a store
+it cannot validate rather than guessing.
 
 === Azure Functions
 
@@ -219,6 +312,17 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | MSAL configuration for the tabs SPA
 | Tabs
 
+| `PUBLIC_URL`
+| Base path of the tabs build (`/portal` for getzapl.ie/portal/; unset at the
+  root). Sets asset paths, the router basename and the MSAL redirect URI
+| Tabs (build time)
+
+| `REACT_APP_API_BASE_URL`
+| Origin of the Express backend when the tabs are served from another host
+  (`https://<portal App Service host>` for getzapl.ie); unset, `/api` calls stay
+  same-origin
+| Tabs (build time)
+
 | `WEBSITE_URL`, `CONTENT_URL`
 | Public URLs substituted into the Teams manifest by `build.js`
 | Manifest
@@ -263,7 +367,38 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | Portal backend
 
 | `PORTAL_URL`
-| Public base URL of the portal, used in identity/OAuth redirect flows
+| Public base URL of the portal, used in identity/OAuth redirect flows. The
+  GitHub callbacks (App manifest and identity OAuth) are registered on its
+  origin, so it may also point at a route such as `/settings`. Required in
+  production: with `NODE_ENV=production` and no `PORTAL_URL`, the GitHub App
+  manifest route refuses, because its URLs would fall back to localhost and
+  be baked into the App
+| Portal backend
+
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`
+| Optional. Not needed when an admin creates the GitHub App from Automations
+  (the manifest flow stores its credentials under `ZAPLIE_DATA_DIR`). When
+  both are set they win over the stored App key; set only one and it is
+  ignored. See `docs/setup/zero-config-github.md`
+| Portal backend
+
+| `GITHUB_APP_SLUG`
+| Optional. Overrides the stored App slug used for the "Connect repositories"
+  install link
+| Portal backend
+
+| `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`
+| Optional. Both or neither. When set, they must be the Zaplie GitHub App's
+  own client ID and secret, not a separate OAuth App's, and that App must
+  register `/api/identities/github/callback` on the `PORTAL_URL` origin.
+  "Connect GitHub" uses them. When unset, the client of the App created from
+  Automations is used
+| Portal backend
+
+| `GITHUB_OAUTH_REDIRECT_URI`
+| Optional, and used only with the env OAuth client above. Defaults to
+  `<PORTAL_URL origin>/api/identities/github/callback`, the callback the App
+  manifest registers. The stored App client always uses the manifest callback
 | Portal backend
 
 | `TREASURY_USERNAME`
@@ -288,7 +423,8 @@ created. Must be a positive integer; a failed grant is logged, not retried
   on either OS and on any stamp. Consumers: every portal backend
   store honours it (`data.json`, identities, connections, pending rewards,
   secrets, webhook keys, GitHub App credentials, the LNbits user directory);
-  the bot's zap ledger (`bot-zap-ledger.json`) reads it too, and outside
+  the bot's zap and reward ledgers (`bot-zap-ledger.json`,
+  `bot-reward-ledger.json`) read it too, and outside
   explicit development mode the bot refuses to start without it. Set it on
   both — a component that does not read it yet simply ignores it.
 | Bot, Portal backend
@@ -310,8 +446,9 @@ created. Must be a positive integer; a failed grant is logged, not retried
 | Guests (or users from other tenants) the bot may serve, besides members of
   its own tenant. Comma-separated: `person@example.com`, `@example.com` for a
   whole domain, or an Entra object id. Empty or unset (the default): members
-  only. Anonymous meeting participants are never served
-| Bot
+  only. Anonymous meeting participants are never served. The portal backend
+  reads the same setting for `POST /api/lnbits/users/me`
+| Bot, Portal backend
 
 | `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL`
 | Azure AI Foundry project endpoint and model for the conversational

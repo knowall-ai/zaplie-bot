@@ -170,7 +170,10 @@ const redactSensitive = (value, depth = 0) => {
 
 const sanitizeUser = (user) => {
   const extra = parseExtra(user);
-  let displayName = String(user.username || user.name || user.id || '');
+  // Users created by the portal carry their name only in extra.display_name.
+  let displayName = String(
+    user.username || user.name || extra.display_name || user.id || '',
+  );
   if (displayName.includes('@')) {
     displayName = displayName
       .split('@')[0]
@@ -372,6 +375,115 @@ const findCaller = async (aadObjectId) => {
 const assertCaller = async (aadObjectId) => {
   await findCaller(aadObjectId);
 };
+
+// The bot provisions an LNbits user (and the Allowance and Private wallets) on
+// a person's first Teams turn. Outside Teams nothing did, so someone signing
+// in to the portal with a work account that had never met the bot was refused
+// by assertCaller on every route, the user directory included. This creates
+// only what is missing, the way the bot does (the Entra oid in external_id,
+// wallets matched by name), and moves no sats: the opening allowance is the
+// bot's treasury decision (LNBITS_INITIAL_ALLOWANCE), not the portal's, so a
+// wallet created here starts empty.
+const CALLER_WALLET_NAMES = ['Allowance', 'Private'];
+const MAX_DISPLAY_NAME_LENGTH = 256;
+const MAX_EMAIL_LENGTH = 320;
+
+const createLnbitsUser = async ({ aadObjectId, displayName, email }) => {
+  const user = await lnbitsRequest('/users/api/v1/user', {
+    method: 'POST',
+    body: {
+      ...(email ? { email } : {}),
+      external_id: aadObjectId,
+      extra: { ...(displayName ? { display_name: displayName } : {}) },
+    },
+  });
+  if (!user || typeof user.id !== 'string' || !USER_ID_PATTERN.test(user.id)) {
+    throw new LnbitsGatewayError('LNbits user response is malformed');
+  }
+  return user;
+};
+
+const createLnbitsWallet = async (userId, name) => {
+  const wallet = await lnbitsRequest(
+    `/users/api/v1/user/${encodeURIComponent(userId)}/wallet`,
+    { method: 'POST', body: { name } },
+  );
+  if (!wallet || typeof wallet.id !== 'string') {
+    throw new LnbitsGatewayError('LNbits wallet response is malformed');
+  }
+  return wallet;
+};
+
+const cleanClaim = (value, maxLength) =>
+  typeof value === 'string' && value.trim().length > 0
+    ? value.trim().slice(0, maxLength)
+    : undefined;
+
+const createEnsureCaller = ({
+  listUsersForCaller = listRawUsers,
+  createUserForCaller = createLnbitsUser,
+  listWalletsForCaller = listUserWalletsWithKeys,
+  createWalletForCaller = createLnbitsWallet,
+} = {}) => {
+  // Two tabs signing in at once must not create two LNbits users for one
+  // person (findUniqueUserByAadObjectId would then refuse them both), so
+  // concurrent calls for the same oid share one operation. This map lives in
+  // one process: the portal backend runs as a single App Service instance
+  // (like its other in-memory caches), and a second instance could still
+  // race a first sign-in.
+  const inFlight = new Map();
+
+  return async ({ aadObjectId, displayName, email }) => {
+    if (typeof aadObjectId !== 'string' || !USER_ID_PATTERN.test(aadObjectId)) {
+      throw new LnbitsGatewayError('invalid caller', 400);
+    }
+    const active = inFlight.get(aadObjectId);
+    if (active) {
+      return active;
+    }
+
+    const operation = (async () => {
+      let user = findUniqueUserByAadObjectId(
+        await listUsersForCaller(),
+        aadObjectId,
+      );
+      let created = false;
+      if (!user) {
+        user = await createUserForCaller({
+          aadObjectId,
+          displayName: cleanClaim(displayName, MAX_DISPLAY_NAME_LENGTH),
+          email: cleanClaim(email, MAX_EMAIL_LENGTH),
+        });
+        created = true;
+      }
+
+      const existing = new Set(
+        (await listWalletsForCaller(user.id)).map((wallet) =>
+          String(wallet.name).trim().toLowerCase(),
+        ),
+      );
+      const createdWallets = [];
+      for (const name of CALLER_WALLET_NAMES) {
+        if (!existing.has(name.toLowerCase())) {
+          await createWalletForCaller(user.id, name);
+          createdWallets.push(name);
+        }
+      }
+      if (created || createdWallets.length > 0) {
+        // The feed's shared wallet walk must see the new wallets.
+        walletIndex = null;
+      }
+      return { user: sanitizeUser(user), created, createdWallets };
+    })().finally(() => {
+      inFlight.delete(aadObjectId);
+    });
+
+    inFlight.set(aadObjectId, operation);
+    return operation;
+  };
+};
+
+const ensureCaller = createEnsureCaller();
 
 const requireOwnedWallet = async (walletId, aadObjectId) => {
   const user = await findCaller(aadObjectId);
@@ -727,9 +839,11 @@ const resetCachesForTests = () => {
 module.exports = {
   LnbitsGatewayError,
   assertCaller,
+  createEnsureCaller,
   createInvoice,
   createSendZap,
   createOwnedInvoice,
+  ensureCaller,
   getAllPayments,
   getInvoicePayment,
   getNostrRewards,
@@ -748,5 +862,6 @@ module.exports = {
   sanitizePayment,
   sanitizeWallet,
   sanitizeBalanceMsat,
+  sanitizeUser,
   sendZap,
 };

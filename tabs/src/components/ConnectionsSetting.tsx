@@ -30,6 +30,12 @@ const useGithubReturnStatus = () => {
       toast.success('GitHub connected.');
     } else if (status === 'repos_connected') {
       toast.success('Repositories connected.');
+    } else if (status === 'repos_updated') {
+      toast.success('Repository access updated on GitHub.');
+    } else if (status === 'install_requested') {
+      toast.success(
+        'Install requested. An owner of the GitHub organisation must approve it.',
+      );
     } else if (status === 'conflict') {
       toast.error('That GitHub account is already linked to another person.');
     } else if (status === 'install_error') {

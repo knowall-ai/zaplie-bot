@@ -130,13 +130,16 @@
                   "type": "Http",
                   "inputs": {
                     "retryPolicy": {
-                      "type": "none"
+                      "type": "fixed",
+                      "count": 3,
+                      "interval": "PT30S"
                     },
                     "method": "POST",
                     "uri": "@parameters('zaplieRewardsUrl')",
                     "headers": {
                       "Content-Type": "application/json",
-                      "X-Api-Key": "@parameters('zaplieRewardsApiKey')"
+                      "X-Api-Key": "@parameters('zaplieRewardsApiKey')",
+                      "Idempotency-Key": "@triggerOutputs()?['headers']?['X-GitHub-Delivery']"
                     },
                     "body": {
                       "recipient": "@triggerBody()?['pull_request']?['user']?['login']",

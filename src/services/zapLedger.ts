@@ -1,32 +1,26 @@
-import { createHash, randomBytes } from 'crypto';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DataDirError, resolveDataDir } from './dataDir';
+import {
+  ensureDataDirectory,
+  isErrnoException,
+  LedgerFile,
+  sweepStaleTemporaries,
+  validateDuration,
+  withStoreLock,
+  writeAtomically,
+} from './ledgerFile';
 
 const STORE_VERSION = 1;
 const STORE_FILENAME = 'bot-zap-ledger.json';
 const DEFAULT_LOCK_RETRY_MS = 20;
-// Windows enforces mandatory sharing, so a concurrent lock-free reader holding
-// the canonical store open can make MoveFileEx(REPLACE_EXISTING) fail with
-// EPERM/EACCES/EBUSY. Those handles are held for a single readFileSync, so a
-// few short retries clear a sharing violation that would otherwise strand a
-// settled payment in `processing`.
-const RENAME_SHARING_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
-const RENAME_RETRY_ATTEMPTS = 5;
-const RENAME_RETRY_MS = 20;
-// A crash between writing a temporary and renaming it leaves that temporary
-// behind: the catch block that would remove it never runs. Each one is a full
-// ledger snapshot, so repeated crashes would grow without bound on the
-// persistent share. An hour is far longer than any write, so anything older
-// than that belongs to a dead process, never to a write in flight.
-const STALE_TEMP_MS = 60 * 60 * 1000;
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
 // A transition that records an already-settled payment can never be safely
 // abandoned: giving up leaves the recipient `processing` forever, which no
 // retry may clear. It waits far longer than a submit does, and says so
 // periodically instead of failing quietly.
 const DEFAULT_SETTLE_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
-const LOCK_WAIT_LOG_MS = 5_000;
 // Every write re-serialises the whole store, so an unbounded file eventually
 // makes each transition slow enough to queue submits past the lock timeout.
 // A `paid` record only has to outlive the card that produced it; ninety days
@@ -83,9 +77,6 @@ export class ZapLedgerError extends Error {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
-  typeof error === 'object' && error !== null && 'code' in error;
 
 const hasControlCharacter = (value: string): boolean =>
   Array.from(value).some(character => {
@@ -224,119 +215,48 @@ const readStore = (storePath: string): ZapStore => {
   }
 };
 
-const validateDuration = (name: string, value: number): number => {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new ZapLedgerError(`${name} is invalid`);
-  }
-  return value;
-};
-
-const wait = (milliseconds: number): Promise<void> =>
-  new Promise(resolve => setTimeout(resolve, milliseconds));
-
-// The rename itself stays atomic: a retry only re-attempts the same single
-// replacement, so a reader still sees either the previous canonical file or
-// the next one. Writers already hold the exclusive store lock, so no other
-// writer can slip in between attempts.
-// Best effort by design: a crash temporary is a leftover, never a reason to
-// fail. Only this store's own temporaries match, and only ones old enough that
-// no live write could own them. Runs once when a ZapLedger is constructed, not
-// per write: the condition it cleans up only arises after a crash, and a
-// readdir+stat on every transition would sit inside the exclusive lock.
-const sweepStaleTemporaries = (storePath: string, nowMs: number): void => {
-  const directory = path.dirname(storePath);
-  const prefix = `${path.basename(storePath)}.`;
-  try {
-    const cutoff = nowMs - STALE_TEMP_MS;
-    for (const name of fs.readdirSync(directory)) {
-      if (!name.startsWith(prefix) || !name.endsWith('.tmp')) {
-        continue;
-      }
-      const candidate = path.join(directory, name);
-      try {
-        if (fs.statSync(candidate).mtimeMs < cutoff) {
-          fs.unlinkSync(candidate);
-        }
-      } catch {
-        // Another process removed it, or it is not ours to remove.
-      }
-    }
-  } catch {
-    // A directory listing failure is not a reason to refuse to start.
-  }
-};
-
-// fsync of the file only guarantees its contents. On POSIX the rename itself
-// is a directory update, and without syncing the directory a power loss can
-// restore the old entry - losing a `paid` record that markPaid already
-// returned, which a later retry would pay again. Failures are deliberately not
-// caught: a durability operation that failed must fail the write. Windows has
-// no directory handle to sync (opening one fails outright) and MoveFileEx is
-// already ordered by the filesystem, so the step is skipped there.
-const syncDirectory = async (directory: string): Promise<void> => {
-  if (process.platform === 'win32') {
-    return;
-  }
-  const handle = await fs.promises.open(directory, 'r');
-  try {
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-};
-
-const replaceStoreFile = async (
-  tempPath: string,
-  storePath: string,
-): Promise<void> => {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await fs.promises.rename(tempPath, storePath);
-      await syncDirectory(path.dirname(storePath));
-      return;
-    } catch (error) {
-      const transient =
-        isErrnoException(error) &&
-        error.code !== undefined &&
-        RENAME_SHARING_CODES.has(error.code);
-      if (!transient || attempt >= RENAME_RETRY_ATTEMPTS) {
-        throw error;
-      }
-      await wait(RENAME_RETRY_MS);
-    }
-  }
-};
-
 export class ZapLedger {
   readonly storePath: string;
   readonly lockPath: string;
-  private readonly lockRetryMs: number;
   private readonly lockTimeoutMs: number;
   private readonly settleLockTimeoutMs: number;
   private readonly retentionMs: number;
   private readonly now: () => number;
+  private readonly file: LedgerFile;
 
   constructor(options: ZapLedgerOptions = {}) {
     this.storePath = options.storePath ?? resolveZapLedgerStorePath();
     this.lockPath = `${this.storePath}.lock`;
-    this.lockRetryMs = validateDuration(
+    const lockRetryMs = validateDuration(
+      ZapLedgerError,
       'Zap ledger lock retry duration',
       options.lockRetryMs ?? DEFAULT_LOCK_RETRY_MS,
     );
     this.lockTimeoutMs = validateDuration(
+      ZapLedgerError,
       'Zap ledger lock timeout',
       options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS,
     );
     this.settleLockTimeoutMs = validateDuration(
+      ZapLedgerError,
       'Zap ledger settle lock timeout',
       options.settleLockTimeoutMs ?? DEFAULT_SETTLE_LOCK_TIMEOUT_MS,
     );
     this.retentionMs = validateDuration(
+      ZapLedgerError,
       'Zap ledger retention window',
       options.retentionMs ?? DEFAULT_RETENTION_MS,
     );
     this.now = options.now ?? Date.now;
-    this.ensureDataDirectory();
+    this.file = {
+      storePath: this.storePath,
+      lockPath: this.lockPath,
+      label: 'Zap ledger',
+      lockTimeoutImpact: 'every zap submission fails',
+      lockRetryMs,
+      errorType: ZapLedgerError,
+    };
+    ensureDataDirectory(this.file);
     // Once per process, outside the lock: a crash temporary is a startup
     // condition, not something to look for on every payment.
     sweepStaleTemporaries(this.storePath, this.timestamp());
@@ -467,113 +387,12 @@ export class ZapLedger {
     }
   }
 
-  private ensureDataDirectory(): void {
-    const directory = path.dirname(this.storePath);
-    try {
-      fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-      fs.accessSync(directory, fs.constants.R_OK | fs.constants.W_OK);
-    } catch (error) {
-      throw new ZapLedgerError(
-        'Zap ledger data directory is unavailable',
-        error,
-      );
-    }
-  }
-
-  private async withStoreLock<T>(
+  private withStoreLock<T>(
     operation: () => Promise<T>,
     timeoutMs = this.lockTimeoutMs,
   ): Promise<T> {
-    const release = await this.acquireLock(timeoutMs);
-    try {
-      return await operation();
-    } finally {
-      await release();
-    }
+    return withStoreLock(this.file, operation, timeoutMs);
   }
-
-  private async acquireLock(
-    timeoutMs = this.lockTimeoutMs,
-  ): Promise<() => Promise<void>> {
-    const startedAt = Date.now();
-    const deadline = startedAt + timeoutMs;
-    let nextLogAt = startedAt + LOCK_WAIT_LOG_MS;
-
-    for (;;) {
-      try {
-        const handle = await fs.promises.open(this.lockPath, 'wx', 0o600);
-        const ownerToken = randomBytes(32).toString('hex');
-        try {
-          await handle.writeFile(ownerToken, 'utf8');
-          await handle.sync();
-        } catch (error) {
-          await handle.close().catch(() => undefined);
-          await fs.promises.unlink(this.lockPath).catch(() => undefined);
-          throw new ZapLedgerError(
-            'Zap ledger lock could not be written',
-            error,
-          );
-        }
-
-        return async () => {
-          try {
-            await handle.close();
-            const currentToken = await fs.promises.readFile(
-              this.lockPath,
-              'utf8',
-            );
-            if (currentToken !== ownerToken) {
-              throw new ZapLedgerError('Zap ledger lock ownership changed');
-            }
-            await fs.promises.unlink(this.lockPath);
-          } catch (error) {
-            if (error instanceof ZapLedgerError) {
-              throw error;
-            }
-            throw new ZapLedgerError(
-              'Zap ledger lock could not be released',
-              error,
-            );
-          }
-        };
-      } catch (error) {
-        if (error instanceof ZapLedgerError) {
-          throw error;
-        }
-        if (!isErrnoException(error) || error.code !== 'EEXIST') {
-          throw new ZapLedgerError(
-            'Zap ledger lock could not be acquired',
-            error,
-          );
-        }
-        if (Date.now() >= deadline) {
-          // Deliberate: an orphaned lock is a manual outage, not something to
-          // evict on a timer. Name the recovery procedure so the operator is
-          // not left guessing at a bare timeout.
-          throw new ZapLedgerError(
-            'Zap ledger lock timed out; every zap submission fails until an ' +
-              'operator follows the lock recovery procedure in ' +
-              'docs/DEPLOYMENT.adoc',
-            error,
-          );
-        }
-        // A long wait must not be silent: an operator watching the logs is
-        // how a held lock gets noticed before the deadline arrives.
-        if (Date.now() >= nextLogAt) {
-          console.error(
-            `Still waiting for the zap ledger lock after ${Math.round(
-              (Date.now() - startedAt) / 1000,
-            )}s; another process may have crashed holding ${this.lockPath}.`,
-          );
-          nextLogAt = Date.now() + LOCK_WAIT_LOG_MS;
-        }
-        await wait(
-          Math.min(this.lockRetryMs, Math.max(0, deadline - Date.now())),
-        );
-      }
-    }
-  }
-
   // Bounded by construction: every write drops `paid` records past the
   // retention window, so the file cannot grow until a transition outlasts the
   // lock timeout. Pruning here rather than on a timer keeps it on the path
@@ -595,23 +414,8 @@ export class ZapLedger {
 
   private async writeStore(store: ZapStore): Promise<void> {
     // Validate our own output too: a bad transition must never replace the last
-    // known-good file. A unique same-directory temporary keeps rename atomic.
+    // known-good file.
     const canonical = validateStore(this.prune(store), this.storePath);
-    const tempPath = `${this.storePath}.${process.pid}.${randomBytes(16).toString('hex')}.tmp`;
-    let handle: fs.promises.FileHandle | undefined;
-    try {
-      handle = await fs.promises.open(tempPath, 'wx', 0o600);
-      await handle.writeFile(`${JSON.stringify(canonical, null, 2)}\n`, 'utf8');
-      await handle.sync();
-      await handle.close();
-      handle = undefined;
-      await replaceStoreFile(tempPath, this.storePath);
-    } catch (error) {
-      if (handle) {
-        await handle.close().catch(() => undefined);
-      }
-      await fs.promises.unlink(tempPath).catch(() => undefined);
-      throw new ZapLedgerError('Zap ledger data could not be persisted', error);
-    }
+    await writeAtomically(this.file, `${JSON.stringify(canonical, null, 2)}\n`);
   }
 }

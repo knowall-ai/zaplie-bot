@@ -18,6 +18,18 @@ change reward routing.
 - GitHub's client secret, OAuth access token, and `IDENTITY_STATE_SECRET` remain
   in the tab backend. The signed, expiring OAuth state binds the callback to the
   verified Entra `oid` that started the flow.
+- The state is tagged `identity`, so a repository-install state cannot be
+  replayed here, nor the reverse. The flow is also bound to the browser that
+  started it: issuing the authorize link sets a short-lived `HttpOnly`,
+  `Secure`, `SameSite=Lax` cookie scoped to `/api/identities/github`, and the
+  state carries only its hash. The callback requires the cookie to match and
+  clears it, so an authorize link handed to a colleague links nothing.
+- "Connect GitHub" navigates the current window to GitHub, and GitHub refuses
+  to load inside a frame, so it cannot run inside the Teams tab: start it from
+  the portal open in a browser tab. There the portal is first-party, and the
+  binding cookie returns on GitHub's top-level redirect to the callback.
+  Starting the flow from inside the Teams tab (a popup or a new tab) is
+  tracked in https://github.com/knowall-ai/zaplie-bot/issues/495.
 - The bot calls `GET /api/identities/resolve` with `TAB_BACKEND_TOKEN`. This is a
   server-to-server secret and must never be exposed through a `REACT_APP_*`
   variable or otherwise sent to browser code.
@@ -33,11 +45,11 @@ Configure these values in the tab backend's approved server-side secret store.
 | --- | --- |
 | `AAD_TENANT_ID` | Entra tenant accepted by the backend JWT verifier. |
 | `AAD_CLIENT_ID` | Audience expected on the portal's MSAL ID token. |
-| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client id. |
-| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret; server only. |
-| `GITHUB_OAUTH_REDIRECT_URI` | Exact callback URL registered in GitHub: `https://<backend>/api/identities/github/callback`. |
+| `GITHUB_OAUTH_CLIENT_ID` | Optional. The Zaplie GitHub App's own client ID, never a separate OAuth App's. When unset, the client of the App created from Automations is used. |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Optional. That App's client secret, set together with the client ID (both or neither). Server only. |
+| `GITHUB_OAUTH_REDIRECT_URI` | Optional, and used only with the env client above. Defaults to `<PORTAL_URL origin>/api/identities/github/callback`, the callback the App manifest registers. Set it only when that App registers the identity callback at a different URL. The stored App client always uses the manifest callback. |
 | `IDENTITY_STATE_SECRET` | Random secret used to sign the expiring OAuth state. |
-| `PORTAL_URL` | Portal URL that receives the `?github=connected`, `conflict`, or `error` result. |
+| `PORTAL_URL` | Portal URL that receives the `?github=connected`, `conflict`, or `error` result. Its origin is also where the GitHub callbacks are registered. |
 | `TAB_BACKEND_TOKEN` | Shared server-to-server token expected from the bot. Generate independently with `openssl rand -hex 32`. |
 
 Configure these values on the bot process:
@@ -57,12 +69,21 @@ configuration errors, not development fallbacks.
 
 ## GitHub OAuth setup
 
-1. Create a GitHub OAuth App for the deployed environment.
-2. Set its callback URL to the exact `GITHUB_OAUTH_REDIRECT_URI` above.
-3. Set `PORTAL_URL` to the portal Settings route for that environment.
-4. Provision the Entra and GitHub values in the backend secret store.
-5. Provision the same newly generated `TAB_BACKEND_TOKEN` on the bot and tab
+1. Set `PORTAL_URL` to the portal Settings route for that environment.
+2. An admin creates the Zaplie GitHub App from Automations
+   ([zero-config setup](setup/zero-config-github.md)). Its OAuth client
+   serves "Connect GitHub" with no further configuration.
+3. Provision the Entra values in the backend secret store.
+4. Provision the same newly generated `TAB_BACKEND_TOKEN` on the bot and tab
    backend, then restart both processes.
+
+To configure the client by env instead (env wins over the stored App
+credentials), set `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`
+to the Zaplie GitHub App's own client ID and secret, both or neither. A
+separate OAuth App is not supported. Register
+`<PORTAL_URL origin>/api/identities/github/callback` as that App's callback
+URL, and set `GITHUB_OAUTH_REDIRECT_URI` only if its identity callback lives
+elsewhere.
 
 Identity and pending-reward JSON stores are runtime data and are gitignored.
 Do not copy production identity data into the repository or screenshots.

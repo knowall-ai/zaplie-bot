@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { apiUrl } from './appLocation';
 
-const API_URL = '/api/webhook-keys';
+const API_URL = apiUrl('/api/webhook-keys');
 
 export interface WebhookKey {
   id: string;

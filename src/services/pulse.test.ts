@@ -151,6 +151,26 @@ describe('agent-pulse wrapper', () => {
     ]);
   });
 
+  test('an automation reward with an unknown outcome is recorded as needing a check', async () => {
+    recordRewardOutcome({
+      status: 'needs-checking',
+      requestKey: 'req-3',
+      sats: 75,
+    });
+    await pulseSettled();
+
+    expect(emitted()).toEqual([
+      expect.objectContaining({
+        activityType: 'zap.failed',
+        level: 'warning',
+        subject: 'outcome-unknown',
+        channel: 'api',
+        activityId: 'sha256:req-3',
+        measurements: { sats: 75 },
+      }),
+    ]);
+  });
+
   test('a throwing library is logged and never reaches the caller', async () => {
     const warn = jest
       .spyOn(console, 'warn')

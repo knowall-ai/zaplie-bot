@@ -1,9 +1,10 @@
 import { loginRequest } from '../authConfig';
 import { getMsalInstance } from '../msalClient';
+import { apiUrl } from '../appLocation';
 
 // LNbits is never reached from the browser: every call below goes to the
 // same-origin Express gateway, which holds the credentials server-side.
-const API_BASE = '/api/lnbits';
+const API_BASE = apiUrl('/api/lnbits');
 
 // Long enough for a Lightning payment, short enough that a stalled gateway
 // cannot leave a payment caller loading with neither success nor failure.

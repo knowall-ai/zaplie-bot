@@ -8,6 +8,30 @@ describe('createMsalConfig', () => {
     );
   });
 
+  test('uses the bare origin as the redirect URI at the root', () => {
+    const publicUrl = process.env.PUBLIC_URL;
+    process.env.PUBLIC_URL = '';
+    try {
+      expect(createMsalConfig().auth.redirectUri).toBe(window.location.origin);
+    } finally {
+      process.env.PUBLIC_URL = publicUrl;
+    }
+  });
+
+  test('includes the base path in the redirect URIs under /portal/', () => {
+    const publicUrl = process.env.PUBLIC_URL;
+    process.env.PUBLIC_URL = '/portal';
+    try {
+      const { auth } = createMsalConfig();
+      expect(auth.redirectUri).toBe(`${window.location.origin}/portal`);
+      expect(auth.postLogoutRedirectUri).toBe(
+        `${window.location.origin}/portal`,
+      );
+    } finally {
+      process.env.PUBLIC_URL = publicUrl;
+    }
+  });
+
   test('throws when the client id is missing', () => {
     const clientId = process.env.REACT_APP_AAD_CLIENT_ID;
     delete process.env.REACT_APP_AAD_CLIENT_ID;
