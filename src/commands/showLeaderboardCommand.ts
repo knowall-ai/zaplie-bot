@@ -2,9 +2,12 @@ import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory } from 'botbuilder';
 import { getZapLeaderboard } from '../services/zapHistoryService';
 import { positiveIntFromEnv } from '../services/envNumbers';
+import { LocaleTag, en, formatNumber, t } from '../i18n';
 
-export const LEADERBOARD_UNAVAILABLE_MESSAGE =
-  'Sorry, I could not load the leaderboard just now. Please try again in a moment.';
+// The copy lives in src/i18n, translated per client language; these constants
+// are the English renderings, kept for callers and tests that compare against
+// them.
+export const LEADERBOARD_UNAVAILABLE_MESSAGE = en.leaderboardUnavailable;
 
 export const LEADERBOARD_WINDOW_DAYS_VAR = 'LEADERBOARD_WINDOW_DAYS';
 export const LEADERBOARD_TOP_N_VAR = 'LEADERBOARD_TOP_N';
@@ -85,27 +88,45 @@ export function windowStartSeconds(
   return Math.floor(nowMs / 1000) - windowDays * SECONDS_PER_DAY;
 }
 
-export function leaderboardWindowLabel(windowDays: number): string {
-  return windowDays === 1 ? 'last day' : `last ${windowDays} days`;
+// The window, title and empty copy follow the client language (`locale` is
+// the raw activity.locale; English when omitted). One day is singular in both
+// languages, never "last 1 days". The empty message has its own one-day and
+// N-day keys because Spanish needs the article to agree ("en el último día",
+// "en los últimos 7 días").
+export function leaderboardWindowLabel(
+  windowDays: number,
+  locale: LocaleTag = 'en',
+): string {
+  return windowDays === 1
+    ? t(locale, 'leaderboardWindowOneDay')
+    : t(locale, 'leaderboardWindowDays', { days: windowDays });
 }
 
 export function leaderboardTitle(
   windowDays: number,
   rewardName: string,
+  locale: LocaleTag = 'en',
 ): string {
-  return `Top zappers (${rewardName} sent, ${leaderboardWindowLabel(windowDays)}):`;
+  return t(locale, 'leaderboardTitle', {
+    rewardName,
+    window: leaderboardWindowLabel(windowDays, locale),
+  });
 }
 
-export function leaderboardEmptyMessage(windowDays: number): string {
-  return `No zaps sent in the ${leaderboardWindowLabel(windowDays)} yet. Send a zap to get things started!`;
+export function leaderboardEmptyMessage(
+  windowDays: number,
+  locale: LocaleTag = 'en',
+): string {
+  return windowDays === 1
+    ? t(locale, 'leaderboardEmptyOneDay')
+    : t(locale, 'leaderboardEmptyDays', { days: windowDays });
 }
 
 // A team-wide read can miss a user or a wallet (a rate-limited LNbits response,
 // say). The totals are then a floor, not a total, and someone can be missing
 // from the card altogether — so the card says so rather than presenting an
 // incomplete ranking as the ranking.
-export const LEADERBOARD_PARTIAL_MESSAGE =
-  'Some wallets could not be read just now, so this ranking may be incomplete.';
+export const LEADERBOARD_PARTIAL_MESSAGE = en.leaderboardPartial;
 
 export interface LeaderboardEntry {
   displayName: string;
@@ -117,6 +138,9 @@ export interface LeaderboardCardOptions {
   emptyMessage: string;
   portalUrl?: string;
   partial?: boolean;
+  // The raw activity.locale: picks the language of the card's own copy and
+  // groups the amounts for the client's region. English when omitted.
+  locale?: LocaleTag;
 }
 
 // Builds the leaderboard card: a title, then one two-column row per leader
@@ -128,7 +152,7 @@ export function buildLeaderboardCard(
   rewardName: string,
   options: LeaderboardCardOptions,
 ) {
-  const { title, emptyMessage, portalUrl, partial } = options;
+  const { title, emptyMessage, portalUrl, partial, locale = 'en' } = options;
   return {
     type: 'AdaptiveCard',
     body: [
@@ -168,7 +192,7 @@ export function buildLeaderboardCard(
             items: [
               {
                 type: 'TextBlock',
-                text: `${entry.amount.toLocaleString()} ${rewardName}`,
+                text: `${formatNumber(entry.amount, locale)} ${rewardName}`,
                 weight: 'Bolder',
               },
             ],
@@ -179,7 +203,7 @@ export function buildLeaderboardCard(
         ? [
             {
               type: 'TextBlock',
-              text: LEADERBOARD_PARTIAL_MESSAGE,
+              text: t(locale, 'leaderboardPartial'),
               wrap: true,
               isSubtle: true,
               spacing: 'Medium',
@@ -192,7 +216,7 @@ export function buildLeaderboardCard(
           actions: [
             {
               type: 'Action.OpenUrl',
-              title: 'View Wallets',
+              title: t(locale, 'leaderboardViewWallets'),
               url: `${portalUrl.replace(/\/+$/, '')}/wallet`,
             },
           ],
@@ -214,6 +238,9 @@ export function buildLeaderboardCard(
 // only what is its own: the configured window and row count, and the copy.
 export class ShowLeaderboardCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
+    // The raw tag: it picks the language and groups the amounts for the
+    // client's region.
+    const locale = context.activity?.locale;
     try {
       console.log('Showing leaderboard...');
 
@@ -238,10 +265,11 @@ export class ShowLeaderboardCommand extends SSOCommand {
       // env/.env.dev.example). Without it there is no live portal to link
       // to, so the button is omitted rather than pointing at a dead URL.
       const cardResponse = buildLeaderboardCard(entries, globalRewardName, {
-        title: leaderboardTitle(windowDays, globalRewardName),
-        emptyMessage: leaderboardEmptyMessage(windowDays),
+        title: leaderboardTitle(windowDays, globalRewardName, locale),
+        emptyMessage: leaderboardEmptyMessage(windowDays, locale),
         portalUrl: process.env.PORTAL_URL,
         partial: leaderboard.partial,
+        locale,
       });
 
       await context.sendActivity({
@@ -249,7 +277,7 @@ export class ShowLeaderboardCommand extends SSOCommand {
       });
     } catch (error) {
       console.error('Error showing leaderboard:', error);
-      await context.sendActivity(LEADERBOARD_UNAVAILABLE_MESSAGE);
+      await context.sendActivity(t(locale, 'leaderboardUnavailable'));
     }
   }
 }

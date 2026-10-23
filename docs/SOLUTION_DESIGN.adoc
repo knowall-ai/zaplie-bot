@@ -579,6 +579,63 @@ Weekly top-ups are the allowance extension's job.
 The leaderboard keeps excluding payments whose memo contains
 `Weekly Allowance cleared` so historical sweeps never count as zaps.
 
+=== Bot copy follows the user's Teams language
+
+*Decision:* Every user-facing bot string lives in `src/i18n/index.ts` as a
+key with an English and a Spanish rendering (typed objects, so a missing
+translation is a compile error). Handlers resolve the language from the
+`locale` Teams sends on each activity (`es-*` is Spanish, anything else is
+English) and render through `t(activity.locale, key, params)`; validation
+errors carry a key and raw numbers (`UserFacingError`) and are rendered where
+they are caught. This covers every reply and card the bot sends in a chat:
+the zap card and its receipt, balance, the leaderboard card (its window reads
+"last day" / "último día" or "last N days" / "últimos N días", and the empty,
+incomplete-read and unavailable messages are keys too), calendar sign-in, the
+welcome, greeting, unrecognised-command and assistant-unavailable guides, and
+the error messages. Command words, LNbits wallet names, display names and the
+reward label are data and are never translated. `appPackage/es.json`
+localises the manifest (name, descriptions and tab names; command titles stay
+English because the bot matches them).
+
+Numbers are formatted for the client's region, never with the server's
+default locale: `t` passes every number parameter through
+`formatNumber(value, activity.locale)`, which uses the full tag Teams sent for
+Spanish copy (`es-ES` writes 10000 as `10.000`, `es-MX` and `es-419` as
+`10,000`) and `en` for everything else, matching the English copy around it.
+Formatting is copy only: the amount regex, the ledger, the memo and every
+comparison use the raw number, and nothing re-parses a formatted string.
+
+The conversational assistant gets the language per turn: every question is
+sent with a leading developer message, and the user's text stays its own item.
+A Spanish client's turn asks for a Spanish reply (command words, names, amounts
+and the reward label unchanged); any other client's turn says to reply in the
+language the user writes in, English by default, and that any earlier
+instruction to reply in Spanish no longer applies. The hint goes both ways
+because Foundry stores input items in the conversation and replays them on
+later turns: a Spanish hint with nothing after it would keep a later English
+turn in Spanish (https://github.com/knowall-ai/zaplie-bot/issues/516). The
+hint is not part of the agent instructions, because `ensureAgent` re-creates
+the agent whenever their hash changes, so a language switch never re-creates
+the agent.
+
+A missing parameter leaves its `{{name}}` token in the text and logs a
+warning, so a call-site typo is visible instead of rendering "tu saldo es .".
+
+*Rationale:* Issue #110 asks for Spanish first. Two dictionaries and 30-odd
+keys do not justify a localisation framework, and a typed object gives
+compile-time key safety that a JSON resource cannot. Per-user locale needs no
+configuration and matches what Teams already knows about the user.
+
+*Consequences:* A language the bot does not have falls back to English and
+never fails a turn; a missing Spanish value falls back with a warning in the
+logs. Spanish command aliases ("enviar zap") are a separate decision. Two
+things stay English on purpose: the recipient notification (a proactive
+message opened by AAD object id, so there is no activity from the recipient
+and no reliable language; its copy has a Spanish key ready for when one is
+stored), and the tabs portal (`tabs/`), which has no localisation framework
+and is its own piece of work. Operator telemetry (agent-pulse titles) is not
+user-facing and is not translated.
+
 === Teams Toolkit for provisioning
 
 *Context:* The app spans an AAD app registration, a bot registration, an App

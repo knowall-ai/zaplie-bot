@@ -89,4 +89,29 @@ describe('connectCalendarCommand', () => {
       expect.objectContaining({ attachments: expect.any(Array) }),
     );
   });
+
+  test('answers a Spanish client in Spanish when already connected', async () => {
+    const { context } = makeContext('graph-token');
+    (context.activity as { locale?: string }).locale = 'es-MX';
+
+    await new ConnectCalendarCommand().execute(context);
+
+    expect(context.sendActivity).toHaveBeenCalledWith(
+      'Tu calendario ya está conectado. ¡Pregúntame por tus reuniones recientes!',
+    );
+  });
+
+  test('builds the sign-in card in Spanish for a Spanish client', async () => {
+    const { context } = makeContext();
+    (context.activity as { locale?: string }).locale = 'es-ES';
+
+    await new ConnectCalendarCommand().execute(context);
+
+    const [message] = jest.mocked(context.sendActivity).mock
+      .calls[0] as unknown as [{ attachments: { content: unknown }[] }];
+    const card = JSON.stringify(message.attachments[0].content);
+    expect(card).toContain('Conectar señales de trabajo');
+    expect(card).toContain('acceso delegado y de solo lectura');
+    expect(card).not.toContain('Connect work signals');
+  });
 });

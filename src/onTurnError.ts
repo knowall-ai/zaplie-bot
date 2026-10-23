@@ -1,5 +1,5 @@
 import { TurnContext } from 'botbuilder';
-import { GENERIC_ERROR_MESSAGE } from './messages';
+import { genericErrorMessage } from './messages';
 import { recordActivity } from './services/pulse';
 
 // Catch-all for errors. Lives outside index.ts so it can be unit tested
@@ -44,6 +44,6 @@ export const onTurnErrorHandler = async (
     'TurnError',
   );
 
-  // Send a single generic, friendly message to the user
-  await context.sendActivity(GENERIC_ERROR_MESSAGE);
+  // Send a single generic, friendly message to the user, in their language.
+  await context.sendActivity(genericErrorMessage(context.activity.locale));
 };

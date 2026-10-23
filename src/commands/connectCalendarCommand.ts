@@ -8,6 +8,7 @@ import {
   TurnContext,
 } from 'botbuilder';
 import { UserTokenClient } from 'botframework-connector';
+import { t } from '../i18n';
 
 export const CONNECT_CALENDAR_COMMAND = 'connect calendar';
 
@@ -43,11 +44,10 @@ export async function getStoredGraphToken(
 export class ConnectCalendarCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
     const connectionName = requiredGraphConnectionName();
+    const locale = context.activity?.locale;
     const existing = await getStoredGraphToken(context);
     if (existing) {
-      await context.sendActivity(
-        'Your calendar is already connected — ask me about your recent meetings!',
-      );
+      await context.sendActivity(t(locale, 'calendarAlreadyConnected'));
       return;
     }
 
@@ -58,8 +58,8 @@ export class ConnectCalendarCommand extends SSOCommand {
     );
     const card = CardFactory.oauthCard(
       connectionName,
-      'Connect work signals',
-      'Zaplie requests delegated, read-only access to calendar and relevant people so it can suggest teammates to recognise.',
+      t(locale, 'calendarCardTitle'),
+      t(locale, 'calendarCardText'),
       resource.signInLink,
       resource.tokenExchangeResource,
       resource.tokenPostResource,

@@ -651,6 +651,29 @@ Complete these once per new environment, right after the first deployment:
 
 == Manifest and App Package
 
+The manifest is localised: `manifest.template.json` declares English as the
+default language and Spanish through `localizationInfo`, and
+`appPackage/es.json` carries the Spanish name, descriptions and tab names.
+`teamsApp/zipAppPackage` includes the file automatically. Command titles are
+left in English on purpose: Teams inserts the title as the message text when
+a user picks a command, and the bot matches those English words. Adding a
+language means one more file and one more entry in `additionalLanguages`;
+`npm run test:tooling` checks that every key in a language file points at a
+real string in the template. That check reads the template, not the emitted
+`appPackage/manifest.json`; this is enough because `build.js` only sets the
+version, the URLs and the valid domains and passes `localizationInfo` through
+unchanged.
+
+The store listing (app name, descriptions, command descriptions and tab names,
+English and Spanish) comes from the app package, not from the bot code. A
+code-only deploy (the `deploy` stage of `teamsapp.yml`, which only zip-deploys
+the App Service) changes the bot's replies but leaves the listing as it was: a
+new or changed `es.json` reaches users only once the app package is rebuilt
+and applied, through the `provision` or `publish` stage (both run
+`teamsApp/zipAppPackage` and `teamsApp/update`) or an updated upload in the
+Teams admin center. Until then a Spanish client sees the old, English listing
+while the bot already answers in Spanish.
+
 `build.js` (`npm run build-manifest`) substitutes `CONTENT_URL`/`WEBSITE_URL`
 into `manifest.template.json`, takes the version from `APP_VERSION` when set
 (otherwise the template version, with the patch auto-incremented for

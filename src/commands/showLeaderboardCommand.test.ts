@@ -20,6 +20,7 @@ import {
   windowStartSeconds,
 } from './showLeaderboardCommand';
 import { createReadOnlyTools } from './agentTools';
+import { formatNumber } from '../i18n';
 import {
   getAllPaymentsPage,
   getPayments,
@@ -196,6 +197,32 @@ describe('leaderboard copy', () => {
       'Top zappers (Sats sent, last 30 days):',
     );
   });
+
+  test('says "último día" and "últimos N días" to a Spanish client', () => {
+    expect(leaderboardWindowLabel(1, 'es-MX')).toBe('último día');
+    expect(leaderboardWindowLabel(7, 'es-ES')).toBe('últimos 7 días');
+    expect(leaderboardTitle(1, 'Sats', 'es-MX')).toBe(
+      'Quienes más zapean (Sats enviados, último día):',
+    );
+    expect(leaderboardTitle(30, 'Sats', 'es-419')).toBe(
+      'Quienes más zapean (Sats enviados, últimos 30 días):',
+    );
+    expect(leaderboardEmptyMessage(1, 'es')).toBe(
+      'Todavía no se ha enviado ningún zap en el último día. ¡Envía un zap para empezar!',
+    );
+    expect(leaderboardEmptyMessage(365, 'es-ES')).toBe(
+      'Todavía no se ha enviado ningún zap en los últimos 365 días. ¡Envía un zap para empezar!',
+    );
+  });
+
+  test('keeps English for any other client language', () => {
+    expect(leaderboardTitle(7, 'Sats', 'de-DE')).toBe(
+      'Top zappers (Sats sent, last 7 days):',
+    );
+    expect(leaderboardEmptyMessage(7, undefined)).toBe(
+      'No zaps sent in the last 7 days yet. Send a zap to get things started!',
+    );
+  });
 });
 
 describe('windowStartSeconds', () => {
@@ -247,9 +274,7 @@ describe('buildLeaderboardCard', () => {
       options,
     );
 
-    expect(rowText(card.body[1])).toBe(
-      `#1 Alice | ${(12345).toLocaleString()} Sats`,
-    );
+    expect(rowText(card.body[1])).toBe('#1 Alice | 12,345 Sats');
   });
 
   test('shows the empty message instead of a bare title', () => {
@@ -291,6 +316,26 @@ describe('buildLeaderboardCard', () => {
       },
     ]);
     expect(withoutButton.actions).toBeUndefined();
+  });
+
+  test('writes its own copy and the amounts for a Spanish client', () => {
+    const card = buildLeaderboardCard(
+      [{ displayName: 'Alice', amount: 12345 }],
+      'Sats',
+      {
+        ...options,
+        partial: true,
+        portalUrl: 'https://portal.example.test',
+        locale: 'es-ES',
+      },
+    );
+
+    expect(rowText(card.body[1])).toBe('#1 Alice | 12.345 Sats');
+    expect(card.body[card.body.length - 1]).toMatchObject({
+      text: 'No se pudieron leer algunas carteras en este momento, así que esta clasificación puede estar incompleta.',
+    });
+    expect(card.actions?.[0].title).toBe('Ver carteras');
+    expect(JSON.stringify(card)).not.toContain(LEADERBOARD_PARTIAL_MESSAGE);
   });
 });
 
@@ -676,7 +721,7 @@ describe('showLeaderboardCommand', () => {
     expect(rows(sendActivity)).toEqual(
       result.leaderboard.map(
         (entry, index) =>
-          `#${index + 1} ${entry.displayName} | ${entry.zappedSats.toLocaleString()} Sats`,
+          `#${index + 1} ${entry.displayName} | ${formatNumber(entry.zappedSats, 'en')} Sats`,
       ),
     );
     expect(result.leaderboard).toEqual([
@@ -714,7 +759,7 @@ describe('showLeaderboardCommand', () => {
     expect(rows(sendActivity)).toEqual(
       result.leaderboard.map(
         (entry, index) =>
-          `#${index + 1} ${entry.displayName} | ${entry.zappedSats.toLocaleString()} Sats`,
+          `#${index + 1} ${entry.displayName} | ${formatNumber(entry.zappedSats, 'en')} Sats`,
       ),
     );
   });
@@ -732,5 +777,71 @@ describe('showLeaderboardCommand', () => {
     expect(sendActivity).toHaveBeenCalledWith(LEADERBOARD_UNAVAILABLE_MESSAGE);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  // The manifest describes the command in Spanish, so the card it answers
+  // with is Spanish too, with the numbers grouped the way the client's region
+  // writes them.
+  describe('in the user language', () => {
+    const localizedContext = (locale: string) => {
+      const { context, sendActivity } = makeContext();
+      (context as unknown as { activity: unknown }).activity = { locale };
+      return { context, sendActivity };
+    };
+
+    test('answers an es-ES client in Spanish with Spain-style grouping', async () => {
+      process.env.PORTAL_URL = 'https://portal.example.test';
+      zap('z1', alice, bob, 12_345);
+      const { context, sendActivity } = localizedContext('es-ES');
+
+      await new ShowLeaderboardCommand().execute(context);
+
+      const card = sentCard(sendActivity);
+      expect(card.body[0].text).toBe(
+        'Quienes más zapean (Sats enviados, últimos 7 días):',
+      );
+      expect(rows(sendActivity)).toEqual(['#1 Alice | 12.345 Sats']);
+      expect(card.actions?.[0].title).toBe('Ver carteras');
+      expect(JSON.stringify(card)).not.toContain(leaderboardTitle(7, 'Sats'));
+    });
+
+    test('groups an es-MX amount with a comma, as Mexico writes it', async () => {
+      zap('z1', alice, bob, 12_345);
+      const { context, sendActivity } = localizedContext('es-MX');
+
+      await new ShowLeaderboardCommand().execute(context);
+
+      expect(rows(sendActivity)).toEqual(['#1 Alice | 12,345 Sats']);
+    });
+
+    test('says the board is empty in Spanish, singular for one day', async () => {
+      process.env.LEADERBOARD_WINDOW_DAYS = '1';
+      const { context, sendActivity } = localizedContext('es-419');
+
+      await new ShowLeaderboardCommand().execute(context);
+
+      const card = sentCard(sendActivity);
+      expect(card.body[0].text).toBe(
+        'Quienes más zapean (Sats enviados, último día):',
+      );
+      expect(card.body[1]).toMatchObject({
+        text: 'Todavía no se ha enviado ningún zap en el último día. ¡Envía un zap para empezar!',
+      });
+    });
+
+    test('reports an unavailable leaderboard in Spanish', async () => {
+      const consoleError = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => undefined);
+      mockGetUsers.mockRejectedValue(new Error('LNbits timeout'));
+      const { context, sendActivity } = localizedContext('es-ES');
+
+      await new ShowLeaderboardCommand().execute(context);
+
+      expect(sendActivity).toHaveBeenCalledWith(
+        'Lo siento, no pude cargar la clasificación en este momento. Inténtalo de nuevo en un momento.',
+      );
+      consoleError.mockRestore();
+    });
   });
 });

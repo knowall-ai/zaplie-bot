@@ -1,6 +1,6 @@
 // The line a zap recipient receives carries the sender's own words, so it
 // is bounded and flattened here, not trusted from the card.
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 import {
   ZAP_MEMO_PREVIEW_MAX,
   assistantUnavailableGuide,
@@ -21,9 +21,28 @@ describe('zapReceivedMessage', () => {
         rewardName: 'Sats',
         message: 'Thanks for the review!',
       }),
-    ).toBe(
-      `⚡ Alice zapped you ${(2100).toLocaleString()} Sats: "Thanks for the review!"`,
-    );
+    ).toBe('⚡ Alice zapped you 2,100 Sats: "Thanks for the review!"');
+  });
+
+  // The recipient notice is a proactive message with no recipient activity,
+  // so there is no client locale to follow: it stays English, and so do its
+  // numbers, whatever the server's own default locale is (Ben's point 1).
+  test('writes the amount in English whatever the server locale', () => {
+    const spy = jest
+      .spyOn(Number.prototype, 'toLocaleString')
+      .mockReturnValue('SERVER-LOCALE');
+    try {
+      expect(
+        zapReceivedMessage({
+          senderName: 'Alice',
+          amount: 12000,
+          rewardName: 'Sats',
+          message: 'gracias',
+        }),
+      ).toBe('⚡ Alice zapped you 12,000 Sats: "gracias"');
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('falls back to a neutral sender name', () => {

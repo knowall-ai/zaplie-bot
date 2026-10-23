@@ -180,7 +180,9 @@ export const notifyZapRecipient = async (
       channelData: { tenant: { id: tenantId } },
     };
     // Plain text: the zap message is the sender's own words, and markdown in
-    // it must not restyle the line.
+    // it must not restyle the line. English: this chat is opened by AAD id
+    // with no activity from the recipient, so their Teams language is not
+    // known (see zapReceivedMessage).
     const line = MessageFactory.text(zapReceivedMessage(notification));
     line.textFormat = TextFormatTypes.Plain;
 

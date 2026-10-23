@@ -294,9 +294,9 @@ describe('buildZapReceiptCard', () => {
       }) as CardElement,
     );
 
-    expect(text).toContain((2500).toLocaleString());
-    expect(text).toContain((5000).toLocaleString());
-    expect(text).toContain((12000).toLocaleString());
+    expect(text).toContain('2,500');
+    expect(text).toContain('5,000');
+    expect(text).toContain('12,000');
   });
 });
 
@@ -411,7 +411,7 @@ describe('the zap card caps the amount at the live balance', () => {
     const { amount } = await cardFor(25_000);
 
     expect(amount.regex).toBe(zapAmountRegex(MAX_ZAP_SATS));
-    expect(amount.errorMessage).toContain(MAX_ZAP_SATS.toLocaleString());
+    expect(amount.errorMessage).toContain('10,000');
   });
 
   test('an empty balance leaves nothing sendable and says so', async () => {
@@ -656,5 +656,202 @@ describe('SendZap payment metadata', () => {
     );
     expect(createInvoice).not.toHaveBeenCalled();
     expect(payInvoice).not.toHaveBeenCalled();
+  });
+});
+
+// The card a Spanish client receives is Spanish end to end: form labels,
+// validation hints, the balance line, the button, and the receipt it turns
+// into. Wallet names, amounts and the reward label stay as they are.
+describe('zap card and receipt in the user language', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('renders the receipt in Spanish', () => {
+    const text = allText(
+      buildZapReceiptCard(
+        {
+          ...baseReceipt,
+          recipients: ['Bob', 'Carol'],
+          failedRecipients: ['Dave'],
+          uncertainRecipients: ['Erin'],
+        },
+        'es',
+      ) as CardElement,
+    );
+
+    for (const expected of [
+      '¡Zap enviado!',
+      'Destinatarios:',
+      'Bob, Carol',
+      'Mensaje:',
+      'Thanks for the review!',
+      'Cantidad (Sats):',
+      'Total enviado (Sats):',
+      'Saldo restante (Sats):',
+      '**Destinatarios fallidos:**',
+      '- Dave',
+      '**Por verificar:**',
+      '- Erin',
+    ]) {
+      expect(text).toContain(expected);
+    }
+    expect(text).not.toContain('Zap sent!');
+  });
+
+  test('defaults the receipt to English', () => {
+    expect(allText(buildZapReceiptCard(baseReceipt) as CardElement)).toContain(
+      'Zap sent!',
+    );
+  });
+
+  test('sends the zap card in Spanish for a Spanish client', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest
+      .mocked(getUsers)
+      .mockResolvedValue([
+        { id: 'user-2', displayName: 'Bob', aadObjectId: 'aad-2' } as never,
+      ]);
+    jest.mocked(getWalletBalance).mockResolvedValue(15000);
+    const { context, sendActivity } = makeContext();
+    (context as unknown as { activity: unknown }).activity = {
+      locale: 'es-MX',
+    };
+    (context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      allowanceWallet: { id: 'w-1', inkey: 'inkey-1', adminkey: 'adm-1' },
+    });
+
+    await new SendZapCommand().execute(context);
+
+    const [message] = sendActivity.mock.calls[0] as unknown as [
+      { attachments: { content: unknown }[] },
+    ];
+    const card = JSON.stringify(message.attachments[0].content);
+    // The reward label is read when the module loads, so this file does not
+    // pin it; the label-bearing strings are checked up to the label.
+    for (const expected of [
+      'Destinatario',
+      'Selecciona una o más carteras destinatarias',
+      'Debes seleccionar al menos a una persona',
+      'Mensaje',
+      '¡Gracias por ayudarme con la propuesta!',
+      'Cantidad (',
+      'Indica un número entero entre 1 y 10,000',
+      '**Saldo disponible (',
+      '15,000',
+      'Enviar zap',
+    ]) {
+      expect(card).toContain(expected);
+    }
+    expect(card).not.toContain('Send Zap');
+    // The submit payload the handler keys on is unchanged.
+    expect(card).toContain('"action":"submitZaps"');
+  });
+});
+
+// Ben's pre-merge point 1: on a money screen the numbers follow the client's
+// region (activity.locale, the full tag), never the server's default locale.
+// es-ES groups with a dot, es-MX with a comma; an unusable tag is English.
+describe('zap card numbers follow the client region', () => {
+  type AmountInput = { id?: string; errorMessage?: string };
+
+  const cardFor = async (locale: string, balance: number) => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.mocked(getUsers).mockResolvedValue([]);
+    jest.mocked(getWalletBalance).mockResolvedValue(balance as never);
+    const { context, sendActivity } = makeContext();
+    (context as unknown as { activity: unknown }).activity = { locale };
+    (context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      allowanceWallet: { id: 'w-1', inkey: 'inkey-1', adminkey: 'adm-1' },
+    });
+
+    await new SendZapCommand().execute(context);
+
+    const [message] = sendActivity.mock.calls[0] as unknown as [
+      { attachments: { content: CardElement }[] },
+    ];
+    const card = message.attachments[0].content;
+    const amount = (card.body ?? []).find(
+      element => (element as AmountInput).id === 'zapAmount',
+    ) as AmountInput;
+    return { amount, text: allText(card) };
+  };
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('es-ES: the ceiling and the balance are grouped with a dot', async () => {
+    const { amount, text } = await cardFor('es-ES', 25_000);
+
+    // The reward label is read when the module loads (see above), so the
+    // assertions stop short of it.
+    expect(amount.errorMessage).toContain(
+      'Indica un número entero entre 1 y 10.000 ',
+    );
+    expect(text).toMatch(/\*\*Saldo disponible \(.*\):\*\* 25\.000/);
+  });
+
+  test('es-MX: the same numbers are grouped with a comma', async () => {
+    const { amount, text } = await cardFor('es-MX', 25_000);
+
+    expect(amount.errorMessage).toContain(
+      'Indica un número entero entre 1 y 10,000 ',
+    );
+    expect(text).toMatch(/\*\*Saldo disponible \(.*\):\*\* 25,000/);
+  });
+
+  test('the balance cap in the error follows the region too', async () => {
+    // Spain leaves four-digit numbers ungrouped; Mexico groups them.
+    expect((await cardFor('es-ES', 9_500)).amount.errorMessage).toContain(
+      'hasta 9500.',
+    );
+    expect((await cardFor('es-MX', 9_500)).amount.errorMessage).toContain(
+      'hasta 9,500.',
+    );
+    // The regex is built from the raw number, never from the formatted text.
+    expect(zapAmountInput(9_500, 'Sats', 'es-ES').regex).toBe(
+      zapAmountRegex(9_500),
+    );
+  });
+
+  test('a malformed Spanish tag gets English copy and English numbers', async () => {
+    const { amount } = await cardFor('es-@@', 25_000);
+
+    expect(amount.errorMessage).toContain(
+      'Enter a whole number between 1 and 10,000 ',
+    );
+  });
+
+  test('the receipt never uses the server locale', () => {
+    // Stands in for a server whose default locale is not the client's.
+    jest
+      .spyOn(Number.prototype, 'toLocaleString')
+      .mockReturnValue('SERVER-LOCALE');
+
+    const text = allText(
+      buildZapReceiptCard(
+        {
+          ...baseReceipt,
+          recipients: ['Bob', 'Carol'],
+          amount: 2500,
+          remainingBalance: 12_000,
+        },
+        'es-ES',
+      ) as CardElement,
+    );
+
+    expect(text).not.toContain('SERVER-LOCALE');
+    expect(text).toContain('Cantidad (Sats):\n2500');
+    expect(text).toContain('Total enviado (Sats):\n5000');
+    expect(text).toContain('Saldo restante (Sats):\n12.000');
+  });
+
+  test('the amount regex is the same for every language', () => {
+    expect(zapAmountInput(1000, 'Sats', 'en').regex).toBe(
+      zapAmountInput(1000, 'Sats', 'es-ES').regex,
+    );
   });
 });

@@ -35,14 +35,15 @@ import {
   getStoredGraphToken,
 } from './commands/connectCalendarCommand';
 import {
-  GENERIC_ERROR_MESSAGE,
   UserFacingError,
   assistantUnavailableGuide,
+  genericErrorMessage,
   greetingGuide,
   isGreeting,
   unrecognizedCommandGuide,
   welcomeMessage,
 } from './messages';
+import { t } from './i18n';
 import { runConversationalTurn } from './services/foundryAgentService';
 import config from './config';
 import { createReadOnlyTools } from './commands/agentTools';
@@ -53,8 +54,6 @@ import {
   recordZapOutcome,
 } from './services/pulse';
 
-const UNRECOGNIZED_COMMAND_MESSAGE =
-  "D'oh! I'm sorry, but I didn't recognize that command. But don't worry, I'm always getting better!";
 const ZAP_SUBMIT_ACTION = 'submitZaps';
 
 // The conversational assistant needs a Foundry project and model. Without
@@ -124,6 +123,10 @@ export class TeamsBot extends TeamsActivityHandler {
         return;
       }
 
+      // The reply follows the Teams client that sent the message: the raw
+      // tag (e.g. "es-MX") decides the language and the number format.
+      const locale = context.activity.locale;
+
       try {
         let textMessage = context.activity.text || '';
         const mentions = TurnContext.getMentions(context.activity);
@@ -164,9 +167,7 @@ export class TeamsBot extends TeamsActivityHandler {
           // conversation, or card id could merge unrelated submissions or
           // make a duplicate look new.
           if (!tenantId || !conversationId || !cardId) {
-            await context.sendActivity(
-              'That zap card cannot be identified, so it was not submitted. Please start a new zap.',
-            );
+            await context.sendActivity(t(locale, 'zapCardUnidentified'));
             return;
           }
           const keyFor = (recipientId: string) =>
@@ -188,9 +189,7 @@ export class TeamsBot extends TeamsActivityHandler {
 
           const sendingWallet = currentUser?.allowanceWallet;
           if (!currentUser || (!currentUser.id && !currentUser.aadObjectId)) {
-            throw new UserFacingError(
-              'Could not verify your sender identity, so no zaps were sent.',
-            );
+            throw new UserFacingError('senderUnverified');
           }
           if (
             !sendingWallet?.id ||
@@ -201,24 +200,18 @@ export class TeamsBot extends TeamsActivityHandler {
           }
 
           if (receiverIds.length === 0) {
-            throw new UserFacingError(
-              'No valid recipients were selected, so no zaps were sent.',
-            );
+            throw new UserFacingError('noRecipients');
           }
 
           // The card marks the message required, but that check is client-side
           // and forgeable, and the message reaches both the invoice and the
           // receipt card.
           if (typeof zapMessage !== 'string' || zapMessage.trim() === '') {
-            throw new UserFacingError(
-              'Your zap needs a message, so no zaps were sent.',
-            );
+            throw new UserFacingError('zapNeedsMessage');
           }
 
           if (currentUser.id && receiverIds.includes(currentUser.id)) {
-            throw new UserFacingError(
-              'You cannot zap yourself, so no zaps were sent.',
-            );
+            throw new UserFacingError('selfZap');
           }
 
           const pendingReceiverIds = await getPendingRecipientIds(
@@ -232,8 +225,8 @@ export class TeamsBot extends TeamsActivityHandler {
               receiverIds,
               keyFor,
             ))
-              ? 'One or more payments from this zap still need checking, so nothing was retried.'
-              : 'That zap card was already submitted, so nothing was sent again.';
+              ? t(locale, 'submitStillChecking')
+              : t(locale, 'submitAlreadyHandled');
           if (pendingReceiverIds.length === 0) {
             await context.sendActivity(await handledSubmitMessage());
             return;
@@ -302,13 +295,17 @@ export class TeamsBot extends TeamsActivityHandler {
             await context.sendActivity(
               [
                 uncertainRecipients.length > 0
-                  ? 'No zaps were confirmed.'
-                  : 'No zaps were sent.',
+                  ? t(locale, 'noZapsConfirmed')
+                  : t(locale, 'noZapsSent'),
                 failedRecipients.length > 0
-                  ? `Could not complete: ${failedRecipients.join(', ')}.`
+                  ? t(locale, 'couldNotComplete', {
+                      recipients: failedRecipients.join(', '),
+                    })
                   : '',
                 uncertainRecipients.length > 0
-                  ? `Payment outcome uncertain for: ${uncertainRecipients.join(', ')} — an admin should verify before retrying.`
+                  ? t(locale, 'outcomeUncertain', {
+                      recipients: uncertainRecipients.join(', '),
+                    })
                   : '',
               ]
                 .filter(Boolean)
@@ -332,15 +329,18 @@ export class TeamsBot extends TeamsActivityHandler {
             // recipients this submit processed. Recipients already settled by
             // an earlier submit of the same card were skipped and are not
             // relisted.
-            const updatedCard = buildZapReceiptCard({
-              recipients: successfulRecipients,
-              failedRecipients,
-              uncertainRecipients,
-              message: zapMessage,
-              amount,
-              remainingBalance,
-              rewardName: globalRewardName,
-            });
+            const updatedCard = buildZapReceiptCard(
+              {
+                recipients: successfulRecipients,
+                failedRecipients,
+                uncertainRecipients,
+                message: zapMessage,
+                amount,
+                remainingBalance,
+                rewardName: globalRewardName,
+              },
+              locale,
+            );
 
             const updatedMessage = MessageFactory.attachment(
               CardFactory.adaptiveCard(updatedCard),
@@ -362,7 +362,7 @@ export class TeamsBot extends TeamsActivityHandler {
           // Sent whether or not the card could be rewritten: the zaps really
           // were sent, and saying otherwise would be the wrong answer.
           await context.sendActivity(
-            `Awesome! You sent ${amount} ${globalRewardName} to your colleague with a zap!`,
+            t(locale, 'zapSent', { amount, rewardName: globalRewardName }),
           );
 
           // Last, so a slow or refused Teams call never delays the receipt
@@ -425,8 +425,8 @@ export class TeamsBot extends TeamsActivityHandler {
             const commandNames = SSOCommandMap.commandNames();
             await context.sendActivity(
               isGreeting(textMessage)
-                ? greetingGuide(commandNames)
-                : unrecognizedCommandGuide(commandNames),
+                ? greetingGuide(commandNames, locale)
+                : unrecognizedCommandGuide(commandNames, locale),
             );
             recordActivity({
               activityType: 'chat.answered',
@@ -453,8 +453,10 @@ export class TeamsBot extends TeamsActivityHandler {
         });
         await context.sendActivity(
           error instanceof UserFacingError
-            ? `D'oh! ${error.message}`
-            : GENERIC_ERROR_MESSAGE,
+            ? t(locale, 'userFacingError', {
+                message: error.localized(locale),
+              })
+            : genericErrorMessage(locale),
         );
       }
 
@@ -468,7 +470,7 @@ export class TeamsBot extends TeamsActivityHandler {
       const membersAdded = context.activity.membersAdded ?? [];
       if (membersAdded.some(member => member.id === botId)) {
         await context.sendActivity(
-          welcomeMessage(SSOCommandMap.commandNames()),
+          welcomeMessage(SSOCommandMap.commandNames(), context.activity.locale),
         );
       }
       await next();
@@ -484,7 +486,7 @@ export class TeamsBot extends TeamsActivityHandler {
       await this.userState.saveChanges(context, false);
     } catch (error) {
       console.error('Error in run method:', error);
-      await context.sendActivity(GENERIC_ERROR_MESSAGE);
+      await context.sendActivity(genericErrorMessage(context.activity.locale));
     }
   }
 
@@ -499,6 +501,7 @@ export class TeamsBot extends TeamsActivityHandler {
       undefined,
     );
     const commandNames = SSOCommandMap.commandNames();
+    const locale = context.activity.locale;
     let result: Awaited<ReturnType<typeof runConversationalTurn>>;
     try {
       result = await runConversationalTurn(
@@ -526,16 +529,16 @@ export class TeamsBot extends TeamsActivityHandler {
         channel: 'teams',
         upstreamId: upstreamIdOf(context),
       });
-      await context.sendActivity(assistantUnavailableGuide(commandNames));
+      await context.sendActivity(
+        assistantUnavailableGuide(commandNames, locale),
+      );
       return false;
     }
     await this.foundryConversationIdAccessor.set(
       context,
       result.foundryConversationId,
     );
-    await context.sendActivity(
-      result.replyText || UNRECOGNIZED_COMMAND_MESSAGE,
-    );
+    await context.sendActivity(result.replyText || t(locale, 'agentNoReply'));
     return true;
   }
 
@@ -545,10 +548,11 @@ export class TeamsBot extends TeamsActivityHandler {
   ) {
     if (!process.env.GRAPH_CONNECTION_NAME) return;
     const token = await getStoredGraphToken(context, query.state);
+    const locale = context.activity.locale;
     await context.sendActivity(
       token
-        ? 'Work signals connected — ask me about recent meetings or collaborators!'
-        : `Sign-in could not be completed. Type "${CONNECT_CALENDAR_COMMAND}" to try again.`,
+        ? t(locale, 'workSignalsConnected')
+        : t(locale, 'signInFailed', { command: CONNECT_CALENDAR_COMMAND }),
     );
   }
 

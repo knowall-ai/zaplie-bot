@@ -24,6 +24,15 @@
         "full": "Zaplie seamlessly integrates into Microsoft Teams, bringing a unique blend of Bitcoin micro-transactions and AI automation to enhance team collaboration and recognition. With Zaplie, you can effortlessly send Bitcoin-based rewards (Sats) to colleagues as a token of appreciation, automate recognition for positive behavior, and foster a more engaged and motivated workplace. Transform how your team acknowledges great work and builds a culture of gratitude directly within Teams."
     },
     "accentColor": "#002A5B",
+    "localizationInfo": {
+        "defaultLanguageTag": "en",
+        "additionalLanguages": [
+            {
+                "languageTag": "es",
+                "file": "es.json"
+            }
+        ]
+    },
     "bots": [
         {
             "botId": "${{BOT_ID}}",

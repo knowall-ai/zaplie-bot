@@ -73,8 +73,10 @@ jest.mock('@azure/ai-projects', () => ({
 }));
 
 import {
+  ENGLISH_REPLY_HINT,
   howZaplieWorks,
   runConversationalTurn,
+  SPANISH_REPLY_HINT,
   ToolDefinition,
 } from './foundryAgentService';
 
@@ -560,4 +562,173 @@ describe('howZaplieWorks', () => {
   test('is empty when there are no commands', () => {
     expect(howZaplieWorks([])).toBe('');
   });
+});
+
+// Ben's pre-merge point 3: a Spanish client's free-text question must be
+// answered in Spanish. The hint rides on the turn's own input, never in the
+// agent instructions: ensureAgent caches the agent by a hash of those, so a
+// language in them would re-create the agent on every en/es switch. Every turn
+// carries a hint in both directions, because the items are stored in the
+// Foundry conversation and an English turn has to override a Spanish one.
+describe('foundryAgentService.runConversationalTurn language', () => {
+  const contextWithLocale = (locale: unknown): TurnContext =>
+    ({ activity: { locale } }) as unknown as TurnContext;
+
+  const firstInput = (): unknown =>
+    mockResponsesCreate.mock.calls[mockResponsesCreate.mock.calls.length - 1][0]
+      .input;
+
+  beforeAll(() => {
+    mockConversationsCreate.mockResolvedValue({ id: 'conv_new' });
+  });
+
+  test('tells the assistant to answer an es-MX client in Spanish, on the turn itself', async () => {
+    mockResponsesCreate.mockResolvedValueOnce({
+      output: [],
+      output_text: '¡Hola!',
+    });
+
+    await runConversationalTurn(
+      '¿qué puedo hacer?',
+      'conv_existing',
+      [noopTool],
+      contextWithLocale('es-MX'),
+      NO_COMMANDS,
+    );
+
+    expect(firstInput()).toEqual([
+      {
+        type: 'message',
+        role: 'developer',
+        content: expect.stringMatching(/Reply in Spanish/),
+      },
+      { type: 'message', role: 'user', content: '¿qué puedo hacer?' },
+    ]);
+  });
+
+  test('tells the assistant a non-Spanish client gets the language it wrote in', async () => {
+    for (const locale of ['en-US', 'fr-FR', undefined, 'es-@@']) {
+      mockResponsesCreate.mockResolvedValueOnce({
+        output: [],
+        output_text: 'ok',
+      });
+
+      await runConversationalTurn(
+        'hello',
+        'conv_existing',
+        [noopTool],
+        contextWithLocale(locale),
+        NO_COMMANDS,
+      );
+
+      // The user's text is the second item, unchanged.
+      expect({ locale, input: firstInput() }).toEqual({
+        locale,
+        input: [
+          { type: 'message', role: 'developer', content: ENGLISH_REPLY_HINT },
+          { type: 'message', role: 'user', content: 'hello' },
+        ],
+      });
+    }
+  });
+
+  // https://github.com/knowall-ai/zaplie-bot/issues/516: the developer item is
+  // stored in the Foundry conversation and replayed on later turns, so an
+  // English turn must override the stored Spanish hint, not go out bare.
+  test('an English turn after a Spanish one in the same conversation carries an explicit English counter-hint', async () => {
+    mockConversationsCreate.mockClear();
+    mockAgentsUpdate.mockClear();
+    mockResponsesCreate
+      .mockResolvedValueOnce({ output: [], output_text: '¡Hola!' })
+      .mockResolvedValueOnce({ output: [], output_text: 'Hello!' });
+
+    await runConversationalTurn(
+      'hola',
+      'conv_shared',
+      [noopTool],
+      contextWithLocale('es-MX'),
+      NO_COMMANDS,
+    );
+    await runConversationalTurn(
+      'hello',
+      'conv_shared',
+      [noopTool],
+      contextWithLocale('en-US'),
+      NO_COMMANDS,
+    );
+
+    const calls = mockResponsesCreate.mock.calls.slice(-2);
+    // Both turns went to the same Foundry conversation, which is where the
+    // Spanish item now lives.
+    expect(calls.map(call => call[0].conversation)).toEqual([
+      'conv_shared',
+      'conv_shared',
+    ]);
+    expect(mockConversationsCreate).not.toHaveBeenCalled();
+    expect(calls[0][0].input).toEqual([
+      {
+        type: 'message',
+        role: 'developer',
+        content: expect.stringMatching(/Reply in Spanish/),
+      },
+      { type: 'message', role: 'user', content: 'hola' },
+    ]);
+    // The English turn does not go out bare: it overrides the stored hint.
+    expect(calls[1][0].input).toEqual([
+      {
+        type: 'message',
+        role: 'developer',
+        content: expect.stringMatching(
+          /not set to Spanish[\s\S]*no longer applies/,
+        ),
+      },
+      { type: 'message', role: 'user', content: 'hello' },
+    ]);
+    expect((calls[1][0].input as { content: string }[])[0].content).not.toMatch(
+      /Reply in Spanish/,
+    );
+    // A language switch never touches the agent.
+    expect(mockAgentsUpdate).not.toHaveBeenCalled();
+  });
+
+  test('switching language never re-creates the agent', async () => {
+    mockGetBotPersona.mockResolvedValue('');
+    mockResponsesCreate.mockResolvedValue({ output: [], output_text: 'ok' });
+    // Settle the agent for this persona first.
+    await runConversationalTurn(
+      'hello',
+      'conv_existing',
+      [noopTool],
+      contextWithLocale('en-US'),
+      NO_COMMANDS,
+    );
+    mockAgentsUpdate.mockClear();
+
+    for (const locale of ['es-MX', 'en-US', 'es-ES']) {
+      await runConversationalTurn(
+        'hola',
+        'conv_existing',
+        [noopTool],
+        contextWithLocale(locale),
+        NO_COMMANDS,
+      );
+    }
+
+    expect(mockAgentsUpdate).not.toHaveBeenCalled();
+    mockResponsesCreate.mockReset();
+  });
+});
+
+describe('reply-language hints', () => {
+  test.each([
+    ['Spanish', SPANISH_REPLY_HINT],
+    ['English', ENGLISH_REPLY_HINT],
+  ])(
+    'the %s hint keeps names, amounts and the reward label unchanged',
+    (_language, hint) => {
+      expect(hint).toMatch(
+        /keep wallet names, display names, amounts and the reward label unchanged/,
+      );
+    },
+  );
 });
