@@ -179,10 +179,12 @@ Three server-side clients speak to the LNbits REST API:
   `/api/lnbits/*` routes with a verified Entra ID token. Wallet routes resolve
   the wallet through the caller's own LNbits user, so a wallet id on its own
   grants neither reads nor writes. Four reads are deliberately tenant-wide
-  because the product is built on them: the user directory, the wallet list with
-  balances (leaderboard), the aggregate payment feed, and per-wallet payment
-  history, which the team feed and the transaction log read across every
-  teammate.
+  because the product is built on them: the user directory, the wallet list
+  with balances (leaderboard), the aggregate payment feed, and per-wallet
+  payment history, which `WalletTransactionLog` reads through
+  `getWalletTransactionsSince` for the signed-in user's selected wallet. The
+  gateway may permit tenant-wide access to the underlying payment-history
+  route, but the transaction-log UI scopes its request to that selected wallet.
 - `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
   base URL and credentials arrive with each HTTP request.
 
@@ -420,6 +422,12 @@ any token whose membership cannot be read, gets 403 and nothing is created.
   assistant's persona; both are visible read-only to non-admins
 |===
 
+The Feed's totals, activity chart, and transaction list share one cached zap
+activity query; the 7-, 30-, and 60-day list filters are applied client-side.
+Wallet transaction history uses cached activity pairing data and caches the
+signed-in user's history by wallet, so changing All/Sent/Received filters does
+not reload transactions.
+
 The reward label is persisted by the Express backend
 (`GET/POST /api/reward-name` → `data.json` under `ZAPLIE_DATA_DIR`) and consumed by both
 the tabs (`RewardNameContext`) and the bot (`src/services/fetchRewardsName.ts`).
@@ -454,10 +462,10 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 | Transactions / Zaps
 | LNbits payments ledger
-| Queried per wallet for feed, history, and leaderboard. Each zap carries an
-  `extra` object `{ tag: 'zap', from, to }` where `from`/`to` are
-  `{ id, name, user, displayName }` projections of the wallets, never the
-  wallet objects themselves
+| The Feed uses the aggregate payments list; wallet history and the leaderboard
+  query per wallet. Each zap carries an `extra` object
+  `{ tag: 'zap', from, to }` where `from`/`to` are `{ id, name, user,
+  displayName }` projections of the wallets, never the wallet objects themselves
 
 | Reward label ("Sats")
 | `data.json` under `ZAPLIE_DATA_DIR`
