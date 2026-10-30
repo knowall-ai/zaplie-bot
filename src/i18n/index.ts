@@ -77,7 +77,7 @@ export const en = {
   cardAmountLabel: 'Amount ({{rewardName}})',
   cardAmountErrorNone: 'You have no {{rewardName}} to send right now.',
   cardAmountErrorCap:
-    "Sorry, you don't have that many {{rewardName}} to send! Enter a whole number up to {{cap}}.",
+    'Enter a whole number from 1 to {{cap}} {{rewardName}} (your balance).',
   cardAmountErrorRange:
     'Enter a whole number between 1 and {{max}} {{rewardName}}.',
   cardBalance: '**Current Available Balance ({{rewardName}}):** {{balance}}',
@@ -181,7 +181,7 @@ export const es: Record<MessageKey, string> = {
   cardAmountLabel: 'Cantidad ({{rewardName}})',
   cardAmountErrorNone: 'No tienes {{rewardName}} para enviar ahora mismo.',
   cardAmountErrorCap:
-    '¡Lo siento! No tienes tantos {{rewardName}} para enviar. Indica un número entero hasta {{cap}}.',
+    'Indica un número entero de 1 a {{cap}} {{rewardName}} (tu saldo).',
   cardAmountErrorRange:
     'Indica un número entero entre 1 y {{max}} {{rewardName}}.',
   cardBalance: '**Saldo disponible ({{rewardName}}):** {{balance}}',
