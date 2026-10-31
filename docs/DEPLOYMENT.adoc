@@ -98,11 +98,12 @@ Test:: Deploys with federated OIDC — `azure/login` using the repository
 secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`
 (`id-token: write`), then ensures a deployment slot exists (`pr-<number>` for
 pull requests, else `testing`) on app `zaplie-dev` before deploying to it.
-Prod:: Still deploys with a publish profile — the `AZURE_WEBAPP_PUBLISH_PROFILE`
-secret against app `zaplie-prod-webapp`, with no `azure/login` step. Migrating
-production onto the same federated OIDC credential is pending; until then the
-publish profile is a long-lived secret and must be re-downloaded whenever it is
-reset in Azure.
+Prod:: Deploys to app `zaplie-prod-webapp` with federated OIDC too: the deploy job
+runs in the `Prod` environment and `azure/login` takes the `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` variables from it. They name an app
+registration with a federated credential for
+`repo:knowall-ai@50064085/zaplie-bot@737620909:environment:Prod` and Website Contributor on that app
+only. No publish profile is needed, so SCM basic auth can stay off.
 
 Note: neither workflow has a bot job — CI deploys only the portal, and it
 deploys the whole portal: the React build *and* the Express backend under
