@@ -68,14 +68,14 @@ describe('agent-pulse wrapper', () => {
     });
   });
 
-  test('takes the agent id from AGENT_ID, so test deploys report as zaplie-test', async () => {
-    process.env.AGENT_ID = 'zaplie-test';
+  test('takes the agent id from AGENT_ID, so a custom AGENT_ID is reported', async () => {
+    process.env.AGENT_ID = 'zaplie-custom';
 
     recordZapOutcome('paid', 'ledger-key', 10);
     await pulseSettled();
 
     expect(mockCreatePulse).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: 'zaplie-test' }),
+      expect.objectContaining({ agentId: 'zaplie-custom' }),
     );
   });
 
