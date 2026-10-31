@@ -102,7 +102,7 @@ Prod:: Deploys to app `zaplie-prod-webapp` with federated OIDC too: the deploy j
 runs in the `Prod` environment and `azure/login` takes the `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` variables from it. They name an app
 registration with a federated credential for
-`repo:knowall-ai/zaplie-bot:environment:Prod` and Website Contributor on that app
+`repo:knowall-ai@50064085/zaplie-bot@737620909:environment:Prod` and Website Contributor on that app
 only. No publish profile is needed, so SCM basic auth can stay off.
 
 Note: neither workflow has a bot job — CI deploys only the portal, and it
