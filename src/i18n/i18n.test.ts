@@ -198,6 +198,9 @@ describe('formatNumber', () => {
     expect(
       t('es-MX', 'cardAmountErrorRange', { max: 10000, rewardName: 'Sats' }),
     ).toBe('Indica un número entero entre 1 y 10,000 Sats.');
+    expect(
+      t('es-MX', 'cardAmountErrorCap', { cap: 250, rewardName: 'Sats' }),
+    ).toBe('Indica un número entero de 1 a 250 Sats (tu saldo).');
     expect(t('en-GB', 'zapSent', { amount: 2100, rewardName: 'Sats' })).toBe(
       'Awesome! You sent 2,100 Sats to your colleague with a zap!',
     );

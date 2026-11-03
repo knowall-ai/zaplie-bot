@@ -432,7 +432,9 @@ describe('the zap card caps the amount at the live balance', () => {
     });
     expect(new RegExp(amount.regex ?? '').test('250')).toBe(true);
     expect(new RegExp(amount.regex ?? '').test('251')).toBe(false);
-    expect(amount.errorMessage).toMatch(/don't have that many .* up to 250\./);
+    expect(amount.errorMessage).toMatch(
+      /^Enter a whole number from 1 to 250 .* \(your balance\)\.$/,
+    );
     expect(text).toContain('250');
   });
 
@@ -900,10 +902,10 @@ describe('zap card numbers follow the client region', () => {
   test('the balance cap in the error follows the region too', async () => {
     // Spain leaves four-digit numbers ungrouped; Mexico groups them.
     expect((await cardFor('es-ES', 9_500)).amount.errorMessage).toContain(
-      'hasta 9500.',
+      'de 1 a 9500 ',
     );
     expect((await cardFor('es-MX', 9_500)).amount.errorMessage).toContain(
-      'hasta 9,500.',
+      'de 1 a 9,500 ',
     );
     // The regex is built from the raw number, never from the formatted text.
     expect(zapAmountInput(9_500, 'Sats', 'es-ES').regex).toBe(
