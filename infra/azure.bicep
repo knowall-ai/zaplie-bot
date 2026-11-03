@@ -24,7 +24,7 @@ param aadAppOauthAuthorityHost string
 @secure()
 param aadAppClientSecret string
 
-@description('The agent id the Agents Portal knows this deployment by: zaplie for production, zaplie-test for test. Tags the telemetry resources and is the AGENT_ID the bot stamps on every AgentActivity event.')
+@description('The agent id the Agents Portal knows this deployment by: zaplie for production. Tags the telemetry resources and is the AGENT_ID the bot stamps on every AgentActivity event.')
 param agentId string = 'zaplie'
 
 // Telemetry: AgentActivity events (agent-pulse) land in this workspace-based
