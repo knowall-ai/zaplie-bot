@@ -169,7 +169,7 @@ table):
   `LEADERBOARD_TOP_N` (1 to 100; values outside either range fail closed),
   `ZAP_MAX_RECIPIENTS` (1 or more, default 3; a malformed value stops the
   bot at startup), `LNBITS_INITIAL_ALLOWANCE` (unset means no grant; a value
-  that is not a plain whole number also stops the bot at startup),
+  that is not a positive whole number also stops the bot at startup),
   plus
   `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` for the Agents Portal
   telemetry (`src/services/pulse.ts`; titles and subjects are fixed strings,

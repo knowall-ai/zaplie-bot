@@ -169,7 +169,7 @@ Three server-side clients speak to the LNbits REST API:
   one-off grant of
   `LNBITS_INITIAL_ALLOWANCE` to a new user's Allowance wallet (`topUpWallet`,
   called from `UserService`); the grant is skipped when the setting is
-  missing, a value that is not a plain whole number stops the bot at startup
+  missing, a value that is not a positive whole number stops the bot at startup
   (`resolveInitialAllowance`, when `UserService` is constructed), and a failed
   LNbits request is logged rather than retried. Recurring replenishment is not
   bot code (see Design Decisions).
@@ -674,7 +674,7 @@ Automations panel, the CLI and the timer run; see `docs/automation/README.md`,
 "Weekly allowances". The bot only
 attempts to fund a wallet once, when it is created: `applyInitialAllowance`
 skips the grant when `LNBITS_INITIAL_ALLOWANCE` is unset, a value that is not
-a plain whole number stops the bot at startup (so a typo cannot pay the wrong
+a positive whole number stops the bot at startup (so a typo cannot pay the wrong
 amount to every new user), and `topUpWallet` logs a failed LNbits request
 instead of retrying, so user setup never fails on funding and no later
 balance check enforces it.
