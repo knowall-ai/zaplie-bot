@@ -1,16 +1,17 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
+import { useQuery } from '@tanstack/react-query';
 import ArrowIncoming from '../images/ArrowIncoming.svg';
 import ArrowOutgoing from '../images/ArrowOutcoming.svg';
 import { getWalletTransactionsSince } from '../services/lnbits/payments';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
 import {
-  fetchZapActivity,
   pairId,
   transactionTime,
   ZapActivity,
   ZapTransfer,
+  zapActivityQueryOptions,
 } from '../utils/walletUtilities';
 import { RewardNameContext } from './RewardNameContext';
 import styles from './WalletTransactionLog.module.css';
@@ -27,8 +28,8 @@ interface WalletHistory {
   transactions: Transaction[];
 }
 
-const SECONDS_PER_DAY = 86_400;
 const TRANSACTION_HISTORY_DAYS = 30;
+const SECONDS_PER_DAY = 86_400;
 
 // Intl gets the singular forms right ("1 minute ago", not "1 minutes ago").
 // The rest of this tab is English-only, so the locale is pinned to match
@@ -107,132 +108,57 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
     error: rewardNameError,
     retry: retryRewardName,
   } = useContext(RewardNameContext);
-  const [history, setHistory] = useState<WalletHistory | null>(null);
-  const [activity, setActivity] = useState<ZapActivity | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [loadingActivity, setLoadingActivity] = useState(true);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [activityError, setActivityError] = useState<string | null>(null);
-  const [retryToken, setRetryToken] = useState(0);
-
-  const loading = loadingHistory || loadingActivity;
-  const error = historyError ?? activityError;
-
-  // The tenant-wide pairing data is the expensive half of this screen — every
-  // user, every user's wallets, and paged instance-wide payments — and none of
-  // it depends on which of the signed-in user's own wallets is on screen. It
-  // gets its own effect so switching Private/Allowance does not re-run it.
-  useEffect(() => {
-    if (!accountId) {
-      setActivity(null);
-      setActivityError(null);
-      setLoadingActivity(false);
-      return;
-    }
-
-    let cancelled = false;
-    setActivity(null);
-    setActivityError(null);
-    setLoadingActivity(true);
-
-    // Whole seconds: fetchZapActivity rejects a fractional window.
-    const since = Math.floor(
-      Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY,
-    );
-
-    fetchZapActivity(since)
-      .then(loaded => {
-        if (!cancelled) setActivity(loaded);
-      })
-      .catch(loadError => {
-        if (!cancelled) {
-          setActivityError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'Transaction history could not be loaded.',
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingActivity(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accountId, retryToken]);
-
-  // The selected wallet's own rows, which is the only part a wallet switch
-  // actually invalidates.
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTransactions = async () => {
-      setHistory(null);
-      setHistoryError(null);
-
+  const activityQuery = useQuery({
+    ...zapActivityQueryOptions(TRANSACTION_HISTORY_DAYS),
+    enabled: Boolean(accountId),
+  });
+  const historyQuery = useQuery({
+    queryKey: ['walletHistory', accountId, activeWallet, TRANSACTION_HISTORY_DAYS],
+    enabled: Boolean(accountId),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<WalletHistory> => {
       if (!accountId) {
-        setLoadingHistory(false);
-        setHistoryError(
-          accountCount === 0
-            ? 'Sign in to load your transaction history.'
-            : 'Your Zaplie account could not be identified.',
-        );
-        return;
+        throw new Error('Your Zaplie account could not be identified.');
+      }
+      const matchingUsers = await getUsers({ aadObjectId: accountId });
+      if (matchingUsers.length !== 1) {
+        throw new Error('Your Zaplie account could not be identified.');
       }
 
-      setLoadingHistory(true);
-      try {
-        const matchingUsers = await getUsers({ aadObjectId: accountId });
-        if (matchingUsers.length !== 1) {
-          throw new Error('Your Zaplie account could not be identified.');
-        }
-
-        const currentUser = matchingUsers[0];
-        const wallets = await getUserWallets(currentUser.id);
-        const matchingWallets = wallets.filter(
-          candidate =>
-            candidate.name.trim().toLowerCase() === activeWallet.toLowerCase(),
-        );
-        if (matchingWallets.length === 0) {
-          throw new Error(`Your ${activeWallet} wallet could not be found.`);
-        }
-        if (matchingWallets.length > 1) {
-          throw new Error(
-            `Your ${activeWallet} wallet could not be identified uniquely.`,
-          );
-        }
-        const wallet = matchingWallets[0];
-
-        const since =
-          Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * SECONDS_PER_DAY;
-        const transactions = await getWalletTransactionsSince(
-          wallet.id,
-          since,
-          null,
-        );
-
-        if (!cancelled) {
-          setHistory({ currentUser, transactions });
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setHistoryError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'Transaction history could not be loaded.',
-          );
-        }
-      } finally {
-        if (!cancelled) setLoadingHistory(false);
+      const currentUser = matchingUsers[0];
+      const wallets = await getUserWallets(currentUser.id);
+      const matchingWallets = wallets.filter(
+        candidate =>
+          candidate.name.trim().toLowerCase() === activeWallet.toLowerCase(),
+      );
+      if (matchingWallets.length === 0) {
+        throw new Error(`Your ${activeWallet} wallet could not be found.`);
       }
-    };
+      if (matchingWallets.length > 1) {
+        throw new Error(
+          `Your ${activeWallet} wallet could not be identified uniquely.`,
+        );
+      }
 
-    void loadTransactions();
-    return () => {
-      cancelled = true;
-    };
-  }, [accountCount, accountId, activeWallet, retryToken]);
+      const since =
+        Date.now() / 1000 - TRANSACTION_HISTORY_DAYS * 86_400;
+      const transactions = await getWalletTransactionsSince(
+        matchingWallets[0].id,
+        since,
+        null,
+      );
+      return { currentUser, transactions };
+    },
+  });
+
+  const history = historyQuery.data ?? null;
+  const activity: ZapActivity | null = activityQuery.data ?? null;
+  const loading = historyQuery.isPending || activityQuery.isPending;
+  const error = historyQuery.error ?? activityQuery.error;
+  const retry = () => {
+    void Promise.all([historyQuery.refetch(), activityQuery.refetch()]);
+  };
 
   const transfersById = useMemo(() => {
     const byId = new Map<string, ZapTransfer>();
@@ -255,6 +181,16 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
       .slice()
       .sort((left, right) => transactionTime(right) - transactionTime(left));
   }, [activeTab, history]);
+
+  if (!accountId) {
+    return (
+      <div className={styles.errorState} role="alert">
+        {accountCount === 0
+          ? 'Sign in to load your transaction history.'
+          : 'Your Zaplie account could not be identified.'}
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -285,15 +221,10 @@ const WalletTransactionLog: React.FC<WalletTransactionLogProps> = ({
   if (error) {
     return (
       <div className={styles.errorState} role="alert">
-        <span>{error}</span>
-        {accountId && (
-          <button
-            type="button"
-            onClick={() => setRetryToken(token => token + 1)}
-          >
-            Try again
-          </button>
-        )}
+        <span>{error.message}</span>
+        <button type="button" onClick={retry}>
+          Try again
+        </button>
       </div>
     );
   }

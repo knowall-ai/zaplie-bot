@@ -1,5 +1,6 @@
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getWalletTransactionsSince } from '../services/lnbits/payments';
 import { getUsers } from '../services/lnbits/users';
 import { getUserWallets } from '../services/lnbits/wallets';
@@ -28,6 +29,16 @@ jest.mock('../services/lnbits/wallets', () => ({
 jest.mock('../utils/walletUtilities', () => ({
   ...jest.requireActual('../utils/walletUtilities'),
   fetchZapActivity: jest.fn(),
+  zapActivityQueryOptions: (periodDays: number) => {
+    const options = jest
+      .requireActual('../utils/walletUtilities')
+      .zapActivityQueryOptions(periodDays);
+    return {
+      ...options,
+      queryFn: () =>
+        jest.requireMock('../utils/walletUtilities').fetchZapActivity(),
+    };
+  },
 }));
 
 const user = (id: string, displayName: string): User => ({
@@ -89,6 +100,7 @@ const knownOutgoingPair = payment(
 
 let container: HTMLDivElement;
 let root: Root;
+let queryClient: QueryClient;
 
 const mount = async (
   activeTab: 'all' | 'sent' | 'received' = 'all',
@@ -103,9 +115,11 @@ const mount = async (
   // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(
-      <RewardNameContext.Provider value={rewardContext}>
-        <WalletTransactionLog activeTab={activeTab} activeWallet="Private" />
-      </RewardNameContext.Provider>,
+      <QueryClientProvider client={queryClient}>
+        <RewardNameContext.Provider value={rewardContext}>
+          <WalletTransactionLog activeTab={activeTab} activeWallet="Private" />
+        </RewardNameContext.Provider>
+      </QueryClientProvider>,
     );
   });
 };
@@ -150,6 +164,9 @@ describe('WalletTransactionLog', () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     jest.clearAllMocks();
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     jest.spyOn(Date, 'now').mockReturnValue(1_700_000_100_000);
     mockUseMsal.mockReturnValue({ accounts: [{ localAccountId: 'aad-alex' }] });
     container = document.createElement('div');
@@ -161,6 +178,7 @@ describe('WalletTransactionLog', () => {
     await act(async () => {
       root.unmount();
     });
+    queryClient.clear();
     container.remove();
     jest.restoreAllMocks();
   });
@@ -213,23 +231,48 @@ describe('WalletTransactionLog', () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
       root.render(
-        <RewardNameContext.Provider
-          value={{
-            rewardName: 'Sats',
-            rewardNameLabel: 'Sats',
-            setRewardName: jest.fn(),
-            isLoading: false,
-            error: null,
-          }}
-        >
-          <WalletTransactionLog activeTab="all" activeWallet="Allowance" />
-        </RewardNameContext.Provider>,
+        <QueryClientProvider client={queryClient}>
+          <RewardNameContext.Provider
+            value={{
+              rewardName: 'Sats',
+              rewardNameLabel: 'Sats',
+              setRewardName: jest.fn(),
+              isLoading: false,
+              error: null,
+            }}
+          >
+            <WalletTransactionLog activeTab="all" activeWallet="Allowance" />
+          </RewardNameContext.Provider>
+        </QueryClientProvider>,
       );
     });
     await settle();
 
     // The wallet's own rows are reread; the expensive tenant-wide fetch is not.
     expect(getWalletTransactionsSince).toHaveBeenCalledTimes(2);
+    expect(fetchZapActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test('filters All, Sent, and Received rows without refetching', async () => {
+    configureSuccess();
+
+    await mount();
+    await eventually(() => {
+      expect(container.textContent).toContain('from Sam Chen');
+    });
+    expect(getWalletTransactionsSince).toHaveBeenCalledTimes(1);
+    expect(fetchZapActivity).toHaveBeenCalledTimes(1);
+
+    await mount('sent');
+    await settle();
+    expect(container.textContent).not.toContain('from Sam Chen');
+    expect(getWalletTransactionsSince).toHaveBeenCalledTimes(1);
+    expect(fetchZapActivity).toHaveBeenCalledTimes(1);
+
+    await mount('received');
+    await settle();
+    expect(container.textContent).toContain('from Sam Chen');
+    expect(getWalletTransactionsSince).toHaveBeenCalledTimes(1);
     expect(fetchZapActivity).toHaveBeenCalledTimes(1);
   });
 
