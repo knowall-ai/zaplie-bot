@@ -51,6 +51,12 @@ closing the gaps.
   receipt, and that a failing or rejecting notifier never reaches the sender;
   `src/services/fetchUserMiddleware.proactive.test.ts` pins that the
   synthetic proactive event skips the Teams and LNbits lookups.
+- `src/services/userService.test.ts` pins `LNBITS_INITIAL_ALLOWANCE`: unset
+  or blank grants nothing, `15000` (or ` 15000 `) tops up the new Allowance
+  wallet with exactly that, and `1e3`, `25,000`, `+1`, `0x10`, `-5`, `0`,
+  `1.5` or `abc` stop `UserService` from constructing, naming the variable,
+  before any LNbits user or wallet is created. `25000` is accepted and
+  `25001` refused, naming the variable and the range.
 - `src/commands/zapBudget.test.ts` pins the recipient cap
   (`validateRecipientCount` and `ZAP_MAX_RECIPIENTS` parsing: default three,
   an override, and `0`, `-1`, `1e1`, `3.0` or `abc` refused naming the

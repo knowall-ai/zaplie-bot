@@ -9,7 +9,15 @@
 // `Number()` would accept `1e3`, `0x10` and `10000.0`; none of those is what an
 // operator typing a sats ceiling meant, and silently reinterpreting them is how
 // a cap ends up somewhere nobody chose.
-export function positiveIntFromEnv(name: string, fallback: number): number {
+//
+// The fallback may be something other than a number (`null` for "unset means
+// none", as LNBITS_INITIAL_ALLOWANCE uses it); the portal twin already takes
+// `null` (`positiveIntFromEnv('ZAP_MAX_AMOUNT_SATS', null)` in
+// `tabs/backend/lnbitsGatewayService.js`), so this keeps the two at parity.
+export function positiveIntFromEnv<F = number>(
+  name: string,
+  fallback: F,
+): number | F {
   const configured = process.env[name];
   if (configured === undefined || configured.trim() === '') {
     return fallback;
@@ -18,6 +26,22 @@ export function positiveIntFromEnv(name: string, fallback: number): number {
   const value = /^\d+$/.test(trimmed) ? Number.parseInt(trimmed, 10) : NaN;
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+}
+
+// Same rule with a ceiling. Above it is rejected, not clamped: a clamped
+// value would apply a number nobody configured while the operator believes
+// theirs was. The message names the variable and the range, like a malformed
+// value's does. Bot-only, so it has no portal twin.
+export function boundedPositiveIntFromEnv<F = number>(
+  name: string,
+  fallback: F,
+  max: number,
+): number | F {
+  const value = positiveIntFromEnv(name, fallback);
+  if (typeof value === 'number' && value > max) {
+    throw new Error(`${name} must be a whole number from 1 to ${max}`);
   }
   return value;
 }
