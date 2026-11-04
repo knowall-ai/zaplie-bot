@@ -134,6 +134,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # CRA inlines REACT_APP_* values into public JavaScript. The portal must
+      # never read a credential through one: privileged LNbits calls go through
+      # tabs/backend. Scanning the sources catches the read whatever the build
+      # does with it (DefinePlugin replaces the name with the value, so a
+      # bundle without source maps would not show it). Runs on every PR here;
+      # the deploy workflows carry the same guard but are disabled in Actions.
+      - name: Fail if the portal sources read a credential from the environment
+        shell: bash
+        run: |
+          test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
+          if grep -REl 'process\.env\.REACT_APP_[A-Z0-9_]*(KEY|PASSWORD|SECRET|TOKEN)' tabs/src; then
+            echo '::error::Portal sources read a credential-shaped REACT_APP_* variable in browser code. Move privileged calls behind tabs/backend.'
+            exit 1
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -155,6 +170,18 @@ jobs:
         env:
           CI: false
         run: npm run build
+
+      # Backstop for the step above: a credential name that reaches the build
+      # output, through a string or the source maps CRA emits by default. A
+      # missing build directory is a failure, not a pass: grep would exit 2.
+      - name: Fail if the built portal bundle references a credential name
+        shell: bash
+        run: |
+          test -d tabs/build || { echo '::error::No built bundle found to scan'; exit 1; }
+          if grep -RlE 'REACT_APP_[A-Z0-9_]*(KEY|PASSWORD|SECRET|TOKEN)|LNBITS_(ADMINKEY|ADMIN_KEY|PASSWORD|INKEY)|TAB_BACKEND_TOKEN' tabs/build; then
+            echo '::error::Credential references found in the built portal bundle. Move privileged LNbits calls behind tabs/backend.'
+            exit 1
+          fi
 
       # functions/ is a third deployable package. Without this step its
       # dependency bumps pass CI while actually breaking the build.
