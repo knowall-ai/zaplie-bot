@@ -30,6 +30,22 @@ export function positiveIntFromEnv<F = number>(
   return value;
 }
 
+// Same rule with a ceiling. Above it is rejected, not clamped: a clamped
+// value would apply a number nobody configured while the operator believes
+// theirs was. The message names the variable and the range, like a malformed
+// value's does. Bot-only, so it has no portal twin.
+export function boundedPositiveIntFromEnv<F = number>(
+  name: string,
+  fallback: F,
+  max: number,
+): number | F {
+  const value = positiveIntFromEnv(name, fallback);
+  if (typeof value === 'number' && value > max) {
+    throw new Error(`${name} must be a whole number from 1 to ${max}`);
+  }
+  return value;
+}
+
 // Same strict rule, but 0 is allowed: for a setting where 0 means "off"
 // (ZAPLIE_LEDGER_STALE_LOCK_MS). Bot-only, so it has no portal twin.
 export function nonNegativeIntFromEnv(name: string, fallback: number): number {

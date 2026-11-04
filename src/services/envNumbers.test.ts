@@ -1,4 +1,8 @@
-import { nonNegativeIntFromEnv, positiveIntFromEnv } from './envNumbers';
+import {
+  boundedPositiveIntFromEnv,
+  nonNegativeIntFromEnv,
+  positiveIntFromEnv,
+} from './envNumbers';
 
 const NAME = 'REWARDS_MAX_AMOUNT_SATS';
 
@@ -47,6 +51,52 @@ describe('positiveIntFromEnv', () => {
       expect(() => positiveIntFromEnv(NAME, 10000)).toThrow(
         `${NAME} must be a positive integer`,
       );
+    }
+  });
+});
+
+describe('boundedPositiveIntFromEnv', () => {
+  const BOUNDED_NAME = 'LNBITS_INITIAL_ALLOWANCE';
+  const original = process.env[BOUNDED_NAME];
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env[BOUNDED_NAME];
+    } else {
+      process.env[BOUNDED_NAME] = original;
+    }
+  });
+
+  it('falls back when the variable is unset or blank, including a null fallback', () => {
+    delete process.env[BOUNDED_NAME];
+    expect(boundedPositiveIntFromEnv(BOUNDED_NAME, 7, 25000)).toBe(7);
+    expect(boundedPositiveIntFromEnv(BOUNDED_NAME, null, 25000)).toBeNull();
+    process.env[BOUNDED_NAME] = '   ';
+    expect(boundedPositiveIntFromEnv(BOUNDED_NAME, null, 25000)).toBeNull();
+  });
+
+  it('accepts a value up to and including the ceiling', () => {
+    process.env[BOUNDED_NAME] = '1';
+    expect(boundedPositiveIntFromEnv(BOUNDED_NAME, null, 25000)).toBe(1);
+    process.env[BOUNDED_NAME] = ' 25000 ';
+    expect(boundedPositiveIntFromEnv(BOUNDED_NAME, null, 25000)).toBe(25000);
+  });
+
+  it('rejects a value above the ceiling, naming the variable and the range', () => {
+    for (const above of ['25001', '1500000000']) {
+      process.env[BOUNDED_NAME] = above;
+      expect(() =>
+        boundedPositiveIntFromEnv(BOUNDED_NAME, null, 25000),
+      ).toThrow(`${BOUNDED_NAME} must be a whole number from 1 to 25000`);
+    }
+  });
+
+  it('keeps the malformed-value message unchanged', () => {
+    for (const malformed of ['1e3', '0', '-1', 'abc']) {
+      process.env[BOUNDED_NAME] = malformed;
+      expect(() =>
+        boundedPositiveIntFromEnv(BOUNDED_NAME, null, 25000),
+      ).toThrow(`${BOUNDED_NAME} must be a positive integer`);
     }
   });
 });

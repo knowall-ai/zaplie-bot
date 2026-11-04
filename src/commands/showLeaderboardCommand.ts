@@ -1,7 +1,7 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory } from 'botbuilder';
 import { getZapLeaderboard } from '../services/zapHistoryService';
-import { positiveIntFromEnv } from '../services/envNumbers';
+import { boundedPositiveIntFromEnv } from '../services/envNumbers';
 import { LocaleTag, en, formatNumber, t } from '../i18n';
 
 // The copy lives in src/i18n, translated per client language; these constants
@@ -31,21 +31,6 @@ const SECONDS_PER_DAY = 24 * 60 * 60;
 export interface LeaderboardSettings {
   windowDays: number;
   topN: number;
-}
-
-// Above the ceiling is rejected, not clamped: a clamped value would rank a
-// window or a row count nobody configured while the operator believes theirs
-// was applied. The message names the variable, like a malformed value's does.
-function boundedPositiveIntFromEnv(
-  name: string,
-  fallback: number,
-  max: number,
-): number {
-  const value = positiveIntFromEnv(name, fallback);
-  if (value > max) {
-    throw new Error(`${name} must be a whole number from 1 to ${max}`);
-  }
-  return value;
 }
 
 /**

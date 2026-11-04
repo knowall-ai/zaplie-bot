@@ -9,22 +9,28 @@ import {
   topUpWallet,
   getWalletById,
 } from './lnbitsService';
-import { positiveIntFromEnv } from './envNumbers';
+import { boundedPositiveIntFromEnv } from './envNumbers';
 
 const adminKey = process.env.LNBITS_ADMINKEY as string;
 
 export const INITIAL_ALLOWANCE_ENV = 'LNBITS_INITIAL_ALLOWANCE';
+// One week's Allowance. The opening grant lets a new joiner zap before their
+// first weekly top-up, so more than a week is never a correct value, and the
+// admin top-up behind it creates unbacked sats: a stray digit must stop the
+// bot, not fund every new wallet.
+export const MAX_INITIAL_ALLOWANCE = 25000;
 
 // The opening grant for a new Allowance wallet. Unset or blank means no grant
 // (production: the LNbits allowance extension funds wallets, and an admin
-// top-up creates sats with no backing). Anything else must be a plain whole
-// number of sats: parseInt read '1e3' as 1 and '25,000' as 25, and a typo here
-// pays the wrong amount into every new user's wallet. Resolved once, in the
-// UserService constructor, so a malformed value stops the bot at startup
-// (src/index.ts constructs the singleton before it listens), like
-// ZAP_MAX_RECIPIENTS.
+// top-up creates sats with no backing). Anything else must be a positive
+// whole number of sats from 1 to MAX_INITIAL_ALLOWANCE: parseInt read '1e3'
+// as 1 and '25,000' as 25, and a typo here pays the wrong amount into every
+// new user's wallet. Resolved once, in the UserService constructor, so a
+// malformed value stops the bot at startup (src/index.ts constructs the
+// singleton before it listens), like ZAP_MAX_RECIPIENTS. Above
+// MAX_INITIAL_ALLOWANCE is refused the same way.
 export const resolveInitialAllowance = (): number | null =>
-  positiveIntFromEnv(INITIAL_ALLOWANCE_ENV, null);
+  boundedPositiveIntFromEnv(INITIAL_ALLOWANCE_ENV, null, MAX_INITIAL_ALLOWANCE);
 
 async function applyInitialAllowance(
   walletId: string,
