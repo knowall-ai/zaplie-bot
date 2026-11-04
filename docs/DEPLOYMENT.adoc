@@ -92,6 +92,10 @@ ignored `.zaplie-data` fallback.
   credentials, drop the mutable backend JSON stores, upload the `tabs` artifact
 . Deploy job (ubuntu-latest): `azure/webapps-deploy@v3`
 
+The same source and bundle scans run on every pull request targeting `main`
+(and on every push to `main`) in `ci-quality-checks.yml` (Build
+Verification), since the deploy workflows are disabled.
+
 The two workflows authenticate differently today:
 
 Test:: Deploys with federated OIDC — `azure/login` using the repository

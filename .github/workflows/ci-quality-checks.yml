@@ -134,6 +134,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # CRA inlines REACT_APP_* values into public JavaScript. The portal must
+      # never read a credential through one: privileged LNbits calls go through
+      # tabs/backend. Scanning the sources catches the read whatever the build
+      # does with it (DefinePlugin replaces the name with the value, so a
+      # bundle without source maps would not show it). The scan matches the
+      # bare name, not just process.env.NAME, because CRA also inlines
+      # process.env["NAME"] and const { NAME } = process.env; a comment naming
+      # such a variable fails too, which is intended. Runs on every pull
+      # request targeting main (this workflow's trigger) and on push to main;
+      # the deploy workflows carry the same guard but are disabled in Actions.
+      - name: Fail if the portal sources read a credential from the environment
+        shell: bash
+        run: |
+          test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
+          # grep exits 1 for "no match" and 2 for an error (unreadable file,
+          # broken symlink); only 1 is a clean scan.
+          status=0
+          grep -REn 'REACT_APP_[A-Z0-9_]*(KEY|PASSWORD|SECRET|TOKEN)' tabs/src || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo '::error::Portal sources read a credential-shaped REACT_APP_* variable in browser code. Move privileged calls behind tabs/backend.'
+            exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "::error::Credential scan of tabs/src did not complete (grep exit status $status)."
+            exit 1
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -155,6 +181,24 @@ jobs:
         env:
           CI: false
         run: npm run build
+
+      # Backstop for the step above: a credential name that reaches the build
+      # output, through a string or the source maps CRA emits by default. A
+      # missing build directory is a failure, not a pass, and so is a scan
+      # that does not finish (grep exit 2).
+      - name: Fail if the built portal bundle references a credential name
+        shell: bash
+        run: |
+          test -d tabs/build || { echo '::error::No built bundle found to scan'; exit 1; }
+          status=0
+          grep -RlE 'REACT_APP_[A-Z0-9_]*(KEY|PASSWORD|SECRET|TOKEN)|LNBITS_(ADMINKEY|ADMIN_KEY|PASSWORD|INKEY)|TAB_BACKEND_TOKEN' tabs/build || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo '::error::Credential references found in the built portal bundle. Move privileged LNbits calls behind tabs/backend.'
+            exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "::error::Credential scan of tabs/build did not complete (grep exit status $status)."
+            exit 1
+          fi
 
       # functions/ is a third deployable package. Without this step its
       # dependency bumps pass CI while actually breaking the build.
