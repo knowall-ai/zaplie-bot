@@ -237,3 +237,9 @@
 .hoverable:hover {
   color: #5b5fc7;
 }
+
+.truncatedNotice {
+  padding: 8px 12px;
+  color: #e0b000;
+  font-size: 13px;
+}

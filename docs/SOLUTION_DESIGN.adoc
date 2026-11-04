@@ -180,9 +180,10 @@ Three server-side clients speak to the LNbits REST API:
   the wallet through the caller's own LNbits user, so a wallet id on its own
   grants neither reads nor writes. Four reads are deliberately tenant-wide
   because the product is built on them: the user directory, the wallet list with
-  balances (leaderboard), the aggregate payment feed, and per-wallet payment
-  history, which the team feed and the transaction log read across every
-  teammate.
+  balances (leaderboard), the aggregate payment feed, which the team feed, the
+  leaderboard and the transaction log's counterparty names page through
+  `fetchZapActivity`, and per-wallet payment history, which the transaction log
+  reads for the signed-in user's own wallet.
 - `functions/services/lnbitsService.ts` — request-scoped variant; the LNbits
   base URL and credentials arrive with each HTTP request.
 
@@ -553,7 +554,9 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 | Transactions / Zaps
 | LNbits payments ledger
-| Queried per wallet for feed, history, and leaderboard. Each zap carries an
+| The feed and the leaderboard page the instance-wide `/payments` endpoint
+  through `fetchZapActivity`; the transaction log queries the signed-in user's
+  own wallet for its rows. Each zap carries an
   `extra` object `{ tag: 'zap', from, to }` where `from`/`to` are
   `{ id, name, user, displayName }` projections of the wallets, never the
   wallet objects themselves
@@ -632,10 +635,11 @@ Private wallet is private: its balance is never surfaced or ranked.
 Leaderboards measure zaps sent out of Allowance wallets that landed in a
 Private wallet, excluding the `Weekly Allowance cleared` sweep, so they
 reward giving rather than receiving or hoarding. Self-zaps do not count.
-Payments are read through the instance-wide paginated payments endpoint
-(`PAYMENTS_PAGE_SIZE` 1000 rows per request, at most `MAX_PAYMENT_PAGES` 100
-pages), falling back to paged per-wallet reads on an LNbits that lacks it. A
-wallet that cannot be read, or a read that stops at the page limit, marks the
+
+In the bot, payments are read through the instance-wide paginated payments
+endpoint (`PAYMENTS_PAGE_SIZE` 1000 rows per request, at most
+`MAX_PAYMENT_PAGES` 100 pages), falling back to paged per-wallet reads on an
+LNbits that lacks it. A wallet that cannot be read, or a read that stops at the page limit, marks the
 result partial, and the card and the assistant both say the ranking may be
 incomplete rather than presenting a floor as the total. The ranking is only as
 complete as the user list `getUsers` returns: someone missing from that list is
@@ -649,6 +653,17 @@ card still named the window. `LEADERBOARD_TOP_N` is capped at 100 rows
 ceiling is rejected like a malformed one: the command replies "unavailable"
 and logs the variable name. A treasury wallet must not be named `Allowance`,
 or its automation payouts would rank as a person's zaps.
+
+In the portal the feed and the leaderboard both read `fetchZapActivity`
+(`tabs/src/utils/walletUtilities.ts`), which pages the same instance-wide
+endpoint (`PAYMENT_PAGE_SIZE` 1000 rows, at most `PAYMENT_FETCH_CAP` 10,000)
+and emits one transfer per verified Allowance -> Private pair between two
+different people, so a self-zap is left out of both by the same rule and each
+says when the history was truncated. The transaction log reads
+`fetchZapActivity` only to name the counterparty on a row; its rows are the
+signed-in user's own wallet history from `getWalletTransactionsSince`, so a
+self-zap still appears there as a movement between that person's two wallets,
+with no counterparty.
 
 === Scheduled top-ups are not bot code
 

@@ -147,7 +147,12 @@ npm run coverage:ratchet
   instead of the generic retry, is marked invalid for a refused or blank name
   but not a failed request, passes the raw value (a leading tab is not
   trimmed away), counts the characters left (past the limit too), and that a
-  valid save still updates the shared context
+  valid save still updates the shared context. `FeedList.test.tsx` and
+  `Leaderboard.test.tsx` mock the LNbits service layer so the real
+  `fetchZapActivity` pairing runs, and check that a self-zap (Allowance to
+  the same person's Private wallet) is neither a feed row nor a leaderboard
+  total, that the feed reads the paged `/payments` endpoint, and that the feed
+  says so when that history was truncated
 - Run:
 
 [source,bash]
