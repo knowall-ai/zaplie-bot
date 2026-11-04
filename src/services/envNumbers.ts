@@ -9,7 +9,15 @@
 // `Number()` would accept `1e3`, `0x10` and `10000.0`; none of those is what an
 // operator typing a sats ceiling meant, and silently reinterpreting them is how
 // a cap ends up somewhere nobody chose.
-export function positiveIntFromEnv(name: string, fallback: number): number {
+//
+// The fallback may be something other than a number (`null` for "unset means
+// none", as LNBITS_INITIAL_ALLOWANCE uses it); the portal twin already takes
+// `null` (`positiveIntFromEnv('ZAP_MAX_AMOUNT_SATS', null)` in
+// `tabs/backend/lnbitsGatewayService.js`), so this keeps the two at parity.
+export function positiveIntFromEnv<F = number>(
+  name: string,
+  fallback: F,
+): number | F {
   const configured = process.env[name];
   if (configured === undefined || configured.trim() === '') {
     return fallback;

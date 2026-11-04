@@ -168,7 +168,8 @@ table):
   `LEADERBOARD_WINDOW_DAYS` (1 to 365; also the assistant's default window),
   `LEADERBOARD_TOP_N` (1 to 100; values outside either range fail closed),
   `ZAP_MAX_RECIPIENTS` (1 or more, default 3; a malformed value stops the
-  bot at startup),
+  bot at startup), `LNBITS_INITIAL_ALLOWANCE` (unset means no grant; a value
+  that is not a plain whole number also stops the bot at startup),
   plus
   `APPLICATIONINSIGHTS_CONNECTION_STRING` and `AGENT_ID` for the Agents Portal
   telemetry (`src/services/pulse.ts`; titles and subjects are fixed strings,
@@ -259,4 +260,5 @@ steer them to any LNbits endpoint.
 
 User-typed amounts are parsed with `parseSatsAmount`
 (`src/utils/satsAmount.ts`), never `Number()` or `parseInt` alone; env
-ceilings with `positiveIntFromEnv` (including `ZAP_MAX_RECIPIENTS`).
+ceilings with `positiveIntFromEnv` (including `ZAP_MAX_RECIPIENTS` and
+`LNBITS_INITIAL_ALLOWANCE`).

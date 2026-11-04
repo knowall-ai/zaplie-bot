@@ -10,9 +10,9 @@ It combines a conversational Teams bot, a set of React web tabs, and serverless
 HTTP endpoints, all backed by an https://lnbits.com/[LNbits] Lightning wallet
 and account system. Every Teams user is automatically provisioned with two
 LNbits wallets: an *Allowance* wallet (a spending budget; the bot attempts a
-one-off grant of `LNBITS_INITIAL_ALLOWANCE` when it is created, and weekly
-top-ups come from the LNbits allowance extension, not the bot) and a *Private*
-wallet (where received Zaps accumulate).
+one-off grant of `LNBITS_INITIAL_ALLOWANCE`, if set, when it is created, and
+weekly top-ups come from the LNbits allowance extension, not the bot) and a
+*Private* wallet (where received Zaps accumulate).
 
 == Architecture
 
@@ -168,9 +168,11 @@ Three server-side clients speak to the LNbits REST API:
   request by default and orders nothing unless `sortby` is set. Attempts a
   one-off grant of
   `LNBITS_INITIAL_ALLOWANCE` to a new user's Allowance wallet (`topUpWallet`,
-  called from `UserService`); the grant is skipped when the setting is missing
-  or not a positive integer, and a failed LNbits request is logged rather than
-  retried. Recurring replenishment is not bot code (see Design Decisions).
+  called from `UserService`); the grant is skipped when the setting is
+  missing, a value that is not a plain whole number stops the bot at startup
+  (`resolveInitialAllowance`, when `UserService` is constructed), and a failed
+  LNbits request is logged rather than retried. Recurring replenishment is not
+  bot code (see Design Decisions).
 - `tabs/backend/lnbitsGatewayService.js` — authenticated Express gateway for
   the tabs. It keeps the LNbits service account, admin key, invoice keys, and
   wallet admin keys in the Node process. The React client
@@ -623,7 +625,7 @@ REST API that supports programmatic user/wallet creation and payments.
 *Context:* Users need both a budget to give from and a balance they have earned.
 
 *Decision:* Provision each user an Allowance wallet (granted
-`LNBITS_INITIAL_ALLOWANCE` on a best-effort basis at creation; weekly top-ups
+`LNBITS_INITIAL_ALLOWANCE` once at creation, best-effort; weekly top-ups
 come from the LNbits allowance extension) and a Private wallet (receives
 Zaps).
 
@@ -671,9 +673,11 @@ Lightning address on a schedule. Each Allowance wallet gets its LNURL pay link
 Automations panel, the CLI and the timer run; see `docs/automation/README.md`,
 "Weekly allowances". The bot only
 attempts to fund a wallet once, when it is created: `applyInitialAllowance`
-skips the grant when `LNBITS_INITIAL_ALLOWANCE` is missing or not a positive
-integer, and `topUpWallet` logs a failed LNbits request instead of retrying,
-so user setup never fails on funding and no later balance check enforces it.
+skips the grant when `LNBITS_INITIAL_ALLOWANCE` is unset, a value that is not
+a plain whole number stops the bot at startup (so a typo cannot pay the wrong
+amount to every new user), and `topUpWallet` logs a failed LNbits request
+instead of retrying, so user setup never fails on funding and no later
+balance check enforces it.
 Weekly top-ups are the allowance extension's job.
 
 *Consequences:* No scheduler, host wallet or sweep logic lives in the bot.

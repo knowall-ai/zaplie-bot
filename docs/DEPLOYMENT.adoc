@@ -349,8 +349,9 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Bot, Portal backend
 
 | `LNBITS_INITIAL_ALLOWANCE`
-| Sats the bot attempts to grant to each user's Allowance wallet when it is
-created. Must be a positive integer; a failed grant is logged, not retried
+| Sats the bot grants to each user's Allowance wallet when it is created.
+Unset means no grant. Must be a plain whole number (digits only); any other
+value stops the bot at startup. A failed grant is logged, not retried
 | Bot
 
 | `LNBITS_POINTS_LABEL`
