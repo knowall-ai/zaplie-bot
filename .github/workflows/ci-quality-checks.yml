@@ -138,13 +138,16 @@ jobs:
       # never read a credential through one: privileged LNbits calls go through
       # tabs/backend. Scanning the sources catches the read whatever the build
       # does with it (DefinePlugin replaces the name with the value, so a
-      # bundle without source maps would not show it). Runs on every PR here;
+      # bundle without source maps would not show it). The scan matches the
+      # bare name, not just process.env.NAME, because CRA also inlines
+      # process.env["NAME"] and const { NAME } = process.env; a comment naming
+      # such a variable fails too, which is intended. Runs on every PR here;
       # the deploy workflows carry the same guard but are disabled in Actions.
       - name: Fail if the portal sources read a credential from the environment
         shell: bash
         run: |
           test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
-          if grep -REl 'process\.env\.REACT_APP_[A-Z0-9_]*(KEY|PASSWORD|SECRET|TOKEN)' tabs/src; then
+          if grep -REn 'REACT_APP_[A-Z0-9_]*(KEY|PASSWORD|SECRET|TOKEN)' tabs/src; then
             echo '::error::Portal sources read a credential-shaped REACT_APP_* variable in browser code. Move privileged calls behind tabs/backend.'
             exit 1
           fi
