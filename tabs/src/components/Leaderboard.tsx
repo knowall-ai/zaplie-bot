@@ -208,7 +208,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ timestamp }) => {
       <div className={`${styles.horizontalContainer} ${styles.table}`}>
         <ul>
           {userTransactionSummary.map(summary => (
-            <li key={summary.userId} className={styles.bodycell}>
+            <li
+              key={summary.userId}
+              className={styles.bodycell}
+              data-testid="leaderboard-row"
+            >
               <div className={styles.bodyContents}>
                 <div className={styles.mainContentStack}>
                   <div className={styles.personDetails}>

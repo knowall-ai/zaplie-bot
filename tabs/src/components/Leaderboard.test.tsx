@@ -135,7 +135,9 @@ describe('Leaderboard', () => {
       expect(container.textContent).toContain('Alex Rivera');
     });
 
-    const rows = Array.from(container.querySelectorAll('li.bodycell'));
+    const rows = Array.from(
+      container.querySelectorAll('[data-testid="leaderboard-row"]'),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('Alex Rivera');
     expect(rows[0].textContent).toContain('20,000');

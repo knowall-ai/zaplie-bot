@@ -69,8 +69,8 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
 
         // One row per verified Allowance -> Private transfer between two
         // different people. Self-zaps and weekly sweeps are left out by
-        // fetchZapActivity, the same rule the leaderboard, the transaction log
-        // and the bot's leaderboard apply.
+        // fetchZapActivity, the same rule the leaderboard and the bot's
+        // leaderboard apply.
         setZaps(transfers.slice(0, MAX_RECORDS));
       } catch (error) {
         const errorMessage =
@@ -214,6 +214,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
           <div
             key={zap.transaction.checking_id || index}
             className={styles.bodycell}
+            data-testid="feed-row"
           >
             <div className={styles.bodyContents}>
               <div className={styles.mainContentStack}>

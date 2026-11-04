@@ -152,7 +152,9 @@ describe('FeedList', () => {
     expect(container.textContent).toContain('Alex Rivera');
     expect(container.textContent).toContain('Sam Chen');
     expect(container.textContent).not.toContain('Mine');
-    expect(container.querySelectorAll('.bodycell')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-testid="feed-row"]')).toHaveLength(
+      1,
+    );
     expect(container.textContent).toContain('20,000');
   });
 
