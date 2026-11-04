@@ -632,6 +632,9 @@ Private wallet is private: its balance is never surfaced or ranked.
 Leaderboards measure zaps sent out of Allowance wallets that landed in a
 Private wallet, excluding the `Weekly Allowance cleared` sweep, so they
 reward giving rather than receiving or hoarding. Self-zaps do not count.
+In the portal the feed, the leaderboard and the transaction log all read
+`fetchZapActivity` (`tabs/src/utils/walletUtilities.ts`), so a self-zap is
+left out of all three by the same rule.
 Payments are read through the instance-wide paginated payments endpoint
 (`PAYMENTS_PAGE_SIZE` 1000 rows per request, at most `MAX_PAYMENT_PAGES` 100
 pages), falling back to paged per-wallet reads on an LNbits that lacks it. A

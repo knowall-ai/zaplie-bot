@@ -1,16 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './FeedList.module.css';
 import ZapIcon from '../images/ZapIcon.svg';
-import { getWalletTransactionsSince } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { fetchZapActivity } from '../utils/walletUtilities';
 
 interface FeedListProps {
   timestamp?: number | null;
 }
 interface ZapTransaction {
-  from: User | null;
-  to: User | null;
+  from: User;
+  to: User;
   transaction: Transaction;
 }
 
@@ -33,25 +31,12 @@ const parseTransactionTime = (timestamp: number | string): Date | null => {
   return null;
 };
 
-// Wallet type identifiers - these match the exact naming convention used by the backend
-// Backend creates wallets with names 'Allowance' and 'Private' (see functions/sendZap/index.ts)
-// NOTE: If wallet naming conventions change on the backend, these must be updated
-const WALLET_NAME_ALLOWANCE = 'Allowance';
-const WALLET_NAME_PRIVATE = 'Private';
-
-// Helper functions to identify wallet types by name
-// Using exact match (case-insensitive) to avoid false positives like "not_an_allowance_wallet"
-const isAllowanceWallet = (walletName: string): boolean =>
-  walletName.toLowerCase() === WALLET_NAME_ALLOWANCE.toLowerCase();
-
-const isPrivateWallet = (walletName: string): boolean =>
-  walletName.toLowerCase() === WALLET_NAME_PRIVATE.toLowerCase();
-
 const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   const [zaps, setZaps] = useState<ZapTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [truncated, setTruncated] = useState(false);
   const initialRender = useRef(true);
 
   // State for sorting (excluding the Memo field)
@@ -66,209 +51,27 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
       setError(null);
 
       try {
-        const paymentsSinceTimestamp =
-          timestamp === null || timestamp === undefined || timestamp === 0
-            ? 0
-            : timestamp;
-
-        // Step 1: Get all users
-        const fetchedUsers = await getUsers({});
-        if (!fetchedUsers || fetchedUsers.length === 0) {
+        // Whole seconds: fetchZapActivity refuses a fractional window.
+        const since =
+          timestamp && timestamp > 0 ? Math.floor(timestamp) : undefined;
+        const {
+          users,
+          transfers,
+          truncated: isTruncated,
+        } = await fetchZapActivity(since);
+        if (users.length === 0) {
           setError(
             'Unable to load users. Please check your connection and try again.',
           );
-          setLoading(false);
           return;
         }
+        setTruncated(isTruncated);
 
-        // Step 2: Parallelize wallet fetches for all users
-        const walletPromises = fetchedUsers.map(async user => {
-          try {
-            const userWallets = await getUserWallets(user.id);
-            return { userId: user.id, wallets: userWallets || [] };
-          } catch (err) {
-            // Log error but continue - don't fail entire feed for one user
-            return { userId: user.id, wallets: [] };
-          }
-        });
-        const allWalletsData = await Promise.all(walletPromises);
-
-        // Step 3: Get payments from both Allowance and Private wallets
-        // We need both to match sender (Allowance) with receiver (Private)
-        const allowanceWalletIds = new Set<string>();
-        const privateWalletIds = new Set<string>();
-        const allRelevantWallets: Wallet[] = [];
-        let failedWalletCount = 0;
-
-        for (const userData of allWalletsData) {
-          // Filter to Allowance and Private wallets using exact match
-          const relevantWallets = userData.wallets.filter(
-            wallet =>
-              isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name),
-          );
-
-          // Track wallet IDs by type
-          relevantWallets.forEach(wallet => {
-            if (isAllowanceWallet(wallet.name)) {
-              allowanceWalletIds.add(wallet.id);
-            }
-            if (isPrivateWallet(wallet.name)) {
-              privateWalletIds.add(wallet.id);
-            }
-          });
-
-          allRelevantWallets.push(...relevantWallets);
-        }
-
-        // Fetch all wallet transactions in parallel for better performance
-        const paymentPromises = allRelevantWallets.map(wallet =>
-          getWalletTransactionsSince(
-            wallet.id,
-            paymentsSinceTimestamp,
-            null,
-          ).catch(err => {
-            console.error(
-              `Error fetching payments for wallet ${wallet.id}:`,
-              err,
-            );
-            failedWalletCount++;
-            return [] as Transaction[]; // Return empty array on error
-          }),
-        );
-
-        const paymentResults = await Promise.all(paymentPromises);
-        const allPayments = paymentResults.flat();
-
-        // Log warning if some wallets failed to load
-        if (failedWalletCount > 0) {
-          console.warn(
-            `${failedWalletCount} wallet(s) failed to load transactions`,
-          );
-        }
-
-        // Create wallet ID to user mapping
-        const walletToUserMap = new Map<string, User>();
-        allWalletsData.forEach(userData => {
-          const user = fetchedUsers.find(u => u.id === userData.userId);
-          if (user) {
-            userData.wallets.forEach(wallet => {
-              walletToUserMap.set(wallet.id, user);
-            });
-          } else {
-            console.warn(
-              `User not found for userId: ${userData.userId} - wallet transactions may show as Unknown`,
-            );
-          }
-        });
-
-        // Map payments by checking_id (built before filtering to find receiving side)
-        const paymentsByCheckingId = new Map<string, Transaction[]>();
-        allPayments.forEach(payment => {
-          const cleanId = payment.checking_id?.replace('internal_', '') || '';
-          if (cleanId) {
-            const existing = paymentsByCheckingId.get(cleanId) || [];
-            existing.push(payment);
-            paymentsByCheckingId.set(cleanId, existing);
-          }
-        });
-
-        // Helper to find the receiving payment for a given outgoing payment
-        const findReceiverWalletId = (payment: Transaction): string | null => {
-          const cleanId = payment.checking_id?.replace('internal_', '') || '';
-          if (!cleanId) return null;
-
-          const matchingPayments = paymentsByCheckingId.get(cleanId) || [];
-          const receivingPayment = matchingPayments.find(
-            p => p.wallet_id !== payment.wallet_id && p.amount > 0,
-          );
-          return receivingPayment?.wallet_id || null;
-        };
-
-        // Filter: Only outgoing payments FROM Allowance wallets TO Private wallets
-        const allowanceTransactions = allPayments.filter(payment => {
-          // Must be from an Allowance wallet
-          if (!allowanceWalletIds.has(payment.wallet_id)) return false;
-          // Must be outgoing (negative amount)
-          if (payment.amount >= 0) return false;
-          // Exclude weekly allowance cleared transactions
-          if (payment.memo?.includes('Weekly Allowance cleared')) return false;
-
-          // Verify the receiver is a Private wallet (not external Lightning payment)
-          const receiverWalletId = findReceiverWalletId(payment);
-          if (!receiverWalletId || !privateWalletIds.has(receiverWalletId)) {
-            return false;
-          }
-
-          return true;
-        });
-
-        // Deduplicate internal transfers by checking_id
-        const seenCheckingIds = new Set<string>();
-        const deduplicatedTransactions = allowanceTransactions.filter(
-          payment => {
-            const cleanId = payment.checking_id?.replace('internal_', '') || '';
-
-            if (cleanId) {
-              if (seenCheckingIds.has(cleanId)) {
-                return false; // Skip duplicate
-              }
-              seenCheckingIds.add(cleanId);
-            }
-
-            return true;
-          },
-        );
-
-        const allowanceZaps = deduplicatedTransactions.map(
-          (transaction, index) => {
-            // FROM = owner of the Allowance wallet (sender)
-            const fromUser = walletToUserMap.get(transaction.wallet_id) || null;
-
-            // TO = recipient (owner of the Private wallet that received the payment)
-            let toUser: User | null = null;
-
-            // Try to find matching internal payment (the receiving side)
-            const cleanCheckingId =
-              transaction.checking_id?.replace('internal_', '') || '';
-            const matchingPayments =
-              paymentsByCheckingId.get(cleanCheckingId) || [];
-            const matchingPayment = matchingPayments.find(
-              p => p.wallet_id !== transaction.wallet_id,
-            );
-
-            if (matchingPayment) {
-              toUser = walletToUserMap.get(matchingPayment.wallet_id) || null;
-              if (!toUser) {
-                console.warn(
-                  `Receiver wallet ${matchingPayment.wallet_id} found but user mapping missing`,
-                );
-              }
-            }
-
-            // Fallback: Try extra.to.user field
-            if (!toUser && transaction.extra?.to?.user) {
-              const toUserId = transaction.extra.to.user;
-              toUser = fetchedUsers.find(f => f.id === toUserId) || null;
-            }
-
-            if (!toUser) {
-              console.warn(
-                `Could not determine receiver for transaction ${transaction.checking_id}`,
-              );
-            }
-
-            return {
-              from: fromUser,
-              to: toUser,
-              transaction: transaction,
-            };
-          },
-        );
-
-        // Limit to MAX_RECORDS (100 records)
-        const limitedZaps = allowanceZaps.slice(0, MAX_RECORDS);
-
-        setZaps(limitedZaps);
+        // One row per verified Allowance -> Private transfer between two
+        // different people. Self-zaps and weekly sweeps are left out by
+        // fetchZapActivity, the same rule the leaderboard, the transaction log
+        // and the bot's leaderboard apply.
+        setZaps(transfers.slice(0, MAX_RECORDS));
       } catch (error) {
         const errorMessage =
           error instanceof Error
@@ -308,12 +111,12 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
         valB = b.transaction.time;
         break;
       case 'from':
-        valA = a.from?.displayName || '';
-        valB = b.from?.displayName || '';
+        valA = a.from.displayName || '';
+        valB = b.from.displayName || '';
         break;
       case 'to':
-        valA = a.to?.displayName || '';
-        valB = b.to?.displayName || '';
+        valA = a.to.displayName || '';
+        valB = b.to.displayName || '';
         break;
       case 'amount':
         valA = a.transaction.amount;
@@ -366,6 +169,12 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
   }
   return (
     <div className={styles.feedlist}>
+      {truncated && (
+        <div role="status" className={styles.truncatedNotice}>
+          History truncated: only the most recent payments could be read, so
+          this feed is incomplete.
+        </div>
+      )}
       <div className={styles.headercell}>
         <div className={styles.headerContents}>
           {/* Interactive sortable headers with hover effect */}
@@ -437,11 +246,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                   <div className={styles.userName}>
                     {zap.transaction.memo?.startsWith('[Anonymous]')
                       ? 'Anonymous'
-                      : zap.from?.displayName ||
-                        zap.from?.email ||
-                        (zap.transaction.extra?.from?.user
-                          ? `User ${zap.transaction.extra.from.user.substring(0, 8)}`
-                          : 'Unknown')}
+                      : zap.from.displayName || zap.from.email}
                   </div>
                 </div>
                 <div className={styles.personDetails}>
@@ -452,11 +257,7 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
                     style={{ display: 'none' }}
                   />
                   <div className={styles.userName}>
-                    {zap.to?.displayName ||
-                      zap.to?.email ||
-                      (zap.transaction.extra?.to?.user
-                        ? `User ${zap.transaction.extra.to.user.substring(0, 8)}`
-                        : 'Unknown')}
+                    {zap.to.displayName || zap.to.email}
                   </div>
                 </div>
                 <div
