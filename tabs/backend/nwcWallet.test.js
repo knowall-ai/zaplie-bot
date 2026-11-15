@@ -125,3 +125,55 @@ test('budget is read only from a wallet that advertises get_budget', async () =>
   });
   assert.equal(fake.calls.filter((call) => call.method === 'get_budget').length, 1);
 });
+
+test('a placeholder preimage is never hashed: the wallet is asked which payment it was', async () => {
+  const zeros = '0'.repeat(64);
+  assert.equal(paymentHashOf(zeros), null);
+
+  const fake = createFakeNwc();
+  const first = fake.add(nwcUrlFor(1), { pay: async () => ({ preimage: zeros, fees_paid: 0 }) });
+  first.lookup = async () => ({ state: 'settled', payment_hash: 'AB'.repeat(32), fees_paid: 1000 });
+  const second = fake.add(nwcUrlFor(2), { pay: async () => ({ preimage: zeros, fees_paid: 0 }) });
+  second.lookup = async () => ({ state: 'settled', payment_hash: 'cd'.repeat(32), fees_paid: 0 });
+  const one = await fake.factory.open(nwcUrlFor(1)).payInvoice('lnbc10n1p');
+  const two = await fake.factory.open(nwcUrlFor(2)).payInvoice('lnbc10n1q');
+  assert.deepEqual(one, { paymentHash: 'ab'.repeat(32), feesSats: 1 });
+  // Two payments without a preimage must not share one payment hash.
+  assert.notEqual(one.paymentHash, two.paymentHash);
+
+  // Paid, but the wallet cannot say which payment: unknown, never a made-up hash.
+  fake.add(nwcUrlFor(3), { pay: async () => ({ preimage: zeros, fees_paid: 0 }) });
+  await assert.rejects(fake.factory.open(nwcUrlFor(3)).payInvoice('lnbc10n1r'), NwcPaymentUnknown);
+});
+
+test('an SDK network error (named "Error", told apart by its class) drops the client', async () => {
+  const { createNwcWalletFactory } = require('./nwcWallet');
+  // As @getalby/sdk 9 builds them: the class name is all that says "network".
+  class Nip47NetworkError extends Error {
+    constructor(message, code) {
+      super(message);
+      this.code = code;
+    }
+  }
+  let created = 0;
+  let closed = 0;
+  const factory = createNwcWalletFactory({
+    env: ENV,
+    clientFactory: () => {
+      created += 1;
+      const first = created === 1;
+      return {
+        getBalance: () =>
+          first ? Promise.reject(new Nip47NetworkError('Failed to connect', 'OTHER')) : Promise.resolve({ balance: 3000 }),
+        close: () => {
+          closed += 1;
+        },
+      };
+    },
+  });
+  const handle = factory.open(nwcUrlFor(1));
+  await assert.rejects(handle.getBalanceSats());
+  assert.equal(closed, 1);
+  assert.equal(await handle.getBalanceSats(), 3);
+  assert.equal(created, 2);
+});
