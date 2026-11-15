@@ -517,6 +517,18 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Entra tenant and app client id used to validate MSAL idTokens
 | Portal backend
 
+| `ZAPLIE_ALLOWED_TENANTS`
+| Entra tenant ids whose tokens the portal accepts, comma-separated. Default:
+  `AAD_TENANT_ID` only. Any other tenant is refused even with a valid
+  signature. Admitting an organisation is a manual step:
+  `docs/MULTI_TENANT.adoc`
+| Portal backend
+
+| `ZAPLIE_PLATFORM_TENANT_ID`
+| The only tenant whose `Zaplie.PlatformOperator` role counts (KnowAll's).
+  Default: `AAD_TENANT_ID`
+| Portal backend
+
 | `PORTAL_URL`
 | Public base URL of the portal, used in identity/OAuth redirect flows. The
   GitHub callbacks (App manifest and identity OAuth) are registered on its

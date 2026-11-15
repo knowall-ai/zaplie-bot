@@ -57,6 +57,14 @@ app.get('/healthz', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Every /api request runs as one organisation (tenantMiddleware.js): stores,
+// settings and admin checks below all resolve to the caller's own tenant.
+const { requireHomeTenant, tenantMiddleware } = require('./tenantMiddleware');
+app.use('/api', tenantMiddleware);
+
+// The organisation's own view and "Set up your organisation".
+app.use('/api/tenant', require('./tenantRoutes'));
+
 // All browser access to wallets goes through this authenticated same-origin
 // gateway; wallet connections stay in the Node process. /api/lnbits is the
 // old path, kept so a portal tab loaded before a deploy keeps working.
@@ -72,19 +80,21 @@ app.use('/api/directory', require('./directoryRoutes'));
 // Mounted before the generic authMiddleware below: its user-facing routes
 // (authorize-url, mine) authenticate with a real MSAL token, not the
 // shared backend token, and /resolve applies authMiddleware itself.
-app.use('/api/identities', identityRoutes);
+// Home organisation only: the GitHub App is one per deployment, and GitHub's
+// browser callbacks carry no token, so they always land in the home tenant.
+app.use('/api/identities', requireHomeTenant, identityRoutes);
 
 // Same reason: user-facing routes here authenticate with a real MSAL token
 // (admin writes additionally require the Zaplie.Admin app role), and
 // /connections/github/setup is GitHub's post-install browser redirect.
-app.use('/api/connections', require('./connectionsRoutes'));
+app.use('/api/connections', requireHomeTenant, require('./connectionsRoutes'));
 app.use('/api/webhook-keys', require('./webhookKeysRoutes'));
 app.use('/api/automations-stats', require('./automationsStatsRoutes'));
 app.use('/api/reports', require('./reportsRoutes'));
 
 // Same reason: the manifest/callback routes are the admin's browser round trip
 // to GitHub and apply their own admin check, not the shared backend token.
-app.use('/api/setup', require('./setupRoutes'));
+app.use('/api/setup', requireHomeTenant, require('./setupRoutes'));
 
 const { requireAdmin } = require('./adminAuth');
 const { requireSignedInOrBot } = require('./readAuth');
@@ -93,12 +103,13 @@ const { requireSignedInOrBot } = require('./readAuth');
 // outside the deployment tree: ZAPLIE_DATA_DIR points at a durable directory
 // (for example /home/data/zaplie on Linux App Service). Unset - the local
 // development default - keeps the store next to the code as before.
-const dataFilePath = dataPath('data.json');
+// Per organisation: resolved on every read and write (dataPaths.js).
+const dataFilePath = () => dataPath('data.json');
 
 // Function to read data from the JSON file
 const readData = () => {
   try {
-    const data = fs.readFileSync(dataFilePath, 'utf8');
+    const data = fs.readFileSync(dataFilePath(), 'utf8');
     return JSON.parse(data);
   } catch (error) {
     console.error('Error reading data file:', error);
@@ -114,7 +125,7 @@ const readAllowanceData = readDataStrict(dataFilePath);
 // Function to write data to the JSON file
 const writeData = (data) => {
   try {
-    writeJsonSecure(dataFilePath, data);
+    writeJsonSecure(dataFilePath(), data);
     return true;
   } catch (error) {
     console.error('Error writing data file:', error);
@@ -374,8 +385,11 @@ app.post('/api/reward-name', requireAdmin, (req, res) => {
 // Mounted before the shared-token middleware for the same reason as the
 // config routes above: reads take an MSAL token or the bot's, writes an admin's.
 const allowanceStore = createAllowanceSyncStore();
+// Home organisation only: the Fund wallet key and the sync state are the
+// deployment's, so another organisation's admin must never run a sync.
 app.use(
   '/api/allowances',
+  requireHomeTenant,
   createAllowanceRouter({ readData: readAllowanceData, writeData, store: allowanceStore }),
 );
 

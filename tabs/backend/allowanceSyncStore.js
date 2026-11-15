@@ -14,7 +14,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { dataPath } = require('./dataPaths');
+const { globalDataPath } = require('./dataPaths');
 const { ensureSecureDir, writeJsonSecure } = require('./secureJsonStore');
 
 const STATE_FILE = 'allowance-sync.json';
@@ -29,8 +29,9 @@ const isPlainObject = (value) =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const createAllowanceSyncStore = ({
-  statePath = dataPath(STATE_FILE),
-  auditPath = dataPath(AUDIT_FILE),
+  // The allowance sync runs for the home tenant only (docs/MULTI_TENANT.adoc).
+  statePath = globalDataPath(STATE_FILE),
+  auditPath = globalDataPath(AUDIT_FILE),
   lockPath = path.join(path.dirname(statePath), LOCK_FILE),
   staleMs = LOCK_STALE_MS,
   clock = () => Date.now(),

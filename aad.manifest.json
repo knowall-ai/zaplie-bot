@@ -24,6 +24,16 @@
             "id": "a27f71cd-3ed2-4904-94ae-da78358f5936",
             "isEnabled": true,
             "value": "Zaplie.User"
+        },
+        {
+            "allowedMemberTypes": [
+                "User"
+            ],
+            "description": "KnowAll platform support: read-only access to other organisations' admin views. Honoured only in KnowAll's own tenant.",
+            "displayName": "Zaplie Platform Operator",
+            "id": "e70bb481-575c-43cd-b11d-2dd2f36f0384",
+            "isEnabled": true,
+            "value": "Zaplie.PlatformOperator"
         }
     ],
     "optionalClaims": {
@@ -118,13 +128,13 @@
             ]
         }
     ],
-    "identifierUris":[
+    "identifierUris": [
         "api://botid-${{BOT_ID}}"
     ],
-    "replyUrlsWithType":[
+    "replyUrlsWithType": [
         {
-          "url": "https://${{BOT_DOMAIN}}/auth-end.html",
-          "type": "Web"
+            "url": "https://${{BOT_DOMAIN}}/auth-end.html",
+            "type": "Web"
         },
         {
             "url": "${{TAB_ENDPOINT}}",
@@ -138,5 +148,6 @@
             "url": "${{TAB_ENDPOINT}}/login",
             "type": "Spa"
         }
-    ]
+    ],
+    "groupMembershipClaims": "DirectoryRole"
 }

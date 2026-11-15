@@ -87,6 +87,14 @@ deployable components in one repository:
   resolved server-side from their Entra id to their registered Lightning
   address; never a client-supplied invoice or address, never the sender.
   `functions/services/lnbitsService.ts` is legacy (#438).
+- **Organisations (tenants)** (`docs/MULTI_TENANT.adoc`): every `/api`
+  request runs as one Entra tenant (`tabs/backend/tenantMiddleware.js`,
+  `tenantContext.js`). Stores resolve their files per tenant through
+  `dataPath` (home tenant: the data root; others: `tenants/<tid>/`); use
+  `globalDataPath` only for deployment-wide files. Tokens are accepted only
+  from `ZAPLIE_ALLOWED_TENANTS` (default the home tenant). Admin checks are
+  tenant-scoped (`adminRoles.js`: Zaplie.Admin or Global Administrator;
+  Zaplie.PlatformOperator only from KnowAll's tenant, read-only).
 - **Tabs app**: routes `/feed`, `/users`, `/rewards`, `/wallet`, `/settings`
   (MSAL-guarded via `RequireAuth`, which also adds the signed-in person to
   the directory through `POST /api/wallet/users/me` on first use outside

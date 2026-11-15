@@ -323,6 +323,12 @@
   font-weight: 400;
 }
 
+.actionCell {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .cardToolbar {
   width: 100%;
   display: flex;

@@ -5,9 +5,12 @@
 // the Fund wallet. The config routes keep their lax reader in server.js.
 const fs = require('fs');
 
+// `filePath` may be a function, resolved on every read, so the path follows
+// the current organisation (dataPaths.js).
 const readDataStrict = filePath => () => {
+  const resolved = typeof filePath === 'function' ? filePath() : filePath;
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return JSON.parse(fs.readFileSync(resolved, 'utf8'));
   } catch (error) {
     if (error.code === 'ENOENT') return {};
     throw error;

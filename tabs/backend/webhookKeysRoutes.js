@@ -12,12 +12,13 @@ const { writeJsonSecure } = require('./secureJsonStore');
 
 const router = express.Router();
 
-const STORE_PATH = dataPath('webhook-keys.json');
+// Resolved per call: each organisation has its own file (dataPaths.js).
+const storePath = () => dataPath('webhook-keys.json');
 
 const readStore = () => {
   let raw;
   try {
-    raw = fs.readFileSync(STORE_PATH, 'utf8');
+    raw = fs.readFileSync(storePath(), 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') {
       return { keys: [] };
@@ -32,7 +33,7 @@ const readStore = () => {
 };
 
 const writeStore = store => {
-  writeJsonSecure(STORE_PATH, store);
+  writeJsonSecure(storePath(), store);
 };
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');

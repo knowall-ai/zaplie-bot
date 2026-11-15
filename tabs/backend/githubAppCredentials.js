@@ -3,10 +3,11 @@
 // only. This module is just the store: githubAppConfig.js chooses between
 // these and the GITHUB_* env vars (env wins when set).
 const fs = require('fs');
-const { dataPath } = require('./dataPaths');
+const { globalDataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = dataPath('github-app-credentials.json');
+// One per deployment, shared by every organisation.
+const STORE_PATH = globalDataPath('github-app-credentials.json');
 
 const getCredentials = () => {
   if (!fs.existsSync(STORE_PATH)) {
