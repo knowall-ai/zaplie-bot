@@ -2,11 +2,12 @@
 // Encrypts LNbits wallet keys before they are written to the people store.
 //
 // AES-256-GCM with a 32-byte key from ZAPLIE_STORE_KEY (64 hex characters).
-// When the variable is unset the key is generated once and kept in
-// secrets.json, the same fallback every other internal secret uses
-// (secretsStore.js). That keeps local development zero-config, but it puts the
-// key beside the data, so production sets ZAPLIE_STORE_KEY in the app settings
-// (ideally a Key Vault reference) and the store on disk is then useless alone.
+// In local development an unset variable falls back to a key generated once
+// into secrets.json (secretsStore.js), which keeps it zero-config. That puts
+// the key beside the data, so a deployed backend refuses to start a store
+// without ZAPLIE_STORE_KEY rather than fall back: the wallet keys would be
+// encrypted in name only, and setting the variable later would orphan every
+// key already sealed with the generated one.
 const crypto = require('crypto');
 const { getOrCreateSecret } = require('./secretsStore');
 
@@ -22,7 +23,17 @@ class KeyCipherError extends Error {
   }
 }
 
+// NODE_ENV=production, or any Azure App Service instance (WEBSITE_SITE_NAME is
+// set by the platform, whatever NODE_ENV says).
+const isDeployed = (env = process.env) =>
+  env.NODE_ENV === 'production' || Boolean(env.WEBSITE_SITE_NAME);
+
 const loadKey = () => {
+  if (isDeployed() && !String(process.env[KEY_ENV] || '').trim()) {
+    throw new KeyCipherError(
+      `${KEY_ENV} must be set in a deployed environment (openssl rand -hex 32, as a Key Vault reference)`,
+    );
+  }
   const hex = String(getOrCreateSecret(KEY_ENV, 32)).trim();
   if (!KEY_PATTERN.test(hex)) {
     throw new KeyCipherError(`${KEY_ENV} must be 64 hexadecimal characters (openssl rand -hex 32)`);

@@ -12,7 +12,7 @@
 //
 // Nothing here creates LNbits users or mints balance: an opening allowance is
 // a payment from the Fund wallet (the allowance extension), never a top-up.
-const { lnbitsApiToken, publicLnbitsHost } = require('./lnbitsConfig');
+const { lnbitsApiToken, publicLnbitsHost, treasuryInkey } = require('./lnbitsConfig');
 const { LnbitsGatewayError, lnbitsRequest } = require('./lnbitsClient');
 const { LnurlPayError, fetchPayRequest, requestInvoice } = require('./lnurlPay');
 const { normalizeOid, peopleStore: defaultPeopleStore } = require('./peopleStore');
@@ -228,8 +228,18 @@ const createWalletDirectory = ({
         if (info?.id || info?.adminkey) {
           throw fail('that is an admin key; paste the invoice (read) key instead', 400);
         }
-        const serviceWallets = await listServiceWallets();
-        if (serviceWallets?.some((wallet) => wallet.inkey === key)) {
+        // Every Zaplie wallet a zap could be routed back into. The directory
+        // and the Treasury setting are checked first because they do not
+        // depend on the token: LNbits masks the keys in GET /api/v1/wallets
+        // unless the ACL also grants write on that path, so the listing alone
+        // would let any such key through.
+        const heldByZaplie =
+          key === treasuryInkey(env) ||
+          store()
+            .list()
+            .some((other) => other.allowance?.inkey === key);
+        const serviceWallets = heldByZaplie ? null : await listServiceWallets();
+        if (heldByZaplie || serviceWallets?.some((wallet) => wallet.inkey === key)) {
           throw fail('that wallet belongs to Zaplie; register your own Private wallet', 400);
         }
         nextInkey = key;
