@@ -20,8 +20,6 @@ const jsonResponse = (body, status = 200) => ({
 
 const installFetch = (handler) => {
   process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-  process.env.LNBITS_USERNAME = 'service';
-  process.env.LNBITS_PASSWORD = 'secret';
   resetCachesForTests();
   const calls = [];
   global.fetch = async (url, init = {}) => {

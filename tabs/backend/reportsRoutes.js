@@ -2,32 +2,25 @@
 // Aggregated series for the Reports page. Recognition zaps are outgoing
 // payments from Allowance wallets; automated payouts are outgoing payments
 // from the treasury. Shared org view, any authenticated tenant user.
+//
+// Allowance wallets come from the people directory and are read with their
+// invoice keys; the treasury is read with ZAPLIE_TREASURY_INKEY. Nothing here
+// logs in to LNbits or lists its users.
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
-const {
-  REQUEST_TIMEOUT_MS,
-  requireLnbitsConfig,
-  getLnbitsToken,
-  lnbitsGet,
-} = require('./lnbitsAdmin');
+const { treasuryInkey } = require('./lnbitsConfig');
+const { lnbitsRequest } = require('./lnbitsClient');
+const { peopleStore } = require('./peopleStore');
 
 const router = express.Router();
 
-const TREASURY_USERNAME = process.env.TREASURY_USERNAME || 'automation';
 const WEEKS = 8;
 
 const paymentEpoch = (time) =>
   typeof time === 'number' ? time : Date.parse(time) / 1000;
 
-const walletOutgoingIntoBuckets = async (config, wallet, nowTs, buckets, totals) => {
-  const response = await fetch(`${config.nodeUrl}/api/v1/payments?limit=1000`, {
-    headers: { 'X-Api-Key': wallet.inkey },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`payments fetch failed (status: ${response.status})`);
-  }
-  const list = await response.json();
+const walletOutgoingIntoBuckets = async (walletKey, nowTs, buckets, totals) => {
+  const list = await lnbitsRequest('/api/v1/payments?limit=1000', { walletKey });
   for (const payment of Array.isArray(list) ? list : []) {
     if (payment.amount >= 0 || payment.memo?.includes('Weekly Allowance cleared')) {
       continue;
@@ -57,10 +50,6 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const config = requireLnbitsConfig();
-    const accessToken = await getLnbitsToken(config);
-    const usersBody = await lnbitsGet(`${config.nodeUrl}/users/api/v1/user`, accessToken);
-    const rawUsers = Array.isArray(usersBody?.data) ? usersBody.data : [];
     const nowTs = Math.floor(Date.now() / 1000);
 
     const zapsWeekly = new Array(WEEKS).fill(0);
@@ -68,24 +57,19 @@ router.get('/', async (req, res) => {
     const zapTotals = { sats: 0, count: 0 };
     const automationTotals = { sats: 0, count: 0 };
 
+    const allowanceKeys = peopleStore()
+      .list()
+      .map((person) => person.allowance?.inkey)
+      .filter(Boolean);
     await Promise.all(
-      rawUsers.map(async (user) => {
-        const wallets = await lnbitsGet(
-          `${config.nodeUrl}/users/api/v1/user/${user.id}/wallet`,
-          accessToken,
-        );
-        for (const wallet of wallets) {
-          if (wallet.deleted === true) {
-            continue;
-          }
-          if (user.username === TREASURY_USERNAME) {
-            await walletOutgoingIntoBuckets(config, wallet, nowTs, automationWeekly, automationTotals);
-          } else if (wallet.name === 'Allowance') {
-            await walletOutgoingIntoBuckets(config, wallet, nowTs, zapsWeekly, zapTotals);
-          }
-        }
-      }),
+      allowanceKeys.map((walletKey) =>
+        walletOutgoingIntoBuckets(walletKey, nowTs, zapsWeekly, zapTotals),
+      ),
     );
+    const treasuryKey = treasuryInkey();
+    if (treasuryKey) {
+      await walletOutgoingIntoBuckets(treasuryKey, nowTs, automationWeekly, automationTotals);
+    }
 
     res.json({
       weeks: WEEKS,
@@ -95,10 +79,13 @@ router.get('/', async (req, res) => {
       totalZapCount: zapTotals.count,
       totalAutomatedSats: Math.round(automationTotals.sats),
       totalAutomatedCount: automationTotals.count,
+      // False when ZAPLIE_TREASURY_INKEY is unset: the automation series is
+      // then unknown, not zero.
+      treasuryConfigured: Boolean(treasuryKey),
     });
   } catch (error) {
     console.error('Reports aggregation failed:', error.message);
-    res.status(502).json({ error: error.message });
+    res.status(502).json({ error: 'reports are unavailable' });
   }
 });
 

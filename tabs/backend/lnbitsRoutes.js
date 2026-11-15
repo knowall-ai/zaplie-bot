@@ -83,7 +83,7 @@ const createLnbitsRouter = ({
         oid: claims.oid,
         roles: claims.roles || [],
         // Profile claims from the same verified token, used only to label a
-        // newly provisioned LNbits user; authorization never reads them.
+        // newly provisioned person; authorization never reads them.
         name: typeof claims.name === 'string' ? claims.name : undefined,
         email:
           typeof claims.preferred_username === 'string'
@@ -110,9 +110,10 @@ const createLnbitsRouter = ({
   });
 
   // Registered before assertCaller on purpose: this is how a signed-in
-  // person who has no LNbits user yet (nobody outside Teams had one) gets
-  // one. It only ever acts on the verified token's own oid, creates nothing
-  // that already exists and moves no sats.
+  // person who is not in the Zaplie directory yet gets added (and, when
+  // LNBITS_API_TOKEN is configured, gets an Allowance wallet under
+  // zaplie.service). It only ever acts on the verified token's own oid,
+  // creates nothing that already exists and moves no sats.
   //
   // It serves the same people the bot serves (src/services/memberGate.ts,
   // mirrored in memberGate.js): members of this tenant, and guests listed in
@@ -159,7 +160,8 @@ const createLnbitsRouter = ({
 
   // Directory, feed, leaderboard, rewards and per-wallet payment history are
   // intentionally tenant-visible. Every other wallet route resolves the wallet
-  // through the caller's own LNbits user, so a wallet id alone grants nothing.
+  // through the caller's own directory entry, so a wallet id alone grants
+  // nothing.
 
   const asyncRoute = (handler) => async (req, res, next) => {
     try {

@@ -448,18 +448,18 @@ test('planner output never contains a key', () => {
   assert.equal(/adminkey|inkey|X-Api-Key/i.test(text), false);
 });
 
-test('peopleFromUsers keeps oid users and flags duplicate LNbits users', () => {
+test('peopleFromUsers keeps directory entries keyed by Entra id and flags duplicates', () => {
   const people = peopleFromUsers([
-    { id: 'u1', external_id: OID_A.toUpperCase(), extra: { display_name: 'Ada' } },
-    { id: 'u2', external_id: OID_A },
+    { id: OID_A, external_id: OID_A.toUpperCase(), extra: { display_name: 'Ada' } },
+    { id: OID_A, external_id: OID_A },
     { id: 'u3', external_id: 'not-an-oid' },
-    { id: 'u4', extra: JSON.stringify({ aadObjectId: OID_B }) },
+    { id: OID_B, external_id: OID_B },
   ]);
   assert.deepEqual(
     people.map((p) => [p.oid, p.userId, p.displayName, Boolean(p.duplicate)]),
     [
-      [OID_A, 'u1', 'Ada', true],
-      [OID_B, 'u4', OID_B, false],
+      [OID_A, OID_A, 'Ada', true],
+      [OID_B, OID_B, OID_B, false],
     ],
   );
 });

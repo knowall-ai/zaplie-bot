@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           test -d tabs/src || { echo '::error::tabs/src not found, cannot verify the portal sources'; exit 1; }
-          if grep -REl 'process\.env\.REACT_APP_LNBITS_(ADMINKEY|PASSWORD)' tabs/src; then
+          if grep -REl 'process\.env\.REACT_APP_(LNBITS_(ADMINKEY|PASSWORD|USERNAME|API_TOKEN)|ZAPLIE_(TREASURY|STORE)|ALLOWANCE_FUND)' tabs/src; then
             echo '::error::Portal sources read LNbits admin credentials in browser code. Move privileged LNbits calls behind the backend.'
             exit 1
           fi
@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           test -d tabs/build || { echo '::error::No built bundle found to scan'; exit 1; }
-          if grep -RlE 'REACT_APP_LNBITS_(ADMINKEY|PASSWORD)|LNBITS_ADMINKEY|LNBITS_PASSWORD' tabs/build; then
+          if grep -RlE 'REACT_APP_LNBITS_(ADMINKEY|PASSWORD)|LNBITS_(ADMINKEY|PASSWORD|API_TOKEN)|ZAPLIE_TREASURY_(ADMINKEY|INKEY)|REWARDS_TREASURY_ADMINKEY|ALLOWANCE_FUND_ADMINKEY|ZAPLIE_STORE_KEY' tabs/build; then
             echo '::error::LNbits admin credential references found in the built portal bundle. Move privileged LNbits calls behind the backend before deploying.'
             exit 1
           fi
@@ -76,7 +76,8 @@ jobs:
             tabs/backend/secrets.json \
             tabs/backend/webhook-keys.json \
             tabs/backend/github-app-credentials.json \
-            tabs/backend/lnbits-zap-idempotency.json
+            tabs/backend/lnbits-zap-idempotency.json \
+            tabs/backend/people.json
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v7

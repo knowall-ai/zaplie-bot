@@ -1,7 +1,7 @@
 // Reconciles every person's weekly allowance schedule in the LNbits allowance
 // extension with the admin's policy.
 //
-//   gather  -> read LNbits users, Allowance wallets, pay links, the Fund
+//   gather  -> read the Zaplie people directory, Allowance wallets, pay links, the Fund
 //              wallet(s) and the extension's schedules
 //   plan    -> planAllowanceSync, pure: the actions and a summary
 //   apply   -> applyPlan: deletes first, then per person the pay link and
@@ -18,12 +18,11 @@
 // - Zaplie never pays: the Fund key only reaches the extension APIs.
 const {
   createWalletPayLink,
-  readRawUserPages,
-  listUserWalletsWithKeys,
+  listDirectoryUsers,
+  listPersonWalletsWithKeys,
   listWalletPayLinksWithKey,
   updateWalletPayLink,
 } = require('./lnbitsGatewayService');
-const { parseExtra } = require('./lnbitsUserDirectory');
 const {
   isPolicyActive,
   payLinkRange,
@@ -135,7 +134,7 @@ const oldestFirst = (a, b) =>
  * @param input.allowances every schedule the Fund key(s) can see
  * @param input.fund { configured, wallets: [{ id, name, balanceSats }] }
  * @param input.state the sync store (byPerson: what Zaplie last wrote)
- * @param input.peopleComplete false when the LNbits user list is provably
+ * @param input.peopleComplete false when the people directory is provably
  *   short of its announced total: nobody missing from it is a leaver then
  * @param input.allowMassDelete the admin's explicit consent to delete more
  *   leavers than the mass-delete guard allows
@@ -301,7 +300,7 @@ const planAllowanceSync = ({
   if (leaverDeletes > massDeleteLimit && !allowMassDelete) {
     blockers.push({
       code: 'mass-delete',
-      message: `${leaverDeletes} leaver schedules would be deleted, more than ${massDeleteLimit} (max of ${MASS_DELETE_MIN} and 10% of ${primaryByOid.size}); check the LNbits user list, or confirm with allowMassDelete`,
+      message: `${leaverDeletes} leaver schedules would be deleted, more than ${massDeleteLimit} (max of ${MASS_DELETE_MIN} and 10% of ${primaryByOid.size}); check the people directory, or confirm with allowMassDelete`,
     });
   }
 
@@ -754,12 +753,12 @@ const applyPlan = async (
 
 const ALLOWANCE_WALLET = 'allowance';
 
-/** LNbits users linked to an Entra object id, with their LNbits user id. */
+/** Directory entries keyed by Entra object id (gateway listDirectoryUsers). */
 const peopleFromUsers = (users) => {
   const byOid = new Map();
   for (const user of users) {
-    const extra = parseExtra(user);
-    const candidate = user?.external_id || user?.aadObjectId || extra.aadObjectId;
+    const extra = user?.extra && typeof user.extra === 'object' ? user.extra : {};
+    const candidate = user?.external_id;
     if (typeof candidate !== 'string') continue;
     const oid = candidate.toLowerCase();
     if (!OID_PATTERN.test(oid)) continue;
@@ -796,8 +795,8 @@ const gatherSnapshot = async ({
   policy,
   env = process.env,
   concurrency = DEFAULT_CONCURRENCY,
-  listUsers = readRawUserPages,
-  listWallets = listUserWalletsWithKeys,
+  listUsers = listDirectoryUsers,
+  listWallets = listPersonWalletsWithKeys,
   listLinks = listWalletPayLinksWithKey,
   clientFactory = createAllowanceExtensionClient,
 }) => {
@@ -844,7 +843,7 @@ const gatherSnapshot = async ({
   const listed = await listUsers();
   const users = listed?.users;
   if (!Array.isArray(users)) {
-    throw new AllowanceSyncError('the LNbits user list is malformed', 502, 'users-unreadable');
+    throw new AllowanceSyncError('the people directory is malformed', 502, 'users-unreadable');
   }
   const announced = Number.isSafeInteger(listed.total) ? listed.total : null;
   const peopleComplete =

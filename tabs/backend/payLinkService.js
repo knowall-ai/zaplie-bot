@@ -7,6 +7,7 @@ const {
   listWalletPayLinksWithKey,
   updateWalletPayLink,
 } = require('./lnbitsGatewayService');
+const { publicLnbitsHost } = require('./lnbitsConfig');
 
 const DESCRIPTION_PREFIX = 'Zaplie allowance';
 const MAX_DESCRIPTION_NAME = 80;
@@ -21,23 +22,6 @@ const allowanceDescription = (displayName) => {
     .trim()
     .slice(0, MAX_DESCRIPTION_NAME);
   return name ? `${DESCRIPTION_PREFIX} (${name})` : DESCRIPTION_PREFIX;
-};
-
-/**
- * The host Lightning addresses are served on: LNBITS_PUBLIC_HOST, else the
- * host of LNBITS_NODE_URL. The extension pays over public HTTPS, so this must
- * be the public name (bank.knowall.ai), not an internal address.
- */
-const publicLnbitsHost = (env = process.env) => {
-  const configured = String(env.LNBITS_PUBLIC_HOST || '').trim();
-  if (configured) {
-    return configured.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
-  }
-  try {
-    return new URL(env.LNBITS_NODE_URL).host.toLowerCase();
-  } catch (_error) {
-    return '';
-  }
 };
 
 /** The pay link fields Zaplie owns for one person. */

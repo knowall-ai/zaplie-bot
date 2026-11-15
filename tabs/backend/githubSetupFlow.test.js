@@ -18,9 +18,9 @@ process.env.TAB_BACKEND_TOKEN = 'test-internal-token';
 process.env.AAD_TENANT_ID = 'test-tenant';
 process.env.AAD_CLIENT_ID = 'test-client';
 process.env.PORTAL_URL = 'https://portal.example.com/settings';
-process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-process.env.LNBITS_USERNAME = 'zaplie';
-process.env.LNBITS_PASSWORD = 'lnbits-password';
+process.env.LNBITS_URL = 'https://lnbits.test';
+process.env.ZAPLIE_STORE_KEY = 'b'.repeat(64);
+const USER_OID = '00000000-0000-4000-8000-0000000000aa';
 const GITHUB_ENV = [
   'GITHUB_APP_ID',
   'GITHUB_APP_PRIVATE_KEY_PATH',
@@ -46,7 +46,7 @@ const claimsFor = token => {
     throw new Error('invalid token');
   }
   return {
-    oid: token === ADMIN_TOKEN ? 'oid-admin' : 'oid-user',
+    oid: token === ADMIN_TOKEN ? 'oid-admin' : USER_OID,
     roles: token === ADMIN_TOKEN ? ['Zaplie.Admin'] : [],
   };
 };
@@ -183,14 +183,6 @@ const stub = async (input, options = {}) => {
       ],
     });
   }
-  if (url === 'https://lnbits.test/api/v1/auth') {
-    return json(200, { access_token: 'lnbits-admin' });
-  }
-  if (url === 'https://lnbits.test/users/api/v1/user') {
-    return json(200, {
-      data: [{ id: 'lnbits-user-1', external_id: 'oid-user' }],
-    });
-  }
   throw new Error(`unexpected outbound call: ${url}`);
 };
 
@@ -201,6 +193,8 @@ const logged = [];
 const realConsole = {};
 
 before(async () => {
+  // The linked person is in Zaplie's own directory; LNbits is never asked.
+  require('./peopleStore').peopleStore().upsertProfile({ oid: USER_OID, displayName: 'User' });
   globalThis.fetch = stub;
   for (const level of ['log', 'warn', 'error']) {
     realConsole[level] = console[level];
@@ -468,10 +462,7 @@ test('setup -> install -> owner-checked connection -> identity link, with no GIT
     'test-internal-token',
   );
   assert.equal(resolved.status, 200);
-  assert.deepEqual(resolved.body, {
-    personAad: 'oid-user',
-    lnbitsUserId: 'lnbits-user-1',
-  });
+  assert.deepEqual(resolved.body, { personAad: USER_OID });
 });
 
 test('an install link opened in another browser saves nothing (login CSRF)', async () => {

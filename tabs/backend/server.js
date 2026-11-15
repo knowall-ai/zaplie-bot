@@ -61,6 +61,11 @@ app.get('/healthz', (_req, res) => {
 // gateway. Wallet and service-account keys stay in the Node process.
 app.use('/api/lnbits', require('./lnbitsRoutes'));
 
+// Zaplie's people directory: the signed-in person's receive target (MSAL),
+// operator wallet linking (Zaplie.Admin) and the bot's internal calls (shared
+// token). Mounted before the generic authMiddleware: each area applies its own.
+app.use('/api/directory', require('./directoryRoutes'));
+
 // Mounted before the generic authMiddleware below: its user-facing routes
 // (authorize-url, mine) authenticate with a real MSAL token, not the
 // shared backend token, and /resolve applies authMiddleware itself.
