@@ -65,6 +65,12 @@ const button = (label: string) =>
     candidate => candidate.textContent === label,
   )!;
 
+beforeAll(() => {
+  (
+    globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   container = document.createElement('div');
@@ -85,7 +91,10 @@ describe('ReceiveTargetCard', () => {
 
     expect(
       container.querySelector('[data-testid="receive-status"]')?.textContent,
-    ).toContain('not set up');
+    ).toMatch(/not set up/i);
+    expect(container.querySelector('[role="note"]')?.textContent).toContain(
+      "Colleagues can't zap you yet",
+    );
     expect(
       container.querySelector('[data-testid="allowance-status"]')?.textContent,
     ).toContain('2,100 sats');
@@ -94,6 +103,22 @@ describe('ReceiveTargetCard', () => {
     );
     // There is no invoice-key path any more: an address is the only target.
     expect(container.querySelector('#receive-invoice-key')).toBe(null);
+  });
+
+  test("the placeholder shows this deployment's address format", async () => {
+    mockGetMyDirectoryEntry.mockResolvedValue(
+      entry({ receiveDomains: ['bank.knowall.ai'] }),
+    );
+
+    await render();
+
+    const input =
+      container.querySelector<HTMLInputElement>('#receive-address')!;
+    expect(input.placeholder).toBe('name@bank.knowall.ai');
+    expect(input.getAttribute('aria-describedby')).toBe('receive-address-help');
+    expect(container.textContent).toContain(
+      'Accepted here: name@bank.knowall.ai.',
+    );
   });
 
   test('saves a Lightning address and reloads', async () => {
