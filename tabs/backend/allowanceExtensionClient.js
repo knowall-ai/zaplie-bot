@@ -7,7 +7,7 @@
 // delete), health, and the read-only wallet endpoint. Nothing else under the
 // extension (not `.../retry`, which pays, nor `test-scheduler`), and never
 // /api/v1/payments. allowanceExtensionClient.test.js holds the allowlist.
-const { lnbitsRequest, maskKeys } = require('./lnbitsGatewayService');
+const { lnbitsRequest, maskKeys } = require('./lnbitsClient');
 
 const FUND_KEY_ENV = 'ALLOWANCE_FUND_ADMINKEY';
 const ALLOWANCE_ID_SOURCE = '[A-Za-z0-9_-]{1,128}';

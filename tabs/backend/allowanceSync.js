@@ -16,7 +16,7 @@
 // - apply must echo the preview's total per period, and is refused while a
 //   Fund wallet holds less than one period unless explicitly overridden;
 // - Zaplie never pays: the Fund key only reaches the extension APIs.
-const { listDirectoryUsers, listPersonWallets } = require('./lnbitsGatewayService');
+const { listDirectoryUsers, listPersonWallets } = require('./walletGateway');
 
 // Zaplie holds no Allowance wallet key since the move to NWC: each wallet's
 // pay link is created in LNbits by an operator (or by automatic provisioning)

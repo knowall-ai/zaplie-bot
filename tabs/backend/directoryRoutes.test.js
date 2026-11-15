@@ -34,6 +34,8 @@ const directory = createWalletDirectory({
 const zaps = [];
 const rewards = [];
 let nextZapError = null;
+const provisionerCalls = [];
+const TOKEN = 'lnbits-acl-token-short-lived-0123456789';
 
 // Bearer <oid> stands in for a verified MSAL token; "admin" for Zaplie.Admin.
 const requireMsalOid = async (req, res) => {
@@ -77,6 +79,19 @@ before(async () => {
         rewards.push(input);
         return { payment_hash: 'cd'.repeat(32) };
       },
+      // A fake provisioner over the fake NWC wallets: what a real one returns.
+      createProvisioner: (kind, { token }) => {
+        provisionerCalls.push({ kind, tokenSeen: token === TOKEN });
+        if (kind !== 'lnbits') throw Object.assign(new Error('unknown provisioner'), { status: 400, expose: true });
+        return {
+          id: kind,
+          provisionAllowance: async (person) => {
+            const seed = `prov-${person.oid}`;
+            fake.add(nwcUrlFor(seed));
+            return { nwcUrl: nwcUrlFor(seed), lightningAddress: `zaplie-${person.oid.slice(0, 8)}@bank.example` };
+          },
+        };
+      },
     }),
   );
   await new Promise((resolve) => {
@@ -116,7 +131,6 @@ test('the signed-in person sees their own entry and balance, never the connectio
   assert.equal(response.body.allowanceWalletId, 'nwc_me');
   assert.equal(response.body.allowanceSats, 12);
   assert.equal(response.body.budget, null);
-  assert.equal(response.body.provisioning, 'operator');
   noSecret(response.text);
 });
 
@@ -154,7 +168,7 @@ test('admins link an Allowance wallet by NWC connection; it is never returned', 
     (await call('PUT', `/admin/people/${PEER}/allowance-wallet`, 'Bearer admin', { adminkey: 'a'.repeat(32), inkey: 'b'.repeat(32) })).status,
     400,
   );
-  assert.equal((await call('POST', `/admin/people/${PEER}/provision`, 'Bearer admin')).status, 409);
+  assert.deepEqual(listed.body.provisioners, ['lnbits']);
 });
 
 test('internal routes take only the shared token and return no credential', async () => {
@@ -236,4 +250,40 @@ test('the bot pays a reward and reads the zap records', async () => {
   const listed = await call('GET', '/internal/zaps?since=4000', 'internal-test-token');
   assert.equal(listed.status, 200);
   assert.deepEqual(listed.body.zaps.map((zap) => zap.paymentHash), ['ef'.repeat(32)]);
+});
+
+test('admins provision people with a token used for that request only', async () => {
+  const NEW = '22222222-3333-4444-8555-666666666666';
+  const logged = [];
+  const originals = { log: console.log, warn: console.warn, error: console.error };
+  for (const level of ['log', 'warn', 'error']) {
+    console[level] = (...args) => logged.push(args.map(String).join(' '));
+  }
+  try {
+    const body = { provisioner: 'lnbits', token: TOKEN, people: [{ oid: NEW, displayName: 'New Person' }, { oid: ME }], budgetSats: 25000, period: 'weekly' };
+    assert.equal((await call('POST', '/admin/people/provision', `Bearer ${ME}`, body)).status, 403);
+
+    const response = await call('POST', '/admin/people/provision', 'Bearer admin', body);
+    assert.equal(response.status, 200);
+    assert.deepEqual(
+      response.body.results.map((result) => [result.oid, result.status]),
+      [[NEW, 'provisioned'], [ME, 'already-linked']],
+    );
+    assert.equal(response.body.results[0].lightningAddress, 'zaplie-22222222@bank.example');
+    assert.equal(provisionerCalls.at(-1).tokenSeen, true);
+
+    assert.equal((await call('POST', '/admin/people/provision', 'Bearer admin', { ...body, period: 'hourly' })).status, 400);
+    assert.equal((await call('POST', '/admin/people/provision', 'Bearer admin', { ...body, provisioner: 'other' })).status, 400);
+    assert.equal((await call('POST', '/admin/people/provision', 'Bearer admin', { ...body, people: [] })).status, 400);
+
+    // The token never comes back, never reaches a log line and is not on disk.
+    assert.equal(response.text.includes(TOKEN), false);
+    assert.equal(logged.some((line) => line.includes(TOKEN)), false);
+    for (const file of fs.readdirSync(dir)) {
+      assert.equal(fs.readFileSync(path.join(dir, file), 'utf8').includes(TOKEN), false, file);
+    }
+    noSecret(response.text);
+  } finally {
+    Object.assign(console, originals);
+  }
 });

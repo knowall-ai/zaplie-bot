@@ -5,7 +5,7 @@ const path = require('path');
 const test = require('node:test');
 const { createKeyCipher } = require('./keyCipher');
 const { createPeopleStore } = require('./peopleStore');
-const { createWalletDirectory, newNwcKeyPair } = require('./walletDirectory');
+const { createWalletDirectory } = require('./walletDirectory');
 const { LnurlPayError } = require('./lnurlPay');
 const { ALL_METHODS, createFakeNwc, nwcUrlFor } = require('./testSupport/fakeNwc');
 
@@ -121,54 +121,52 @@ test('the Allowance address comes from the connection when not typed, and must b
   );
 });
 
-test('without automatic provisioning a new person waits for an operator and LNbits is not called', async (t) => {
-  const { directory, lnbitsCalls } = harness(t, { env: { ...ENV, LNBITS_API_TOKEN: 'token' } });
+test('a new person waits for an admin; signing in creates nothing in any wallet backend', async (t) => {
+  const { directory, fake } = harness(t, { env: { ...ENV, LNBITS_API_TOKEN: 'token', ZAPLIE_AUTO_PROVISION: 'true' } });
   const result = await directory.ensurePerson({ oid: OID, displayName: 'Ada' });
   assert.equal(result.awaitingOperator, true);
   assert.equal(result.person.allowance, null);
-  assert.deepEqual(lnbitsCalls, []);
+  assert.deepEqual(result.createdWallets, []);
+  assert.deepEqual(fake.calls, []);
 });
 
-test('automatic provisioning creates wallet, pay link and NWC connection, then keeps only the connection', async (t) => {
-  const calls = [];
-  let fake;
-  const env = { ...ENV, LNBITS_API_TOKEN: 'token', ZAPLIE_AUTO_PROVISION: 'true', ALLOWANCE_MAX_AMOUNT_SATS: '5000' };
-  const request = async (route, options = {}) => {
-    calls.push({ route, method: options.method || 'GET', apiToken: options.apiToken, walletKey: options.walletKey, body: options.body });
-    if (route === '/api/v1/wallet') return { id: 'w-new', adminkey: 'a'.repeat(32), inkey: 'b'.repeat(32) };
-    if (route === '/lnurlp/api/v1/links') return { id: 'link-1', username: options.body.username };
-    if (route.startsWith('/nwcprovider/api/v1/nwc/')) return { data: {} };
-    if (route.startsWith('/nwcprovider/api/v1/pairing/')) {
-      fake.add(nwcUrlFor(7));
-      return nwcUrlFor(7);
-    }
-    throw new Error(`unexpected ${route}`);
+test('provisionPeople links what a provisioner made, skips the linked and reports failures', async (t) => {
+  const { directory, fake, store } = harness(t);
+  fake.add(nwcUrlFor(1));
+  await directory.linkAllowanceWallet({ oid: OTHER, nwcUrl: nwcUrlFor(1), lightningAddress: 'zaplie-other@bank.example' });
+  const asked = [];
+  const provisioner = {
+    id: 'fake',
+    provisionAllowance: async (person, options) => {
+      asked.push({ person, options });
+      if (person.displayName === 'Broken') {
+        throw Object.assign(new Error('Creating the pay link: LNbits answered 500'), { expose: true });
+      }
+      fake.add(nwcUrlFor(5));
+      return { nwcUrl: nwcUrlFor(5), lightningAddress: 'zaplie-0f8fad5bd9cb@bank.example' };
+    },
   };
-  const h = harness(t, { env, request });
-  fake = h.fake;
+  const THIRD = '11111111-2222-4333-8444-555555555555';
+  const results = await directory.provisionPeople({
+    provisioner,
+    people: [
+      { oid: OID.toUpperCase(), displayName: 'Ada' },
+      { oid: OTHER },
+      { oid: THIRD, displayName: 'Broken' },
+      { oid: 'not-an-oid' },
+    ],
+    budgetSats: 25000,
+    refreshSeconds: 604800,
+  });
 
-  const [first, second] = await Promise.all([
-    h.directory.ensurePerson({ oid: OID, displayName: 'Ada' }),
-    h.directory.ensurePerson({ oid: OID, displayName: 'Ada' }),
-  ]);
-  assert.equal(first, second);
-  assert.deepEqual(first.createdWallets, ['Allowance']);
-  assert.equal(calls.filter((call) => call.route === '/api/v1/wallet').length, 1);
-  assert.equal(calls[0].apiToken, true);
-  const registration = calls.find((call) => call.route.startsWith('/nwcprovider/api/v1/nwc/'));
-  assert.deepEqual(registration.body.permissions, ['pay', 'invoice', 'lookup', 'history', 'balance', 'info']);
-  assert.equal(registration.body.budgets[0].budget_msats, 5_000_000);
-
-  const stored = JSON.stringify(h.store.get(OID));
-  assert.equal(stored.includes('a'.repeat(32)), false);
-  assert.equal(stored.includes('b'.repeat(32)), false);
-  assert.equal(h.store.get(OID).allowance.lightningAddress, 'zaplie-0f8fad5bd9cb@bank.example');
-});
-
-test('a fresh NWC key pair is a 32-byte secret and its x-only public key', () => {
-  const { secret, pubkey } = newNwcKeyPair();
-  assert.match(secret, /^[0-9a-f]{64}$/);
-  assert.match(pubkey, /^[0-9a-f]{64}$/);
+  assert.deepEqual(results.map((result) => result.status), ['provisioned', 'already-linked', 'failed', 'failed']);
+  assert.equal(results[0].lightningAddress, 'zaplie-0f8fad5bd9cb@bank.example');
+  assert.match(results[2].message, /pay link/);
+  assert.deepEqual(asked[0].options, { budgetSats: 25000, refreshSeconds: 604800 });
+  assert.equal(asked.length, 2);
+  assert.equal(store.get(OID).allowance.source, 'operator');
+  assert.equal(store.get(THIRD), null);
+  assert.equal(JSON.stringify(results).includes('nostr+walletconnect'), false);
 });
 
 test('a receive address is resolved before it is saved; allowance and external addresses are refused', async (t) => {

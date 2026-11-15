@@ -5,14 +5,11 @@
 // own record of each payment (zapRecordStore.js) is what the feed, the
 // leaderboards and the reports read (docs/LNBITS_MIGRATION.adoc).
 const { rewardsStoreInkey } = require('./lnbitsConfig');
-const {
-  LnbitsGatewayError,
-  lnbitsRequest,
-  maskKeys,
-  redactSensitive,
-} = require('./lnbitsClient');
+// lnbitsClient only for the optional rewards store (nostrmarket is LNbits).
+const { lnbitsRequest, maskKeys, redactSensitive } = require('./lnbitsClient');
+const { WalletGatewayError } = require('./walletErrors');
 const { positiveIntFromEnv } = require('./rewardAmounts');
-const { createZapIdempotencyStore } = require('./lnbitsZapIdempotencyStore');
+const { createZapIdempotencyStore } = require('./zapIdempotencyStore');
 const { walletDirectory } = require('./walletDirectory');
 const { normalizeOid } = require('./peopleStore');
 const { NwcPaymentRefused, NwcPaymentUnknown } = require('./nwcWallet');
@@ -50,7 +47,7 @@ const maxZapAmountSats = () => {
       DEFAULT_ZAP_MAX_AMOUNT_SATS
     );
   } catch (error) {
-    throw new LnbitsGatewayError(error.message, 503);
+    throw new WalletGatewayError(error.message, 503);
   }
 };
 
@@ -113,7 +110,7 @@ const requirePaymentId = (payment) => {
     validPaymentId,
   );
   if (!paymentId) {
-    throw new LnbitsGatewayError(
+    throw new WalletGatewayError(
       'LNbits payment response is missing a stable identifier',
     );
   }
@@ -213,7 +210,7 @@ const listAllWallets = async () =>
 const personByWalletId = (walletId) => {
   const person = walletDirectory().store().findByAllowanceWalletId(walletId);
   if (!person) {
-    throw new LnbitsGatewayError('Wallet not found', 404);
+    throw new WalletGatewayError('Wallet not found', 404);
   }
   return person;
 };
@@ -245,7 +242,7 @@ const ensureCaller = async ({ aadObjectId, displayName, email }) => {
 const requireOwnedWallet = (walletId, aadObjectId) => {
   const person = findCaller(aadObjectId);
   if (!person.allowance || person.allowance.walletId !== walletId) {
-    throw new LnbitsGatewayError('Wallet does not belong to this account', 403);
+    throw new WalletGatewayError('Wallet does not belong to this account', 403);
   }
   return person;
 };
@@ -346,7 +343,7 @@ const createOwnedInvoice = async ({ walletId, amount, memo, aadObjectId }) => {
   const person = requireOwnedWallet(walletId, aadObjectId);
   const invoice = await allowanceOf(person).makeInvoice({ amountSats: amount, description: memo });
   if (!validPaymentId(invoice.paymentHash) || invoice.paymentRequest.length > 4096) {
-    throw new LnbitsGatewayError('The wallet did not return a complete invoice');
+    throw new WalletGatewayError('The wallet did not return a complete invoice');
   }
   return { paymentRequest: invoice.paymentRequest, invoiceId: invoice.paymentHash };
 };
@@ -355,7 +352,7 @@ const createOwnedInvoice = async ({ walletId, amount, memo, aadObjectId }) => {
 // per-zap ceiling, the self-zap refusal and the Lightning address allow-list.
 const payOwnedInvoice = async ({ walletId, aadObjectId }) => {
   requireOwnedWallet(walletId, aadObjectId);
-  throw new LnbitsGatewayError('Allowance sats can only be sent as zaps', 403);
+  throw new WalletGatewayError('Allowance sats can only be sent as zaps', 403);
 };
 
 // One wording for both the moment it happens and every later retry, so support
@@ -379,7 +376,7 @@ const createIdempotentPayer = (idempotencyStore) => {
     if (active) {
       if (active.requestHash !== requestHash) {
         throw Object.assign(
-          new LnbitsGatewayError('Idempotency key was already used for another payment', 409),
+          new WalletGatewayError('Idempotency key was already used for another payment', 409),
           { paymentOutcome: 'not_paid' },
         );
       }
@@ -390,15 +387,15 @@ const createIdempotentPayer = (idempotencyStore) => {
       const idempotency = await idempotencyStore.begin({ scope, requestHash });
       if (idempotency.state === 'replay') return idempotency.result;
       if (idempotency.state === 'pending') {
-        throw new LnbitsGatewayError('Payment is already in progress', 409);
+        throw new WalletGatewayError('Payment is already in progress', 409);
       }
       if (idempotency.state === 'failed') {
-        throw Object.assign(new LnbitsGatewayError('Idempotency key cannot be retried safely', 409), {
+        throw Object.assign(new WalletGatewayError('Idempotency key cannot be retried safely', 409), {
           paymentOutcome: 'unknown',
         });
       }
       if (idempotency.state === 'outcome_unknown') {
-        throw Object.assign(new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true }), {
+        throw Object.assign(new WalletGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true }), {
           paymentOutcome: 'unknown',
         });
       }
@@ -433,7 +430,7 @@ const createIdempotentPayer = (idempotencyStore) => {
           } catch (markError) {
             console.error('Payment idempotency outcome could not be marked unknown', markError);
           }
-          throw new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true });
+          throw new WalletGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true });
         }
         return result;
       } catch (error) {
@@ -452,7 +449,7 @@ const createIdempotentPayer = (idempotencyStore) => {
           console.error('Payment idempotency outcome could not be persisted', persistError);
         }
         if (error instanceof NwcPaymentUnknown) {
-          throw Object.assign(new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true }), {
+          throw Object.assign(new WalletGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true }), {
             paymentOutcome: 'unknown',
           });
         }
@@ -498,14 +495,14 @@ const createSendZap = ({
       aadObjectId.length === 0 ||
       !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey || '')
     ) {
-      throw Object.assign(new LnbitsGatewayError('Invalid zap request', 400), { paymentOutcome: 'not_paid' });
+      throw Object.assign(new WalletGatewayError('Invalid zap request', 400), { paymentOutcome: 'not_paid' });
     }
 
     let sender;
     try {
       sender = await findCallerForZap(aadObjectId);
       if (recipientOid === sender.oid) {
-        throw new LnbitsGatewayError('A user cannot zap their own account', 409);
+        throw new WalletGatewayError('A user cannot zap their own account', 409);
       }
     } catch (error) {
       error.paymentOutcome = 'not_paid';
@@ -518,15 +515,15 @@ const createSendZap = ({
       prepare: async () => {
         const senderWallet = walletForZap(sender);
         if (!senderWallet) {
-          throw new LnbitsGatewayError('Your Allowance wallet has not been set up yet', 409, { expose: true });
+          throw new WalletGatewayError('Your Allowance wallet has not been set up yet', 409, { expose: true });
         }
         const recipient = await findRecipientForZap(recipientOid);
         if (!recipient) {
-          throw new LnbitsGatewayError('Recipient is not registered with Zaplie', 409);
+          throw new WalletGatewayError('Recipient is not registered with Zaplie', 409);
         }
         const senderBalance = await senderWallet.getBalanceSats();
         if (!Number.isFinite(senderBalance) || senderBalance < amount) {
-          throw new LnbitsGatewayError('Insufficient allowance balance', 409, { expose: true });
+          throw new WalletGatewayError('Insufficient allowance balance', 409, { expose: true });
         }
         const invoice = await createInvoiceForZap(recipient, amount, memo);
         return {
@@ -578,14 +575,14 @@ const createPayReward = ({
       memo.length > 500 ||
       !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey || '')
     ) {
-      throw Object.assign(new LnbitsGatewayError('Invalid reward payment', 400), { paymentOutcome: 'not_paid' });
+      throw Object.assign(new WalletGatewayError('Invalid reward payment', 400), { paymentOutcome: 'not_paid' });
     }
     return pay({
       scope: idempotencyStore.scopeDigest({ aadObjectId: TREASURY_SCOPE, idempotencyKey }),
       requestHash: idempotencyStore.requestDigest({ recipientUserId: recipientOid, amount: amountSats, memo }),
       prepare: async () => {
         const recipient = await findRecipient(recipientOid);
-        if (!recipient) throw new LnbitsGatewayError('Recipient is not registered with Zaplie', 409);
+        if (!recipient) throw new WalletGatewayError('Recipient is not registered with Zaplie', 409);
         const payFrom = treasuryWallet();
         const invoice = await createInvoiceForReward(recipient, amountSats, memo);
         return {
@@ -626,7 +623,7 @@ const getNostrRewards = async (stallId) => {
   }
   const walletKey = rewardsStoreInkey();
   if (!walletKey) {
-    throw new LnbitsGatewayError('ZAPLIE_REWARDS_STORE_INKEY must be set for the rewards store', 503);
+    throw new WalletGatewayError('ZAPLIE_REWARDS_STORE_INKEY must be set for the rewards store', 503);
   }
   let rewards;
   try {
@@ -642,7 +639,7 @@ const getNostrRewards = async (stallId) => {
     throw error;
   }
   if (!Array.isArray(rewards)) {
-    throw new LnbitsGatewayError('LNbits rewards response is malformed');
+    throw new WalletGatewayError('LNbits rewards response is malformed');
   }
   return rewards.map((reward) => ({
     id: reward.id,
@@ -678,7 +675,7 @@ const resetCachesForTests = () => {
 
 module.exports = {
   ALLOWANCE_WALLET_NAME,
-  LnbitsGatewayError,
+  WalletGatewayError,
   OUTCOME_UNKNOWN_MESSAGE,
   assertCaller,
   createIdempotentPayer,
