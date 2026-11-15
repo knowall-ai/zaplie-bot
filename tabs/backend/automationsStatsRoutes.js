@@ -3,9 +3,8 @@
 // this month. Shared org view, so any authenticated tenant user may read it.
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
-const { treasuryInkey } = require('./lnbitsConfig');
-const { lnbitsRequest } = require('./lnbitsClient');
 const { peopleStore } = require('./peopleStore');
+const { toPayment, zapRecords } = require('./zapRecordStore');
 const fs = require('fs');
 const {
   summarizeAutomationPayments,
@@ -45,23 +44,17 @@ router.get('/', async (req, res) => {
     return;
   }
 
-  // The treasury is identified by its key, not by an LNbits username.
-  const walletKey = treasuryInkey();
-  if (!walletKey) {
-    res.status(503).json({ error: 'ZAPLIE_TREASURY_INKEY must be set' });
-    return;
-  }
-
   try {
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
     const sinceTs = Math.floor(monthStart.getTime() / 1000);
 
-    const payments = await lnbitsRequest('/api/v1/payments?limit=1000', { walletKey });
-    if (!Array.isArray(payments)) {
-      throw new Error('treasury payments response is not an array');
-    }
+    // Treasury payouts are Zaplie's own reward records, in payment shape.
+    const payments = zapRecords()
+      .list()
+      .filter((record) => record.kind === 'reward')
+      .map(toPayment);
     // Recipients are named from the directory; extra.to.user is their Entra id.
     const people = peopleStore()
       .list()

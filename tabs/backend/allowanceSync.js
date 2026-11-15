@@ -16,13 +16,17 @@
 // - apply must echo the preview's total per period, and is refused while a
 //   Fund wallet holds less than one period unless explicitly overridden;
 // - Zaplie never pays: the Fund key only reaches the extension APIs.
-const {
-  createWalletPayLink,
-  listDirectoryUsers,
-  listPersonWalletsWithKeys,
-  listWalletPayLinksWithKey,
-  updateWalletPayLink,
-} = require('./lnbitsGatewayService');
+const { listDirectoryUsers, listPersonWallets } = require('./lnbitsGatewayService');
+
+// Zaplie holds no Allowance wallet key since the move to NWC: each wallet's
+// pay link is created in LNbits by an operator (or by automatic provisioning)
+// and its address recorded in the directory. A plan from a directory entry
+// never contains a pay-link action; these refuse one if a caller builds it.
+const noWalletKeys = async () => {
+  throw Object.assign(new Error('Zaplie holds no Allowance wallet keys to manage pay links'), {
+    upstreamStatus: 403,
+  });
+};
 const {
   isPolicyActive,
   payLinkRange,
@@ -129,7 +133,7 @@ const oldestFirst = (a, b) =>
  * The plan. Pure: no I/O, no clock but `now`, no keys anywhere in its input
  * or output.
  *
- * @param input.people [{ oid, displayName, walletId, walletIssue }]
+ * @param input.people [{ oid, displayName, walletId, walletIssue, lightningAddress? }]
  * @param input.payLinks { [walletId]: link | null } (absent: unreadable)
  * @param input.allowances every schedule the Fund key(s) can see
  * @param input.fund { configured, wallets: [{ id, name, balanceSats }] }
@@ -375,14 +379,17 @@ const planAllowanceSync = ({
       continue;
     }
 
-    const link = payLinks[person.walletId];
+    // A recorded address (the directory) needs no pay-link management.
+    const link = person.lightningAddress ? 'recorded' : payLinks[person.walletId];
     if (link === undefined) {
       actions.push({ ...base, kind: 'skip', reason: 'pay-link-unreadable' });
       if (row) keepLoad(row);
       continue;
     }
     const wantedLink = desiredPayLink({ oid, displayName, range });
-    if (link === null) {
+    if (link === 'recorded') {
+      // Nothing to do: the operator created the pay link in LNbits.
+    } else if (link === null) {
       actions.push({
         ...base,
         kind: 'paylink-create',
@@ -402,7 +409,7 @@ const planAllowanceSync = ({
 
     const desired = {
       name: scheduleName(oid),
-      lightning_address: `${allowanceUsername(oid)}@${publicHost}`,
+      lightning_address: person.lightningAddress || `${allowanceUsername(oid)}@${publicHost}`,
       amount: policy.amountSats,
       currency: 'sats',
       memo,
@@ -623,8 +630,8 @@ const applyPlan = async (
     clients,
     fundOrder = [...clients.keys()],
     wallets,
-    createLink = createWalletPayLink,
-    updateLink = updateWalletPayLink,
+    createLink = noWalletKeys,
+    updateLink = noWalletKeys,
     concurrency = DEFAULT_CONCURRENCY,
     now = () => new Date(),
   },
@@ -796,8 +803,8 @@ const gatherSnapshot = async ({
   env = process.env,
   concurrency = DEFAULT_CONCURRENCY,
   listUsers = listDirectoryUsers,
-  listWallets = listPersonWalletsWithKeys,
-  listLinks = listWalletPayLinksWithKey,
+  listWallets = listPersonWallets,
+  listLinks = null,
   clientFactory = createAllowanceExtensionClient,
 }) => {
   const keys = readFundKeys(env);
@@ -881,9 +888,20 @@ const gatherSnapshot = async ({
       return;
     }
     const wallet = matches[0];
+    // A directory wallet carries the address its schedule pays; the
+    // allowance extension needs nothing else.
+    if (wallet.lightningAddress !== undefined) {
+      if (!wallet.lightningAddress) {
+        person.walletIssue = 'missing-lightning-address';
+        return;
+      }
+      person.walletId = wallet.id;
+      person.lightningAddress = wallet.lightningAddress;
+      return;
+    }
     person.walletId = wallet.id;
     wallets.set(wallet.id, wallet);
-    if (!enabled) return;
+    if (!enabled || !listLinks) return;
     try {
       payLinks[wallet.id] = findAllowancePayLink(await listLinks(wallet), person.oid);
     } catch (error) {
@@ -895,11 +913,12 @@ const gatherSnapshot = async ({
 
   return {
     snapshot: {
-      people: people.map(({ oid, displayName, walletId, walletIssue }) => ({
+      people: people.map(({ oid, displayName, walletId, walletIssue, lightningAddress }) => ({
         oid,
         displayName,
         walletId: walletId || null,
         walletIssue: walletIssue || null,
+        ...(lightningAddress ? { lightningAddress } : {}),
       })),
       peopleComplete,
       payLinks,

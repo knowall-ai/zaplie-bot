@@ -10,30 +10,30 @@ const { createDirectoryRouter } = require('./directoryRoutes');
 const { createKeyCipher } = require('./keyCipher');
 const { createPeopleStore } = require('./peopleStore');
 const { createWalletDirectory } = require('./walletDirectory');
+const { createZapRecordStore } = require('./zapRecordStore');
+const { createFakeNwc, nwcUrlFor } = require('./testSupport/fakeNwc');
 
 const ME = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const PEER = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
-const ADMIN_KEY = 'a'.repeat(32);
-const INVOICE_KEY = 'b'.repeat(32);
+const ENV = { LNBITS_URL: 'https://bank.example' };
+const SECRET = new URL(nwcUrlFor(1).replace('nostr+walletconnect://', 'http://')).searchParams.get('secret');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-directory-routes-'));
 const store = createPeopleStore({
   filePath: path.join(dir, 'people.json'),
   cipher: createKeyCipher({ keyProvider: () => Buffer.alloc(32, 9) }),
 });
-const invoices = [];
+const records = createZapRecordStore({ filePath: path.join(dir, 'zap-records.json') });
+const fake = createFakeNwc({ env: ENV });
 const directory = createWalletDirectory({
   store,
-  env: {},
-  request: async (route, options = {}) => {
-    if (route === '/api/v1/wallet') return { name: 'Allowance', balance: 12000 };
-    if (route === '/api/v1/payments' && options.method === 'POST') {
-      invoices.push(options);
-      return { payment_request: 'lnbc120n1pinvoice', checking_id: 'inv-1' };
-    }
-    throw new Error(`unexpected ${route}`);
-  },
+  env: ENV,
+  nwc: fake.factory,
+  resolvePayRequest: async (address) => ({ address: address.toLowerCase() }),
 });
+const zaps = [];
+const rewards = [];
+let nextZapError = null;
 
 // Bearer <oid> stands in for a verified MSAL token; "admin" for Zaplie.Admin.
 const requireMsalOid = async (req, res) => {
@@ -50,13 +50,35 @@ const adminAuth = (req, res, next) =>
 let server;
 let base;
 before(async () => {
+  fake.add(nwcUrlFor(1), { balanceSats: 12 });
   store.upsertProfile({ oid: ME, displayName: 'Me' });
-  store.setAllowanceWallet(ME, { walletId: 'w-me', adminkey: ADMIN_KEY, inkey: INVOICE_KEY, source: 'operator' });
+  store.setAllowanceWallet(ME, { walletId: 'nwc_me', nwc: nwcUrlFor(1), lightningAddress: 'zaplie-me@bank.example', source: 'operator' });
   store.upsertProfile({ oid: PEER, displayName: 'Peer' });
-  store.setReceiveTarget(PEER, { inkey: 'c'.repeat(32) });
+  store.setReceiveTarget(PEER, { lightningAddress: 'peer@bank.example' });
   const app = express();
   app.use(express.json());
-  app.use('/api/directory', createDirectoryRouter({ directory: () => directory, requireMsalOid, adminAuth }));
+  app.use(
+    '/api/directory',
+    createDirectoryRouter({
+      directory: () => directory,
+      requireMsalOid,
+      adminAuth,
+      zapRecords: () => records,
+      sendZap: async (input) => {
+        zaps.push(input);
+        if (nextZapError) {
+          const error = nextZapError;
+          nextZapError = null;
+          throw error;
+        }
+        return { payment_hash: 'ab'.repeat(32) };
+      },
+      payReward: async (input) => {
+        rewards.push(input);
+        return { payment_hash: 'cd'.repeat(32) };
+      },
+    }),
+  );
   await new Promise((resolve) => {
     server = app.listen(0, () => {
       base = `http://127.0.0.1:${server.address().port}/api/directory`;
@@ -82,15 +104,20 @@ const call = async (method, route, authorization, body) => {
   return { status: response.status, text, body: text ? JSON.parse(text) : null };
 };
 
-test('the signed-in person sees their own entry and balances, never a key', async () => {
+const noSecret = (text) => {
+  assert.equal(text.includes(SECRET), false);
+  assert.equal(text.includes('nostr+walletconnect'), false);
+};
+
+test('the signed-in person sees their own entry and balance, never the connection', async () => {
   const response = await call('GET', '/me', `Bearer ${ME}`);
   assert.equal(response.status, 200);
   assert.equal(response.body.oid, ME);
-  assert.equal(response.body.allowanceWalletId, 'w-me');
+  assert.equal(response.body.allowanceWalletId, 'nwc_me');
   assert.equal(response.body.allowanceSats, 12);
+  assert.equal(response.body.budget, null);
   assert.equal(response.body.provisioning, 'operator');
-  assert.equal(response.text.includes(ADMIN_KEY), false);
-  assert.equal(response.text.includes(INVOICE_KEY), false);
+  noSecret(response.text);
 });
 
 test('someone outside the directory gets 403 from /me', async () => {
@@ -98,77 +125,115 @@ test('someone outside the directory gets 403 from /me', async () => {
   assert.equal(response.status, 403);
 });
 
-test('the receive body accepts only the two documented fields', async () => {
-  assert.equal((await call('PUT', '/me/receive', `Bearer ${ME}`, { aadObjectId: PEER })).status, 400);
+test('the receive body accepts only a Lightning address', async () => {
+  assert.equal((await call('PUT', '/me/receive', `Bearer ${ME}`, { invoiceKey: 'a'.repeat(32) })).status, 400);
   assert.equal((await call('PUT', '/me/receive', `Bearer ${ME}`, {})).status, 400);
-  assert.equal((await call('PUT', '/me/receive', undefined, { invoiceKey: null })).status, 401);
-  const cleared = await call('PUT', '/me/receive', `Bearer ${ME}`, { invoiceKey: null });
-  assert.equal(cleared.status, 200);
-  assert.equal(cleared.body.receive.invoiceKeyRegistered, false);
+  assert.equal((await call('PUT', '/me/receive', undefined, { lightningAddress: null })).status, 401);
+  const saved = await call('PUT', '/me/receive', `Bearer ${ME}`, { lightningAddress: 'Me@bank.example' });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.receive.lightningAddress, 'me@bank.example');
 });
 
-test('admin routes need the admin role and never return keys', async () => {
+test('admins link an Allowance wallet by NWC connection; it is never returned', async () => {
   assert.equal((await call('GET', '/admin/people', `Bearer ${ME}`)).status, 403);
+  fake.add(nwcUrlFor(2), { balanceSats: 40 });
+  const linked = await call('PUT', `/admin/people/${PEER}/allowance-wallet`, 'Bearer admin', {
+    nwcUrl: nwcUrlFor(2),
+    lightningAddress: 'zaplie-peer@bank.example',
+  });
+  assert.equal(linked.status, 200);
+  assert.equal(linked.body.balanceSats, 40);
+  assert.equal(linked.body.person.allowanceLightningAddress, 'zaplie-peer@bank.example');
+  noSecret(linked.text);
+
   const listed = await call('GET', '/admin/people', 'Bearer admin');
-  assert.equal(listed.status, 200);
   assert.deepEqual(listed.body.people.map((person) => person.oid).sort(), [ME, PEER].sort());
-  assert.equal(listed.text.includes(ADMIN_KEY), false);
-  const provision = await call('POST', `/admin/people/${PEER}/provision`, 'Bearer admin');
-  assert.equal(provision.status, 409);
+  noSecret(listed.text);
+
+  assert.equal(
+    (await call('PUT', `/admin/people/${PEER}/allowance-wallet`, 'Bearer admin', { adminkey: 'a'.repeat(32), inkey: 'b'.repeat(32) })).status,
+    400,
+  );
+  assert.equal((await call('POST', `/admin/people/${PEER}/provision`, 'Bearer admin')).status, 409);
 });
 
-test('internal routes take only the shared token', async () => {
+test('internal routes take only the shared token and return no credential', async () => {
   assert.equal((await call('GET', '/internal/people', `Bearer ${ME}`)).status, 401);
   const listed = await call('GET', '/internal/people', 'internal-test-token');
   assert.equal(listed.status, 200);
-  const me = listed.body.people.find((person) => person.oid === ME);
-  assert.deepEqual(me.allowanceWallet, { id: 'w-me', inkey: INVOICE_KEY });
-  assert.equal(listed.text.includes(ADMIN_KEY), false);
-});
-
-test('ensure hands the bot the caller\'s own Allowance keys', async () => {
-  const response = await call('POST', '/internal/people/ensure', 'internal-test-token', {
-    aadObjectId: ME.toUpperCase(),
-    displayName: 'Me',
-  });
-  assert.equal(response.status, 200);
-  assert.deepEqual(response.body.person.allowanceWallet, { id: 'w-me', adminkey: ADMIN_KEY, inkey: INVOICE_KEY });
-  assert.equal(response.body.awaitingOperator, false);
+  noSecret(listed.text);
+  const ensured = await call('POST', '/internal/people/ensure', 'internal-test-token', { aadObjectId: ME.toUpperCase(), displayName: 'Me' });
+  assert.equal(ensured.status, 200);
+  assert.equal(ensured.body.person.allowanceWalletId, 'nwc_me');
+  assert.equal(ensured.body.awaitingOperator, false);
+  noSecret(ensured.text);
   assert.equal(
     (await call('POST', '/internal/people/ensure', 'internal-test-token', { aadObjectId: 'lnbits-user-1' })).status,
     400,
   );
 });
 
-test('the bot invoices a recipient without ever seeing their key', async () => {
-  const response = await call('POST', `/internal/people/${PEER}/invoices`, 'internal-test-token', {
-    amountSats: 12,
+test('the bot pays a zap between members by Entra id, and learns the outcome', async () => {
+  const body = { senderOid: ME, recipientOid: PEER, amountSats: 12, memo: 'thanks', idempotencyKey: 'zap-card-key-000001' };
+  const paid = await call('POST', '/internal/zaps', 'internal-test-token', body);
+  assert.equal(paid.status, 200);
+  assert.deepEqual(paid.body, { paymentHash: 'ab'.repeat(32), outcome: 'paid' });
+  assert.deepEqual(zaps.at(-1), {
+    aadObjectId: ME,
+    recipientUserId: PEER,
+    amount: 12,
     memo: 'thanks',
-    extra: { tag: 'zap', to: { user: PEER, displayName: 'Peer' } },
+    idempotencyKey: 'zap-card-key-000001',
+    source: 'bot',
   });
-  assert.equal(response.status, 201);
-  assert.equal(response.body.paymentRequest, 'lnbc120n1pinvoice');
-  assert.equal(response.text.includes('c'.repeat(32)), false);
-  assert.equal(invoices.at(-1).walletKey, 'c'.repeat(32));
 
-  const keyInExtra = await call('POST', `/internal/people/${PEER}/invoices`, 'internal-test-token', {
-    amountSats: 12,
-    memo: 'thanks',
-    extra: { from: { adminkey: ADMIN_KEY } },
-  });
-  assert.equal(keyInExtra.status, 400);
-  const fractional = await call('POST', `/internal/people/${PEER}/invoices`, 'internal-test-token', {
-    amountSats: 1.5,
-    memo: 'thanks',
-  });
-  assert.equal(fractional.status, 400);
+  nextZapError = Object.assign(new Error('Insufficient allowance balance'), { status: 409, expose: true, paymentOutcome: 'not_paid' });
+  const refused = await call('POST', '/internal/zaps', 'internal-test-token', body);
+  assert.deepEqual([refused.status, refused.body.outcome], [409, 'not_paid']);
+
+  nextZapError = Object.assign(new Error('relay gone'), { status: 503 });
+  const unknown = await call('POST', '/internal/zaps', 'internal-test-token', body);
+  assert.deepEqual([unknown.status, unknown.body.outcome], [503, 'unknown']);
 });
 
-test('an unregistered recipient is a 409 the bot can relay', async () => {
-  const response = await call('POST', `/internal/people/${ME}/invoices`, 'internal-test-token', {
-    amountSats: 12,
-    memo: 'thanks',
+test('a client-supplied invoice or address is never accepted for payment', async () => {
+  const before = zaps.length;
+  for (const extra of [{ paymentRequest: 'lnbc10n1pexternal' }, { lightningAddress: 'evil@wallet.other' }]) {
+    const response = await call('POST', '/internal/zaps', 'internal-test-token', {
+      senderOid: ME,
+      recipientOid: PEER,
+      amountSats: 1,
+      memo: 'x',
+      idempotencyKey: 'zap-card-key-000002',
+      ...extra,
+    });
+    assert.deepEqual([response.status, response.body.outcome], [400, 'not_paid']);
+  }
+  const reward = await call('POST', '/internal/rewards', 'internal-test-token', {
+    recipientOid: PEER,
+    amountSats: 1,
+    memo: 'x',
+    idempotencyKey: 'reward-key-00000001',
+    paymentRequest: 'lnbc10n1pexternal',
   });
-  assert.equal(response.status, 409);
-  assert.match(response.body.error, /has not set up where they receive/);
+  assert.equal(reward.status, 400);
+  assert.equal(zaps.length, before);
+});
+
+test('the bot pays a reward and reads the zap records', async () => {
+  const paid = await call('POST', '/internal/rewards', 'internal-test-token', {
+    recipientOid: PEER,
+    recipientLabel: 'octocat',
+    amountSats: 50,
+    memo: 'GitHub: PR #7 merged',
+    reward: { eventType: 'githubPrMerged', repo: 'acme/api', baseSats: 50 },
+    idempotencyKey: 'reward-key-00000002',
+  });
+  assert.deepEqual(paid.body, { paymentHash: 'cd'.repeat(32), outcome: 'paid' });
+  assert.equal(rewards.at(-1).reward.repo, 'acme/api');
+
+  records.record({ paymentHash: 'ef'.repeat(32), amountSats: 3, memo: 'm', timeMs: 5000_000, from: { oid: ME }, to: { oid: PEER } });
+  const listed = await call('GET', '/internal/zaps?since=4000', 'internal-test-token');
+  assert.equal(listed.status, 200);
+  assert.deepEqual(listed.body.zaps.map((zap) => zap.paymentHash), ['ef'.repeat(32)]);
 });

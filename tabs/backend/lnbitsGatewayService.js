@@ -1,8 +1,10 @@
-// The portal's server-side view of LNbits. People and their wallets come from
-// Zaplie's own directory (walletDirectory.js / peopleStore.js); LNbits is only
-// ever called with a wallet key, or with the optional zaplie.service API token
-// for the few account-level reads (docs/LNBITS_MIGRATION.adoc).
-const { lnbitsApiToken, treasuryInkey } = require('./lnbitsConfig');
+// The portal's server-side view of the wallets. People come from Zaplie's own
+// directory (walletDirectory.js / peopleStore.js). Every wallet Zaplie spends
+// from (each Allowance wallet, the Treasury) is reached over NWC
+// (nwcWallet.js); recipients are paid at their Lightning address. Zaplie's
+// own record of each payment (zapRecordStore.js) is what the feed, the
+// leaderboards and the reports read (docs/LNBITS_MIGRATION.adoc).
+const { rewardsStoreInkey } = require('./lnbitsConfig');
 const {
   LnbitsGatewayError,
   lnbitsRequest,
@@ -13,6 +15,8 @@ const { positiveIntFromEnv } = require('./rewardAmounts');
 const { createZapIdempotencyStore } = require('./lnbitsZapIdempotencyStore');
 const { walletDirectory } = require('./walletDirectory');
 const { normalizeOid } = require('./peopleStore');
+const { NwcPaymentRefused, NwcPaymentUnknown } = require('./nwcWallet');
+const { toPayment, zapRecords } = require('./zapRecordStore');
 
 const BALANCE_CACHE_MS = 30 * 1000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~-]{16,128}$/;
@@ -162,70 +166,56 @@ const sanitizePaymentPage = (payments, source) =>
     }
   });
 
-/** A person's Allowance wallet, keys included, for server-side use only. */
-const keyedAllowanceWallet = (person) =>
-  person.allowance
-    ? {
-        id: person.allowance.walletId,
-        name: ALLOWANCE_WALLET_NAME,
-        user: person.oid,
-        adminkey: person.allowance.adminkey,
-        inkey: person.allowance.inkey,
-      }
-    : null;
-
 const listPeople = () => walletDirectory().store().list();
 
 const listUsers = async () => listPeople().map(sanitizeUser);
 
-const walletBalanceMsat = async (wallet) => {
-  const cached = balanceCache.get(wallet.id);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
-  }
-  const details = await lnbitsRequest('/api/v1/wallet', { walletKey: wallet.inkey });
-  const value = sanitizeBalanceMsat(details?.balance);
-  balanceCache.set(wallet.id, { value, expiresAt: Date.now() + BALANCE_CACHE_MS });
+const allowanceOf = (person) => walletDirectory().allowanceWallet(person);
+
+const balanceSats = async (person) => {
+  const walletId = person.allowance.walletId;
+  const cached = balanceCache.get(walletId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const value = await allowanceOf(person).getBalanceSats();
+  balanceCache.set(walletId, { value, expiresAt: Date.now() + BALANCE_CACHE_MS });
   return value;
 };
 
-// With the API token one account-level read returns every zaplie.service
-// wallet with its balance; without it, one read per wallet (cached briefly).
-const withBalances = async (wallets) => {
-  if (wallets.length === 0) return [];
-  if (lnbitsApiToken()) {
-    const owned = await walletDirectory().listServiceWallets();
-    const byId = new Map(owned.map((wallet) => [wallet.id, wallet.balance_msat]));
-    return wallets.map((wallet) => ({ ...wallet, balance_msat: byId.get(wallet.id) ?? null }));
+/** The Allowance wallet as the portal sees it; a balance read failing reads as null. */
+const allowanceView = async (person) => {
+  let sats = null;
+  try {
+    sats = await balanceSats(person);
+  } catch (error) {
+    console.warn('Allowance balance unavailable:', `wallet=${person.allowance.walletId}`, error.message);
   }
-  return mapLimit(wallets, MAX_CONCURRENT_READS, async (wallet) => {
-    try {
-      return { ...wallet, balance_msat: await walletBalanceMsat(wallet) };
-    } catch (error) {
-      console.warn('Allowance balance unavailable:', `wallet=${wallet.id}`, error.message);
-      return { ...wallet, balance_msat: null };
-    }
+  return sanitizeWallet({
+    id: person.allowance.walletId,
+    name: ALLOWANCE_WALLET_NAME,
+    user: person.oid,
+    balance_msat: sats === null ? null : sats * 1000,
   });
 };
 
-/** The person's wallets as the portal sees them: their Allowance wallet. */
+/** The person's wallets as the portal sees it: their Allowance wallet. */
 const listUserWallets = async (userId) => {
   const person = walletDirectory().store().get(userId);
-  const wallet = person && keyedAllowanceWallet(person);
-  return (await withBalances(wallet ? [wallet] : [])).map(sanitizeWallet);
+  return person?.allowance ? [await allowanceView(person)] : [];
 };
 
 const listAllWallets = async () =>
-  (await withBalances(listPeople().map(keyedAllowanceWallet).filter(Boolean))).map(
-    sanitizeWallet,
+  mapLimit(
+    listPeople().filter((person) => person.allowance),
+    MAX_CONCURRENT_READS,
+    allowanceView,
   );
 
-const getWalletWithKeys = (walletId) => {
+const personByWalletId = (walletId) => {
   const person = walletDirectory().store().findByAllowanceWalletId(walletId);
   if (!person) {
     throw new LnbitsGatewayError('Wallet not found', 404);
   }
-  return keyedAllowanceWallet(person);
+  return person;
 };
 
 const findCaller = (aadObjectId) => walletDirectory().requirePerson(aadObjectId);
@@ -235,9 +225,8 @@ const assertCaller = async (aadObjectId) => {
 };
 
 /**
- * Provisions the signed-in person (see walletDirectory.ensurePerson): moves no
- * sats. `awaitingOperator` is true when no API token is configured and an
- * operator still has to link their Allowance wallet.
+ * Adds the signed-in person to the directory (see walletDirectory.ensurePerson):
+ * moves no sats. `awaitingOperator` is true until an Allowance wallet is linked.
  */
 const ensureCaller = async ({ aadObjectId, displayName, email }) => {
   const result = await walletDirectory().ensurePerson({
@@ -254,92 +243,73 @@ const ensureCaller = async ({ aadObjectId, displayName, email }) => {
 };
 
 const requireOwnedWallet = (walletId, aadObjectId) => {
-  const wallet = keyedAllowanceWallet(findCaller(aadObjectId));
-  if (!wallet || wallet.id !== walletId) {
+  const person = findCaller(aadObjectId);
+  if (!person.allowance || person.allowance.walletId !== walletId) {
     throw new LnbitsGatewayError('Wallet does not belong to this account', 403);
   }
-  return wallet;
+  return person;
 };
 
-const getWalletDetails = async (walletId, aadObjectId) => {
-  const wallet = requireOwnedWallet(walletId, aadObjectId);
-  const details = await lnbitsRequest('/api/v1/wallet', { walletKey: wallet.inkey });
-  return sanitizeWallet({ ...wallet, balance_msat: details?.balance });
+const getWalletDetails = async (walletId, aadObjectId) =>
+  allowanceView(requireOwnedWallet(walletId, aadObjectId));
+
+const getWalletBalance = async (walletId, aadObjectId) => {
+  const person = requireOwnedWallet(walletId, aadObjectId);
+  balanceCache.delete(walletId);
+  return balanceSats(person);
 };
 
-const walletBalanceSats = async (wallet) => {
-  const details = await lnbitsRequest('/api/v1/wallet', { walletKey: wallet.inkey });
-  return Number(details.balance || 0) / 1000;
+/**
+ * One NWC transaction in the payment shape the portal reads. Its `extra` is
+ * Zaplie's record of the payment when there is one (a zap or a reward).
+ */
+const nwcTransactionToPayment = (tx, walletId, records) => {
+  const record = records.get(String(tx.payment_hash || '').toLowerCase());
+  return {
+    checking_id: tx.payment_hash,
+    payment_hash: tx.payment_hash,
+    status: tx.state === 'pending' ? 'pending' : 'success',
+    amount: (tx.type === 'outgoing' ? -1 : 1) * Math.abs(Number(tx.amount) || 0),
+    fee: Number(tx.fees_paid) || 0,
+    memo: record?.memo || tx.description || '',
+    time: tx.settled_at || tx.created_at,
+    extra: record ? toPayment(record).extra : {},
+    wallet_id: walletId,
+  };
 };
 
-const getWalletBalance = async (walletId, aadObjectId) =>
-  walletBalanceSats(requireOwnedWallet(walletId, aadObjectId));
-
-// Deliberately tenant-wide: the team feed and the transaction log build their
-// history from every teammate's Allowance wallet.
+// Deliberately tenant-wide: the team feed and the transaction log read every
+// teammate's Allowance history.
 const listWalletPayments = async (walletId, limit = 100) => {
-  const wallet = getWalletWithKeys(walletId);
-  const payments = await lnbitsRequest(`/api/v1/payments?limit=${limit}`, {
-    walletKey: wallet.inkey,
-  });
-  if (!Array.isArray(payments)) {
-    throw new LnbitsGatewayError('LNbits payments response is malformed');
-  }
-  return sanitizePaymentPage(payments, `wallet ${walletId}`);
+  const person = personByWalletId(walletId);
+  const transactions = await allowanceOf(person).listTransactions({ limit });
+  const records = zapRecords().byPaymentHash();
+  return sanitizePaymentPage(
+    transactions
+      .filter((tx) => tx && tx.state !== 'failed')
+      .map((tx) => nwcTransactionToPayment(tx, walletId, records)),
+    `wallet ${walletId}`,
+  );
 };
 
 const getInvoicePayment = async (walletId, invoiceId, aadObjectId) => {
-  const wallet = requireOwnedWallet(walletId, aadObjectId);
-  return redactSensitive(
-    await lnbitsRequest(`/api/v1/payments/${encodeURIComponent(invoiceId)}`, {
-      walletKey: wallet.inkey,
-    }),
-  );
+  const person = requireOwnedWallet(walletId, aadObjectId);
+  const tx = await allowanceOf(person).lookupInvoice({ payment_hash: invoiceId });
+  return {
+    paid: tx?.state === 'settled',
+    pending: tx?.state === 'pending',
+    amount: Number(tx?.amount) || 0,
+    memo: tx?.description || '',
+  };
 };
 
+// Zaplie no longer holds keys to read pay links; it knows the one address
+// that matters, recorded when the wallet was linked.
 const getWalletPayLinks = async (walletId, aadObjectId) => {
-  const wallet = requireOwnedWallet(walletId, aadObjectId);
-  return redactSensitive(
-    await lnbitsRequest(
-      `/lnurlp/api/v1/links?all_wallets=false&wallet=${encodeURIComponent(walletId)}`,
-      { walletKey: wallet.inkey },
-    ),
-  );
+  const person = requireOwnedWallet(walletId, aadObjectId);
+  const address = person.allowance.lightningAddress;
+  return address ? [{ username: address.split('@')[0], lightningAddress: address }] : [];
 };
-
-// Pay links on a wallet the server already holds keys for (the allowance sync
-// walks every Allowance wallet). Listing takes the invoice key; creating and
-// updating take the wallet's admin key, as the lnurlp extension requires.
-const listWalletPayLinksWithKey = async (wallet) => {
-  const links = await lnbitsRequest('/lnurlp/api/v1/links?all_wallets=false', {
-    walletKey: wallet.inkey,
-    readErrorDetail: true,
-  });
-  if (!Array.isArray(links)) {
-    throw new LnbitsGatewayError('LNbits pay links response is malformed');
-  }
-  return links.map(redactSensitive);
-};
-
-const createWalletPayLink = async (wallet, body) =>
-  redactSensitive(
-    await lnbitsRequest('/lnurlp/api/v1/links', {
-      method: 'POST',
-      walletKey: wallet.adminkey,
-      body,
-      readErrorDetail: true,
-    }),
-  );
-
-const updateWalletPayLink = async (wallet, linkId, body) =>
-  redactSensitive(
-    await lnbitsRequest(`/lnurlp/api/v1/links/${encodeURIComponent(linkId)}`, {
-      method: 'PUT',
-      walletKey: wallet.adminkey,
-      body,
-      readErrorDetail: true,
-    }),
-  );
 
 /**
  * The allowance sync's view of the directory, in the shape it has always
@@ -355,93 +325,38 @@ const listDirectoryUsers = async () => {
   return { users, total: users.length, complete: true };
 };
 
-/** A person's Allowance wallet with keys, for the allowance sync. */
-const listPersonWalletsWithKeys = async (userId) => {
+/**
+ * A person's Allowance wallet for the allowance sync: its id and the
+ * Lightning address the schedule pays. No credential.
+ */
+const listPersonWallets = async (userId) => {
   const person = walletDirectory().store().get(userId);
-  const wallet = person && keyedAllowanceWallet(person);
-  return wallet ? [wallet] : [];
+  return person?.allowance
+    ? [
+        {
+          id: person.allowance.walletId,
+          name: ALLOWANCE_WALLET_NAME,
+          lightningAddress: person.allowance.lightningAddress || null,
+        },
+      ]
+    : [];
 };
 
-const createInvoice = async (wallet, amount, memo) => {
-  const result = await lnbitsRequest('/api/v1/payments', {
-    method: 'POST',
-    walletKey: wallet.inkey,
-    body: { out: false, amount, memo },
-  });
-  const paymentRequest = result.payment_request;
-  const invoiceId = validPaymentId(result.checking_id)
-    ? result.checking_id
-    : result.payment_hash;
-  if (
-    typeof paymentRequest !== 'string' ||
-    paymentRequest.length === 0 ||
-    paymentRequest.length > 4096 ||
-    !validPaymentId(invoiceId)
-  ) {
-    throw new LnbitsGatewayError(
-      'LNbits did not return a complete invoice',
-    );
+const createOwnedInvoice = async ({ walletId, amount, memo, aadObjectId }) => {
+  const person = requireOwnedWallet(walletId, aadObjectId);
+  const invoice = await allowanceOf(person).makeInvoice({ amountSats: amount, description: memo });
+  if (!validPaymentId(invoice.paymentHash) || invoice.paymentRequest.length > 4096) {
+    throw new LnbitsGatewayError('The wallet did not return a complete invoice');
   }
-  return { paymentRequest, invoiceId };
+  return { paymentRequest: invoice.paymentRequest, invoiceId: invoice.paymentHash };
 };
 
-const createOwnedInvoice = async ({ walletId, amount, memo, aadObjectId }) =>
-  createInvoice(requireOwnedWallet(walletId, aadObjectId), amount, memo);
-
-const payInvoice = async (wallet, paymentRequest, extra) => {
-  const result = await lnbitsRequest('/api/v1/payments', {
-    method: 'POST',
-    walletKey: wallet.adminkey,
-    body: { out: true, bolt11: paymentRequest, ...(extra ? { extra } : {}) },
-  });
-  const paymentId = validPaymentId(result.payment_hash)
-    ? result.payment_hash
-    : result.checking_id;
-  if (!validPaymentId(paymentId)) {
-    throw new LnbitsGatewayError(
-      'LNbits did not return a payment identifier',
-    );
-  }
-  return {
-    payment_hash: validPaymentId(result.payment_hash)
-      ? result.payment_hash
-      : paymentId,
-    checking_id: validPaymentId(result.checking_id)
-      ? result.checking_id
-      : paymentId,
-  };
-};
-
-// The only wallet a caller owns here is their Allowance wallet, and its sats
-// are for recognising other people. They leave it as zaps (sendZap), which
-// name a registered recipient and are bounded by the zap ceiling and the
-// Lightning address allow-list. Paying an arbitrary invoice from it would
-// bypass all three, so it is refused; a person spends their own money from
-// their own Private wallet, which Zaplie holds no key for.
+// An Allowance wallet pays zaps only: an arbitrary invoice would skip the
+// per-zap ceiling, the self-zap refusal and the Lightning address allow-list.
 const payOwnedInvoice = async ({ walletId, aadObjectId }) => {
   requireOwnedWallet(walletId, aadObjectId);
   throw new LnbitsGatewayError('Allowance sats can only be sent as zaps', 403);
 };
-
-/**
- * The payment metadata the feed reads. Only names and ids: never a key.
- * The recipient is identified by Entra id, because Zaplie does not know (and
- * must not need) the id of the Private wallet the zap lands in.
- */
-const zapExtra = (sender, senderWallet, recipient) => ({
-  tag: 'zap',
-  from: {
-    id: senderWallet.id,
-    name: ALLOWANCE_WALLET_NAME,
-    user: sender.oid,
-    displayName: sender.displayName || sender.oid,
-  },
-  to: {
-    name: 'Private',
-    user: recipient.oid,
-    displayName: recipient.displayName || recipient.oid,
-  },
-});
 
 // One wording for both the moment it happens and every later retry, so support
 // sees the same string whichever way the user hits it.
@@ -449,176 +364,99 @@ const OUTCOME_UNKNOWN_MESSAGE =
   'This zap may have been paid but could not be recorded. Do not retry: ' +
   'contact support to confirm whether it went through.';
 
-const createSendZap = ({
-  findCallerForZap = findCaller,
-  findRecipientForZap = (oid) => walletDirectory().store().get(oid),
-  getBalanceForZap = walletBalanceSats,
-  createInvoiceForZap = (recipient, amount, memo, extra) =>
-    walletDirectory().createInvoiceFor(recipient.oid, { amountSats: amount, memo, extra }),
-  payInvoiceForZap = payInvoice,
-  idempotencyStore = createZapIdempotencyStore(),
-} = {}) => {
+/**
+ * Pays once per idempotency key: the shared core of zaps and rewards.
+ * `prepare()` runs after the key is reserved and returns the invoice, the
+ * wallet to pay from and how to record the result. Every error leaving here
+ * carries `paymentOutcome`: 'not_paid' (safe to retry, the key is released)
+ * or 'unknown' (the payment may have left; never retry blind).
+ */
+const createIdempotentPayer = (idempotencyStore) => {
   const inFlight = new Map();
 
-  return async ({
-    recipientUserId,
-    amount,
-    memo,
-    aadObjectId,
-    idempotencyKey,
-  }) => {
-    const maxAmount = maxZapAmountSats();
-    const recipientOid = normalizeOid(recipientUserId);
-    if (
-      !recipientOid ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0 ||
-      amount > maxAmount ||
-      typeof memo !== 'string' ||
-      memo.trim().length === 0 ||
-      memo.length > 500 ||
-      typeof aadObjectId !== 'string' ||
-      aadObjectId.length === 0 ||
-      !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey || '')
-    ) {
-      throw new LnbitsGatewayError('Invalid zap request', 400);
-    }
-
-    const scope = idempotencyStore.scopeDigest({
-      aadObjectId,
-      idempotencyKey,
-    });
-    const requestHash = idempotencyStore.requestDigest({
-      recipientUserId: recipientOid,
-      amount,
-      memo,
-    });
+  return async ({ scope, requestHash, prepare }) => {
     const active = inFlight.get(scope);
     if (active) {
       if (active.requestHash !== requestHash) {
-        throw new LnbitsGatewayError(
-          'Idempotency key was already used for another zap',
-          409,
+        throw Object.assign(
+          new LnbitsGatewayError('Idempotency key was already used for another payment', 409),
+          { paymentOutcome: 'not_paid' },
         );
       }
       return active.promise;
     }
 
     const operation = (async () => {
-      const sender = await findCallerForZap(aadObjectId);
-      if (recipientOid === sender.oid) {
-        throw new LnbitsGatewayError('A user cannot zap their own account', 409);
-      }
-
       const idempotency = await idempotencyStore.begin({ scope, requestHash });
-      if (idempotency.state === 'replay') {
-        return idempotency.result;
-      }
+      if (idempotency.state === 'replay') return idempotency.result;
       if (idempotency.state === 'pending') {
-        throw new LnbitsGatewayError('Zap request is already in progress', 409);
+        throw new LnbitsGatewayError('Payment is already in progress', 409);
       }
       if (idempotency.state === 'failed') {
-        throw new LnbitsGatewayError(
-          'Idempotency key cannot be retried safely',
-          409,
-        );
+        throw Object.assign(new LnbitsGatewayError('Idempotency key cannot be retried safely', 409), {
+          paymentOutcome: 'unknown',
+        });
       }
       if (idempotency.state === 'outcome_unknown') {
-        throw new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, {
-          expose: true,
+        throw Object.assign(new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true }), {
+          paymentOutcome: 'unknown',
         });
       }
 
       let paymentAttempted = false;
       let outcomeUnknown = false;
       try {
-        const senderWallet = keyedAllowanceWallet(sender);
-        if (!senderWallet) {
-          throw new LnbitsGatewayError(
-            'Your Allowance wallet has not been set up yet',
-            409,
-            { expose: true },
-          );
-        }
-
-        const recipient = await findRecipientForZap(recipientOid);
-        if (!recipient) {
-          throw new LnbitsGatewayError('Recipient is not registered with Zaplie', 409);
-        }
-
-        const senderBalance = await getBalanceForZap(senderWallet);
-        if (!Number.isFinite(senderBalance) || senderBalance < amount) {
-          throw new LnbitsGatewayError('Insufficient allowance balance', 409);
-        }
-
-        const extra = zapExtra(sender, senderWallet, recipient);
-        const invoice = await createInvoiceForZap(recipient, amount, memo, extra);
-        // Recorded before the payment so a zap that dies mid-payment still
-        // leaves the invoice behind to reconcile against LNbits. An invoice
-        // from a Lightning address has no LNbits id on our side, so the
-        // payment request itself is what support reconciles by.
+        const { invoice, payFrom, record } = await prepare();
+        // Recorded before the payment so a payment that dies mid-way still
+        // leaves its invoice behind to reconcile.
         await idempotencyStore.attachPayment({
           scope,
           requestHash,
           invoiceId: invoice.invoiceId || invoice.paymentRequest.slice(0, 256),
         });
         paymentAttempted = true;
-        const result = await payInvoiceForZap(
-          senderWallet,
-          invoice.paymentRequest,
-          extra,
-        );
+        const paid = await payFrom.payInvoice(invoice.paymentRequest);
+        const result = { payment_hash: paid.paymentHash, checking_id: paid.paymentHash };
+        try {
+          record(paid);
+        } catch (recordError) {
+          // The money has left; a missing feed entry must not read as unpaid.
+          console.error('Zap record could not be written', recordError.message);
+        }
         try {
           await idempotencyStore.complete({ scope, requestHash, result });
         } catch (persistError) {
-          console.error(
-            'Zap idempotency completion could not be persisted',
-            persistError,
-          );
-          // The money has left. Swallowing this would report success for a zap
-          // nothing recorded, and leaving the record pending would wedge every
-          // retry on "already in progress" forever, so mark it unknown and say
-          // so instead of guessing either way.
+          console.error('Payment idempotency completion could not be persisted', persistError);
           outcomeUnknown = true;
           try {
-            await idempotencyStore.markOutcomeUnknown({
-              scope,
-              requestHash,
-              result,
-            });
+            await idempotencyStore.markOutcomeUnknown({ scope, requestHash, result });
           } catch (markError) {
-            console.error(
-              'Zap idempotency outcome could not be marked unknown',
-              markError,
-            );
+            console.error('Payment idempotency outcome could not be marked unknown', markError);
           }
-          throw new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, {
-            expose: true,
-          });
+          throw new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true });
         }
         return result;
       } catch (error) {
+        // The wallet's definite refusal proves nothing was paid, so the key
+        // is released like any failure before the payment.
+        const notPaid = !paymentAttempted || error instanceof NwcPaymentRefused;
         try {
-          // `outcomeUnknown` means the payment went through and only recording
-          // it failed. Marking that `failed` would be a lie even when
-          // markOutcomeUnknown itself failed: `failed` reads as "not paid" and
-          // replays as "cannot be retried safely", when the money has almost
-          // certainly gone. Leaving the record pending or unknown keeps it
-          // reconcilable, so this path touches the store no further.
           if (!outcomeUnknown) {
-            if (paymentAttempted) {
-              await idempotencyStore.fail({ scope, requestHash });
-            } else {
-              // No payment was attempted, so the key is safe to retry.
+            if (notPaid) {
               await idempotencyStore.release({ scope, requestHash });
+            } else {
+              await idempotencyStore.fail({ scope, requestHash });
             }
           }
         } catch (persistError) {
-          console.error(
-            'Zap idempotency outcome could not be persisted',
-            persistError,
-          );
+          console.error('Payment idempotency outcome could not be persisted', persistError);
         }
+        if (error instanceof NwcPaymentUnknown) {
+          throw Object.assign(new LnbitsGatewayError(OUTCOME_UNKNOWN_MESSAGE, 503, { expose: true }), {
+            paymentOutcome: 'unknown',
+          });
+        }
+        error.paymentOutcome = notPaid && !outcomeUnknown ? 'not_paid' : 'unknown';
         throw error;
       }
     })();
@@ -634,7 +472,143 @@ const createSendZap = ({
   };
 };
 
+const createSendZap = ({
+  findCallerForZap = findCaller,
+  findRecipientForZap = (oid) => walletDirectory().store().get(oid),
+  walletForZap = allowanceOf,
+  createInvoiceForZap = (recipient, amount, memo) =>
+    walletDirectory().createInvoiceFor(recipient.oid, { amountSats: amount, memo }),
+  recordZap = (entry) => zapRecords().record(entry),
+  idempotencyStore = createZapIdempotencyStore(),
+} = {}) => {
+  const pay = createIdempotentPayer(idempotencyStore);
+
+  return async ({ recipientUserId, amount, memo, aadObjectId, idempotencyKey, source = 'portal' }) => {
+    const maxAmount = maxZapAmountSats();
+    const recipientOid = normalizeOid(recipientUserId);
+    if (
+      !recipientOid ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0 ||
+      amount > maxAmount ||
+      typeof memo !== 'string' ||
+      memo.trim().length === 0 ||
+      memo.length > 500 ||
+      typeof aadObjectId !== 'string' ||
+      aadObjectId.length === 0 ||
+      !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey || '')
+    ) {
+      throw Object.assign(new LnbitsGatewayError('Invalid zap request', 400), { paymentOutcome: 'not_paid' });
+    }
+
+    let sender;
+    try {
+      sender = await findCallerForZap(aadObjectId);
+      if (recipientOid === sender.oid) {
+        throw new LnbitsGatewayError('A user cannot zap their own account', 409);
+      }
+    } catch (error) {
+      error.paymentOutcome = 'not_paid';
+      throw error;
+    }
+
+    return pay({
+      scope: idempotencyStore.scopeDigest({ aadObjectId, idempotencyKey }),
+      requestHash: idempotencyStore.requestDigest({ recipientUserId: recipientOid, amount, memo }),
+      prepare: async () => {
+        const senderWallet = walletForZap(sender);
+        if (!senderWallet) {
+          throw new LnbitsGatewayError('Your Allowance wallet has not been set up yet', 409, { expose: true });
+        }
+        const recipient = await findRecipientForZap(recipientOid);
+        if (!recipient) {
+          throw new LnbitsGatewayError('Recipient is not registered with Zaplie', 409);
+        }
+        const senderBalance = await senderWallet.getBalanceSats();
+        if (!Number.isFinite(senderBalance) || senderBalance < amount) {
+          throw new LnbitsGatewayError('Insufficient allowance balance', 409, { expose: true });
+        }
+        const invoice = await createInvoiceForZap(recipient, amount, memo);
+        return {
+          invoice,
+          payFrom: senderWallet,
+          record: (paid) =>
+            recordZap({
+              paymentHash: paid.paymentHash,
+              kind: 'zap',
+              source,
+              amountSats: amount,
+              memo,
+              from: { oid: sender.oid, displayName: sender.displayName || sender.oid, walletId: sender.allowance.walletId },
+              to: { oid: recipient.oid, displayName: recipient.displayName || recipient.oid },
+            }),
+        };
+      },
+    });
+  };
+};
+
 const sendZap = createSendZap();
+
+const TREASURY_SCOPE = 'treasury';
+const TREASURY_DISPLAY_NAME = 'Automation';
+
+/**
+ * Pays an automation reward from the Treasury to a person's Lightning
+ * address, once per idempotency key, and records it. The bot decides the
+ * amount and enforces the budget; this only pays.
+ */
+const createPayReward = ({
+  findRecipient = (oid) => walletDirectory().store().get(oid),
+  treasuryWallet = () => walletDirectory().treasuryWallet(),
+  createInvoiceForReward = (recipient, amount, memo) =>
+    walletDirectory().createInvoiceFor(recipient.oid, { amountSats: amount, memo }),
+  recordReward = (entry) => zapRecords().record(entry),
+  idempotencyStore = createZapIdempotencyStore(),
+} = {}) => {
+  const pay = createIdempotentPayer(idempotencyStore);
+
+  return async ({ recipientOid: oidInput, recipientLabel, amountSats, memo, reward = {}, idempotencyKey }) => {
+    const recipientOid = normalizeOid(oidInput);
+    if (
+      !recipientOid ||
+      !Number.isSafeInteger(amountSats) ||
+      amountSats <= 0 ||
+      typeof memo !== 'string' ||
+      memo.length > 500 ||
+      !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey || '')
+    ) {
+      throw Object.assign(new LnbitsGatewayError('Invalid reward payment', 400), { paymentOutcome: 'not_paid' });
+    }
+    return pay({
+      scope: idempotencyStore.scopeDigest({ aadObjectId: TREASURY_SCOPE, idempotencyKey }),
+      requestHash: idempotencyStore.requestDigest({ recipientUserId: recipientOid, amount: amountSats, memo }),
+      prepare: async () => {
+        const recipient = await findRecipient(recipientOid);
+        if (!recipient) throw new LnbitsGatewayError('Recipient is not registered with Zaplie', 409);
+        const payFrom = treasuryWallet();
+        const invoice = await createInvoiceForReward(recipient, amountSats, memo);
+        return {
+          invoice,
+          payFrom,
+          record: (paid) =>
+            recordReward({
+              paymentHash: paid.paymentHash,
+              kind: 'reward',
+              source: 'bot',
+              amountSats,
+              memo,
+              from: { displayName: TREASURY_DISPLAY_NAME },
+              to: { oid: recipient.oid, displayName: recipientLabel || recipient.displayName || recipient.oid },
+              reward,
+            }),
+        };
+      },
+    });
+  };
+};
+
+const payReward = createPayReward();
 
 /**
  * The rewards store lists products of a nostrmarket stall. nostrmarket is not
@@ -650,9 +624,9 @@ const getNostrRewards = async (stallId) => {
   if (!rewardsStoreEnabled()) {
     return [];
   }
-  const walletKey = treasuryInkey();
+  const walletKey = rewardsStoreInkey();
   if (!walletKey) {
-    throw new LnbitsGatewayError('ZAPLIE_TREASURY_INKEY must be set for the rewards store', 503);
+    throw new LnbitsGatewayError('ZAPLIE_REWARDS_STORE_INKEY must be set for the rewards store', 503);
   }
   let rewards;
   try {
@@ -684,50 +658,18 @@ const getNostrRewards = async (stallId) => {
   }));
 };
 
-const paymentTime = (payment) =>
-  typeof payment.time === 'number' ? payment.time : Date.parse(payment.time) / 1000 || 0;
-
 /**
- * Every payment Zaplie can see, newest first. With the API token that is one
- * paged read of zaplie.service's payments (every Allowance wallet, the Fund
- * and the Treasury). Without it, each known wallet is read with its invoice
- * key and the pages are merged here.
+ * Every zap and reward Zaplie paid, as payments, newest first: the feed's
+ * and the leaderboards' source. Each is the sending leg only (an Allowance
+ * wallet, or the Treasury for a reward) with Zaplie's metadata in `extra`.
  */
 const getAllPayments = async ({ limit = 1000, offset = 0, direction = 'desc' }) => {
-  const order = direction === 'asc' ? 'asc' : 'desc';
-  if (lnbitsApiToken()) {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      offset: String(offset),
-      sortby: 'time',
-      direction: order,
-    });
-    const body = await lnbitsRequest(`/api/v1/payments/all/paginated?${params}`, {
-      apiToken: true,
-    });
-    const payments = Array.isArray(body)
-      ? body
-      : body?.data || body?.payments || body?.items;
-    if (!Array.isArray(payments)) {
-      throw new LnbitsGatewayError('LNbits payments response is malformed');
-    }
-    return sanitizePaymentPage(payments, 'the zaplie.service payments page');
-  }
-
-  const keys = listPeople()
-    .map((person) => person.allowance?.inkey)
-    .filter(Boolean);
-  const treasury = treasuryInkey();
-  if (treasury) keys.push(treasury);
-  const window = Math.min(offset + limit, 1000);
-  const lists = await mapLimit(keys, MAX_CONCURRENT_READS, async (walletKey) => {
-    const page = await lnbitsRequest(`/api/v1/payments?limit=${window}`, { walletKey });
-    return Array.isArray(page) ? page : [];
-  });
-  const merged = lists.flat().sort((a, b) =>
-    order === 'asc' ? paymentTime(a) - paymentTime(b) : paymentTime(b) - paymentTime(a),
+  const records = zapRecords().list();
+  if (direction === 'asc') records.reverse();
+  return sanitizePaymentPage(
+    records.slice(offset, offset + limit).map(toPayment),
+    'the zap records',
   );
-  return sanitizePaymentPage(merged.slice(offset, offset + limit), 'the merged wallet payments');
 };
 
 const resetCachesForTests = () => {
@@ -737,11 +679,12 @@ const resetCachesForTests = () => {
 module.exports = {
   ALLOWANCE_WALLET_NAME,
   LnbitsGatewayError,
+  OUTCOME_UNKNOWN_MESSAGE,
   assertCaller,
-  createInvoice,
-  createSendZap,
+  createIdempotentPayer,
   createOwnedInvoice,
-  createWalletPayLink,
+  createPayReward,
+  createSendZap,
   ensureCaller,
   getAllPayments,
   getInvoicePayment,
@@ -751,15 +694,16 @@ module.exports = {
   getWalletPayLinks,
   listAllWallets,
   listDirectoryUsers,
-  listPersonWalletsWithKeys,
+  listPersonWallets,
   listUserWallets,
   listUsers,
-  listWalletPayLinksWithKey,
   listWalletPayments,
   lnbitsRequest,
   maskKeys,
   maxZapAmountSats,
+  nwcTransactionToPayment,
   payOwnedInvoice,
+  payReward,
   redactSensitive,
   resetCachesForTests,
   rewardsStoreEnabled,
@@ -768,6 +712,4 @@ module.exports = {
   sanitizeUser,
   sanitizeWallet,
   sendZap,
-  updateWalletPayLink,
-  zapExtra,
 };

@@ -7,8 +7,7 @@ const { createKeyCipher } = require('./keyCipher');
 const { createPeopleStore, normalizeOid, toPublicPerson } = require('./peopleStore');
 
 const OID = '0f8fad5b-d9cb-469f-a165-70867728950e';
-const ADMIN = '1'.repeat(32);
-const INVOICE = '2'.repeat(32);
+const NWC = `nostr+walletconnect://${'b'.repeat(64)}?relay=wss://bank.example/nostrclient/api/v1/relay&secret=${'c'.repeat(64)}`;
 const keyOf = (hex) => () => Buffer.from(hex.repeat(64).slice(0, 64), 'hex');
 
 const tempStore = (t, keyHex = 'c') => {
@@ -21,39 +20,39 @@ const tempStore = (t, keyHex = 'c') => {
   };
 };
 
-test('wallet keys are encrypted on disk and decrypted on read', (t) => {
+test('the NWC connection string is encrypted on disk and decrypted on read', (t) => {
   const { filePath, store } = tempStore(t);
   store.upsertProfile({ oid: OID.toUpperCase(), displayName: 'Ada' });
-  store.setAllowanceWallet(OID, { walletId: 'w1', adminkey: ADMIN, inkey: INVOICE, source: 'token' });
-  store.setReceiveTarget(OID, { inkey: '3'.repeat(32) });
+  store.setAllowanceWallet(OID, { walletId: 'nwc_1', nwc: NWC, lightningAddress: 'zaplie-0f8f@bank.example', source: 'operator' });
+  store.setReceiveTarget(OID, { lightningAddress: 'ada@bank.example' });
 
   const raw = fs.readFileSync(filePath, 'utf8');
-  assert.equal(raw.includes(ADMIN), false);
-  assert.equal(raw.includes(INVOICE), false);
-  assert.equal(raw.includes('3'.repeat(32)), false);
+  assert.equal(raw.includes('c'.repeat(64)), false);
+  assert.equal(raw.includes('nostr+walletconnect'), false);
   assert.match(raw, /enc:v1:/);
 
   const person = store.get(OID);
   assert.equal(person.oid, OID);
-  assert.equal(person.allowance.adminkey, ADMIN);
-  assert.equal(person.receive.inkey, '3'.repeat(32));
+  assert.equal(person.allowance.nwc, NWC);
+  assert.equal(store.findByAllowanceAddress('zaplie-0f8f@bank.example').oid, OID);
+  assert.equal(person.receive.lightningAddress, 'ada@bank.example');
 });
 
 test('the store opened with another key refuses to hand out keys', (t) => {
   const { filePath, store } = tempStore(t);
   store.upsertProfile({ oid: OID });
-  store.setAllowanceWallet(OID, { walletId: 'w1', adminkey: ADMIN, inkey: INVOICE, source: 'token' });
+  store.setAllowanceWallet(OID, { walletId: 'nwc_1', nwc: NWC, source: 'operator' });
   const wrong = createPeopleStore({ filePath, cipher: createKeyCipher({ keyProvider: keyOf('d') }) });
   assert.throws(() => wrong.get(OID), /could not be decrypted/);
 });
 
-test('a plaintext key written by hand is refused, not used', (t) => {
+test('a plaintext connection string written by hand is refused, not used', (t) => {
   const { filePath, store } = tempStore(t);
   fs.writeFileSync(
     filePath,
     JSON.stringify({
       version: 1,
-      people: { [OID]: { oid: OID, allowance: { walletId: 'w1', adminkey: ADMIN, inkey: INVOICE } } },
+      people: { [OID]: { oid: OID, allowance: { walletId: 'nwc_1', nwc: NWC } } },
     }),
   );
   assert.throws(() => store.get(OID), /not encrypted/);
@@ -86,20 +85,20 @@ test('only Entra object ids are accepted as people', (t) => {
   assert.equal(store.get('user-1'), null);
 });
 
-test('the public projection carries no key', (t) => {
+test('the public projection carries no connection string', (t) => {
   const { store } = tempStore(t);
   store.upsertProfile({ oid: OID, displayName: 'Ada' });
-  store.setAllowanceWallet(OID, { walletId: 'w1', adminkey: ADMIN, inkey: INVOICE, source: 'operator' });
-  store.setReceiveTarget(OID, { lightningAddress: 'ada@bank.example', inkey: '3'.repeat(32) });
+  store.setAllowanceWallet(OID, { walletId: 'nwc_1', nwc: NWC, lightningAddress: 'zaplie-0f8f@bank.example', source: 'operator' });
+  store.setReceiveTarget(OID, { lightningAddress: 'ada@bank.example' });
   const projected = toPublicPerson(store.get(OID));
   assert.deepEqual(projected, {
     oid: OID,
     displayName: 'Ada',
     email: '',
-    allowanceWalletId: 'w1',
+    allowanceWalletId: 'nwc_1',
     allowanceSource: 'operator',
-    receive: { lightningAddress: 'ada@bank.example', invoiceKeyRegistered: true },
+    allowanceLightningAddress: 'zaplie-0f8f@bank.example',
+    receive: { lightningAddress: 'ada@bank.example' },
   });
-  assert.equal(JSON.stringify(projected).includes(ADMIN), false);
-  assert.equal(JSON.stringify(projected).includes('3'.repeat(32)), false);
+  assert.equal(JSON.stringify(projected).includes('c'.repeat(64)), false);
 });
