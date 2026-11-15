@@ -32,7 +32,7 @@ only here; values live in App Service settings and nowhere else.
 | Variable | Purpose |
 | --- | --- |
 | `GITHUB_WEBHOOK_SECRET` | Shared secret GitHub signs each delivery with. Generate with `openssl rand -hex 32` and paste the same value into every repository webhook. Unset: the webhook answers 503 and pays nothing. |
-| `REWARDS_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). |
+| `ZAPLIE_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). `REWARDS_TREASURY_ADMINKEY` is still read when unset. |
 | `WEBSITE_API_URL` | Base URL of the portal backend API, including `/api` (for example `https://<portal-domain>/api`). The bot reads amounts, policy and identities from it. |
 | `TAB_BACKEND_TOKEN` | Shared secret the bot sends to the portal backend. Must be a real value, the same on both apps, or every reward fails before payment. |
 | `REWARDS_MAX_AMOUNT_SATS` | Ceiling for one reward (base plus bonus). Defaults to 10000. Set it on the bot and the portal backend. A malformed value fails closed. |
@@ -43,12 +43,14 @@ only here; values live in App Service settings and nowhere else.
 
 Rewards are paid from a dedicated treasury, never from a teammate's Allowance:
 
-1. In LNbits, create a user named `automation` (lower case) with one wallet.
-   Do not name it `Allowance`. The portal finds the treasury by that username;
-   set `TREASURY_USERNAME` on the portal backend if you use another name.
+1. In LNbits, signed in as `zaplie.service`, create a wallet named
+   `Treasury` (the existing `Zaplie` wallet may be reused). Do not name it
+   `Allowance`.
 2. Fund it with **one budget period at most**. The bot's budget ledger is the
    first limit; the wallet balance is the second, independent one.
-3. Set `REWARDS_TREASURY_ADMINKEY` to that wallet's **Admin key**.
+3. Set `ZAPLIE_TREASURY_ADMINKEY` on the bot to that wallet's **Admin key**,
+   and `ZAPLIE_TREASURY_INKEY` on the portal backend to its **Invoice key**:
+   the portal finds the treasury by key, not by an LNbits username.
 
 Payments carry the memo `GitHub: PR #<n> merged - <title>` and show as sent by
 "Automation" in the recipient's transaction log.
@@ -264,7 +266,7 @@ settings):
 | Setting | Purpose |
 | --- | --- |
 | `ALLOWANCE_FUND_ADMINKEY` | Admin key of the `Fund` wallet. Comma-separated for more than one Fund wallet (100 schedules each). Unset: preview only, apply refused. |
-| `LNBITS_PUBLIC_HOST` | The public LNbits host the extension pays over HTTPS, for example `bank.knowall.ai`. Defaults to the host of `LNBITS_NODE_URL`. |
+| `LNBITS_PUBLIC_HOST` | The public LNbits host the extension pays over HTTPS, for example `bank.knowall.ai`. Defaults to the host of `LNBITS_URL`. |
 | `ALLOWANCE_MAX_AMOUNT_SATS` | Optional ceiling per person per period (default 100000). |
 | `ALLOWANCE_SYNC_INTERVAL_MINUTES` | Optional. How often the automatic sync runs (default 360; `0` turns it off). |
 | `ALLOWANCE_SYNC_DISABLED` | Optional. `true` stops the automatic sync. |

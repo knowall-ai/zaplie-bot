@@ -42,10 +42,13 @@ deployable components in one repository:
   fetch fails open to the built-in persona — a portal outage never fails a turn.
 - **Middleware** (`src/services/fetchUserMiddleware.ts`): every turn that has
   a sender (the synthetic event of a proactive send has none) resolves the
-  Teams member and calls `UserService.ensureUserSetup()`, which creates the
-  LNbits user (keyed by AAD object id) and ensures each user has an
-  **Allowance** wallet (spending budget) and a **Private** wallet (received
-  Zaps).
+  Teams member and calls `UserService.ensureUserSetup()`, which adds them to
+  Zaplie's people directory through the portal
+  (`src/services/peopleDirectory.ts` → `/api/directory/internal/people/ensure`).
+  Their **Allowance** wallet (spending budget) is owned by the `zaplie.service`
+  LNbits account; their **Private** wallet (received Zaps) is their own, and
+  Zaplie knows only where they receive (a Lightning address or an invoice
+  key).
 - **Copy and languages** (`src/i18n/`): every user-facing bot string is a key
   in `src/i18n/index.ts` with `en` and `es` dictionaries; replies follow the
   Teams client language (`activity.locale`, English fallback). Add new copy
@@ -66,22 +69,30 @@ deployable components in one repository:
   returns an outcome and never throws into the payment path. Not awaited by
   the sender's turn (Teams' 15-second response limit); tracked on the bot
   instance so tests can settle it (`settleBackgroundWork`).
-- **LNbits integration**: `src/services/lnbitsService.ts` (bot),
-  `tabs/src/services/lnbits/` (browser: `auth`, `cache`, `users`, `wallets`,
-  `payments`, `rewards`), and
-  `functions/services/lnbitsService.ts` (request-scoped) are three parallel
-  clients for the LNbits REST API (`/api/v1/*`, `/users/api/v1/*`).
-  Auth is either `X-Api-Key` (admin/invoice key) or a Bearer token from
-  `POST /api/v1/auth`. A Zap = `createInvoice` on the receiver's Private wallet
-  then `payInvoice` from the sender's Allowance wallet. The payment `extra`
-  carries `{ id, name, user, displayName }` per wallet, built by
+- **LNbits integration (least privilege, `docs/LNBITS_MIGRATION.adoc`)**:
+  Zaplie never logs in to LNbits (no `POST /api/v1/auth`, which mandatory 2FA
+  refuses) and never calls the admin Users API (`/users/api/v1/*`); tests in
+  both packages fail if a source file does. Every call carries one wallet key
+  (`X-Api-Key`) or the optional `zaplie.service` ACL token
+  (`LNBITS_API_TOKEN`, Bearer). The portal backend owns the people directory
+  (`tabs/backend/peopleStore.js`, `walletDirectory.js`, `directoryRoutes.js`,
+  keys sealed under `ZAPLIE_STORE_KEY`) and the one HTTP client
+  (`tabs/backend/lnbitsClient.js`); the bot's client is
+  `src/services/lnbitsService.ts`; `functions/services/lnbitsService.ts` is the
+  legacy request-scoped one (#438). A Zap = the portal invoices the recipient
+  (`createInvoiceForPerson`: their Lightning address over LNURL-pay, amount
+  checked, or their invoice key) then `payInvoice` from the sender's Allowance
+  wallet. The payment `extra` carries `from: { id, name, user, displayName }`
+  and `to: { name, user, displayName }` (`user` = Entra object id), built by
   `src/services/paymentExtra.ts`, never a `Wallet` object (which holds keys);
-  the automation reward's `from` is `{ displayName }` only, because the bot
-  holds the treasury wallet's admin key, not its wallet object.
+  the feed and leaderboard identify zaps by it, because the receiving Private
+  wallet is not visible to Zaplie. The automation reward's `from` is
+  `{ displayName }` only.
 - **Tabs app**: routes `/feed`, `/users`, `/rewards`, `/wallet`, `/settings`
-  (MSAL-guarded via `RequireAuth`, which also provisions the signed-in
-  person's LNbits user and wallets through `POST /api/lnbits/users/me` on
-  first use outside Teams), plus `/login`, `/auth-start`, `/auth-end`. A
+  (MSAL-guarded via `RequireAuth`, which also adds the signed-in person to
+  the directory through `POST /api/lnbits/users/me` on first use outside
+  Teams; the Wallet page registers where they receive, and Settings lets a
+  Zaplie.Admin link Allowance wallets), plus `/login`, `/auth-start`, `/auth-end`. A
   second build of the same source serves `https://getzapl.ie/portal/`
   (`PUBLIC_URL=/portal`).
   `tabs/backend/server.js` is a tiny Express API that persists the renamable
@@ -163,8 +174,10 @@ Never commit secrets. Key variables (see `docs/DEPLOYMENT.adoc` for the full
 table):
 
 - **Bot**: `BOT_ID`, `BOT_PASSWORD`, `BOT_DOMAIN`, `AAD_APP_CLIENT_ID`,
-  `AAD_APP_TENANT_ID`, `LNBITS_NODE_URL`, `LNBITS_USERNAME`,
-  `LNBITS_PASSWORD`, `LNBITS_ADMINKEY`, `LNBITS_INITIAL_ALLOWANCE`,
+  `AAD_APP_TENANT_ID`, `LNBITS_URL` (`LNBITS_NODE_URL` still read),
+  `LNBITS_API_TOKEN` (optional), `ZAPLIE_TREASURY_ADMINKEY`,
+  `TAB_BACKEND_TOKEN` + `WEBSITE_API_URL` (the people directory). Never an
+  LNbits username, password or super-user key,
   `LEADERBOARD_WINDOW_DAYS` (1 to 365; also the assistant's default window),
   `LEADERBOARD_TOP_N` (1 to 100; values outside either range fail closed),
   `ZAP_MAX_RECIPIENTS` (1 or more, default 3; a malformed value stops the
@@ -225,11 +238,11 @@ table):
 - The GitHub Actions workflows (`.github/workflows/`) build only `tabs/` and
   deploy to the `zappie-dev` App Service (slot per PR / `testing`); the bot is
   deployed via `teamsapp deploy`, not CI.
-- `getUsers` pages the LNbits Users API (`sortby=id`, 100 per request, until
-  `total` is reached or a page comes back empty). LNbits 1.6 returns ten
-  accounts per request by default, orders nothing unless `sortby` is set, and
-  reports `total: 0` once `offset` is past the end, so do not assume the
-  default response contains the complete list.
+- People are Zaplie's, not LNbits': `people.json` under `ZAPLIE_DATA_DIR`
+  on the portal backend. Losing it (or `ZAPLIE_STORE_KEY`) loses the
+  Allowance wallet keys, not the sats: the wallets still exist under
+  `zaplie.service` and can be re-linked from Settings. Back it up with the
+  rest of the data directory.
 
 ## Documentation
 
@@ -254,8 +267,8 @@ Any id that reaches an LNbits URL (user, wallet, invoice) goes through
 `encodeURIComponent`, and ids from a Teams card or other client input are
 checked against the plain-id pattern first (`normalizeRecipientIds` in
 `src/commands/zapRecipient.ts`, `USER_ID_PATTERN` in the portal gateway).
-Those calls carry the LNbits admin token, so a raw `../` would let a client
-steer them to any LNbits endpoint.
+Those calls carry wallet keys or the portal's internal token, so a raw
+`../` would let a client steer them to another endpoint.
 
 User-typed amounts are parsed with `parseSatsAmount`
 (`src/utils/satsAmount.ts`), never `Number()` or `parseInt` alone; env

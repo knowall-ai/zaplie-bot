@@ -58,9 +58,8 @@ Configure these values on the bot process:
 | --- | --- |
 | `WEBSITE_API_URL` | Tab backend API base URL, including `/api`. Required in production. |
 | `TAB_BACKEND_TOKEN` | The same server-to-server value configured on the tab backend. |
-| `LNBITS_NODE_URL` | LNbits base URL. |
-| `LNBITS_USERNAME` / `LNBITS_PASSWORD` | LNbits service credentials used to obtain the admin bearer token. |
-| `LNBITS_ADMINKEY` | Required guard for the linked-user lookup and wallet access. |
+| `LNBITS_URL` | LNbits base URL (`LNBITS_NODE_URL` is still read). |
+| `ZAPLIE_TREASURY_ADMINKEY` | Treasury wallet the reward is paid from. The recipient is invoiced by the portal from the people directory; the bot holds no LNbits login. |
 
 Do not reuse `REWARDS_API_KEY` as `TAB_BACKEND_TOKEN`; the external automation
 boundary and the internal bot-to-backend boundary have different exposure and

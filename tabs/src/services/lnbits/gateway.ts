@@ -30,13 +30,21 @@ const getIdToken = async (): Promise<string> => {
 export const apiRequest = async <T>(
   path: string,
   init: RequestInit = {},
+): Promise<T> => apiRequestAt<T>(API_BASE, path, init);
+
+// The same signed-in, time-limited request against another backend area
+// (the people directory lives at /api/directory).
+export const apiRequestAt = async <T>(
+  base: string,
+  path: string,
+  init: RequestInit = {},
 ): Promise<T> => {
   const token = await getIdToken();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${base}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {

@@ -58,15 +58,18 @@ where configured, come from the LNbits allowance extension rather than the bot.
 
 === Which LNbits version is required?
 
-LNbits 1.0 or higher; the shared test instance runs 1.5.6. Users and wallets
-are provisioned through the core Users API (`/users/api/v1/user`), which
-replaced the User Manager extension, so no extension needs to be enabled.
+LNbits 1.7 or higher (bank.knowall.ai runs 1.7.1 with mandatory 2FA). Zaplie
+uses an ordinary account, `zaplie.service`, with the `lnurlp` and `allowance`
+extensions enabled for it; it never logs in and never uses the admin Users
+API. See `docs/LNBITS_MIGRATION.adoc`.
 
 === How are Teams users mapped to wallets?
 
-By the Entra ID (AAD) object id, stored as an extra field on the LNbits user.
-`FetchUserMiddleware` ensures the user and both wallets exist on every bot
-interaction.
+By the Entra ID (AAD) object id, in Zaplie's own people directory
+(`people.json`, wallet keys encrypted). `FetchUserMiddleware` adds the person
+on their first bot interaction; their Allowance wallet belongs to
+`zaplie.service`, and they receive zaps in their own Private wallet through a
+Lightning address or invoice key they register on the portal's Wallet page.
 
 === How do I report a security issue?
 

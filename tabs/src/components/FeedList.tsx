@@ -193,7 +193,18 @@ const FeedList: React.FC<FeedListProps> = ({ timestamp }) => {
           // Exclude weekly allowance cleared transactions
           if (payment.memo?.includes('Weekly Allowance cleared')) return false;
 
-          // Verify the receiver is a Private wallet (not external Lightning payment)
+          // A zap Zaplie paid carries its own metadata naming the recipient
+          // by Entra id: their Private wallet is their own and is not visible
+          // here (docs/LNBITS_MIGRATION.adoc).
+          if (
+            payment.extra?.tag === 'zap' &&
+            payment.extra?.automation !== true &&
+            typeof payment.extra?.to?.user === 'string'
+          ) {
+            return true;
+          }
+
+          // Older zaps: the receiving side is a Private wallet still in view.
           const receiverWalletId = findReceiverWalletId(payment);
           if (!receiverWalletId || !privateWalletIds.has(receiverWalletId)) {
             return false;

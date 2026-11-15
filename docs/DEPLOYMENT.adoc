@@ -151,14 +151,18 @@ The backend already answers cross-origin requests (`cors()` in
 `https://getzapl.ie/portal` once the GitHub identity and connection redirects
 are meant to land there.
 
-People who have never used the bot in Teams have no LNbits user. The portal
-provisions one on first sign-in: `POST /api/lnbits/users/me` (the one gateway
-route that does not require an existing LNbits user) creates the user, keyed
-by the Entra `oid` in `external_id` like the bot does, and its empty
-`Allowance` and `Private` wallets. It moves no sats: the opening allowance
-(`LNBITS_INITIAL_ALLOWANCE`) remains the bot's doing, so a person set up this
-way can receive zaps at once and send them once their Allowance wallet is
-funded.
+People are kept in Zaplie's own directory (`people.json` under
+`ZAPLIE_DATA_DIR`, wallet keys encrypted with `ZAPLIE_STORE_KEY`), keyed by
+the Entra `oid`. Zaplie never creates LNbits users and never logs in to
+LNbits (see `docs/LNBITS_MIGRATION.adoc`). On first sign-in
+`POST /api/lnbits/users/me` (the one gateway route that does not require an
+existing directory entry) adds the person and, when `LNBITS_API_TOKEN` is
+configured, creates their empty Allowance wallet under the `zaplie.service`
+account; without the token an admin links a wallet in *Settings → People and
+Allowance wallets*. It moves no sats: the opening allowance is paid from the
+Fund wallet by the allowance extension. Each person registers where they
+receive zaps (a Lightning address, or the invoice key of their own Private
+wallet) on the portal's *Wallet* page.
 
 The route serves exactly the people the bot serves. `tabs/backend/memberGate.js`
 mirrors `src/services/memberGate.ts`: members of the home tenant are
@@ -171,7 +175,7 @@ idToken: `tid` is the tenant and the optional claim `acct` is the role
 that is applied to the app registration (`teamsapp provision` outside
 production, or *Token configuration* in the Entra portal; see Day One for
 production) no token carries it and the route
-refuses everyone, by design. People who already have an LNbits user are not
+refuses everyone, by design. People already in the directory are not
 affected: only creation is gated.
 
 === Persistent application state
@@ -334,24 +338,39 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Entra ID app registration for SSO
 | Bot
 
-| `LNBITS_NODE_URL`
-| Base URL of the LNbits instance
+| `LNBITS_URL`
+| Base URL of the LNbits instance. `LNBITS_NODE_URL` is still read when this
+  is unset, so existing app settings keep working
 | Bot, Portal backend
 
-| `LNBITS_USERNAME`, `LNBITS_PASSWORD`
-| LNbits service-account credentials (`POST /api/v1/auth`) — server-side only,
-  never with a `REACT_APP_` prefix
+| `LNBITS_API_TOKEN`
+| Optional. ACL token of the `zaplie.service` account, scoped to
+  `POST /api/v1/wallet`, `GET /api/v1/wallets` and `GET /api/v1/payments`.
+  The portal uses it to create a person's Allowance wallet on first sign-in
+  and to read balances and payments in one call; the bot to read the
+  leaderboard in one paged call. Without it an admin links each Allowance
+  wallet and every wallet is read with its own invoice key. Server-side only,
+  never with a `REACT_APP_` prefix. See `docs/LNBITS_MIGRATION.adoc`
 | Bot, Portal backend
 
-| `LNBITS_ADMINKEY`
-| LNbits admin API key for wallet operations — server-side only, never with a
-  `REACT_APP_` prefix
-| Bot, Portal backend
+| `ZAPLIE_STORE_KEY`
+| 64 hex characters (`openssl rand -hex 32`) that encrypt the wallet keys in
+  the people directory (`people.json`). Unset, one is generated into
+  `secrets.json` beside the data: fine locally, but in Azure set it (a Key
+  Vault reference) so the data share alone does not open the keys. Changing it
+  makes the stored keys unreadable
+| Portal backend
 
-| `LNBITS_INITIAL_ALLOWANCE`
-| Sats the bot attempts to grant to each user's Allowance wallet when it is
-created. Must be a positive integer; a failed grant is logged, not retried
-| Bot
+| `ZAPLIE_LIGHTNING_ADDRESS_DOMAINS`
+| Domains a person's Lightning address may use, comma-separated; `*` allows
+  any public domain. Default: the public LNbits host only, so zaps stay on
+  the instance
+| Portal backend
+
+| `ZAPLIE_REWARDS_STORE_ENABLED`
+| `true` turns on the rewards store, which needs the nostrmarket extension.
+  Off by default; an instance without the extension shows an empty store
+| Portal backend
 
 | `LNBITS_POINTS_LABEL`
 | Default reward-unit label (renamable in Settings)
@@ -419,9 +438,16 @@ created. Must be a positive integer; a failed grant is logged, not retried
   portal-managed keys created in Automations). GitHub does not use it
 | Bot
 
-| `REWARDS_TREASURY_ADMINKEY`
-| Admin key of the LNbits treasury wallet that reward payouts are drawn from
+| `ZAPLIE_TREASURY_ADMINKEY`
+| Admin key of the Treasury wallet (owned by `zaplie.service`) that reward
+  payouts are drawn from. `REWARDS_TREASURY_ADMINKEY` is still read when this
+  is unset
 | Bot
+
+| `ZAPLIE_TREASURY_INKEY`
+| Invoice (read) key of the Treasury wallet: the automation stats, the reports
+  and (when enabled) the rewards store read it. Replaces `TREASURY_USERNAME`
+| Portal backend
 
 | `REWARDS_MAX_AMOUNT_SATS`
 | Upper bound in sats for a single automated reward, base plus level bonus
@@ -464,7 +490,7 @@ created. Must be a positive integer; a failed grant is logged, not retried
 
 | `LNBITS_PUBLIC_HOST`
 | Public host of LNbits that Lightning addresses are served on (for example
-  `bank.knowall.ai`). Defaults to the host of `LNBITS_NODE_URL`. The extension
+  `bank.knowall.ai`). Defaults to the host of `LNBITS_URL`. The extension
   pays over public HTTPS, so it must not be an internal address
 | Portal backend
 
@@ -529,10 +555,6 @@ created. Must be a positive integer; a failed grant is logged, not retried
   manifest registers. The stored App client always uses the manifest callback
 | Portal backend
 
-| `TREASURY_USERNAME`
-| LNbits account that owns the treasury wallet used by portal payouts
-| Portal backend
-
 | `IDENTITY_STATE_SECRET`
 | HMAC key that signs the short-lived state token in the GitHub OAuth /
   identity-linking round trip (`backend/githubOAuthState.js`). If unset the
@@ -550,7 +572,8 @@ created. Must be a positive integer; a failed grant is logged, not retried
   portable spelling: the bot expands `%HOME%` itself, so one value is correct
   on either OS and on any stamp. Consumers: every portal backend
   store honours it (`data.json`, identities, connections, pending rewards,
-  secrets, webhook keys, GitHub App credentials, the LNbits user directory);
+  secrets, webhook keys, GitHub App credentials, the people directory
+  `people.json`);
   the bot's zap and reward ledgers (`bot-zap-ledger.json`,
   `bot-reward-ledger.json`) read it too, and outside
   explicit development mode the bot refuses to start without it. Set it on
@@ -610,7 +633,10 @@ never in tracked files.
 
 `REACT_APP_*` is a public compile-time namespace, not a secret store. The
 portal has no references to `REACT_APP_LNBITS_PASSWORD` or
-`REACT_APP_LNBITS_ADMINKEY`; build workflows must not supply them.
+`REACT_APP_LNBITS_ADMINKEY`; build workflows must not supply them. The deploy
+workflows fail if the built bundle names any LNbits credential
+(`LNBITS_API_TOKEN`, the Treasury or Fund keys, `ZAPLIE_STORE_KEY`), so keep
+those names out of browser code, comments included: source maps carry them.
 
 [[Telemetry]]
 == Telemetry (Agents Portal)
@@ -732,11 +758,12 @@ Complete these once per new environment, right after the first deployment:
      Keep that role to a few trusted accounts, and test the gate with an
      ordinary unassigned user, not an administrator.
   .. Keep this list in step with the Teams app's availability (below).
-. *Prepare LNbits.* No extension is needed for provisioning: the bot creates
-  users through the core Users API, which requires an LNbits admin account.
-  Create the treasury wallet that funds automation rewards, fund it with one
-  budget period at most, and copy its admin key into
-  `REWARDS_TREASURY_ADMINKEY`. Then follow `docs/automation/README.md` to set
+. *Prepare LNbits.* Follow `docs/LNBITS_MIGRATION.adoc`: Zaplie uses an
+  ordinary, non-admin account (`zaplie.service`) and never logs in. Enable
+  the `lnurlp` and `allowance` extensions for that account, and create the
+  Fund and Treasury wallets under it. Fund the Treasury with one budget
+  period at most, and copy its admin key into `ZAPLIE_TREASURY_ADMINKEY` (bot)
+  and its invoice key into `ZAPLIE_TREASURY_INKEY` (portal). Then follow `docs/automation/README.md` to set
   `GITHUB_WEBHOOK_SECRET`, the reward amount, the budget and each repository
   webhook; nothing pays until the amount and the budget are set. Weekly
   allowances are paid by the LNbits
@@ -748,16 +775,17 @@ Complete these once per new environment, right after the first deployment:
   `REACT_APP_LNBITS_PASSWORD` and `REACT_APP_LNBITS_ADMINKEY` into the
   portal's public JavaScript bundle, so any admin key or service-account
   password that ever reached a deployed environment must be treated as
-  compromised. Rotate both in LNbits and update the server-side app settings
-  (`LNBITS_PASSWORD`, `LNBITS_ADMINKEY`) — never reuse the old values.
-. *Provisioning caveat.* A user's LNbits wallets are provisioned the first
-  time the bot sees them (the Teams install event or their first message),
-  so the tab cannot resolve a wallet for someone the bot has never seen.
+  compromised. Rotate both in LNbits; Zaplie no longer reads either
+  (`docs/LNBITS_MIGRATION.adoc`), so delete them from the app settings.
+. *Provisioning caveat.* A person is added to the directory the first time
+  the bot sees them (the Teams install event or their first message) or they
+  sign in to the portal; their Allowance wallet is created then when
+  `LNBITS_API_TOKEN` is set, otherwise when an admin links one.
   Only *members* of the bot's own tenant (`userRole` `user`, `tenantId` =
   `AAD_APP_TENANT_ID`) and guests listed in `ZAPLIE_GUEST_ALLOWLIST` are
   provisioned or answered. Anyone else (an unlisted guest, an anonymous
   meeting participant, an unlisted user from another tenant, or a sender
-  Teams cannot resolve) gets no LNbits account, no reply and no error
+  Teams cannot resolve) gets no directory entry, no reply and no error
   message (`src/services/memberGate.ts`).
 . *Who can use the Teams app (Teams admin centre, Manage apps, Zaplie).*
   *Availability* decides who can use it, *Installs* who gets it without

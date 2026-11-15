@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import WalletYourWalletInfoCard from './components/WalletInfoCard';
+import ReceiveTargetCard from './components/ReceiveTargetCard';
 import WalletTransactionHistory from './components/WalletTransactionHistory';
 import WalletAllowanceCard from './components/WalletAllowanceComponent';
 import styles from './Wallet.module.css';
@@ -41,9 +41,11 @@ const Wallet: React.FC = () => {
         </button>
       </div>
       {showYourWalletTab ? (
+        // The Private wallet is the person's own LNbits wallet: Zaplie can
+        // invoice into it but never spend from or list it, so its history
+        // lives in that wallet, not here.
         <div>
-          <WalletYourWalletInfoCard />
-          <WalletTransactionHistory activeMainTab={activeWallet} />
+          <ReceiveTargetCard />
         </div>
       ) : (
         <div>
