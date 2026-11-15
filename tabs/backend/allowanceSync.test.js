@@ -94,6 +94,17 @@ test('planner: a new person gets a pay link and a schedule from the next anchor'
   assert.equal(result.summary.changes, 2);
 });
 
+test('planner: a recorded Allowance address needs no pay link and is what the schedule pays', () => {
+  // Since NWC Zaplie holds no Allowance wallet key: the operator created the
+  // pay link in LNbits and the directory recorded its address.
+  const result = plan({
+    people: [{ ...person(OID_A), lightningAddress: `team-a@${HOST}` }],
+    payLinks: {},
+  });
+  assert.deepEqual(kinds(result), ['create:']);
+  assert.equal(result.actions[0].body.lightning_address, `team-a@${HOST}`);
+});
+
 test('planner table: create, update, recreate, delete, dedupe, drift, paused, leaver, fund-full', () => {
   const cases = [
     {

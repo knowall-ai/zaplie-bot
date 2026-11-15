@@ -2,30 +2,39 @@
 // The people directory over HTTP. Three audiences, three credentials:
 //
 //   /me/*        the signed-in person (verified MSAL token): see their own
-//                wallets, register where they receive zaps.
-//   /admin/*     Zaplie.Admin: see who is set up, link an Allowance wallet
-//                created by hand in LNbits (the no-API-token path).
+//                Allowance balance, register where they receive zaps.
+//   /admin/*     Zaplie.Admin: see who is set up, link an Allowance wallet by
+//                its NWC connection string and Lightning address.
 //   /internal/*  the bot (shared TAB_BACKEND_TOKEN): resolve and provision
-//                people, invoice a recipient, read balances.
+//                people, pay a zap or a reward, read balances and zaps.
 //
-// Keys leave this server on exactly one route: /internal/people/ensure hands
-// the bot the caller's own Allowance keys, because the bot pays from that
-// wallet. Every other response goes through toPublicPerson.
+// No credential ever leaves this server: every person goes out through
+// toPublicPerson. The bot holds no wallet access of its own; it asks this
+// backend to pay, and payments only ever go to a directory member, resolved
+// here from their Entra id (an invoice or address from a client is never
+// paid).
 const express = require('express');
 const authMiddleware = require('./authMiddleware');
 const { requireAdmin } = require('./adminAuth');
 const { requireMsalOid: defaultRequireMsalOid } = require('./requireMsalOid');
 const { walletDirectory: defaultDirectory } = require('./walletDirectory');
 const { normalizeOid, toPublicPerson } = require('./peopleStore');
-const { maxZapAmountSats } = require('./lnbitsGatewayService');
-const { redactSensitive } = require('./lnbitsClient');
+const gateway = require('./lnbitsGatewayService');
+const { zapRecords: defaultZapRecords } = require('./zapRecordStore');
 
-const RECEIVE_BODY_KEYS = new Set(['lightningAddress', 'invoiceKey']);
-const LINK_BODY_KEYS = new Set(['adminkey', 'inkey', 'displayName']);
+const RECEIVE_BODY_KEYS = new Set(['lightningAddress']);
+const LINK_BODY_KEYS = new Set(['nwcUrl', 'lightningAddress', 'displayName']);
 const ENSURE_BODY_KEYS = new Set(['aadObjectId', 'displayName', 'email']);
-const INVOICE_BODY_KEYS = new Set(['amountSats', 'memo', 'extra']);
-const MAX_MEMO = 500;
-const MAX_EXTRA_BYTES = 2048;
+const ZAP_BODY_KEYS = new Set(['senderOid', 'recipientOid', 'amountSats', 'memo', 'idempotencyKey']);
+const REWARD_BODY_KEYS = new Set([
+  'recipientOid',
+  'recipientLabel',
+  'amountSats',
+  'memo',
+  'reward',
+  'idempotencyKey',
+]);
+const REWARD_FIELDS = new Set(['eventType', 'repo', 'source', 'baseSats', 'bonusSats', 'level']);
 
 const hasOnlyKeys = (body, allowed) =>
   typeof body === 'object' &&
@@ -36,21 +45,21 @@ const hasOnlyKeys = (body, allowed) =>
 const optionalString = (value, max) =>
   value === undefined || value === null || (typeof value === 'string' && value.length <= max);
 
-// The extra a zap invoice carries is built by the bot from names and ids. It
-// is size-capped, and refused outright if any field is named like a key: the
-// payee's wallet stores it where anyone with its invoice key can read it.
-const validExtra = (extra) => {
-  if (extra === undefined) return true;
-  if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return false;
-  const text = JSON.stringify(extra);
-  return text.length <= MAX_EXTRA_BYTES && JSON.stringify(redactSensitive(extra)) === text;
-};
+const validReward = (reward) =>
+  reward === undefined ||
+  (hasOnlyKeys(reward, REWARD_FIELDS) &&
+    Object.values(reward).every(
+      (value) => (typeof value === 'string' && value.length <= 200) || Number.isSafeInteger(value),
+    ));
 
 const createDirectoryRouter = ({
   directory = defaultDirectory,
   requireMsalOid = defaultRequireMsalOid,
   internalAuth = authMiddleware,
   adminAuth = requireAdmin,
+  sendZap = (input) => gateway.sendZap(input),
+  payReward = (input) => gateway.payReward(input),
+  zapRecords = defaultZapRecords,
 } = {}) => {
   const router = express.Router();
 
@@ -62,6 +71,8 @@ const createDirectoryRouter = ({
     }
   };
 
+  const provisioning = () => (directory().autoProvisionEnabled() ? 'automatic' : 'operator');
+
   // --- the signed-in person ------------------------------------------------
 
   router.get(
@@ -70,18 +81,14 @@ const createDirectoryRouter = ({
       const oid = await requireMsalOid(req, res);
       if (!oid) return;
       const person = directory().requirePerson(oid);
-      let balances = { allowanceSats: null, privateSats: null };
+      let balances = { allowanceSats: null, budget: null };
       try {
         balances = await directory().balancesFor(oid);
       } catch (error) {
         // A balance read failing must not hide the registration form.
         console.warn('Directory balances unavailable:', error.message);
       }
-      res.json({
-        ...toPublicPerson(person),
-        ...balances,
-        provisioning: directory().tokenConfigured() ? 'automatic' : 'operator',
-      });
+      res.json({ ...toPublicPerson(person), ...balances, provisioning: provisioning() });
     }),
   );
 
@@ -93,17 +100,13 @@ const createDirectoryRouter = ({
       const body = req.body;
       if (
         !hasOnlyKeys(body, RECEIVE_BODY_KEYS) ||
-        !optionalString(body.lightningAddress, 320) ||
-        !optionalString(body.invoiceKey, 64) ||
-        (body.lightningAddress === undefined && body.invoiceKey === undefined)
+        body.lightningAddress === undefined ||
+        !optionalString(body.lightningAddress, 320)
       ) {
-        res.status(400).json({ error: 'send lightningAddress and/or invoiceKey' });
+        res.status(400).json({ error: 'send lightningAddress' });
         return;
       }
-      const person = await directory().setReceiveTarget(oid, {
-        lightningAddress: body.lightningAddress,
-        invoiceKey: body.invoiceKey,
-      });
+      const person = await directory().setReceiveTarget(oid, { lightningAddress: body.lightningAddress });
       res.json(toPublicPerson(person));
     }),
   );
@@ -115,7 +118,7 @@ const createDirectoryRouter = ({
     adminAuth,
     route(async (_req, res) => {
       res.json({
-        provisioning: directory().tokenConfigured() ? 'automatic' : 'operator',
+        provisioning: provisioning(),
         people: directory().store().list().map(toPublicPerson),
       });
     }),
@@ -130,20 +133,21 @@ const createDirectoryRouter = ({
       if (
         !oid ||
         !hasOnlyKeys(body, LINK_BODY_KEYS) ||
-        typeof body.adminkey !== 'string' ||
-        typeof body.inkey !== 'string' ||
+        typeof body.nwcUrl !== 'string' ||
+        body.nwcUrl.length > 2048 ||
+        !optionalString(body.lightningAddress, 320) ||
         !optionalString(body.displayName, 256)
       ) {
-        res.status(400).json({ error: 'send the Entra object id, adminkey and inkey' });
+        res.status(400).json({ error: 'send the Entra object id, the NWC connection string and the Lightning address' });
         return;
       }
-      const { person, ownershipVerified } = await directory().linkAllowanceWallet({
+      const { person, balanceSats } = await directory().linkAllowanceWallet({
         oid,
         displayName: body.displayName,
-        adminkey: body.adminkey,
-        inkey: body.inkey,
+        nwcUrl: body.nwcUrl,
+        lightningAddress: body.lightningAddress,
       });
-      res.json({ person: toPublicPerson(person), ownershipVerified });
+      res.json({ person: toPublicPerson(person), balanceSats });
     }),
   );
 
@@ -156,8 +160,8 @@ const createDirectoryRouter = ({
         res.status(400).json({ error: 'invalid Entra object id' });
         return;
       }
-      if (!directory().tokenConfigured()) {
-        res.status(409).json({ error: 'LNBITS_API_TOKEN is not configured; link a wallet instead' });
+      if (!directory().autoProvisionEnabled()) {
+        res.status(409).json({ error: 'Automatic provisioning is off; link a wallet instead' });
         return;
       }
       const result = await directory().ensurePerson({ oid });
@@ -172,19 +176,7 @@ const createDirectoryRouter = ({
   router.get(
     '/internal/people',
     route(async (_req, res) => {
-      res.json({
-        people: directory()
-          .store()
-          .list()
-          .map((person) => ({
-            ...toPublicPerson(person),
-            // The invoice key only: it reads payments (leaderboard) and
-            // cannot spend.
-            allowanceWallet: person.allowance
-              ? { id: person.allowance.walletId, inkey: person.allowance.inkey }
-              : null,
-          })),
-      });
+      res.json({ people: directory().store().list().map(toPublicPerson) });
     }),
   );
 
@@ -208,18 +200,8 @@ const createDirectoryRouter = ({
         displayName: body.displayName,
         email: body.email,
       });
-      const { person } = result;
       res.json({
-        person: {
-          ...toPublicPerson(person),
-          allowanceWallet: person.allowance
-            ? {
-                id: person.allowance.walletId,
-                adminkey: person.allowance.adminkey,
-                inkey: person.allowance.inkey,
-              }
-            : null,
-        },
+        person: toPublicPerson(result.person),
         created: result.created,
         awaitingOperator: result.awaitingOperator,
       });
@@ -245,38 +227,83 @@ const createDirectoryRouter = ({
     }),
   );
 
-  router.post(
-    '/internal/people/:oid/invoices',
+  // A payment answer always says whether money may have left: `outcome`
+  // 'not_paid' (safe to retry) or 'unknown' (reconcile, never retry blind).
+  const payRoute = (pay) =>
     route(async (req, res) => {
-      const body = req.body;
-      const amount = body?.amountSats;
-      if (
-        !normalizeOid(req.params.oid) ||
-        !hasOnlyKeys(body, INVOICE_BODY_KEYS) ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0 ||
-        amount > maxZapAmountSats() ||
-        typeof body.memo !== 'string' ||
-        body.memo.length > MAX_MEMO ||
-        !validExtra(body.extra)
-      ) {
-        res.status(400).json({ error: 'invalid invoice request' });
-        return;
+      try {
+        const result = await pay(req, res);
+        if (result) res.json({ paymentHash: result.payment_hash, outcome: 'paid' });
+      } catch (error) {
+        const status = Number.isInteger(error.status) ? error.status : 502;
+        const outcome = error.paymentOutcome === 'not_paid' ? 'not_paid' : 'unknown';
+        console.error('Directory payment failed:', req.path, outcome, error.message);
+        res.status(status).json({
+          error: status >= 500 && !error.expose ? 'the payment could not be completed' : error.message,
+          outcome,
+        });
       }
-      res.status(201).json(
-        await directory().createInvoiceFor(req.params.oid, {
-          amountSats: amount,
-          memo: body.memo,
-          extra: body.extra,
-        }),
-      );
+    });
+
+  // A zap between two directory members, both named by Entra id. The
+  // recipient's invoice is made here from their registered address.
+  router.post(
+    '/internal/zaps',
+    payRoute(async (req, res) => {
+      const body = req.body;
+      if (!hasOnlyKeys(body, ZAP_BODY_KEYS) || !normalizeOid(body.senderOid)) {
+        res.status(400).json({ error: 'invalid zap', outcome: 'not_paid' });
+        return null;
+      }
+      return sendZap({
+        aadObjectId: normalizeOid(body.senderOid),
+        recipientUserId: body.recipientOid,
+        amount: body.amountSats,
+        memo: body.memo,
+        idempotencyKey: body.idempotencyKey,
+        source: 'bot',
+      });
+    }),
+  );
+
+  // An automation reward from the Treasury to a directory member.
+  router.post(
+    '/internal/rewards',
+    payRoute(async (req, res) => {
+      const body = req.body;
+      if (
+        !hasOnlyKeys(body, REWARD_BODY_KEYS) ||
+        !optionalString(body.recipientLabel, 256) ||
+        !validReward(body.reward)
+      ) {
+        res.status(400).json({ error: 'invalid reward payment', outcome: 'not_paid' });
+        return null;
+      }
+      return payReward({
+        recipientOid: body.recipientOid,
+        recipientLabel: body.recipientLabel,
+        amountSats: body.amountSats,
+        memo: body.memo,
+        reward: body.reward,
+        idempotencyKey: body.idempotencyKey,
+      });
+    }),
+  );
+
+  // Every zap and reward Zaplie paid, newest first (the bot's leaderboard and
+  // history). Names, Entra ids, amounts and memos only.
+  router.get(
+    '/internal/zaps',
+    route(async (req, res) => {
+      const since = Number.parseInt(String(req.query.since || ''), 10);
+      res.json({ zaps: zapRecords().list(Number.isSafeInteger(since) && since > 0 ? { since } : {}) });
     }),
   );
 
   router.use((error, req, res, _next) => {
     const status = Number.isInteger(error.status) ? error.status : 502;
-    const route = `${req.method} ${String(req.originalUrl || req.url || '').split('?')[0]}`;
-    console.error('Directory request failed:', route, error.message);
+    const path = `${req.method} ${String(req.originalUrl || req.url || '').split('?')[0]}`;
+    console.error('Directory request failed:', path, error.message);
     res.status(status).json({
       error: status >= 500 && !error.expose ? 'the Zaplie directory is unavailable' : error.message,
     });

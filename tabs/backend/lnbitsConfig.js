@@ -3,11 +3,13 @@
 //
 // Least privilege (docs/LNBITS_MIGRATION.adoc): Zaplie never logs in to LNbits
 // and never calls the admin Users API (/users/api/v1/*). It holds only
-//   * wallet keys of wallets owned by the zaplie.service account (one
-//     Allowance wallet per person, kept in peopleStore.js; the Fund and the
-//     Treasury wallet from the environment), and
-//   * optionally LNBITS_API_TOKEN, an ACL token of zaplie.service scoped to
-//     creating and listing its own wallets and reading its own payments.
+//   * NWC connection strings for the wallets it spends from (each person's
+//     Allowance wallet in peopleStore.js, the Treasury in ZAPLIE_TREASURY_NWC),
+//   * the Fund wallet's admin key, for the LNbits allowance extension only
+//     (allowanceExtensionClient.js), and
+//   * optionally LNBITS_API_TOKEN, for ZAPLIE_AUTO_PROVISION only. Off by
+//     default: write access to /api/v1/wallet also lets a token reset keys
+//     of, or delete, any zaplie.service wallet.
 const { REQUEST_TIMEOUT_MS } = require('./httpTimeout');
 
 class LnbitsConfigError extends Error {
@@ -37,11 +39,14 @@ const lnbitsUrl = (env = process.env) => {
 const lnbitsApiToken = (env = process.env) => trimmed(env.LNBITS_API_TOKEN) || null;
 
 /**
- * The Treasury wallet's invoice key (automation rewards), which the portal
- * reads payouts with. Its admin key is the bot's alone
- * (ZAPLIE_TREASURY_ADMINKEY) and is deliberately not read here.
+ * The Treasury wallet's NWC connection string (automation rewards). The
+ * portal pays rewards through it on the bot's behalf; it is the only Treasury
+ * credential Zaplie holds.
  */
-const treasuryInkey = (env = process.env) => trimmed(env.ZAPLIE_TREASURY_INKEY) || null;
+const treasuryNwc = (env = process.env) => trimmed(env.ZAPLIE_TREASURY_NWC) || null;
+
+/** Invoice key the optional rewards store (nostrmarket) is read with. */
+const rewardsStoreInkey = (env = process.env) => trimmed(env.ZAPLIE_REWARDS_STORE_INKEY) || null;
 
 /**
  * The host Lightning addresses are served on: LNBITS_PUBLIC_HOST, else the
@@ -66,5 +71,6 @@ module.exports = {
   lnbitsApiToken,
   lnbitsUrl,
   publicLnbitsHost,
-  treasuryInkey,
+  rewardsStoreInkey,
+  treasuryNwc,
 };
