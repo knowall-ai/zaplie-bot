@@ -31,6 +31,8 @@ export interface MyDirectoryEntry extends DirectoryPerson {
   allowanceSats: number | null;
   // Only when the wallet reports its NWC budget (LNbits does not).
   budget: WalletBudget | null;
+  // Domains this deployment accepts Lightning addresses on (empty: any).
+  receiveDomains?: string[];
 }
 
 export const getMyDirectoryEntry = (): Promise<MyDirectoryEntry> =>

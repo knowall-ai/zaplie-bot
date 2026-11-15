@@ -185,8 +185,10 @@ az webapp config appsettings delete -g ka-zaplie-prod -n zaplie-prod-webapp \
 == Phase D: onboard people (Settings → People and Allowance wallets → Add people)
 
 A person appears in the directory on their first bot message or portal
-sign-in. *Add people* lists those still waiting for an Allowance wallet, and
-anyone else can be added by Entra object id. Pick them, then one of two ways.
+sign-in. *Add people* lists those still waiting for an Allowance wallet,
+with a search by name or email; anyone else can be added by Entra object id
+under *Add someone who isn't listed (advanced)*. Pick them, then one of two
+ways.
 
 === Recommended: let Zaplie create the wallets in LNbits (provisioner mode)
 
