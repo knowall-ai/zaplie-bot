@@ -7,7 +7,7 @@ import checkmarkIcon from '../images/CheckmarkCircleGreen.svg';
 import dismissIcon from '../images/DismissCircleRed.svg';
 import pasteInvoice from '../images/PasteInvoice.svg';
 import loaderGif from '../images/Loader.gif';
-import { payInvoice } from '../services/lnbits/payments';
+import { payInvoice } from '../services/wallet/payments';
 import { RewardNameContext } from './RewardNameContext';
 import {
   INVOICE_ERRORS,

@@ -5,14 +5,14 @@ import UserListComponent, {
 } from './UserListComponent';
 import { RewardNameContext } from './RewardNameContext';
 import { CacheProvider, useCache } from '../utils/CacheContext';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   getUsers: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/wallets', () => ({
+jest.mock('../services/wallet/wallets', () => ({
   getUserWallets: jest.fn(),
 }));
 

@@ -1,6 +1,6 @@
-import { getAllPayments } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getAllPayments } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 
 export interface ZapTransfer {
   transaction: Transaction;
@@ -110,13 +110,30 @@ const fetchPayments = async (
   return { payments, truncated: true };
 };
 
+// The recipient named by the metadata Zaplie writes on every zap it pays
+// (lnbitsGatewayService.js zapExtra, src/services/paymentExtra.ts): an Entra
+// object id, which is also a directory user's id. Automation rewards carry the
+// same tag and are not person-to-person zaps.
+const zapRecipient = (
+  payment: Transaction,
+  usersById: Map<string, User>,
+): User | undefined => {
+  const extra = payment.extra;
+  if (extra?.tag !== 'zap' || extra?.automation === true) return undefined;
+  const id = extra?.to?.user;
+  return typeof id === 'string' ? usersById.get(id.toLowerCase()) : undefined;
+};
+
 /**
  * Every verified Allowance→Private transfer, newest first.
  *
- * A transfer is only emitted when exactly two payments share a `checking_id`,
- * their amounts match, one is an outgoing Allowance leg and the other an
- * incoming Private leg, and the two wallets belong to different people. Any
- * other shape is dropped rather than guessed at.
+ * A Private wallet is its owner's and is not visible here, so a zap is the
+ * single outgoing Allowance leg, and its recipient is the directory person
+ * named in its metadata. Zaps from before the directory still have both legs
+ * in view: those are emitted only when exactly two payments share a
+ * `checking_id`, their amounts match, one is an outgoing Allowance leg and the
+ * other an incoming Private leg. Either way the two people must differ, and
+ * any other shape is dropped rather than guessed at.
  */
 export const fetchZapActivity = async (
   sinceSeconds?: number,
@@ -127,6 +144,7 @@ export const fetchZapActivity = async (
   const walletsByUser = await Promise.all(
     users.map(async user => ({ user, wallets: await getUserWallets(user.id) })),
   );
+  const usersById = new Map(users.map(user => [user.id.toLowerCase(), user]));
   const walletOwners = new Map<string, User>();
   const allowanceWalletIds = new Set<string>();
   const privateWalletIds = new Set<string>();
@@ -166,21 +184,26 @@ export const fetchZapActivity = async (
 
   const transfers = Array.from(paymentsByPair.values()).flatMap<ZapTransfer>(
     pairedPayments => {
-      if (pairedPayments.length !== 2) return [];
-
       const outgoing = pairedPayments.filter(
         payment =>
           payment.amount < 0 && allowanceWalletIds.has(payment.wallet_id),
       );
-      const incoming = pairedPayments.filter(
-        payment =>
-          payment.amount > 0 && privateWalletIds.has(payment.wallet_id),
-      );
-      if (outgoing.length !== 1 || incoming.length !== 1) return [];
-      if (Math.abs(outgoing[0].amount) !== incoming[0].amount) return [];
+      if (outgoing.length !== 1) return [];
+
+      let to: User | undefined;
+      if (pairedPayments.length === 1) {
+        to = zapRecipient(outgoing[0], usersById);
+      } else if (pairedPayments.length === 2) {
+        const incoming = pairedPayments.filter(
+          payment =>
+            payment.amount > 0 && privateWalletIds.has(payment.wallet_id),
+        );
+        if (incoming.length !== 1) return [];
+        if (Math.abs(outgoing[0].amount) !== incoming[0].amount) return [];
+        to = walletOwners.get(incoming[0].wallet_id);
+      }
 
       const from = walletOwners.get(outgoing[0].wallet_id);
-      const to = walletOwners.get(incoming[0].wallet_id);
       if (!from || !to || from.id === to.id) return [];
 
       return [{ transaction: outgoing[0], from, to }];

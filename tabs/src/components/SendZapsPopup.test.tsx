@@ -31,16 +31,16 @@ jest.mock('@azure/msal-react', () => {
   return { useMsal: () => ({ accounts }) };
 });
 
-jest.mock('../services/lnbits/payments', () => ({
+jest.mock('../services/wallet/payments', () => ({
   sendZap: (...args: [string, number, string, string]) => mockSendZap(...args),
   newIdempotencyKey: () => `generated-key-${(mockKeyCounter += 1)}`,
 }));
 
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   getUsers: (options: unknown) => mockGetUsers(options),
 }));
 
-jest.mock('../services/lnbits/wallets', () => ({
+jest.mock('../services/wallet/wallets', () => ({
   getUserWallets: (userId: string) => mockGetUserWallets(userId),
 }));
 

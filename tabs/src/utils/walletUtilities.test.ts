@@ -1,6 +1,6 @@
-import { getAllPayments } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getAllPayments } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import {
   fetchVerifiedZapPayments,
   fetchZapActivity,
@@ -8,15 +8,15 @@ import {
   PAYMENT_PAGE_SIZE,
 } from './walletUtilities';
 
-jest.mock('../services/lnbits/payments', () => ({
+jest.mock('../services/wallet/payments', () => ({
   getAllPayments: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   getUsers: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/wallets', () => ({
+jest.mock('../services/wallet/wallets', () => ({
   getUserWallets: jest.fn(),
 }));
 
@@ -83,6 +83,43 @@ describe('fetchZapActivity', () => {
         from: alex,
         to: sam,
         transaction: expect.objectContaining({ checking_id: 'internal_valid' }),
+      }),
+    ]);
+  });
+
+  test('reads a directory zap from its metadata when only the Allowance leg is visible', async () => {
+    const alex = user('alex');
+    const sam = user('SAM');
+    (getUsers as jest.Mock).mockResolvedValue([alex, sam]);
+    (getUserWallets as jest.Mock).mockImplementation(async (id: string) => [
+      wallet(`${id}-a`, 'Allowance', id),
+    ]);
+    const zap = (
+      checkingId: string,
+      extra: Transaction['extra'],
+    ): Transaction => ({
+      ...payment(checkingId, 'alex-a', -20_000, 10),
+      extra,
+    });
+    (getAllPayments as jest.Mock).mockResolvedValue([
+      zap('internal_zap', { tag: 'zap', to: { user: 'sam' } }),
+      zap('internal_self', { tag: 'zap', to: { user: 'alex' } }),
+      zap('internal_reward', {
+        tag: 'zap',
+        automation: true,
+        to: { user: 'sam' },
+      }),
+      zap('internal_stranger', { tag: 'zap', to: { user: 'nobody' } }),
+      zap('withdrawal', {}),
+    ]);
+
+    const result = await fetchZapActivity();
+
+    expect(result.transfers).toEqual([
+      expect.objectContaining({
+        from: alex,
+        to: sam,
+        transaction: expect.objectContaining({ checking_id: 'internal_zap' }),
       }),
     ]);
   });

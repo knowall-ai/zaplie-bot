@@ -2,7 +2,7 @@ import { ReactElement, useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '../services/authConfig';
 import { useNavigate } from 'react-router-dom';
-import { ensureCurrentUser } from '../services/lnbits/users';
+import { ensureCurrentUser } from '../services/wallet/users';
 import { logger } from '../utils/logger';
 
 // One provisioning call per signed-in account per page load, shared by every

@@ -39,7 +39,7 @@ describe('lnbits gateway', () => {
 
     await expect(apiRequest('/wallets')).resolves.toEqual([{ id: 'wallet-1' }]);
 
-    expect(mockFetch).toHaveBeenCalledWith('/api/lnbits/wallets', {
+    expect(mockFetch).toHaveBeenCalledWith('/api/wallet/wallets', {
       signal: expect.any(AbortSignal),
       headers: { Authorization: 'Bearer entra-id-token' },
     });

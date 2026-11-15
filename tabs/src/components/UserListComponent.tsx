@@ -7,14 +7,14 @@ import {
   useCallback,
 } from 'react';
 import styles from './UserListComponent.module.css';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import { useCache } from '../utils/CacheContext';
 import { RewardNameContext } from './RewardNameContext';
 import {
   isFunded,
   selectWalletByName,
-} from '../services/lnbits/walletSelection';
+} from '../services/wallet/walletSelection';
 
 // The wallet lookup is one request per user. Browsers cap concurrent requests
 // per host, so an unbounded fan-out leaves the surplus queued in the browser

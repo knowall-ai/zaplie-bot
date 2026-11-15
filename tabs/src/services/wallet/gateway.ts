@@ -2,9 +2,9 @@ import { loginRequest } from '../authConfig';
 import { getMsalInstance } from '../msalClient';
 import { apiUrl } from '../appLocation';
 
-// LNbits is never reached from the browser: every call below goes to the
+// No wallet backend is ever reached from the browser: every call below goes to the
 // same-origin Express gateway, which holds the credentials server-side.
-const API_BASE = apiUrl('/api/lnbits');
+const API_BASE = apiUrl('/api/wallet');
 
 // Long enough for a Lightning payment, short enough that a stalled gateway
 // cannot leave a payment caller loading with neither success nor failure.
@@ -30,13 +30,22 @@ const getIdToken = async (): Promise<string> => {
 export const apiRequest = async <T>(
   path: string,
   init: RequestInit = {},
+): Promise<T> => apiRequestAt<T>(API_BASE, path, init);
+
+// The same signed-in, time-limited request against another backend area
+// (the people directory lives at /api/directory).
+export const apiRequestAt = async <T>(
+  base: string,
+  path: string,
+  init: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T> => {
   const token = await getIdToken();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${base}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
@@ -47,7 +56,7 @@ export const apiRequest = async <T>(
     });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
     }
     throw error;
   } finally {

@@ -92,8 +92,18 @@ closing the gaps.
   message starts a new Foundry conversation. The `TeamsBot records
   AgentActivity events` block pins that such a failure is recorded as
   `chat.failed` at warning level, with no `chat.answered`.
-- `src/services/lnbitsService.test.ts` mocks `fetch` and exercises the real
-  service logic for wallet, invoice, and payment calls.
+- `src/services/peopleDirectory.test.ts` mocks `fetch` and exercises the
+  bot's only boundary, the portal's people directory: people, `payZap` /
+  `payReward` and their paid / not_paid / unknown outcomes, balances and zap
+  records. It also scans the bot's sources and fails on any LNbits route,
+  API key header, NWC connection or wallet credential.
+- Portal backend wallet tests (`npm run test:backend` in `tabs/`) drive a
+  fake NWC wallet service (`tabs/backend/testSupport/fakeNwc.js`) and a fake
+  LNbits for the provisioner. They cover:
+  * payment outcomes (refused / unknown / looked up);
+  * the payment policy (only directory members; never a client-supplied
+    invoice or address, never the sender);
+  * that a provisioning token is never stored, logged or echoed.
 - `src/i18n/i18n.test.ts` pins language resolution and rendering (Spanish
   for `es-*`, English otherwise, placeholder parity, fallback with a warning,
   a missing parameter left visible with a warning) and `formatNumber`
@@ -130,9 +140,10 @@ npm run coverage:ratchet
 === Unit Tests — Web Tabs (`tabs/`)
 
 - Framework: Jest via react-scripts, with React Testing Library and jest-dom
-- Test files: `tabs/src/services/lnbits/*.test.ts` (mock global `fetch` and
-  localStorage; cover `getAccessToken`, `getWallets`, `getWalletBalance`,
-  `getUserWallets`, `createInvoice`, `payInvoice`),
+- Test files: `tabs/src/services/wallet/*.test.ts` (mock global `fetch`;
+  cover the same-origin wallet gateway client), the *Add people* dialog
+  (`DirectoryAdminSetting.test.tsx`: provisioner and manual modes, the token
+  cleared after use) and the receive card (`ReceiveTargetCard.test.tsx`),
   `tabs/src/setupTests.test.tsx` (environment smoke test) and the component
   suites under `tabs/src/components/`. Among them,
   `AutomationsComponent.test.tsx` covers the GitHub App setup block (create

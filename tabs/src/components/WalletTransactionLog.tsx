@@ -2,9 +2,9 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import ArrowIncoming from '../images/ArrowIncoming.svg';
 import ArrowOutgoing from '../images/ArrowOutcoming.svg';
-import { getWalletTransactionsSince } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getWalletTransactionsSince } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import {
   fetchZapActivity,
   pairId,

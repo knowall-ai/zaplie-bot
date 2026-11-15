@@ -7,11 +7,11 @@ import React, {
 } from 'react';
 import styles from './SendZapsPopup.module.css';
 import { RewardNameContext } from './RewardNameContext';
-import { isFunded } from '../services/lnbits/walletSelection';
+import { isFunded } from '../services/wallet/walletSelection';
 import { useCache } from '../utils/CacheContext';
-import { sendZap, newIdempotencyKey } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { sendZap, newIdempotencyKey } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
 import ZapIcon from '../images/ZapIcon.svg';
@@ -23,7 +23,6 @@ interface SendZapsPopupProps {
 }
 
 // Extended User type with wallet information for this component
-type UserWithWallet = User & { privateWallet: Wallet | null };
 
 const PRESET_AMOUNTS = [5000, 10000, 25000];
 
@@ -84,7 +83,7 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [users, setUsers] = useState<UserWithWallet[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [currentUserWallets, setCurrentUserWallets] = useState<{
     allowance: Wallet | null;
     /** null when the gateway could not read the allowance balance. */
@@ -149,18 +148,14 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
         });
       }
 
-      // Filter out current user - wallet fetching happens on user selection
+      // Filter out current user. Where each recipient receives (their own
+      // Private wallet) is the gateway's business: it answers with a clear
+      // error for someone who has not registered a receive address yet.
       const otherUsers = allUsers.filter(
         u => u.aadObjectId !== account.localAccountId,
       );
 
-      // Initialize users without wallet data - will fetch on selection
-      const usersWithoutWallets: UserWithWallet[] = otherUsers.map(user => ({
-        ...user,
-        privateWallet: null,
-      }));
-
-      setUsers(usersWithoutWallets);
+      setUsers(otherUsers);
     } catch (err) {
       setError('Failed to load users');
     } finally {
@@ -173,39 +168,8 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
     void loadUsers();
   }, [loadUsers]);
 
-  // Fetch wallet for selected user on demand
-  const handleUserSelect = async (userId: string) => {
+  const handleUserSelect = (userId: string) => {
     setSelectedUser(userId);
-
-    if (!userId) return;
-
-    const user = users.find(u => u.id === userId);
-    if (!user || user.privateWallet) return; // Already has wallet or not found
-
-    try {
-      const wallets = await getUserWallets(userId);
-      // Prioritize "private" wallet, then any non-allowance wallet
-      let targetWallet = wallets?.find(w =>
-        w.name.toLowerCase().includes('private'),
-      );
-      if (!targetWallet) {
-        targetWallet = wallets?.find(
-          w => !w.name.toLowerCase().includes('allowance'),
-        );
-      }
-      if (!targetWallet && wallets && wallets.length > 0) {
-        targetWallet = wallets[0];
-      }
-
-      // Update user with wallet data
-      setUsers(prev =>
-        prev.map(u =>
-          u.id === userId ? { ...u, privateWallet: targetWallet || null } : u,
-        ),
-      );
-    } catch {
-      // Silently fail - error will show when trying to send
-    }
   };
 
   if (!rewardNameContext) {
@@ -257,8 +221,8 @@ const SendZapsPopup: React.FC<SendZapsPopupProps> = ({ onClose }) => {
     }
 
     const recipient = users.find(u => u.id === selectedUser);
-    if (!recipient || !recipient.privateWallet) {
-      setError('Recipient wallet not found');
+    if (!recipient) {
+      setError('Recipient not found');
       return;
     }
 

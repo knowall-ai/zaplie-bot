@@ -57,10 +57,10 @@ Acronyms, terms, and definitions used in this project.
 | Sending Sats to a colleague as recognition or reward — the core action in Zaplie
 
 | Wallet
-| An LNbits sub-wallet belonging to a user. Each Teams user is provisioned wallets automatically
+| An LNbits wallet. Each person's Allowance wallet belongs to Zaplie's `zaplie.service` account; their Private wallet is their own
 
 | Allowance
-| The initial balance of Sats granted to a user's wallet, controlled by `LNBITS_INITIAL_ALLOWANCE`
+| A person's spending budget for zaps, in an Allowance wallet owned by `zaplie.service` and paid on a schedule from the Fund wallet by the LNbits allowance extension
 
 | Adaptive Card
 | A Microsoft card format used by the bot to render interactive UI (e.g. the Send Zap form) inside Teams

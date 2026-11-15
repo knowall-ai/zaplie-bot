@@ -1,6 +1,7 @@
 import RewardsNameSetting from './components/RewardsNameSetting';
 import BotPersonaSetting from './components/BotPersonaSetting';
 import ConnectionsSetting from './components/ConnectionsSetting';
+import DirectoryAdminSetting from './components/DirectoryAdminSetting';
 import styles from './components/Settings.module.css';
 import { KNOWALL_CONSTANTS } from './constants/branding';
 
@@ -14,6 +15,7 @@ const Settings: React.FC = () => {
       <RewardsNameSetting />
       <BotPersonaSetting />
       <ConnectionsSetting />
+      <DirectoryAdminSetting />
     </div>
   );
 };
