@@ -127,16 +127,28 @@ const AdminsSetting: FunctionComponent = () => {
           </p>
         ) : null}
         {state.status === 'no-group' ? (
-          <p className={styles.intro} data-testid="admins-no-group">
-            No Zaplie Admins group is set yet.{' '}
-            <a href="/setup">Set up your organisation</a> to choose one.
+          <p className={styles.calloutInfo} data-testid="admins-no-group">
+            <span className={styles.calloutTitle}>
+              No Zaplie Admins group yet
+            </span>
+            <a className={styles.link} href="/setup">
+              Set up your organisation
+            </a>{' '}
+            to choose the Entra group whose members are Zaplie admins.
           </p>
         ) : null}
         {state.status === 'no-permission' ? (
-          <p className={styles.intro} data-testid="admins-no-permission">
-            Zaplie cannot read the group: an administrator has not granted
-            Zaplie the GroupMember.Read.All permission. See the members in{' '}
+          <p
+            className={styles.calloutWarning}
+            data-testid="admins-no-permission"
+          >
+            <span className={styles.calloutTitle}>
+              Zaplie can&apos;t read the admins group
+            </span>
+            An administrator has not granted Zaplie the GroupMember.Read.All
+            permission. See the members in{' '}
             <a
+              className={styles.link}
               href={groupMembersLink(state.tenant.settings.adminsGroupId || '')}
               target="_blank"
               rel="noopener noreferrer"
@@ -148,34 +160,61 @@ const AdminsSetting: FunctionComponent = () => {
         ) : null}
         {state.status === 'ready' ? (
           <>
-            <ul aria-label="Zaplie admins">
-              {state.members.map(member => (
-                <li key={member.id}>
-                  {member.displayName}
-                  {member.userPrincipalName
-                    ? ` (${member.userPrincipalName})`
-                    : ''}
-                  {state.writable ? (
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      disabled={busy}
-                      aria-label={`Remove ${member.displayName}`}
-                      onClick={() =>
-                        void act(() =>
-                          removeGroupMember(
-                            state.tenant.settings.adminsGroupId || '',
-                            member.id,
-                          ),
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
+            <div className={styles.tableWrap}>
+              <table className={styles.table} aria-label="Zaplie admins">
+                <thead>
+                  <tr>
+                    <th scope="col">Admin</th>
+                    {state.writable ? (
+                      <th scope="col">
+                        <span className={styles.visuallyHidden}>Actions</span>
+                      </th>
+                    ) : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.members.length === 0 ? (
+                    <tr>
+                      <td className={styles.helperText}>
+                        The group has no members yet.
+                      </td>
+                    </tr>
                   ) : null}
-                </li>
-              ))}
-            </ul>
+                  {state.members.map(member => (
+                    <tr key={member.id}>
+                      <td className={styles.primaryCell}>
+                        {member.displayName}
+                        {member.userPrincipalName ? (
+                          <span className={styles.secondaryLine}>
+                            {member.userPrincipalName}
+                          </span>
+                        ) : null}
+                      </td>
+                      {state.writable ? (
+                        <td className={styles.actionCell}>
+                          <button
+                            type="button"
+                            className={styles.secondaryButton}
+                            disabled={busy}
+                            aria-label={`Remove ${member.displayName}`}
+                            onClick={() =>
+                              void act(() =>
+                                removeGroupMember(
+                                  state.tenant.settings.adminsGroupId || '',
+                                  member.id,
+                                ),
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {state.writable ? (
               <div className={styles.inputRow}>
                 <input
@@ -203,9 +242,10 @@ const AdminsSetting: FunctionComponent = () => {
                 </button>
               </div>
             ) : (
-              <p className={styles.intro} data-testid="admins-read-only">
+              <p className={styles.helperText} data-testid="admins-read-only">
                 Read-only here. Add or remove admins in{' '}
                 <a
+                  className={styles.link}
                   href={groupMembersLink(
                     state.tenant.settings.adminsGroupId || '',
                   )}
@@ -218,8 +258,9 @@ const AdminsSetting: FunctionComponent = () => {
                 permission.
               </p>
             )}
-            <p className={styles.intro}>
+            <p className={styles.helperText}>
               <a
+                className={styles.link}
                 href={enterpriseAppUsersLink(state.tenant.clientId)}
                 target="_blank"
                 rel="noopener noreferrer"

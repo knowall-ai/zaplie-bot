@@ -5,6 +5,7 @@ import TenantSetup from './TenantSetup';
 const mockIsSetupAdmin = jest.fn();
 const mockGetTenantMe = jest.fn();
 const mockSave = jest.fn();
+const mockOrgName = jest.fn();
 
 jest.mock('@azure/msal-react', () => ({ useMsal: () => ({ accounts: [{}] }) }));
 jest.mock('./services/adminRole', () => ({
@@ -13,6 +14,7 @@ jest.mock('./services/adminRole', () => ({
 jest.mock('./services/tenant', () => ({
   getTenantMe: () => mockGetTenantMe(),
   saveTenantSetup: (patch: unknown) => mockSave(patch),
+  getOrganizationName: () => mockOrgName(),
   enterpriseAppUsersLink: (clientId: string) =>
     `https://entra.example/app/${clientId}`,
 }));
@@ -48,8 +50,15 @@ const type = async (
   });
 };
 
+beforeAll(() => {
+  (
+    globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOrgName.mockResolvedValue(null);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -109,5 +118,45 @@ describe('TenantSetup', () => {
       provisioner: { defaultBudgetSats: 25000, defaultPeriod: 'weekly' },
     });
     expect(container.textContent).toContain('Saved.');
+  });
+
+  const tenantMe = {
+    tid: 'tenant-1',
+    clientId: 'client-1',
+    settings: {
+      adminsGroupId: null,
+      guestAllowlist: [],
+      provisioner: { defaultBudgetSats: 25000, defaultPeriod: 'weekly' },
+    },
+  };
+
+  test('shows the organisation name from Graph, with the tenant id', async () => {
+    mockIsSetupAdmin.mockReturnValue(true);
+    mockGetTenantMe.mockResolvedValue(tenantMe);
+    mockOrgName.mockResolvedValue('KnowAll AI');
+    await render();
+
+    const heading = container.querySelector('[data-testid="setup-tenant"]');
+    expect(heading?.textContent).toContain('KnowAll AI');
+    expect(heading?.textContent).toContain('tenant-1');
+  });
+
+  test('the group id is a single-line field that refuses a non-GUID', async () => {
+    mockIsSetupAdmin.mockReturnValue(true);
+    mockGetTenantMe.mockResolvedValue(tenantMe);
+    await render();
+
+    const input = container.querySelector<HTMLInputElement>('#setup-group')!;
+    expect(input.tagName).toBe('INPUT');
+    await type(input, 'not-a-guid');
+
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "That isn't an object id",
+    );
+    const save = Array.from(container.querySelectorAll('button')).find(
+      button => button.textContent === 'Save',
+    )!;
+    expect(save.disabled).toBe(true);
   });
 });
