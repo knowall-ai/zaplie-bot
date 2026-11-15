@@ -42,14 +42,23 @@ Zaplie now never logs in and never touches `/users/*`. Wallet keys
   invoice key (receive and read only). Never a key that can spend.
 |===
 
-Optional: `LNBITS_API_TOKEN`, an ACL token of `zaplie.service` scoped to
+Optional: `LNBITS_API_TOKEN`, an ACL token of `zaplie.service` for
 `POST /api/v1/wallet`, `GET /api/v1/wallets` and `GET /api/v1/payments`. With
 it, a person's Allowance wallet is created on their first sign-in and
 balances/payments are read in one call; without it an operator creates each
 Allowance wallet in the LNbits UI and links it in the portal
-(*Settings → People and Allowance wallets*). Note that `GET /api/v1/wallets`
-returns the keys of every `zaplie.service` wallet, so the token is as
-sensitive as the Fund key: store it the same way.
+(*Settings → People and Allowance wallets*).
+
+The token is not as narrow as those three calls suggest. An LNbits 1.7.1 ACL
+grants *read* (GET) and *write* (every other method) per path prefix, not per
+method, so the write on `/api/v1/wallet` that creating a wallet needs also
+allows `PUT /api/v1/wallet/reset/{id}` (new keys for any `zaplie.service`
+wallet, returned to the caller) and `DELETE /api/v1/wallet/{id}`. Whoever
+holds the token can therefore take over the Fund and the Treasury as well as
+every Allowance wallet: treat it as more sensitive than the Fund key, keep it
+on the portal backend only, and prefer the operator-link mode if that is not
+acceptable. With read only on `/api/v1/wallets`, LNbits masks both keys of
+every wallet in that listing; Zaplie needs only the ids and balances from it.
 
 Nothing mints balance any more. An opening allowance is a payment from the
 Fund wallet (the allowance extension's first run, or an internal invoice).
@@ -61,6 +70,17 @@ Fund wallet (the allowance extension's first run, or an internal invoice).
   `/api/directory/internal/*` routes, so deploy the portal (webapp) first,
   then the bot. Zaps already fail today (login refused), so there is no
   working state to protect during the window.
+* *Merging is deploying.* Both portal workflows
+  (`Azure_App_Service_zaplie-prod.yml`, `Azure_App_Service_zaplie-test.yml`)
+  run on every push to `main`, so merging the first PR puts the new backend
+  on `zaplie-prod-webapp` and `zaplie-test-webapp` at once. Finish Phase A
+  and Phase B *before* merging, and merge the three PRs one after the other
+  without a pause: between the first and the last, production runs the new
+  backend under the old portal pages.
+* Be on the WireGuard VPN (or the LAN) for anything an LNbits *admin* does:
+  the proxy blocks `/users` and `/admin` from outside, which covers making an
+  extension available on the instance and opening another account's wallet.
+  What `zaplie.service` does in its own account does not need it.
 * Keep the current app setting values (Key Vault or a secure note) until the
   verification below has passed: they are what a rollback restores.
 * Do every LNbits step signed in through the LNbits UI with TOTP. Never paste
@@ -81,19 +101,37 @@ Fund wallet (the allowance extension's first run, or an internal invoice).
   the `Treasury` wallet (or keep using the existing `Zaplie` wallet as the
   Treasury). Neither may be named `Allowance` or `Private`. Fund the Treasury
   with one reward budget period at most.
-. *API token (optional, recommended).* *Account → Access Control List*:
-  create an ACL (for example `zaplie-portal`) granting only
-  `POST /api/v1/wallet`, `GET /api/v1/wallets` and `GET /api/v1/payments`
-  (which covers `/api/v1/payments/all/paginated`). Create a token on it with
-  an expiry you will diarise; LNbits asks for the TOTP code. Copy the token
-  once into Key Vault. Non-GET calls under `/api/v1/auth*`,
-  `/admin/api/v1/settings` and `/users/api/v1/user*` are blocked for tokens
-  under 2FA, and Zaplie needs none of them.
+. *API token (optional).* Read the note under <<Target model>> first: the
+  token can take over every `zaplie.service` wallet. *Account → Access
+  Control List*: create an ACL (for example `zaplie-portal`). The list shows
+  one row per API path with a *read* and a *write* box. Tick exactly:
++
+[cols="1,1,3"]
+|===
+| Path | Tick | For
+
+| `/api/v1/wallet` | write | `POST /api/v1/wallet`, creating an Allowance wallet
+| `/api/v1/wallets` | read | `GET /api/v1/wallets`, ids and balances (keys come back masked)
+| `/api/v1/payments` | read | `GET /api/v1/payments/all/paginated`, `zaplie.service`'s own payments
+|===
++
+Leave every other box clear, in particular write on `/api/v1/payments`
+  (paying) and anything under `/api/v1/auth`. Create a token on the ACL with
+  an expiry you will diarise; creating it is a security operation, so LNbits
+  asks for a fresh TOTP code and it cannot be done by another token. Copy the
+  token once into Key Vault. Non-GET calls under `/api/v1/auth*`,
+  `/admin/api/v1/settings` and `/users/api/v1/user*` are refused for tokens
+  while 2FA is on, and Zaplie needs none of them.
 . *Staff Private wallets.* Each person keeps their Private wallet under their
   own LNbits account. To get a Lightning address on `bank.knowall.ai` they
   enable `lnurlp` for their own account and create a pay link with a
   username; the address is `<username>@bank.knowall.ai`. Alternatively they
-  copy the wallet's *Invoice/read key* (never the Admin key).
+  copy the wallet's *Invoice/read key* (never the Admin key; the portal
+  refuses one). Check one address before asking everyone:
+  `curl https://bank.knowall.ai/.well-known/lnurlp/<username>` must answer
+  JSON whose `callback` starts with `https://bank.knowall.ai/`. The portal
+  follows no redirect and refuses a callback on another host or over plain
+  `http`, which is what a proxy that drops `X-Forwarded-Proto` produces.
 
 == Phase B: Azure app settings
 
@@ -109,7 +147,8 @@ into a shell history you do not control.
 
 | `LNBITS_URL` | `https://bank.knowall.ai` (replaces `LNBITS_NODE_URL`, which is still read)
 | `LNBITS_API_TOKEN` | the ACL token from Phase A (optional)
-| `ZAPLIE_STORE_KEY` | `openssl rand -hex 32`, as a Key Vault reference. Never change it afterwards: it opens `people.json`
+| `ZAPLIE_STORE_KEY` | *Required*: `openssl rand -hex 32`, as a Key Vault reference. A deployed backend refuses to open the directory without it (it does not fall back to a generated key). Never change it afterwards: it opens `people.json`
+| `ZAPLIE_DATA_DIR` | already set; confirm it is. `people.json` lives there, and outside it a deploy would wipe every Allowance key
 | `ZAPLIE_TREASURY_INKEY` | Treasury wallet invoice key
 | `ALLOWANCE_FUND_ADMINKEY` | the `zaplie.service` Fund wallet admin key
 | `LNBITS_PUBLIC_HOST` | only if Lightning addresses are served on a host other than `LNBITS_URL`'s
@@ -127,7 +166,7 @@ Remove: `LNBITS_USERNAME`, `LNBITS_PASSWORD`, `LNBITS_ADMINKEY`,
 
 | `LNBITS_URL` | `https://bank.knowall.ai`
 | `ZAPLIE_TREASURY_ADMINKEY` | Treasury wallet admin key (replaces `REWARDS_TREASURY_ADMINKEY`, still read)
-| `LNBITS_API_TOKEN` | optional; lets the leaderboard read in one paged call
+| `LNBITS_API_TOKEN` | leave unset. It would only save the leaderboard a read per wallet, and it puts a credential that can take over every `zaplie.service` wallet on a second app
 | `WEBSITE_API_URL`, `TAB_BACKEND_TOKEN` | unchanged, but now required for every turn: they reach the people directory
 |===
 
@@ -135,7 +174,7 @@ Remove: `LNBITS_USERNAME`, `LNBITS_PASSWORD`, `LNBITS_ADMINKEY`,
 `LNBITS_INITIAL_ALLOWANCE`, `REWARDS_TREASURY_ADMINKEY` (after the new name is
 set), `LNBITS_NODE_URL` (after `LNBITS_URL`).
 
-=== zaplie-test-webapp (RG `ka-zaplie-test`; confirm the group name)
+=== zaplie-test-webapp (RG `ka-zaplie-prod`, the same group as production)
 
 As for `zaplie-prod-webapp`, with the test instance's values and its own
 `ZAPLIE_STORE_KEY` (never share the store key between environments).
@@ -156,9 +195,12 @@ az webapp config appsettings delete -g ka-zaplie-prod -n zaplie-prod-webapp \
 
 == Phase C: deploy
 
-. Deploy the portal (GitHub Release workflow for the webapp). Check
-  `GET /healthz`, then sign in: the Wallet page shows *Where you receive
-  zaps*.
+. Deploy the portal: merge the three PRs into `main` in order (#559, #560,
+  #561). Each merge runs *Deploy to Azure App Service Production* and
+  *... Test*; wait for the run of the last merge (or start one by hand with
+  *Run workflow*). Check `GET /healthz`, then sign in: the Wallet page shows
+  *Where you receive zaps*. A `503`/`500` on sign-in with
+  `ZAPLIE_STORE_KEY must be set` in the log means Phase B was skipped.
 . Deploy the bot (`teamsapp deploy`). Message it `show my balance`.
 
 == Phase D: people, balances, pay links
@@ -206,7 +248,9 @@ az webapp config appsettings delete -g ka-zaplie-prod -n zaplie-prod-webapp \
   wallet and a receive target.
 * A 1-2 sat zap between two test people, from Teams and from the portal,
   arrives in the recipient's Private wallet and shows in the feed, the
-  leaderboard and the sender's transaction log.
+  leaderboard (portal and `show leaderboard` in Teams) and the sender's
+  transaction log. The feed and leaderboard start empty: zaps paid before the
+  migration sit in wallets Zaplie no longer reads.
 * A test automation reward (1-2 sats) is paid from the Treasury and appears in
   *Automations* stats.
 * The allowance sync preview reports no drift and no missing pay link.
@@ -236,7 +280,14 @@ az webapp config appsettings delete -g ka-zaplie-prod -n zaplie-prod-webapp \
   (`ZAPLIE_LIGHTNING_ADDRESS_DOMAINS`, default the LNbits host) bounds where
   allowance sats can go and which hosts the server will fetch; redirects are
   refused, the callback must stay on the same host, and the invoice amount is
-  checked before paying.
+  checked before paying. Add named domains if people need an outside wallet;
+  do not set `*`: the server does not check what a name resolves to, so any
+  signed-in person could make it request an internal HTTPS host.
+* Allowance sats leave an Allowance wallet only as zaps to a registered
+  receive target. `POST /api/lnbits/wallets/:id/payments` (pay any invoice)
+  answers 403; a person spends their own sats from their own Private wallet.
+  An invoice key is only as private as the wallet's owner keeps it: once
+  registered it lets Zaplie read that wallet's balance, never spend.
 * Portal sign-in stays single-tenant (`AAD_TENANT_ID` is the only accepted
   issuer). Joining Zaplie (directory provisioning) applies the member gate
   (`tabs/backend/memberGate.js`): home-tenant members, plus guests on

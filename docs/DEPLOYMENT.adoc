@@ -344,21 +344,24 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Bot, Portal backend
 
 | `LNBITS_API_TOKEN`
-| Optional. ACL token of the `zaplie.service` account, scoped to
-  `POST /api/v1/wallet`, `GET /api/v1/wallets` and `GET /api/v1/payments`.
+| Optional. ACL token of the `zaplie.service` account: write on
+  `/api/v1/wallet`, read on `/api/v1/wallets` and `/api/v1/payments`.
   The portal uses it to create a person's Allowance wallet on first sign-in
-  and to read balances and payments in one call; the bot to read the
-  leaderboard in one paged call. Without it an admin links each Allowance
-  wallet and every wallet is read with its own invoice key. Server-side only,
-  never with a `REACT_APP_` prefix. See `docs/LNBITS_MIGRATION.adoc`
-| Bot, Portal backend
+  and to read balances and payments in one call. Without it an admin links
+  each Allowance wallet and every wallet is read with its own invoice key.
+  LNbits grants write per path, so the token can also reset the keys of any
+  `zaplie.service` wallet: keep it off the bot (which reads it only to save
+  the leaderboard a request per wallet) and never give it a `REACT_APP_`
+  prefix. See `docs/LNBITS_MIGRATION.adoc`
+| Portal backend (bot: optional, not recommended)
 
 | `ZAPLIE_STORE_KEY`
 | 64 hex characters (`openssl rand -hex 32`) that encrypt the wallet keys in
   the people directory (`people.json`). Unset, one is generated into
-  `secrets.json` beside the data: fine locally, but in Azure set it (a Key
-  Vault reference) so the data share alone does not open the keys. Changing it
-  makes the stored keys unreadable
+  `secrets.json` beside the data, in local development only: a deployed
+  backend (`NODE_ENV=production` or Azure App Service) refuses to open the
+  directory without it. Set it as a Key Vault reference so the data share
+  alone does not open the keys. Changing it makes the stored keys unreadable
 | Portal backend
 
 | `ZAPLIE_LIGHTNING_ADDRESS_DOMAINS`
