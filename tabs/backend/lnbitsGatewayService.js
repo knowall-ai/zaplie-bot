@@ -412,8 +412,16 @@ const payInvoice = async (wallet, paymentRequest, extra) => {
   };
 };
 
-const payOwnedInvoice = async ({ walletId, paymentRequest, aadObjectId }) =>
-  payInvoice(requireOwnedWallet(walletId, aadObjectId), paymentRequest);
+// The only wallet a caller owns here is their Allowance wallet, and its sats
+// are for recognising other people. They leave it as zaps (sendZap), which
+// name a registered recipient and are bounded by the zap ceiling and the
+// Lightning address allow-list. Paying an arbitrary invoice from it would
+// bypass all three, so it is refused; a person spends their own money from
+// their own Private wallet, which Zaplie holds no key for.
+const payOwnedInvoice = async ({ walletId, aadObjectId }) => {
+  requireOwnedWallet(walletId, aadObjectId);
+  throw new LnbitsGatewayError('Allowance sats can only be sent as zaps', 403);
+};
 
 /**
  * The payment metadata the feed reads. Only names and ids: never a key.

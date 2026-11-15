@@ -162,6 +162,28 @@ test('a receive invoice key must be a read key of a wallet that is not Zaplie\'s
   assert.equal(cleared.receive, null);
 });
 
+test('another person\'s Allowance key or the Treasury key is refused even when LNbits masks the listing', async (t) => {
+  const wallets = {
+    [hex('c')]: { name: 'Allowance - Bea', balance: 0 },
+    [hex('9')]: { name: 'Treasury', balance: 0 },
+  };
+  const store = tempStore(t);
+  store.upsertProfile({ oid: OID });
+  store.upsertProfile({ oid: OTHER });
+  store.setAllowanceWallet(OTHER, { walletId: 'w-2', adminkey: hex('8'), inkey: hex('c'), source: 'token' });
+  // What a read-only ACL token gets back: ids, with every key masked.
+  const masked = [{ id: 'w-2', inkey: '*'.repeat(32), adminkey: '*'.repeat(32) }];
+  const directory = createWalletDirectory({
+    store,
+    request: fakeLnbits(wallets, { serviceWallets: masked }).request,
+    env: { LNBITS_API_TOKEN: 'token', ZAPLIE_TREASURY_INKEY: hex('9') },
+  });
+
+  await assert.rejects(directory.setReceiveTarget(OID, { invoiceKey: hex('c') }), /belongs to Zaplie/);
+  await assert.rejects(directory.setReceiveTarget(OID, { invoiceKey: hex('9') }), /belongs to Zaplie/);
+  assert.equal(store.get(OID).receive, null);
+});
+
 test('a Lightning address is resolved before it is saved, and allowance links are refused', async (t) => {
   const store = tempStore(t);
   store.upsertProfile({ oid: OID });
