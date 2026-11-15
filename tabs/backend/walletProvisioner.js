@@ -17,19 +17,21 @@
 const { createLnbitsProvisioner } = require('./lnbitsProvisioner');
 const { WalletGatewayError } = require('./walletErrors');
 
-const PROVISIONERS = {
-  lnbits: ({ token, env }) => createLnbitsProvisioner({ token, env }),
-};
+// A Map, not an object: the kind comes from the request, and an object
+// lookup would also find inherited names such as "constructor".
+const PROVISIONERS = new Map([
+  ['lnbits', ({ token, env }) => createLnbitsProvisioner({ token, env })],
+]);
 
 const PERIOD_SECONDS = { daily: 86400, weekly: 7 * 86400, monthly: 30 * 86400 };
 
 /** The provisioners an admin may pick, for the UI. */
-const availableProvisioners = () => Object.keys(PROVISIONERS);
+const availableProvisioners = () => [...PROVISIONERS.keys()];
 
 /** Builds a provisioner for one request; throws a 400 for an unknown kind. */
 const createProvisioner = (kind, options, registry = PROVISIONERS) => {
-  const make = registry[kind];
-  if (!make) throw new WalletGatewayError(`unknown provisioner "${String(kind).slice(0, 40)}"`, 400, { expose: true });
+  const make = typeof kind === 'string' && registry.has(kind) ? registry.get(kind) : null;
+  if (typeof make !== 'function') throw new WalletGatewayError(`unknown provisioner "${String(kind).slice(0, 40)}"`, 400, { expose: true });
   return make(options);
 };
 
