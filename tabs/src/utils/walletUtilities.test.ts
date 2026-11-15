@@ -87,6 +87,43 @@ describe('fetchZapActivity', () => {
     ]);
   });
 
+  test('reads a directory zap from its metadata when only the Allowance leg is visible', async () => {
+    const alex = user('alex');
+    const sam = user('SAM');
+    (getUsers as jest.Mock).mockResolvedValue([alex, sam]);
+    (getUserWallets as jest.Mock).mockImplementation(async (id: string) => [
+      wallet(`${id}-a`, 'Allowance', id),
+    ]);
+    const zap = (
+      checkingId: string,
+      extra: Transaction['extra'],
+    ): Transaction => ({
+      ...payment(checkingId, 'alex-a', -20_000, 10),
+      extra,
+    });
+    (getAllPayments as jest.Mock).mockResolvedValue([
+      zap('internal_zap', { tag: 'zap', to: { user: 'sam' } }),
+      zap('internal_self', { tag: 'zap', to: { user: 'alex' } }),
+      zap('internal_reward', {
+        tag: 'zap',
+        automation: true,
+        to: { user: 'sam' },
+      }),
+      zap('internal_stranger', { tag: 'zap', to: { user: 'nobody' } }),
+      zap('withdrawal', {}),
+    ]);
+
+    const result = await fetchZapActivity();
+
+    expect(result.transfers).toEqual([
+      expect.objectContaining({
+        from: alex,
+        to: sam,
+        transaction: expect.objectContaining({ checking_id: 'internal_zap' }),
+      }),
+    ]);
+  });
+
   test('rejects instead of presenting partial wallet data', async () => {
     (getUsers as jest.Mock).mockResolvedValue([user('alex')]);
     (getUserWallets as jest.Mock).mockRejectedValue(new Error('LNbits down'));
