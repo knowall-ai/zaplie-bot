@@ -1,0 +1,92 @@
+.page {
+  width: 100%;
+  min-height: 60vh;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  background-color: var(--surface-page);
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.code {
+  margin: 0;
+  color: var(--accent);
+  font-size: var(--font-size-hero);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.body {
+  margin: 0;
+  color: var(--text-body);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.primary,
+.secondary {
+  padding: 9px var(--space-4);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.primary {
+  border: 1px solid transparent;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.secondary {
+  border: 1px solid var(--border);
+  background-color: transparent;
+  color: var(--accent);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.reference {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}

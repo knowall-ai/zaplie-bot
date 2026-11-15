@@ -30,6 +30,7 @@ const {
 const { createAllowanceRouter } = require('./allowanceRoutes');
 const { createAllowanceTimer } = require('./allowanceTimer');
 const { createAllowanceSyncStore } = require('./allowanceSyncStore');
+const { clientErrorRoute, createErrorHandler, notFoundJson } = require('./httpErrors');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -393,14 +394,15 @@ app.use(
   createAllowanceRouter({ readData: readAllowanceData, writeData, store: allowanceStore }),
 );
 
-// Use the authentication middleware for API routes
-app.use('/api', authMiddleware);
-
-// Endpoint to update the reward name
+// The portal's error page reports its reference id here (no auth: an error
+// can happen before sign-in; the global rate limit applies).
+app.post('/api/client-errors', clientErrorRoute());
 
 // Endpoint the bot posts to when a reward's recipient can't be resolved to a
-// Zaplie person yet (identity graph and env-map fallback both miss).
-app.post('/api/pending-rewards', (req, res) => {
+// Zaplie person yet (identity graph and env-map fallback both miss). The
+// shared token is required here, explicitly, rather than on every unmatched
+// /api path: those answer a JSON 404 below.
+app.post('/api/pending-rewards', authMiddleware, (req, res) => {
   const { provider, providerId, recipientLabel, amountSats, reason, source } = req.body || {};
   if (
     typeof provider !== 'string' ||
@@ -424,14 +426,29 @@ app.post('/api/pending-rewards', (req, res) => {
   res.status(201).send({ message: 'Pending reward recorded' });
 });
 
+// No API route matched: a JSON 404, never the portal's index.html.
+app.use(['/api', '/internal'], notFoundJson);
+
 // Serve the React app
 app.use(express.static(path.join(__dirname, '../build')));
 
 // A regular expression works with both Express 4 and path-to-regexp v8 in
 // Express 5. Bare wildcard strings such as '*' throw during Express 5 startup.
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../build', 'index.html'));
+// Only a browser asking for a page gets the app (which shows its own Not
+// found page for an unknown route); anything else unmatched is a JSON 404.
+app.get(/.*/, (req, res, next) => {
+  if (!req.accepts('html')) {
+    notFoundJson(req, res);
+    return;
+  }
+  res.sendFile(path.join(__dirname, '../build', 'index.html'), (error) => {
+    if (error) next(error);
+  });
 });
+
+// Last: anything unmatched by a non-GET method, then thrown errors.
+app.use(notFoundJson);
+app.use(createErrorHandler());
 
 // Only listen when run directly, so tests can bind an ephemeral port.
 if (require.main === module) {

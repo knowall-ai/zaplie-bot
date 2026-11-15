@@ -90,5 +90,10 @@
     "tailwindcss": "4.3.3",
     "ts-loader": "^9.5.1",
     "typescript": "^4.9.5"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js"
+    }
   }
 }

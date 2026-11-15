@@ -1,5 +1,5 @@
-import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { ReactElement, useEffect } from 'react';
 import { Stack } from '@fluentui/react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -23,6 +23,8 @@ import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
 import Settings from './Settings';
 import TenantSetup from './TenantSetup';
+import ErrorBoundary from './components/ErrorBoundary';
+import { NotFound } from './components/StatusPage';
 
 type AppProps = {
   pca: IPublicClientApplication;
@@ -41,6 +43,7 @@ function TitleUpdater() {
       '/auth-start': 'Authenticating...',
       '/auth-end': 'Authentication Complete',
       '/settings': 'Settings - Zaplie',
+      '/setup': 'Set up your organisation - Zaplie',
     };
 
     document.title = titles[location.pathname] || 'Zaplie';
@@ -49,99 +52,117 @@ function TitleUpdater() {
   return null;
 }
 
+// The root still opens the Feed; any other unknown address shows Not found
+// instead of silently landing on the Feed.
+function RedirectToFeed() {
+  return <Navigate to="/feed" replace />;
+}
+
+// One boundary per route, reset when the address changes, so a broken page
+// does not take the navigation down with it.
+function RouteBoundary({ children }: { children: ReactElement }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
+
 function App({ pca }: AppProps) {
   return (
-    <MsalProvider instance={pca}>
-      <RewardNameProvider>
-        <TitleUpdater />
-        <ToastContainer
-          position="top-right"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="dark"
-        />
-        <PageLayout>
-          <Stack styles={{ root: { width: '100%', minWidth: 0 } }}>
-            <Routes>
-              <Route
-                path="/feed"
-                element={
-                  <RequireAuth>
-                    <Feed />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/users"
-                element={
-                  <RequireAuth>
-                    <Users />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/rewards"
-                element={
-                  <RequireAuth>
-                    <Rewards />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/automations"
-                element={
-                  <RequireAuth>
-                    <Automations />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/reports"
-                element={
-                  <RequireAuth>
-                    <Reports />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/wallet"
-                element={
-                  <RequireAuth>
-                    <Wallet />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <RequireAuth>
-                    <Settings />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/setup"
-                element={
-                  <RequireAuth>
-                    <TenantSetup />
-                  </RequireAuth>
-                }
-              />
-              <Route path="/login" element={<Login />} />
-              <Route path="/auth-start" element={<AuthStart />} />
-              <Route path="/auth-end" element={<AuthEnd />} />
-              <Route path="*" element={<Navigate to="/feed" replace />} />
-            </Routes>
-          </Stack>
-        </PageLayout>
-      </RewardNameProvider>
-    </MsalProvider>
+    <ErrorBoundary>
+      <MsalProvider instance={pca}>
+        <RewardNameProvider>
+          <TitleUpdater />
+          <ToastContainer
+            position="top-right"
+            autoClose={5000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="dark"
+          />
+          <PageLayout>
+            <Stack styles={{ root: { width: '100%', minWidth: 0 } }}>
+              <RouteBoundary>
+                <Routes>
+                  <Route
+                    path="/feed"
+                    element={
+                      <RequireAuth>
+                        <Feed />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/users"
+                    element={
+                      <RequireAuth>
+                        <Users />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/rewards"
+                    element={
+                      <RequireAuth>
+                        <Rewards />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/automations"
+                    element={
+                      <RequireAuth>
+                        <Automations />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/reports"
+                    element={
+                      <RequireAuth>
+                        <Reports />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/wallet"
+                    element={
+                      <RequireAuth>
+                        <Wallet />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <RequireAuth>
+                        <Settings />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/setup"
+                    element={
+                      <RequireAuth>
+                        <TenantSetup />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/auth-start" element={<AuthStart />} />
+                  <Route path="/auth-end" element={<AuthEnd />} />
+                  <Route path="/" element={<RedirectToFeed />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </RouteBoundary>
+            </Stack>
+          </PageLayout>
+        </RewardNameProvider>
+      </MsalProvider>
+    </ErrorBoundary>
   );
 }
 

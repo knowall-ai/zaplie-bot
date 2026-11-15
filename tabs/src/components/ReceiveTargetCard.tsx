@@ -6,6 +6,7 @@ import React, {
 } from 'react';
 import { toast } from 'react-toastify';
 import styles from './setting.module.css';
+import { classifyError } from '../utils/appErrors';
 import {
   getMyDirectoryEntry,
   MyDirectoryEntry,
@@ -36,12 +37,17 @@ const ReceiveTargetCard: FunctionComponent = () => {
       setState({ status: 'ready', entry });
       setAddress(entry.receive.lightningAddress || '');
     } catch (error) {
+      const kind = classifyError(error);
       setState({
         status: 'error',
         message:
           error instanceof Error && /No Zaplie wallet/.test(error.message)
             ? 'You are not set up in Zaplie yet. Send the Zaplie bot a message in Teams, or ask an admin.'
-            : "We couldn't load your wallet details. Try again.",
+            : kind === 'signed-out'
+              ? 'Your session has ended. Sign in again to see your wallet.'
+              : kind === 'wallet-unreachable'
+                ? 'The wallet service is unreachable right now. Nothing was paid; try again in a minute.'
+                : "We couldn't load your wallet details. Try again.",
       });
     }
   }, []);

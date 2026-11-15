@@ -1,6 +1,7 @@
 import { loginRequest } from '../authConfig';
 import { getMsalInstance } from '../msalClient';
 import { apiUrl } from '../appLocation';
+import { ApiError } from '../../utils/appErrors';
 
 // No wallet backend is ever reached from the browser: every call below goes to the
 // same-origin Express gateway, which holds the credentials server-side.
@@ -70,7 +71,9 @@ export const apiRequestAt = async <T>(
     } catch {
       // Keep the status-only message for a non-JSON response.
     }
-    throw new Error(message);
+    // The status travels with the error, so screens can tell a session that
+    // ended (401) from an outage (502/503) and show the right state.
+    throw new ApiError(message, response.status);
   }
   return response.json() as Promise<T>;
 };

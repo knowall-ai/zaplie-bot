@@ -8,6 +8,7 @@ import { useMsal } from '@azure/msal-react';
 import styles from './components/setting.module.css';
 import settingsStyles from './components/Settings.module.css';
 import { isSetupAdmin } from './services/adminRole';
+import { ErrorState } from './components/StatusPage';
 import {
   enterpriseAppUsersLink,
   getOrganizationName,
@@ -65,13 +66,7 @@ const TenantSetup: FunctionComponent = () => {
   }, [allowed, load]);
 
   if (!allowed) {
-    return (
-      <div className={settingsStyles.page}>
-        <p className={styles.errorText} role="alert">
-          Only your organisation&apos;s administrators can set up Zaplie.
-        </p>
-      </div>
-    );
+    return <ErrorState kind="forbidden" />;
   }
 
   const save = async () => {
