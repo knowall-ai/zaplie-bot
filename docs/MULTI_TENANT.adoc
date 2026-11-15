@@ -108,6 +108,11 @@ organisation (`PUT /api/tenant/setup`):
 . *Wallets.* Default budget and period for *Add people* (the wallet
   provisioner).
 
+The page heads with the organisation's name, read in the browser from
+Microsoft Graph `GET /organization` with the sign-in `User.Read` permission
+(nothing extra to grant). If Graph doesn't answer, the page shows the tenant
+id alone.
+
 === Settings → Admins
 
 The members of the Zaplie Admins group, read from Microsoft Graph with the

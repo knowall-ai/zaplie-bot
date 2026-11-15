@@ -106,7 +106,11 @@ describe('AdminsSetting', () => {
     ]);
     mockCanManage.mockResolvedValue(false);
     await render();
-    expect(container.textContent).toContain('Ada (ada@example.test)');
+    const row = container.querySelector(
+      'table[aria-label="Zaplie admins"] tbody tr',
+    );
+    expect(row?.textContent).toBe('Adaada@example.test');
+    expect(row?.querySelector('button')).toBe(null);
     expect(
       container.querySelector('[data-testid="admins-read-only"]'),
     ).not.toBe(null);

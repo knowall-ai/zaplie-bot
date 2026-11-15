@@ -28,6 +28,10 @@ const {
   createProvisioner: defaultCreateProvisioner,
 } = require('./walletProvisioner');
 const { zapRecords: defaultZapRecords } = require('./zapRecordStore');
+const { allowedAddressDomains } = require('./lnurlPay');
+
+// Public domain names only (for the Wallet page's hint); '*' means any.
+const receiveDomains = () => [...allowedAddressDomains()].filter((domain) => domain !== '*');
 
 const RECEIVE_BODY_KEYS = new Set(['lightningAddress']);
 const LINK_BODY_KEYS = new Set(['nwcUrl', 'lightningAddress', 'displayName']);
@@ -97,7 +101,7 @@ const createDirectoryRouter = ({
         // A balance read failing must not hide the registration form.
         console.warn('Directory balances unavailable:', error.message);
       }
-      res.json({ ...toPublicPerson(person), ...balances });
+      res.json({ ...toPublicPerson(person), ...balances, receiveDomains: receiveDomains() });
     }),
   );
 

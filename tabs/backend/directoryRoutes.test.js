@@ -134,6 +134,18 @@ test('the signed-in person sees their own entry and balance, never the connectio
   noSecret(response.text);
 });
 
+test('/me lists the accepted Lightning address domains, without the wildcard', async () => {
+  const previous = process.env.ZAPLIE_LIGHTNING_ADDRESS_DOMAINS;
+  process.env.ZAPLIE_LIGHTNING_ADDRESS_DOMAINS = 'bank.example, *, pay.example';
+  try {
+    const response = await call('GET', '/me', `Bearer ${ME}`);
+    assert.deepEqual(response.body.receiveDomains, ['bank.example', 'pay.example']);
+  } finally {
+    if (previous === undefined) delete process.env.ZAPLIE_LIGHTNING_ADDRESS_DOMAINS;
+    else process.env.ZAPLIE_LIGHTNING_ADDRESS_DOMAINS = previous;
+  }
+});
+
 test('someone outside the directory gets 403 from /me', async () => {
   const response = await call('GET', '/me', 'Bearer 11111111-2222-4333-8444-555555555555');
   assert.equal(response.status, 403);

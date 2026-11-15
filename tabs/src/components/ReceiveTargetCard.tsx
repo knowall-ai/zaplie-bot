@@ -110,6 +110,8 @@ const ReceiveTargetCard: FunctionComponent = () => {
     budget && budget.totalSats !== null && budget.usedSats !== null
       ? Math.max(0, budget.totalSats - budget.usedSats)
       : null;
+  const domains = entry.receiveDomains || [];
+  const placeholder = `name@${domains[0] || 'your-wallet-host'}`;
 
   return (
     <section className={styles.section} aria-labelledby="receive-heading">
@@ -119,62 +121,99 @@ const ReceiveTargetCard: FunctionComponent = () => {
         </h2>
         <p className={styles.intro}>
           Zaps you receive go to your own Private wallet. Zaplie never holds a
-          key to it and only ever pays into it: give it your wallet&apos;s
-          Lightning address.
+          key to it and only ever pays into it.
         </p>
       </div>
       <div className={styles.card}>
-        <p className={styles.fieldLabel} data-testid="allowance-status">
-          Allowance:{' '}
-          {entry.allowanceWalletId
-            ? formatSats(entry.allowanceSats)
-            : 'not set up yet — ask a Zaplie admin'}
-        </p>
-        {remaining !== null ? (
-          <p className={styles.fieldLabel} data-testid="allowance-budget">
-            Left to send this period: {formatSats(remaining)}
-          </p>
-        ) : null}
-        <p className={styles.fieldLabel} data-testid="receive-status">
-          Receiving at:{' '}
-          {registered || 'not set up — colleagues cannot zap you yet'}
-        </p>
+        <dl className={styles.statusList}>
+          <dt>Allowance</dt>
+          <dd data-testid="allowance-status">
+            {entry.allowanceWalletId ? (
+              formatSats(entry.allowanceSats)
+            ) : (
+              <>
+                <span className={styles.pill}>Not set up</span>
+                <span className={styles.helperText}>Ask a Zaplie admin</span>
+              </>
+            )}
+          </dd>
+          {remaining !== null ? (
+            <>
+              <dt>Left to send this period</dt>
+              <dd data-testid="allowance-budget">{formatSats(remaining)}</dd>
+            </>
+          ) : null}
+          <dt>Receiving at</dt>
+          <dd data-testid="receive-status">
+            {registered ? (
+              <>
+                <span className={styles.pillOk}>Ready</span>
+                {registered}
+              </>
+            ) : (
+              <span className={styles.pillWarning}>Not set up</span>
+            )}
+          </dd>
+        </dl>
 
-        <label className={styles.fieldLabel} htmlFor="receive-address">
-          Lightning address
-        </label>
-        <div className={styles.inputRow}>
-          <input
-            id="receive-address"
-            className={`${styles.textBox} ${styles.editing}`}
-            type="text"
-            inputMode="email"
-            autoComplete="off"
-            placeholder="name@your-wallet-host"
-            value={address}
-            onChange={event => setAddress(event.target.value)}
-            disabled={saving}
-          />
-          <button
-            type="button"
-            className={styles.primaryButton}
-            disabled={
-              saving || !address.trim() || address.trim() === registered
-            }
-            onClick={() => void save(address.trim())}
-          >
-            Save
-          </button>
-          {registered ? (
+        {registered ? null : (
+          <p className={styles.calloutWarning} role="note">
+            <span className={styles.calloutTitle}>
+              Colleagues can&apos;t zap you yet
+            </span>
+            Add your Lightning address below so zaps reach your wallet.
+          </p>
+        )}
+
+        <hr className={styles.divider} />
+
+        <div className={styles.field}>
+          <label className={styles.fieldLabel} htmlFor="receive-address">
+            Lightning address
+          </label>
+          <div className={styles.inputRow}>
+            <input
+              id="receive-address"
+              className={`${styles.textBox} ${styles.editing}`}
+              type="text"
+              inputMode="email"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={placeholder}
+              aria-describedby="receive-address-help"
+              value={address}
+              onChange={event => setAddress(event.target.value)}
+              disabled={saving}
+            />
             <button
               type="button"
-              className={styles.secondaryButton}
-              disabled={saving}
-              onClick={() => void save(null)}
+              className={styles.primaryButton}
+              disabled={
+                saving || !address.trim() || address.trim() === registered
+              }
+              onClick={() => void save(address.trim())}
             >
-              Remove
+              Save
             </button>
-          ) : null}
+            {registered ? (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={() => void save(null)}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+          <p id="receive-address-help" className={styles.helperText}>
+            A Lightning address looks like an email address and tells Zaplie
+            where to send your zaps. Find it on your wallet&apos;s Receive
+            screen.
+            {domains.length > 0
+              ? ` Accepted here: ${domains.map(d => `name@${d}`).join(', ')}.`
+              : ''}
+          </p>
         </div>
 
         {saveError ? (
