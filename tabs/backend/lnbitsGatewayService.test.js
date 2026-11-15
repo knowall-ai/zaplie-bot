@@ -14,6 +14,7 @@ const {
   listUserWallets,
   maxZapAmountSats,
   listWalletPayments,
+  payOwnedInvoice,
   redactSensitive,
   resetCachesForTests,
   sanitizePayment,
@@ -148,6 +149,15 @@ test('a wallet read is refused when the wallet belongs to somebody else', async 
     status: 403,
   });
   assert.equal(await getWalletBalance('wallet-1', OID_1), 5);
+});
+
+test('an Allowance wallet never pays an arbitrary invoice', async () => {
+  const calls = installLnbitsStub();
+  const pay = (walletId) =>
+    payOwnedInvoice({ walletId, paymentRequest: 'lnbc10n1anything', aadObjectId: OID_1 });
+  await assert.rejects(pay('wallet-1'), (error) => error.status === 403 && /only be sent as zaps/.test(error.message));
+  await assert.rejects(pay('wallet-2'), /does not belong/);
+  assert.equal(calls.length, 0);
 });
 
 test('nobody outside the directory reaches a wallet', async () => {
