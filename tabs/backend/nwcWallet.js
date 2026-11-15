@@ -131,15 +131,20 @@ const withTimeout = (promise, ms, onTimeout) => {
   ]).finally(() => clearTimeout(timer));
 };
 
+// LNbits nwcprovider answers 64 zeros when its backend kept no preimage; that
+// hashes to one constant, so every such payment would share a payment hash.
+const PLACEHOLDER_PREIMAGE = /^0{64}$/;
+
 const paymentHashOf = (preimage) =>
-  typeof preimage === 'string' && HEX64.test(preimage)
+  typeof preimage === 'string' && HEX64.test(preimage) && !PLACEHOLDER_PREIMAGE.test(preimage)
     ? crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex')
     : null;
 
 const msatToSats = (msat) => (Number.isFinite(Number(msat)) ? Math.floor(Number(msat) / 1000) : null);
 
+// The SDK's errors are all named "Error": the class name says what happened.
 const isTimeoutOrNetwork = (error) =>
-  /timeout|network|publish|connect|closed/i.test(`${error?.name} ${error?.code}`);
+  /timeout|network|publish|connect|closed/i.test(`${error?.name} ${error?.constructor?.name} ${error?.code}`);
 
 /**
  * One wallet behind one NWC connection. `clientFactory` is injectable so
@@ -249,8 +254,14 @@ const createNwcWalletFactory = ({
           () => new NwcError('NWC pay_invoice timed out', { code: 'TIMEOUT' }),
         );
         const paymentHash = paymentHashOf(result?.preimage);
-        if (!paymentHash) throw new NwcPaymentUnknown('The wallet confirmed a payment without a preimage');
-        return { paymentHash, feesSats: msatToSats(result.fees_paid) || 0 };
+        if (paymentHash) return { paymentHash, feesSats: msatToSats(result.fees_paid) || 0 };
+        // Paid, but without a usable preimage: the wallet's own record of the
+        // invoice names the payment. Without it the payment cannot be recorded.
+        const tx = await lookupInvoice({ invoice: paymentRequest }).catch(() => null);
+        if (tx?.state === 'settled' && HEX64.test(String(tx.payment_hash || ''))) {
+          return { paymentHash: tx.payment_hash.toLowerCase(), feesSats: msatToSats(tx.fees_paid ?? result?.fees_paid) || 0 };
+        }
+        throw new NwcPaymentUnknown('The wallet confirmed a payment without a preimage');
       } catch (error) {
         if (error instanceof NwcPaymentUnknown) throw error;
         if (REFUSAL_CODES.has(error?.code)) {
@@ -265,7 +276,9 @@ const createNwcWalletFactory = ({
           tx = null;
         }
         if (tx?.state === 'settled') {
-          return { paymentHash: tx.payment_hash || paymentHashOf(tx.preimage), feesSats: msatToSats(tx.fees_paid) || 0 };
+          const settledHash = HEX64.test(String(tx.payment_hash || '')) ? tx.payment_hash.toLowerCase() : paymentHashOf(tx.preimage);
+          if (!settledHash) throw new NwcPaymentUnknown('The wallet settled a payment it could not identify');
+          return { paymentHash: settledHash, feesSats: msatToSats(tx.fees_paid) || 0 };
         }
         if (tx?.state === 'failed') {
           throw new NwcPaymentRefused(REFUSAL_MESSAGES.PAYMENT_FAILED, 'PAYMENT_FAILED');

@@ -23,7 +23,7 @@ const { after, before, test } = require('node:test');
 const express = require('express');
 const { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } = require('jose');
 const { setKeyResolverForTests, verifyMsalPayload } = require('./msalValidator');
-const { tenantMiddleware } = require('./tenantMiddleware');
+const { requireHomeTenant, tenantMiddleware } = require('./tenantMiddleware');
 const { createDirectoryRouter } = require('./directoryRoutes');
 const tenantRoutes = require('./tenantRoutes');
 const { runWithTenant } = require('./tenantContext');
@@ -62,6 +62,10 @@ before(async () => {
   app.use('/api', tenantMiddleware);
   app.use('/api/tenant', tenantRoutes);
   app.use('/api/directory', createDirectoryRouter());
+  // Stands in for what server.js mounts behind the same guard (the allowance
+  // sync, the GitHub App): it answers with the organisation it ran as.
+  app.use('/api/home-only', requireHomeTenant, (req, res) => res.json({ tid: req.zaplie.tid }));
+  app.get('/api/whoami', (req, res) => res.json({ tid: req.zaplie.tid }));
   await new Promise((resolve) => {
     server = app.listen(0, () => {
       base = `http://127.0.0.1:${server.address().port}/api`;
@@ -182,4 +186,51 @@ test('the bot names its organisation, which must be allowed', async () => {
   assert.deepEqual(peopleNames(home), ['Home Person']);
   const stranger = await call('GET', '/directory/internal/people', null, { headers: { ...internal, 'X-Zaplie-Tenant': STRANGER } });
   assert.equal(stranger.status, 403);
+});
+
+test('what the deployment shares is the home organisation\'s only', async () => {
+  const homeAdmin = await token(HOME, { roles: ['Zaplie.Admin'] });
+  assert.deepEqual((await call('POST', '/home-only', homeAdmin)).body, { tid: HOME });
+  // A token-less browser callback (GitHub's redirect) runs as the home tenant.
+  assert.equal((await call('GET', '/home-only', null)).status, 200);
+
+  const customerAdmin = await token(CUSTOMER, { oid: OID(2), roles: ['Zaplie.Admin'] });
+  assert.equal((await call('POST', '/home-only', customerAdmin)).status, 403);
+  const customerGlobalAdmin = await token(CUSTOMER, { oid: OID(3), wids: ['62e90394-69f5-4237-9190-012177145e10'] });
+  assert.equal((await call('POST', '/home-only', customerGlobalAdmin)).status, 403);
+  // Nor the platform operator while acting for another organisation.
+  const operator = await token(HOME, { oid: OID(9), roles: ['Zaplie.PlatformOperator'] });
+  const acting = await call('GET', '/home-only', operator, { headers: { 'X-Zaplie-Act-As-Tenant': CUSTOMER } });
+  assert.equal(acting.status, 403);
+  // The bot, when it names another organisation.
+  const bot = await call('GET', '/home-only', null, {
+    headers: { authorization: 'internal-test-token', 'X-Zaplie-Tenant': CUSTOMER },
+  });
+  assert.equal(bot.status, 403);
+});
+
+test('only the bot\'s own token makes X-Zaplie-Tenant count', async () => {
+  for (const authorization of ['anything', 'Basic Zm9vOmJhcg==', 'internal-test-token-but-wrong']) {
+    const response = await call('GET', '/whoami', null, { headers: { authorization, 'X-Zaplie-Tenant': CUSTOMER } });
+    assert.deepEqual(response.body, { tid: HOME });
+  }
+  const bot = await call('GET', '/whoami', null, {
+    headers: { authorization: 'internal-test-token', 'X-Zaplie-Tenant': CUSTOMER },
+  });
+  assert.deepEqual(bot.body, { tid: CUSTOMER });
+});
+
+test('another organisation has no Treasury: its reward is refused before anything is paid', async () => {
+  process.env.ZAPLIE_TREASURY_NWC = 'nostr+walletconnect://never-opened';
+  try {
+    const response = await call('POST', '/directory/internal/rewards', null, {
+      headers: { authorization: 'internal-test-token', 'X-Zaplie-Tenant': CUSTOMER },
+      body: { recipientOid: OID(2), recipientLabel: 'Customer Person', amountSats: 5, memo: 'reward', idempotencyKey: 'tenant-treasury-0001' },
+    });
+    assert.equal(response.status, 403);
+    assert.equal(response.body.outcome, 'not_paid');
+    assert.match(response.body.error, /no Treasury/);
+  } finally {
+    delete process.env.ZAPLIE_TREASURY_NWC;
+  }
 });

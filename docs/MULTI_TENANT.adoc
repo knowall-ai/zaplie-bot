@@ -137,6 +137,13 @@ These run for the home tenant only, by design for now:
 
 Each needs a per-organisation setting before a customer can use that feature.
 
+This is enforced, not only intended. `requireHomeTenant`
+(`tenantMiddleware.js`) answers 403 to any other organisation, and to the
+platform operator acting for one, on `/api/allowances`, `/api/setup`,
+`/api/connections` and `/api/identities`. The Treasury refuses to pay for any
+organisation but the home one. `X-Zaplie-Tenant` counts only when the request
+carries the bot's own token.
+
 == What Ben does in Entra now (home tenant)
 
 . Apply the `aad.manifest.json` change to "Zaplie" (`teamsapp provision`, or

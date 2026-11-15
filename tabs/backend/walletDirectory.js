@@ -28,6 +28,8 @@ const {
 } = require('./lnurlPay');
 const { NwcError, nwcWallets: defaultNwcWallets } = require('./nwcWallet');
 const { normalizeOid, peopleStore: defaultPeopleStore } = require('./peopleStore');
+const { homeTenant } = require('./tenantConfig');
+const { currentTenant } = require('./tenantContext');
 
 const fail = (message, status, { expose = status < 500 } = {}) =>
   new WalletGatewayError(message, status, { expose });
@@ -242,6 +244,8 @@ const createWalletDirectory = ({
 
   /** The Treasury's NWC wallet (ZAPLIE_TREASURY_NWC). */
   const treasuryWallet = () => {
+    // One Treasury per deployment, and it is the home organisation's.
+    if (currentTenant() !== homeTenant()) throw fail('this organisation has no Treasury yet', 403);
     const url = treasuryNwc(env);
     if (!url) throw fail('ZAPLIE_TREASURY_NWC must be set', 503);
     return nwc().open(url);
