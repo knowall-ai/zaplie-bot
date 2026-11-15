@@ -45,9 +45,13 @@ const settle = async () => {
   });
 };
 
+const mount = () => {
+  root.render(<DirectoryAdminSetting />);
+};
+
 const render = async () => {
   await act(async () => {
-    root.render(<DirectoryAdminSetting />);
+    mount();
   });
   await settle();
 };

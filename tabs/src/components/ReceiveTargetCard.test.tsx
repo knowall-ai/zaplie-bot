@@ -37,9 +37,13 @@ const settle = async () => {
   });
 };
 
+const mount = () => {
+  root.render(<ReceiveTargetCard />);
+};
+
 const render = async () => {
   await act(async () => {
-    root.render(<ReceiveTargetCard />);
+    mount();
   });
   await settle();
 };
