@@ -5,21 +5,21 @@
 //     connection (NIP-47) whose budget LNbits enforces. Zaplie keeps the
 //     connection string (encrypted) and the wallet's zaplie-<oid> Lightning
 //     address, which the allowance extension pays into. No LNbits key.
-//       - Default: an operator creates the wallet, its NWC connection and its
-//         pay link in the LNbits UI and pastes the string and the address in
-//         Settings (linkAllowanceWallet). The connection is tried before it
-//         is saved.
-//       - Optional (ZAPLIE_AUTO_PROVISION=true with LNBITS_API_TOKEN): the
-//         wallet, pay link and NWC connection are created on first sign-in;
-//         the wallet keys are used for those three calls and then dropped.
+//       - Manual (any wallet backend): an admin pastes the NWC string and the
+//         address in Settings (linkAllowanceWallet). The connection is tried
+//         before it is saved.
+//       - Provisioned: an admin picks people in Settings and a provisioner
+//         (walletProvisioner.js; LNbits today) creates wallet, pay link and
+//         NWC connection with a token pasted for that one request
+//         (provisionPeople); the result is linked exactly like a manual one.
+//     There is no standing LNbits token and nothing happens on sign-in.
 //   * Receive target - the Lightning address of the person's own Private
 //     wallet. Any Lightning backend works; Zaplie only ever pays into it.
 //
 // Nothing here creates LNbits users or mints balance: an opening allowance is
 // a payment from the Fund wallet (the allowance extension), never a top-up.
-const crypto = require('crypto');
-const { lnbitsApiToken, publicLnbitsHost, treasuryNwc } = require('./lnbitsConfig');
-const { LnbitsGatewayError, lnbitsRequest } = require('./lnbitsClient');
+const { publicLnbitsHost, treasuryNwc } = require('./lnbitsConfig');
+const { WalletGatewayError } = require('./walletErrors');
 const {
   LnurlPayError,
   fetchPayRequest,
@@ -29,19 +29,8 @@ const {
 const { NwcError, nwcWallets: defaultNwcWallets } = require('./nwcWallet');
 const { normalizeOid, peopleStore: defaultPeopleStore } = require('./peopleStore');
 
-const MAX_WALLET_NAME = 64;
-const NWC_PERMISSIONS = ['pay', 'invoice', 'lookup', 'history', 'balance', 'info'];
-const WEEK_SECONDS = 7 * 24 * 60 * 60;
-const DEFAULT_ALLOWANCE_CAP_SATS = 100000;
-
 const fail = (message, status, { expose = status < 500 } = {}) =>
-  new LnbitsGatewayError(message, status, { expose });
-
-const allowanceWalletName = (displayName) =>
-  `Allowance - ${String(displayName || 'Zaplie user').replace(/[\r\n\t]+/g, ' ').trim()}`.slice(
-    0,
-    MAX_WALLET_NAME,
-  );
+  new WalletGatewayError(message, status, { expose });
 
 // The allowance extension pays each Allowance wallet through a pay link named
 // zaplie-<oid prefix> (payLinkService.js). Registering one of those as a
@@ -51,29 +40,8 @@ const isAllowancePayLink = (address, env) => {
   return name.startsWith('zaplie-') && domain === publicLnbitsHost(env);
 };
 
-/** A fresh NWC client key pair: hex secret and its x-only public key. */
-const newNwcKeyPair = () => {
-  for (;;) {
-    const secret = crypto.randomBytes(32);
-    try {
-      const ecdh = crypto.createECDH('secp256k1');
-      ecdh.setPrivateKey(secret);
-      return {
-        secret: secret.toString('hex'),
-        pubkey: ecdh.getPublicKey('hex', 'compressed').slice(2),
-      };
-    } catch (_error) {
-      // A secret outside the curve order is astronomically rare: draw again.
-    }
-  }
-};
-
-const autoProvisionEnabled = (env) =>
-  String(env.ZAPLIE_AUTO_PROVISION || '').trim().toLowerCase() === 'true' && Boolean(lnbitsApiToken(env));
-
 const createWalletDirectory = ({
   store: storeOption,
-  request = lnbitsRequest,
   env = process.env,
   nwc: nwcOption,
   resolvePayRequest = fetchPayRequest,
@@ -93,78 +61,10 @@ const createWalletDirectory = ({
     }
   };
 
-  // --- optional automatic provisioning (ZAPLIE_AUTO_PROVISION + token) ----
-
-  // The NWC budget is the allowance cap (ALLOWANCE_MAX_AMOUNT_SATS, the
-  // same ceiling allowancePolicy.js enforces). A malformed value falls back
-  // to the default rather than creating an unlimited connection.
-  const allowanceCapSats = () => {
-    const raw = String(env.ALLOWANCE_MAX_AMOUNT_SATS ?? '').trim();
-    const value = /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : NaN;
-    return Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_ALLOWANCE_CAP_SATS;
-  };
-
-  // Creates the wallet (token), its zaplie-<oid> pay link and an NWC
-  // connection limited to the allowance cap (wallet admin key), then forgets
-  // the wallet keys. A failure part-way leaves a wallet an operator can finish
-  // by hand; nothing is stored until all three exist.
-  const provisionWithToken = async (person) => {
-    // Lazy: payLinkService imports the gateway, which imports this module.
-    // eslint-disable-next-line global-require
-    const { allowanceUsername, allowanceDescription } = require('./payLinkService');
-    const wallet = await request('/api/v1/wallet', {
-      method: 'POST',
-      apiToken: true,
-      body: { name: allowanceWalletName(person.displayName) },
-    });
-    if (!wallet || typeof wallet.id !== 'string' || !wallet.adminkey) {
-      throw fail('LNbits did not return a complete wallet', 502);
-    }
-    const cap = allowanceCapSats();
-    const link = await request('/lnurlp/api/v1/links', {
-      method: 'POST',
-      walletKey: wallet.adminkey,
-      body: {
-        description: allowanceDescription(person.displayName),
-        min: 1,
-        max: cap,
-        comment_chars: 0,
-        username: allowanceUsername(person.oid),
-      },
-    });
-    const lightningAddress = `${link?.username || allowanceUsername(person.oid)}@${publicLnbitsHost(env)}`;
-    const { secret, pubkey } = newNwcKeyPair();
-    await request(`/nwcprovider/api/v1/nwc/${pubkey}`, {
-      method: 'PUT',
-      walletKey: wallet.adminkey,
-      body: {
-        permissions: NWC_PERMISSIONS,
-        description: `Zaplie allowance (${String(person.displayName || person.oid).slice(0, 80)})`,
-        expires_at: 0,
-        budgets: [
-          {
-            budget_msats: cap * 1000,
-            refresh_window: WEEK_SECONDS,
-            created_at: Math.floor(Date.now() / 1000),
-          },
-        ],
-      },
-    });
-    const nwcUrl = await request(`/nwcprovider/api/v1/pairing/${secret}`, { walletKey: wallet.adminkey });
-    if (typeof nwcUrl !== 'string') throw fail('LNbits did not return an NWC connection', 502);
-    const verified = await nwc().verify(nwcUrl);
-    return store().setAllowanceWallet(person.oid, {
-      walletId: verified.connectionId,
-      nwc: nwcUrl,
-      lightningAddress,
-      source: 'token',
-    });
-  };
-
   /**
-   * Makes sure the signed-in person is in the directory and, when automatic
-   * provisioning is on, has an Allowance wallet. Concurrent calls for one
-   * person share one operation, so two tabs cannot create two wallets.
+   * Makes sure the signed-in person is in the directory. Concurrent calls
+   * for one person share one operation. Nothing is created in any wallet
+   * backend: an admin links or provisions the Allowance wallet.
    */
   const ensurePerson = async ({ oid: oidInput, displayName, email }) => {
     const oid = normalizeOid(oidInput);
@@ -174,16 +74,11 @@ const createWalletDirectory = ({
 
     const operation = (async () => {
       const created = !store().get(oid);
-      let person = store().upsertProfile({ oid, displayName, email });
-      const createdWallets = [];
-      if (!person.allowance && autoProvisionEnabled(env)) {
-        person = await provisionWithToken(person);
-        createdWallets.push('Allowance');
-      }
+      const person = store().upsertProfile({ oid, displayName, email });
       return {
         person,
         created,
-        createdWallets,
+        createdWallets: [],
         // A new person waits for an operator to link their Allowance wallet.
         awaitingOperator: !person.allowance,
       };
@@ -194,11 +89,11 @@ const createWalletDirectory = ({
   };
 
   /**
-   * The default path: an operator created the wallet under zaplie.service, an
-   * NWC connection on it (pay, invoice, lookup, history, balance, info; budget
-   * = the allowance cap) and its zaplie-<oid> pay link in the LNbits UI, and
-   * pastes the connection string and the address. The connection is tried
-   * (get_info, get_balance) and the address resolved before anything is saved.
+   * Links an Allowance wallet: an NWC connection (pay, invoice, lookup,
+   * history, balance, info; budget = the allowance cap) and the wallet's own
+   * Lightning address, typed by an admin or returned by a provisioner. The
+   * connection is tried (get_info, get_balance) and the address resolved
+   * before anything is saved.
    */
   const linkAllowanceWallet = async ({ oid: oidInput, displayName, nwcUrl, lightningAddress }) => {
     const oid = normalizeOid(oidInput);
@@ -244,6 +139,55 @@ const createWalletDirectory = ({
       source: 'operator',
     });
     return { person, balanceSats: verified.balanceSats };
+  };
+
+  /**
+   * Onboards people with a provisioner built for this one request. Sequential
+   * on purpose (a handful of people, and LNbits is not hammered); one
+   * person's failure is reported and the rest carry on. Returns one result
+   * per person: provisioned, already-linked or failed (with a message safe to
+   * show the admin). No credential appears in a result.
+   */
+  const provisionPeople = async ({ provisioner, people, budgetSats, refreshSeconds }) => {
+    const results = [];
+    for (const entry of people) {
+      const oid = normalizeOid(entry?.oid);
+      if (!oid) {
+        results.push({ oid: String(entry?.oid || '').slice(0, 64), status: 'failed', message: 'not an Entra object id' });
+        continue;
+      }
+      const current = store().get(oid);
+      const displayName = (typeof entry.displayName === 'string' && entry.displayName.trim()) || current?.displayName || null;
+      if (current?.allowance) {
+        results.push({ oid, displayName, status: 'already-linked', lightningAddress: current.allowance.lightningAddress });
+        continue;
+      }
+      try {
+        const made = await provisioner.provisionAllowance({ oid, displayName }, { budgetSats, refreshSeconds });
+        const { person } = await linkAllowanceWallet({
+          oid,
+          displayName,
+          nwcUrl: made.nwcUrl,
+          lightningAddress: made.lightningAddress,
+        });
+        results.push({
+          oid,
+          displayName,
+          status: 'provisioned',
+          allowanceWalletId: person.allowance.walletId,
+          lightningAddress: person.allowance.lightningAddress,
+        });
+      } catch (error) {
+        console.warn('Provisioning failed for one person:', oid, error.expose ? error.message : error.name);
+        results.push({
+          oid,
+          displayName,
+          status: 'failed',
+          message: error.expose ? error.message : 'provisioning failed; see the backend log',
+        });
+      }
+    }
+    return results;
   };
 
   const requirePerson = (oidInput) => {
@@ -329,11 +273,11 @@ const createWalletDirectory = ({
 
   return {
     allowanceWallet,
-    autoProvisionEnabled: () => autoProvisionEnabled(env),
     balancesFor,
     createInvoiceFor,
     ensurePerson,
     linkAllowanceWallet,
+    provisionPeople,
     requirePerson,
     setReceiveTarget,
     store,
@@ -347,4 +291,4 @@ const walletDirectory = () => {
   return defaultDirectory;
 };
 
-module.exports = { allowanceWalletName, createWalletDirectory, newNwcKeyPair, walletDirectory };
+module.exports = { createWalletDirectory, walletDirectory };

@@ -21,14 +21,14 @@ const {
   sanitizePayment,
   sanitizeWallet,
   sanitizeBalanceMsat,
-} = require('./lnbitsGatewayService');
+} = require('./walletGateway');
 const { resetPeopleStoreForTests, peopleStore } = require('./peopleStore');
 const { NwcPaymentRefused, setNwcWalletsForTests } = require('./nwcWallet');
 const { resetZapRecordsForTests, zapRecords } = require('./zapRecordStore');
 const { createFakeNwc, nwcUrlFor } = require('./testSupport/fakeNwc');
 const {
   createZapIdempotencyStore,
-} = require('./lnbitsZapIdempotencyStore');
+} = require('./zapIdempotencyStore');
 
 const OID_1 = '00000000-0000-4000-8000-000000000001';
 const OID_2 = '00000000-0000-4000-8000-000000000002';

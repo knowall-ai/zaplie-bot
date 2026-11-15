@@ -3,8 +3,10 @@
 //
 //   /me/*        the signed-in person (verified MSAL token): see their own
 //                Allowance balance, register where they receive zaps.
-//   /admin/*     Zaplie.Admin: see who is set up, link an Allowance wallet by
-//                its NWC connection string and Lightning address.
+//   /admin/*     Zaplie.Admin: see who is set up, onboard people: link an
+//                Allowance wallet by NWC connection + Lightning address
+//                (any wallet backend), or provision several at once with a
+//                provisioner and a token pasted for that one request.
 //   /internal/*  the bot (shared TAB_BACKEND_TOKEN): resolve and provision
 //                people, pay a zap or a reward, read balances and zaps.
 //
@@ -19,11 +21,19 @@ const { requireAdmin } = require('./adminAuth');
 const { requireMsalOid: defaultRequireMsalOid } = require('./requireMsalOid');
 const { walletDirectory: defaultDirectory } = require('./walletDirectory');
 const { normalizeOid, toPublicPerson } = require('./peopleStore');
-const gateway = require('./lnbitsGatewayService');
+const gateway = require('./walletGateway');
+const {
+  PERIOD_SECONDS,
+  availableProvisioners,
+  createProvisioner: defaultCreateProvisioner,
+} = require('./walletProvisioner');
 const { zapRecords: defaultZapRecords } = require('./zapRecordStore');
 
 const RECEIVE_BODY_KEYS = new Set(['lightningAddress']);
 const LINK_BODY_KEYS = new Set(['nwcUrl', 'lightningAddress', 'displayName']);
+const PROVISION_BODY_KEYS = new Set(['provisioner', 'token', 'people', 'budgetSats', 'period']);
+const MAX_PROVISION_BATCH = 25;
+const MAX_BUDGET_SATS = 10_000_000;
 const ENSURE_BODY_KEYS = new Set(['aadObjectId', 'displayName', 'email']);
 const ZAP_BODY_KEYS = new Set(['senderOid', 'recipientOid', 'amountSats', 'memo', 'idempotencyKey']);
 const REWARD_BODY_KEYS = new Set([
@@ -60,6 +70,7 @@ const createDirectoryRouter = ({
   sendZap = (input) => gateway.sendZap(input),
   payReward = (input) => gateway.payReward(input),
   zapRecords = defaultZapRecords,
+  createProvisioner = defaultCreateProvisioner,
 } = {}) => {
   const router = express.Router();
 
@@ -70,8 +81,6 @@ const createDirectoryRouter = ({
       next(error);
     }
   };
-
-  const provisioning = () => (directory().autoProvisionEnabled() ? 'automatic' : 'operator');
 
   // --- the signed-in person ------------------------------------------------
 
@@ -88,7 +97,7 @@ const createDirectoryRouter = ({
         // A balance read failing must not hide the registration form.
         console.warn('Directory balances unavailable:', error.message);
       }
-      res.json({ ...toPublicPerson(person), ...balances, provisioning: provisioning() });
+      res.json({ ...toPublicPerson(person), ...balances });
     }),
   );
 
@@ -118,7 +127,7 @@ const createDirectoryRouter = ({
     adminAuth,
     route(async (_req, res) => {
       res.json({
-        provisioning: provisioning(),
+        provisioners: availableProvisioners(),
         people: directory().store().list().map(toPublicPerson),
       });
     }),
@@ -151,21 +160,45 @@ const createDirectoryRouter = ({
     }),
   );
 
+  // Onboards up to MAX_PROVISION_BATCH people with a provisioner. The token
+  // is read from this request's body, handed to the provisioner and dropped
+  // with the request: never stored, never logged (this route logs nothing
+  // from the body), never echoed. Per-person results, one 200 for the batch.
   router.post(
-    '/admin/people/:oid/provision',
+    '/admin/people/provision',
     adminAuth,
     route(async (req, res) => {
-      const oid = normalizeOid(req.params.oid);
-      if (!oid) {
-        res.status(400).json({ error: 'invalid Entra object id' });
+      const body = req.body;
+      const valid =
+        hasOnlyKeys(body, PROVISION_BODY_KEYS) &&
+        typeof body.provisioner === 'string' &&
+        typeof body.token === 'string' &&
+        body.token.length <= 4096 &&
+        Array.isArray(body.people) &&
+        body.people.length > 0 &&
+        body.people.length <= MAX_PROVISION_BATCH &&
+        body.people.every(
+          (entry) =>
+            entry && typeof entry === 'object' && typeof entry.oid === 'string' && optionalString(entry.displayName, 256),
+        ) &&
+        Number.isSafeInteger(body.budgetSats) &&
+        body.budgetSats > 0 &&
+        body.budgetSats <= MAX_BUDGET_SATS &&
+        Object.prototype.hasOwnProperty.call(PERIOD_SECONDS, body.period);
+      if (!valid) {
+        res.status(400).json({
+          error: `send provisioner, token, 1-${MAX_PROVISION_BATCH} people, budgetSats and period (daily, weekly or monthly)`,
+        });
         return;
       }
-      if (!directory().autoProvisionEnabled()) {
-        res.status(409).json({ error: 'Automatic provisioning is off; link a wallet instead' });
-        return;
-      }
-      const result = await directory().ensurePerson({ oid });
-      res.json({ person: toPublicPerson(result.person), createdWallets: result.createdWallets });
+      const provisioner = createProvisioner(body.provisioner, { token: body.token });
+      const results = await directory().provisionPeople({
+        provisioner,
+        people: body.people.map((entry) => ({ oid: entry.oid, displayName: entry.displayName })),
+        budgetSats: body.budgetSats,
+        refreshSeconds: PERIOD_SECONDS[body.period],
+      });
+      res.json({ results });
     }),
   );
 

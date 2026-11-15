@@ -35,17 +35,15 @@ test('a wallet key goes out as X-Api-Key and nothing else', async (t) => {
   assert.equal(seen.headers.Authorization, undefined);
 });
 
-test('the API token goes out as a Bearer token, and only when configured', async (t) => {
-  withEnv(t, { LNBITS_URL: 'https://lnbits.test', LNBITS_API_TOKEN: undefined });
-  await assert.rejects(lnbitsRequest('/api/v1/wallets', { apiToken: true }), (error) => error.status === 503);
-  process.env.LNBITS_API_TOKEN = 'token';
+test('a per-request token goes out as a Bearer token; nothing is read from the environment', async (t) => {
+  withEnv(t, { LNBITS_URL: 'https://lnbits.test', LNBITS_API_TOKEN: 'from-env-must-not-be-used' });
   let seen;
   global.fetch = async (_url, init) => {
     seen = init.headers;
     return ok([]);
   };
-  await lnbitsRequest('/api/v1/wallets', { apiToken: true });
-  assert.equal(seen.Authorization, 'Bearer token');
+  await lnbitsRequest('/api/v1/wallets', { bearer: 'pasted-token-0001' });
+  assert.equal(seen.Authorization, 'Bearer pasted-token-0001');
   assert.equal(seen['X-Api-Key'], undefined);
 });
 
@@ -54,8 +52,9 @@ test('a request with no credential, or two, is never sent', async (t) => {
   global.fetch = async () => {
     throw new Error('must not be called');
   };
-  await assert.rejects(lnbitsRequest('/api/v1/wallet'), /needs a wallet key or the API token/);
-  await assert.rejects(lnbitsRequest('/api/v1/wallet', { walletKey: 'k', apiToken: true }), /one credential/);
+  await assert.rejects(lnbitsRequest('/api/v1/wallet'), /needs a wallet key or a token/);
+  await assert.rejects(lnbitsRequest('/api/v1/wallet', { apiToken: true }), /needs a wallet key or a token/);
+  await assert.rejects(lnbitsRequest('/api/v1/wallet', { walletKey: 'k', bearer: 'b'.repeat(20) }), /one credential/);
 });
 
 test('LNBITS_URL is required (LNBITS_NODE_URL still read for existing settings)', async (t) => {
@@ -84,7 +83,7 @@ test('no backend module calls /api/v1/auth or /users/api/v1', () => {
         .split('\n')
         .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
         .join('\n');
-      return /\/api\/v1\/auth\b|\/users\/api\/v1/.test(source) || /LNBITS_(USERNAME|PASSWORD|ADMINKEY)\b/.test(source);
+      return /\/api\/v1\/auth\b|\/users\/api\/v1/.test(source) || /LNBITS_(USERNAME|PASSWORD|ADMINKEY|API_TOKEN)\b|ZAPLIE_AUTO_PROVISION/.test(source);
     });
   assert.deepEqual(offenders, []);
 });

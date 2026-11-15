@@ -7,9 +7,8 @@
 //     Allowance wallet in peopleStore.js, the Treasury in ZAPLIE_TREASURY_NWC),
 //   * the Fund wallet's admin key, for the LNbits allowance extension only
 //     (allowanceExtensionClient.js), and
-//   * optionally LNBITS_API_TOKEN, for ZAPLIE_AUTO_PROVISION only. Off by
-//     default: write access to /api/v1/wallet also lets a token reset keys
-//     of, or delete, any zaplie.service wallet.
+// No standing LNbits token: an admin onboarding people with the LNbits
+// provisioner pastes a short-lived ACL token into that one request.
 const { REQUEST_TIMEOUT_MS } = require('./httpTimeout');
 
 class LnbitsConfigError extends Error {
@@ -35,8 +34,6 @@ const lnbitsUrl = (env = process.env) => {
   return raw.replace(/\/+$/, '');
 };
 
-/** The optional zaplie.service ACL token, or null when it is not configured. */
-const lnbitsApiToken = (env = process.env) => trimmed(env.LNBITS_API_TOKEN) || null;
 
 /**
  * The Treasury wallet's NWC connection string (automation rewards). The
@@ -68,7 +65,6 @@ const publicLnbitsHost = (env = process.env) => {
 module.exports = {
   LnbitsConfigError,
   REQUEST_TIMEOUT_MS,
-  lnbitsApiToken,
   lnbitsUrl,
   publicLnbitsHost,
   rewardsStoreInkey,

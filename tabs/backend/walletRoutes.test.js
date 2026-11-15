@@ -6,7 +6,7 @@ process.env.ZAPLIE_GUEST_ALLOWLIST = 'guest.ok@partner.test';
 const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const express = require('express');
-const { createLnbitsRouter } = require('./lnbitsRoutes');
+const { createWalletRouter } = require('./walletRoutes');
 
 const calls = [];
 const service = {
@@ -92,7 +92,7 @@ const app = express();
 app.use(express.json());
 app.use(
   '/api/lnbits',
-  createLnbitsRouter({ service, extractBearerToken, verifyMsalPayload }),
+  createWalletRouter({ service, extractBearerToken, verifyMsalPayload }),
 );
 
 let server;

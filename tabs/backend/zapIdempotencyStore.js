@@ -309,6 +309,7 @@ const pruneExpired = (store, nowMs) => {
 };
 
 const createZapIdempotencyStore = ({
+  // The file keeps its original name so existing records stay in force.
   storePath = dataPath('lnbits-zap-idempotency.json'),
   now = () => new Date().toISOString(),
 } = {}) => {

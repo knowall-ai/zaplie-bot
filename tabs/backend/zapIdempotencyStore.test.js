@@ -8,7 +8,7 @@ const {
   requestDigest,
   scopeDigest,
   __testing: { breakStaleLock },
-} = require('./lnbitsZapIdempotencyStore');
+} = require('./zapIdempotencyStore');
 
 const tempStore = (t, prefix) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
