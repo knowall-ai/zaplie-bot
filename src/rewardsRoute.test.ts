@@ -23,8 +23,11 @@ import { RewardLedger, rewardKey } from './services/rewardLedger';
 import { RewardBudgetLedger } from './services/rewardBudget';
 import { RewardBudget } from './services/fetchRewardPolicy';
 import { RewardAmount, RewardError } from './services/rewardsService';
-import { payInvoice } from './services/lnbitsService';
-import { createInvoiceForPerson } from './services/peopleDirectory';
+import {
+  payReward as payRewardThroughPortal,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
+} from './services/peopleDirectory';
 import { resolveRewardRecipientByGithubId } from './services/identityService';
 import {
   createPendingReward,
@@ -34,10 +37,10 @@ import {
 // The real payReward runs; only its LNbits and portal calls are stubbed, so
 // "payInvoice was called once" means the treasury paid once.
 jest.mock('./services/peopleDirectory', () => ({
-  createInvoiceForPerson: jest.fn(),
-}));
-jest.mock('./services/lnbitsService', () => ({
-  payInvoice: jest.fn(),
+  ...jest.requireActual<typeof import('./services/peopleDirectory')>(
+    './services/peopleDirectory',
+  ),
+  payReward: jest.fn(),
 }));
 jest.mock('./services/identityService', () => ({
   resolveRewardRecipientByGithubId: jest.fn(),
@@ -51,8 +54,8 @@ jest.mock('./services/fetchWebhookKeys', () => ({
 }));
 
 type AsyncMock = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
-const mockedPayInvoice = payInvoice as unknown as AsyncMock;
-const mockedCreateInvoice = createInvoiceForPerson as unknown as AsyncMock;
+// The portal's pay-reward call: "called once" means the treasury paid once.
+const mockedPayInvoice = payRewardThroughPortal as unknown as AsyncMock;
 const mockedResolveRecipient =
   resolveRewardRecipientByGithubId as unknown as AsyncMock;
 const mockedCreatePendingReward = createPendingReward as unknown as AsyncMock;
@@ -172,8 +175,7 @@ beforeEach(() => {
   };
   process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
   mockedResolveRecipient.mockResolvedValue({ personAad: 'oid-1' });
-  mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
-  mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+  mockedPayInvoice.mockResolvedValue('hash-1');
   mockedCreatePendingReward.mockResolvedValue(undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -343,7 +345,9 @@ describe('POST /api/v1/rewards idempotency', () => {
   });
 
   test('a failure before payInvoice releases the key so a retry can pay', async () => {
-    mockedCreateInvoice.mockRejectedValueOnce(new Error('LNbits down'));
+    mockedPayInvoice.mockRejectedValueOnce(
+      new PaymentNotSentError('LNbits down'),
+    );
     const url = await startServer();
 
     const failed = await post(url);
@@ -355,7 +359,8 @@ describe('POST /api/v1/rewards idempotency', () => {
       expect.objectContaining({ status: 'failed' }),
     );
     expect(retried.status).toBe(200);
-    expect(mockedPayInvoice).toHaveBeenCalledTimes(1);
+    // The refused attempt reached the portal, which paid nothing; the retry paid.
+    expect(mockedPayInvoice).toHaveBeenCalledTimes(2);
   });
 
   test('a payInvoice that throws is uncertain and never paid again', async () => {
@@ -381,7 +386,9 @@ describe('POST /api/v1/rewards idempotency', () => {
   });
 
   test('a payInvoice with no payment hash is uncertain too', async () => {
-    mockedPayInvoice.mockResolvedValueOnce({});
+    mockedPayInvoice.mockRejectedValueOnce(
+      new PaymentOutcomeUncertainError('no payment hash'),
+    );
     const url = await startServer();
 
     const failed = await post(url);
@@ -652,7 +659,9 @@ describe('POST /api/v1/rewards: budget cap', () => {
   test('a failure known to be before payment releases the reservation', async () => {
     deps.getRewardBudget.mockResolvedValue(budget(1000));
     deps.resolveAmountSats.mockResolvedValue(amount(600));
-    mockedCreateInvoice.mockRejectedValueOnce(new Error('LNbits down'));
+    mockedPayInvoice.mockRejectedValueOnce(
+      new PaymentNotSentError('LNbits down'),
+    );
     const url = await startServer({ now: () => WEEK_44 });
 
     const failed = await post(url);

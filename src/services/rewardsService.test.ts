@@ -8,8 +8,11 @@ import {
   RewardPaymentUncertainError,
 } from './rewardsService';
 import { getRewardConfig, RewardPolicy } from './fetchRewardPolicy';
-import { payInvoice } from './lnbitsService';
-import { createInvoiceForPerson } from './peopleDirectory';
+import {
+  payReward as payRewardThroughPortal,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
+} from './peopleDirectory';
 import { resolveRewardRecipientByGithubId } from './identityService';
 import {
   createPendingReward,
@@ -26,10 +29,10 @@ import {
 
 jest.mock('./fetchRewardPolicy', () => ({ getRewardConfig: jest.fn() }));
 jest.mock('./peopleDirectory', () => ({
-  createInvoiceForPerson: jest.fn(),
-}));
-jest.mock('./lnbitsService', () => ({
-  payInvoice: jest.fn(),
+  ...jest.requireActual<typeof import('./peopleDirectory')>(
+    './peopleDirectory',
+  ),
+  payReward: jest.fn(),
 }));
 jest.mock('./identityService', () => ({
   resolveRewardRecipientByGithubId: jest.fn(),
@@ -60,8 +63,8 @@ const mockConfig = (
     rewardPolicy: { ...emptyPolicy(), ...policy },
   });
 type AsyncMock = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
-const mockedPayInvoice = payInvoice as unknown as AsyncMock;
-const mockedCreateInvoice = createInvoiceForPerson as unknown as AsyncMock;
+// The portal's pay-reward call: "called once" means the treasury paid once.
+const mockedPayInvoice = payRewardThroughPortal as unknown as AsyncMock;
 const mockedResolveRecipient =
   resolveRewardRecipientByGithubId as unknown as AsyncMock;
 
@@ -231,8 +234,7 @@ describe('payReward', () => {
   beforeEach(() => {
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
     mockedResolveRecipient.mockResolvedValue({ personAad: 'oid-1' });
-    mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
-    mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+    mockedPayInvoice.mockResolvedValue('hash-1');
   });
 
   afterEach(() => {
@@ -258,15 +260,17 @@ describe('payReward', () => {
   });
 
   test('a payInvoice with no payment hash is an uncertain outcome', async () => {
-    mockedPayInvoice.mockResolvedValue({ detail: 'something odd' });
+    mockedPayInvoice.mockRejectedValue(
+      new PaymentOutcomeUncertainError('no payment hash'),
+    );
 
     await expect(payReward(reward, RECIPIENT)).rejects.toBeInstanceOf(
       RewardPaymentUncertainError,
     );
   });
 
-  test('a failure before payInvoice is a plain error', async () => {
-    mockedCreateInvoice.mockRejectedValue(new Error('LNbits down'));
+  test('a refusal the portal reports as not paid is a plain error', async () => {
+    mockedPayInvoice.mockRejectedValue(new PaymentNotSentError('LNbits down'));
 
     const error = await payReward(reward, RECIPIENT).catch(
       (caught: unknown) => caught,
@@ -274,7 +278,6 @@ describe('payReward', () => {
 
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
-    expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 
   test('a pending write with an unknown outcome is an uncertain outcome', async () => {
@@ -300,17 +303,19 @@ describe('payReward', () => {
     expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
   });
 
-  test('a recipient with no receive target fails before payInvoice', async () => {
-    mockedCreateInvoice.mockRejectedValue(
-      new Error('octocat has not set up where they receive zaps yet'),
+  test('a recipient with no receive target is refused, and that is not uncertain', async () => {
+    mockedPayInvoice.mockRejectedValue(
+      new PaymentNotSentError(
+        'octocat has not set up where they receive zaps yet',
+      ),
     );
 
     const error = await payReward(reward, RECIPIENT).catch(
       (caught: unknown) => caught,
     );
 
+    expect(error).toBeInstanceOf(PaymentNotSentError);
     expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
-    expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 });
 
@@ -500,8 +505,7 @@ describe('resolveRewardRecipient and the payment extra', () => {
 
   test('the payment extra records the base, bonus and level', async () => {
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
-    mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
-    mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+    mockedPayInvoice.mockResolvedValue('hash-1');
 
     await payReward(
       {
@@ -520,13 +524,15 @@ describe('resolveRewardRecipient and the payment extra', () => {
     );
 
     expect(mockedPayInvoice).toHaveBeenCalledWith(
-      'treasury-admin-key',
-      'lnbc-invoice',
       expect.objectContaining({
-        automation: true,
-        baseSats: 1000,
-        bonusSats: 500,
-        level: 'L2',
+        recipientOid: RECIPIENT.personAad,
+        amountSats: 1500,
+        reward: expect.objectContaining({
+          baseSats: 1000,
+          bonusSats: 500,
+          level: 'L2',
+          eventType: 'githubPrMerged',
+        }),
       }),
     );
   });

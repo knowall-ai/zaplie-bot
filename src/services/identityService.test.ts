@@ -4,10 +4,10 @@ import {
   resolveRewardRecipient,
   RewardPaymentUncertainError,
 } from './rewardsService';
-import { payInvoice } from './lnbitsService';
 import {
-  createInvoiceForPerson,
-  RecipientNotReadyError,
+  payReward as payRewardThroughPortal,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
 } from './peopleDirectory';
 import { createPendingReward } from './pendingRewardsService';
 import {
@@ -19,11 +19,10 @@ import {
   jest,
 } from '@jest/globals';
 
-jest.mock('./lnbitsService');
 jest.mock('./peopleDirectory', () => {
   const actual =
     jest.requireActual<typeof import('./peopleDirectory')>('./peopleDirectory');
-  return { ...actual, createInvoiceForPerson: jest.fn() };
+  return { ...actual, payReward: jest.fn() };
 });
 jest.mock('./pendingRewardsService');
 
@@ -40,10 +39,9 @@ afterAll(() => {
   }
 });
 
-const mockedCreateInvoice = createInvoiceForPerson as jest.MockedFunction<
-  typeof createInvoiceForPerson
+const mockedPayInvoice = payRewardThroughPortal as jest.MockedFunction<
+  typeof payRewardThroughPortal
 >;
-const mockedPayInvoice = payInvoice as jest.MockedFunction<typeof payInvoice>;
 const mockedCreatePendingReward = createPendingReward as jest.MockedFunction<
   typeof createPendingReward
 >;
@@ -148,45 +146,40 @@ describe('payReward recipientId resolution', () => {
 
   test('resolves the recipient via the identity graph and pays', async () => {
     linkResolves();
-    mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
-    mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+    mockedPayInvoice.mockResolvedValue('hash-1');
 
     const result = await payResolved(rewardWithRecipientId);
 
     expect(result).toEqual({ paymentHash: 'hash-1' });
-    expect(mockedCreateInvoice).toHaveBeenCalledWith(
-      'aad-1',
-      210,
-      'GitHub: PR #7 merged',
-      expect.any(Object),
-    );
     expect(mockedPayInvoice).toHaveBeenCalledWith(
-      'treasury-adminkey',
-      'lnbc-payment-request',
-      expect.any(Object),
+      expect.objectContaining({
+        recipientOid: 'aad-1',
+        recipientLabel: 'octocat',
+        amountSats: 210,
+        memo: 'GitHub: PR #7 merged',
+      }),
     );
     expect(mockedCreatePendingReward).not.toHaveBeenCalled();
   });
 
-  test('does not embed wallet keys in the payment extra', async () => {
+  test('names the recipient by Entra id and sends no invoice or address', async () => {
     linkResolves();
-    mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
-    mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+    mockedPayInvoice.mockResolvedValue('hash-1');
 
     await payResolved(rewardWithRecipientId);
 
-    const extra = mockedCreateInvoice.mock.calls[0][3];
-    expect(JSON.stringify(extra)).not.toContain('adminkey');
-    expect(JSON.stringify(extra)).not.toContain('inkey');
-    expect(extra).toEqual(
-      expect.objectContaining({
-        to: {
-          name: 'Private',
-          user: 'aad-1',
-          displayName: 'octocat',
-        },
-      }),
+    const request = mockedPayInvoice.mock.calls[0][0];
+    expect(Object.keys(request).sort()).toEqual(
+      [
+        'amountSats',
+        'idempotencyKey',
+        'memo',
+        'recipientLabel',
+        'recipientOid',
+        'reward',
+      ].sort(),
     );
+    expect(request.idempotencyKey).toMatch(/^[0-9a-f]{64}$/);
   });
 
   test('holds the reward pending when the recipient has not linked their GitHub', async () => {
@@ -204,7 +197,7 @@ describe('payReward recipientId resolution', () => {
       reason: 'GitHub: PR #7 merged',
       source: 'github',
     });
-    expect(mockedCreateInvoice).not.toHaveBeenCalled();
+    expect(mockedPayInvoice).not.toHaveBeenCalled();
     expect(mockedPayInvoice).not.toHaveBeenCalled();
   });
 
@@ -248,35 +241,22 @@ describe('payReward recipientId resolution', () => {
 
   test('a recipient with no receive target is refused before any payment', async () => {
     linkResolves();
-    mockedCreateInvoice.mockRejectedValue(
-      new RecipientNotReadyError(
+    mockedPayInvoice.mockRejectedValue(
+      new PaymentNotSentError(
         'octocat has not set up where they receive zaps yet',
       ),
     );
 
     await expect(payResolved(rewardWithRecipientId)).rejects.toThrow(
-      RecipientNotReadyError,
+      PaymentNotSentError,
     );
-    expect(mockedPayInvoice).not.toHaveBeenCalled();
-  });
-
-  test('the legacy REWARDS_TREASURY_ADMINKEY yields to ZAPLIE_TREASURY_ADMINKEY', async () => {
-    linkResolves();
-    process.env.ZAPLIE_TREASURY_ADMINKEY = 'zaplie-treasury';
-    mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
-    mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
-    try {
-      await payResolved(rewardWithRecipientId);
-      expect(mockedPayInvoice.mock.calls[0][0]).toBe('zaplie-treasury');
-    } finally {
-      delete process.env.ZAPLIE_TREASURY_ADMINKEY;
-    }
   });
 
   test('throws an uncertain outcome when payInvoice returns no payment hash', async () => {
     linkResolves();
-    mockedCreateInvoice.mockResolvedValue('lnbc-payment-request');
-    mockedPayInvoice.mockResolvedValue({ detail: 'insufficient balance' });
+    mockedPayInvoice.mockRejectedValue(
+      new PaymentOutcomeUncertainError('no payment hash'),
+    );
 
     await expect(payResolved(rewardWithRecipientId)).rejects.toThrow(
       RewardPaymentUncertainError,

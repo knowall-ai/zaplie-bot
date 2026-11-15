@@ -60,7 +60,7 @@ describe('ShowMyBalanceCommand', () => {
     consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest
       .mocked(getBalances)
-      .mockResolvedValue({ allowanceSats: 21, privateSats: 5 });
+      .mockResolvedValue({ allowanceSats: 21, budgetRemainingSats: null });
   });
 
   afterEach(() => {
@@ -72,7 +72,7 @@ describe('ShowMyBalanceCommand', () => {
     }
   });
 
-  test('replies with the Allowance and the registered Private balance', async () => {
+  test('replies with the Allowance balance and explains the Private wallet', async () => {
     const { context, sendActivity } = makeContext(user);
 
     await new ShowMyBalanceCommand().execute(context);
@@ -81,7 +81,7 @@ describe('ShowMyBalanceCommand', () => {
       'Your Allowance wallet has a balance of 21 Sats.',
     );
     expect(sendActivity).toHaveBeenCalledWith(
-      'Your Private wallet has a balance of 5 Sats.',
+      expect.stringContaining('Zaps you receive go to your own Private wallet'),
     );
   });
 
@@ -96,16 +96,16 @@ describe('ShowMyBalanceCommand', () => {
     expect(logged).not.toContain('-secret');
   });
 
-  test('a Private wallet Zaplie cannot read is explained, never shown as 0', async () => {
+  test('a budget the wallet reports is shown; the Private wallet is never shown as 0', async () => {
     jest
       .mocked(getBalances)
-      .mockResolvedValue({ allowanceSats: 21, privateSats: null });
+      .mockResolvedValue({ allowanceSats: 21, budgetRemainingSats: 4 });
     const { context, sendActivity } = makeContext(user);
 
     await new ShowMyBalanceCommand().execute(context);
 
     expect(sendActivity).toHaveBeenCalledWith(
-      expect.stringContaining('Your Private wallet is your own'),
+      'You can still send 4 Sats this period.',
     );
     expect(sendActivity).not.toHaveBeenCalledWith(
       'Your Private wallet has a balance of 0 Sats.',
@@ -115,7 +115,7 @@ describe('ShowMyBalanceCommand', () => {
   test('a person with no Allowance wallet yet is told to ask an admin', async () => {
     jest
       .mocked(getBalances)
-      .mockResolvedValue({ allowanceSats: null, privateSats: null });
+      .mockResolvedValue({ allowanceSats: null, budgetRemainingSats: null });
     const { context, sendActivity } = makeContext({
       ...user,
       allowanceWallet: null,

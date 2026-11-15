@@ -18,12 +18,11 @@ import * as path from 'path';
 import { TurnContext } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
 import { runConversationalTurn } from './services/foundryAgentService';
-import { getWalletBalance, payInvoice } from './services/lnbitsService';
 import {
-  createInvoiceForPerson,
   getBalances,
   getPerson,
   listPeople,
+  payZap,
 } from './services/peopleDirectory';
 import { en, es as esCopy, t } from './i18n';
 import {
@@ -35,8 +34,21 @@ import {
 } from './commands/showLeaderboardCommand';
 import { getZapLeaderboard } from './services/zapHistoryService';
 
-jest.mock('./services/lnbitsService');
-jest.mock('./services/peopleDirectory');
+jest.mock('./services/peopleDirectory', () => {
+  const actual = jest.requireActual<
+    typeof import('./services/peopleDirectory')
+  >('./services/peopleDirectory');
+  return {
+    ...actual,
+    ensurePerson: jest.fn(),
+    listPeople: jest.fn(),
+    getPerson: jest.fn(),
+    payZap: jest.fn(),
+    payReward: jest.fn(),
+    getBalances: jest.fn(),
+    listZaps: jest.fn(),
+  };
+});
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -221,7 +233,9 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getWalletBalance).mockResolvedValue(25_000);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 25_000, budgetRemainingSats: null });
     jest.mocked(listPeople).mockResolvedValue([
       {
         id: 'user-2',
@@ -232,7 +246,7 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
     ]);
     jest
       .mocked(getBalances)
-      .mockResolvedValue({ allowanceSats: 21_000, privateSats: 12_345 });
+      .mockResolvedValue({ allowanceSats: 21_000, budgetRemainingSats: null });
     // A ranked, partial read, so the leaderboard card's title, rows and
     // incomplete-read note are all swept, not just its error path.
     jest.mocked(getZapLeaderboard).mockResolvedValue({
@@ -335,7 +349,9 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
 
   test('a forged 1e3 amount sends nothing and gets the amount error in Spanish', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    jest.mocked(getWalletBalance).mockResolvedValue(5000);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 5000, budgetRemainingSats: null });
     const bot = new TeamsBot();
     const { context, sendActivity } = makeContext({
       replyToId: 'card-es-forged',
@@ -363,13 +379,14 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
       '¡Ups! Debes indicar un número entero entre 1 y 10.000 Sats.',
     );
     expect(getPerson).not.toHaveBeenCalled();
-    expect(createInvoiceForPerson).not.toHaveBeenCalled();
-    expect(payInvoice).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
   });
 
   test('a budget refusal groups the total and the balance for the region', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    jest.mocked(getWalletBalance).mockResolvedValue(12_500);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 12_500, budgetRemainingSats: null });
     const bot = new TeamsBot();
     const { context, sendActivity } = makeContext({
       replyToId: 'card-es-budget',
@@ -411,7 +428,7 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
       '¡Ups! Puedes enviar un zap a un máximo de 3 personas por tarjeta y seleccionaste 4. No se envió ningún zap; elige 3 o menos e inténtalo de nuevo.',
     );
     expect(getPerson).not.toHaveBeenCalled();
-    expect(payInvoice).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
   });
 
   test('greets a Spanish client in Spanish, including a Spanish greeting', async () => {

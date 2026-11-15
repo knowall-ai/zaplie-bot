@@ -21,12 +21,7 @@ import {
 } from './showLeaderboardCommand';
 import { createReadOnlyTools } from './agentTools';
 import { formatNumber } from '../i18n';
-import {
-  getAllPaymentsPage,
-  getPayments,
-  PaginatedPaymentsUnsupportedError,
-} from '../services/lnbitsService';
-import { listPeople } from '../services/peopleDirectory';
+import { listPeople, listZaps, ZapRecord } from '../services/peopleDirectory';
 import {
   afterEach,
   beforeEach,
@@ -37,15 +32,11 @@ import {
 } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
 
-jest.mock('../services/lnbitsService');
 jest.mock('../services/peopleDirectory');
 
-// The people directory: everyone, each with their Allowance wallet.
+// The people directory and Zaplie's own zap records, both from the portal.
 const mockGetUsers = listPeople as jest.MockedFunction<typeof listPeople>;
-const mockGetPayments = getPayments as jest.MockedFunction<typeof getPayments>;
-const mockGetAllPaymentsPage = getAllPaymentsPage as jest.MockedFunction<
-  typeof getAllPaymentsPage
->;
+const mockListZaps = listZaps as jest.MockedFunction<typeof listZaps>;
 
 const NOW_SECONDS = 1_760_000_000;
 const DAY = 86_400;
@@ -85,38 +76,10 @@ for (const p of people) {
   p.allowanceWallet = wallets.get(p.id)!.allowance;
 }
 
-const paymentsByInkey: Record<string, Transaction[]> = {};
+// Zaplie's record of every zap it paid (the portal's zap records): one
+// entry per payment, both people by Entra id.
+const records: ZapRecord[] = [];
 
-// What the instance-wide paginated endpoint returns: the union of the
-// per-wallet fixtures, each row once. That endpoint is the path production
-// takes, so it is the one these tests drive by default.
-const allFixturePayments = (): Transaction[] =>
-  Object.values(paymentsByInkey).reduce<Transaction[]>(
-    (rows, walletRows) => rows.concat(walletRows),
-    [],
-  );
-
-const zapExtra = (to: User) => ({
-  tag: 'zap',
-  to: { name: 'Private', user: to.id, displayName: to.displayName },
-});
-
-const tx = (overrides: Partial<Transaction>): Transaction => ({
-  checking_id: 'default',
-  pending: false,
-  amount: 0,
-  fee: 0,
-  memo: '',
-  time: NOW_SECONDS,
-  extra: {},
-  wallet_id: '',
-  ...overrides,
-});
-
-// One zap as Zaplie sees it: a debit on the sender's Allowance wallet with
-// the zap metadata naming the recipient. The credit lands in the recipient's
-// own Private wallet, which Zaplie cannot read; it is kept in the fixtures so
-// a test would notice if anything started counting it.
 const zap = (
   id: string,
   from: User,
@@ -124,28 +87,17 @@ const zap = (
   sats: number,
   time: number = NOW_SECONDS,
   memo = 'Nice!',
+  kind: 'zap' | 'reward' = 'zap',
 ) => {
-  const fromWallet = wallets.get(from.id)!.allowance;
-  const toWallet = wallets.get(to.id)!.priv;
-  (paymentsByInkey[fromWallet.inkey] ??= []).push(
-    tx({
-      checking_id: id,
-      amount: -sats * 1000,
-      memo,
-      time,
-      wallet_id: fromWallet.id,
-      extra: zapExtra(to),
-    }),
-  );
-  (paymentsByInkey[toWallet.inkey] ??= []).push(
-    tx({
-      checking_id: `internal_${id}`,
-      amount: sats * 1000,
-      memo,
-      time,
-      wallet_id: toWallet.id,
-    }),
-  );
+  records.push({
+    paymentHash: id,
+    kind,
+    time,
+    amountSats: sats,
+    memo,
+    from: { oid: from.id, displayName: from.displayName },
+    to: { oid: to.id, displayName: to.displayName },
+  });
 };
 
 const makeContext = () => {
@@ -355,16 +307,11 @@ describe('showLeaderboardCommand', () => {
     delete process.env.PORTAL_URL;
     delete process.env.LEADERBOARD_WINDOW_DAYS;
     delete process.env.LEADERBOARD_TOP_N;
-    for (const key of Object.keys(paymentsByInkey)) {
-      delete paymentsByInkey[key];
-    }
+    records.length = 0;
     nowSpy = jest.spyOn(Date, 'now').mockReturnValue(NOW_SECONDS * 1000);
     mockGetUsers.mockResolvedValue(people);
-    mockGetPayments.mockImplementation(
-      async (inKey: string) => (paymentsByInkey[inKey] || []) as Transaction[],
-    );
-    mockGetAllPaymentsPage.mockImplementation(async (limit, offset) =>
-      allFixturePayments().slice(offset, offset + limit),
+    mockListZaps.mockImplementation(async since =>
+      records.filter(record => !since || record.time >= since),
     );
   });
 
@@ -409,39 +356,14 @@ describe('showLeaderboardCommand', () => {
     ]);
   });
 
-  test('excludes weekly allowance sweeps', async () => {
-    zap(
-      'sweep',
-      alice,
-      bob,
-      5000,
-      NOW_SECONDS,
-      'Alice Weekly Allowance cleared',
-    );
+  test('does not rank automation rewards from the Treasury', async () => {
+    zap('reward', alice, bob, 5000, NOW_SECONDS, 'GitHub: PR merged', 'reward');
     zap('z1', bob, alice, 20);
     const { context, sendActivity } = makeContext();
 
     await new ShowLeaderboardCommand().execute(context);
 
     expect(rows(sendActivity)).toEqual(['#1 Bob | 20 Sats']);
-  });
-
-  test('excludes credits that did not come from an Allowance wallet', async () => {
-    // An external deposit into Carol's Private wallet has no Allowance debit.
-    const carolPrivate = wallets.get(carol.id)!.priv;
-    paymentsByInkey[carolPrivate.inkey] = [
-      tx({
-        checking_id: 'deposit',
-        amount: 800_000,
-        wallet_id: carolPrivate.id,
-      }),
-    ];
-    zap('z1', alice, bob, 10);
-    const { context, sendActivity } = makeContext();
-
-    await new ShowLeaderboardCommand().execute(context);
-
-    expect(rows(sendActivity)).toEqual(['#1 Alice | 10 Sats']);
   });
 
   test('counts only zaps inside the configured window', async () => {
@@ -490,33 +412,6 @@ describe('showLeaderboardCommand', () => {
     await new ShowLeaderboardCommand().execute(context);
 
     expect(rows(sendActivity)).toEqual(['#1 Alice | 60 Sats']);
-  });
-
-  test('counts a zap with an ISO timestamp', async () => {
-    const carolAllowance = wallets.get(carol.id)!.allowance;
-    const bobPrivate = wallets.get(bob.id)!.priv;
-    (paymentsByInkey[carolAllowance.inkey] ??= []).push(
-      tx({
-        checking_id: 'iso',
-        amount: -25_000,
-        time: new Date(NOW_SECONDS * 1000).toISOString() as unknown as number,
-        wallet_id: carolAllowance.id,
-        extra: zapExtra(bob),
-      }),
-    );
-    (paymentsByInkey[bobPrivate.inkey] ??= []).push(
-      tx({
-        checking_id: 'internal_iso',
-        amount: 25_000,
-        time: new Date(NOW_SECONDS * 1000).toISOString() as unknown as number,
-        wallet_id: bobPrivate.id,
-      }),
-    );
-    const { context, sendActivity } = makeContext();
-
-    await new ShowLeaderboardCommand().execute(context);
-
-    expect(rows(sendActivity)).toEqual(['#1 Carol | 25 Sats']);
   });
 
   test('does not count a zap from a person to their own Private wallet', async () => {
@@ -640,57 +535,6 @@ describe('showLeaderboardCommand', () => {
     expect(rows(sendActivity)).toEqual(['#1 Alice | 10 Sats']);
   });
 
-  test('says so on the card when some wallets could not be read', async () => {
-    // A rate-limited wallet makes the totals a floor, not a total. Stating an
-    // incomplete ranking as the ranking is the failure this note exists for.
-    const consoleError = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
-    const consoleWarn = jest
-      .spyOn(console, 'warn')
-      .mockImplementation(() => undefined);
-    mockGetAllPaymentsPage.mockRejectedValue(
-      new PaginatedPaymentsUnsupportedError(404),
-    );
-    mockGetPayments.mockImplementation(async (inKey: string) => {
-      if (inKey === wallets.get(carol.id)!.allowance.inkey) {
-        throw new Error('429 Too Many Requests');
-      }
-      return (paymentsByInkey[inKey] || []) as Transaction[];
-    });
-    zap('z1', alice, bob, 10);
-    const { context, sendActivity } = makeContext();
-
-    await new ShowLeaderboardCommand().execute(context);
-
-    const card = sentCard(sendActivity);
-    expect(card.body[card.body.length - 1]).toMatchObject({
-      text: LEADERBOARD_PARTIAL_MESSAGE,
-    });
-    consoleWarn.mockRestore();
-    consoleError.mockRestore();
-  });
-
-  test('ranks the same on instances without the paginated payments endpoint', async () => {
-    const consoleWarn = jest
-      .spyOn(console, 'warn')
-      .mockImplementation(() => undefined);
-    mockGetAllPaymentsPage.mockRejectedValue(
-      new PaginatedPaymentsUnsupportedError(404),
-    );
-    zap('z1', alice, bob, 100);
-    zap('z2', carol, bob, 40);
-    const { context, sendActivity } = makeContext();
-
-    await new ShowLeaderboardCommand().execute(context);
-
-    expect(rows(sendActivity)).toEqual([
-      '#1 Alice | 100 Sats',
-      '#2 Carol | 40 Sats',
-    ]);
-    consoleWarn.mockRestore();
-  });
-
   // The whole point of routing the command through getZapLeaderboard rather
   // than a second aggregator: the card and the assistant cannot disagree about
   // who is ahead for the same window over the same ledger.
@@ -763,7 +607,7 @@ describe('showLeaderboardCommand', () => {
     const consoleError = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
-    mockGetUsers.mockRejectedValue(new Error('LNbits timeout'));
+    mockGetUsers.mockRejectedValue(new Error('portal timeout'));
     const { context, sendActivity } = makeContext();
 
     await new ShowLeaderboardCommand().execute(context);
@@ -828,7 +672,7 @@ describe('showLeaderboardCommand', () => {
       const consoleError = jest
         .spyOn(console, 'error')
         .mockImplementation(() => undefined);
-      mockGetUsers.mockRejectedValue(new Error('LNbits timeout'));
+      mockGetUsers.mockRejectedValue(new Error('portal timeout'));
       const { context, sendActivity } = localizedContext('es-ES');
 
       await new ShowLeaderboardCommand().execute(context);

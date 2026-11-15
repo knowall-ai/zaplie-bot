@@ -19,11 +19,23 @@ import * as os from 'os';
 import * as path from 'path';
 import { TurnContext } from 'botbuilder';
 import { GENERIC_ERROR_MESSAGE } from './messages';
-import { getWalletBalance, payInvoice } from './services/lnbitsService';
-import { createInvoiceForPerson, getPerson } from './services/peopleDirectory';
+import { getBalances, getPerson, payZap } from './services/peopleDirectory';
 
-jest.mock('./services/lnbitsService');
-jest.mock('./services/peopleDirectory');
+jest.mock('./services/peopleDirectory', () => {
+  const actual = jest.requireActual<
+    typeof import('./services/peopleDirectory')
+  >('./services/peopleDirectory');
+  return {
+    ...actual,
+    ensurePerson: jest.fn(),
+    listPeople: jest.fn(),
+    getPerson: jest.fn(),
+    payZap: jest.fn(),
+    payReward: jest.fn(),
+    getBalances: jest.fn(),
+    listZaps: jest.fn(),
+  };
+});
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -123,11 +135,10 @@ beforeEach(() => {
   delete process.env.ZAP_MAX_RECIPIENTS;
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jest.mocked(getPerson).mockImplementation(async (id: string) => userFor(id));
-  jest.mocked(getWalletBalance).mockResolvedValue(1000);
   jest
-    .mocked(createInvoiceForPerson)
-    .mockResolvedValue('lnbc1-payment-request');
-  jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
+    .mocked(getBalances)
+    .mockResolvedValue({ allowanceSats: 1000, budgetRemainingSats: null });
+  jest.mocked(payZap).mockResolvedValue('hash-1');
 });
 
 afterEach(() => {
@@ -149,11 +160,10 @@ describe('TeamsBot caps the recipients of one zap card', () => {
 
     await new TeamsBot().run(mock.context);
 
-    expect(payInvoice).not.toHaveBeenCalled();
-    expect(createInvoiceForPerson).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
     expect(getPerson).not.toHaveBeenCalled();
     // The cap is checked before the live balance read.
-    expect(getWalletBalance).not.toHaveBeenCalled();
+    expect(getBalances).not.toHaveBeenCalled();
     expect(mock.context.updateActivity).not.toHaveBeenCalled();
     expect(mock.sendActivity).toHaveBeenCalledTimes(1);
     expect(mock.sendActivity).toHaveBeenCalledWith(CAP_REFUSAL);
@@ -167,7 +177,7 @@ describe('TeamsBot caps the recipients of one zap card', () => {
     await bot.run(first.context);
     await bot.run(second.context);
 
-    expect(payInvoice).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
     expect(first.sendActivity).toHaveBeenCalledWith(CAP_REFUSAL);
     expect(second.sendActivity).toHaveBeenCalledWith(CAP_REFUSAL);
   });
@@ -179,7 +189,7 @@ describe('TeamsBot caps the recipients of one zap card', () => {
     await bot.run(mock.context);
     await bot.settleBackgroundWork();
 
-    expect(payInvoice).toHaveBeenCalledTimes(3);
+    expect(payZap).toHaveBeenCalledTimes(3);
     expect(mock.context.updateActivity).toHaveBeenCalledTimes(1);
   });
 
@@ -191,7 +201,7 @@ describe('TeamsBot caps the recipients of one zap card', () => {
     await bot.run(mock.context);
     await bot.settleBackgroundWork();
 
-    expect(payInvoice).toHaveBeenCalledTimes(4);
+    expect(payZap).toHaveBeenCalledTimes(4);
   });
 
   test('a malformed override stops the bot from starting', () => {
@@ -205,7 +215,7 @@ describe('TeamsBot caps the recipients of one zap card', () => {
 
     await new TeamsBot().run(mock.context);
 
-    expect(payInvoice).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
     expect(mock.sendActivity).toHaveBeenCalledWith(
       "D'oh! You cannot zap yourself, so no zaps were sent.",
     );
@@ -246,7 +256,7 @@ describe('TeamsBot sends recipient notifications off the turn', () => {
     await bot.run(mock.context);
     await bot.settleBackgroundWork();
 
-    expect(payInvoice).toHaveBeenCalledTimes(2);
+    expect(payZap).toHaveBeenCalledTimes(2);
     expect(members.sort()).toEqual(['aad-r1', 'aad-r2']);
     const receiptOrder = (mock.context.updateActivity as jest.Mock).mock
       .invocationCallOrder[0];
@@ -278,7 +288,7 @@ describe('TeamsBot sends recipient notifications off the turn', () => {
     await bot.run(mock.context);
     await bot.settleBackgroundWork();
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     expect(mock.context.updateActivity).toHaveBeenCalledTimes(1);
     expect(mock.sendActivity).toHaveBeenCalledWith(
       expect.stringContaining('Awesome! You sent 10'),

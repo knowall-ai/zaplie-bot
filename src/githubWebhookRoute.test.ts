@@ -26,18 +26,17 @@ import {
   resolveAmountSats,
 } from './services/rewardsService';
 import { getRewardConfig, RewardBudget } from './services/fetchRewardPolicy';
-import { payInvoice } from './services/lnbitsService';
-import { createInvoiceForPerson } from './services/peopleDirectory';
+import { payReward as payRewardThroughPortal } from './services/peopleDirectory';
 import { resolveRewardRecipientByGithubId } from './services/identityService';
 import { createPendingReward } from './services/pendingRewardsService';
 
 // The real processReward and payReward run; only LNbits and the portal are
 // stubbed, so "payInvoice was called once" means the treasury paid once.
 jest.mock('./services/peopleDirectory', () => ({
-  createInvoiceForPerson: jest.fn(),
-}));
-jest.mock('./services/lnbitsService', () => ({
-  payInvoice: jest.fn(),
+  ...jest.requireActual<typeof import('./services/peopleDirectory')>(
+    './services/peopleDirectory',
+  ),
+  payReward: jest.fn(),
 }));
 jest.mock('./services/identityService', () => ({
   resolveRewardRecipientByGithubId: jest.fn(),
@@ -51,8 +50,8 @@ jest.mock('./services/pendingRewardsService', () => ({
 }));
 
 type AsyncMock = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
-const mockedPayInvoice = payInvoice as unknown as AsyncMock;
-const mockedCreateInvoice = createInvoiceForPerson as unknown as AsyncMock;
+// The portal's pay-reward call: "called once" means the treasury paid once.
+const mockedPayInvoice = payRewardThroughPortal as unknown as AsyncMock;
 const mockedResolveRecipient =
   resolveRewardRecipientByGithubId as unknown as AsyncMock;
 const mockedCreatePendingReward = createPendingReward as unknown as AsyncMock;
@@ -192,8 +191,7 @@ beforeEach(() => {
   };
   process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
   mockedResolveRecipient.mockResolvedValue({ personAad: 'oid-1' });
-  mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
-  mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
+  mockedPayInvoice.mockResolvedValue('hash-1');
   mockedCreatePendingReward.mockResolvedValue(undefined);
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -609,11 +607,17 @@ describe('POST /api/v1/github/webhook: reward policy', () => {
 
     expect(response.status).toBe(200);
     expect(JSON.parse(response.text)).toMatchObject({ amountSats: 2000 });
-    expect(mockedCreateInvoice).toHaveBeenCalledWith(
-      OID,
-      2000,
-      'GitHub: PR #7 merged - Add the thing',
-      expect.objectContaining({ baseSats: 1500, bonusSats: 500, level: 'L2' }),
+    expect(mockedPayInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientOid: OID,
+        amountSats: 2000,
+        memo: 'GitHub: PR #7 merged - Add the thing',
+        reward: expect.objectContaining({
+          baseSats: 1500,
+          bonusSats: 500,
+          level: 'L2',
+        }),
+      }),
     );
   });
 
