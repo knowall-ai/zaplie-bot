@@ -1,6 +1,6 @@
 // filepath: tabs/backend/identityRoutes.js
-// "Connect GitHub" self-linking flow. Person canonical = LNbits user, anchored
-// to aadObjectId; GitHub is an optional linked identity, matched by numeric id
+// "Connect GitHub" self-linking flow. Person canonical = the Entra object id
+// in Zaplie's people directory (peopleStore.js); GitHub is an optional linked identity, matched by numeric id
 // only (never the renamable login). See docs/identity-connections.md.
 const express = require('express');
 const authMiddleware = require('./authMiddleware');
@@ -11,12 +11,8 @@ const {
   clearBinding,
 } = require('./browserBinding');
 const identityStore = require('./identityStore');
-const { requireLnbitsConfig, getLnbitsToken, lnbitsGet } = require('./lnbitsAdmin');
 const { requestTimeoutSignal } = require('./httpTimeout');
-const {
-  findUniqueUserByAadObjectId,
-  listPeople,
-} = require('./lnbitsUserDirectory');
+const { peopleStore } = require('./peopleStore');
 const { requireAdmin } = require('./adminAuth');
 const {
   GithubAppNotConfiguredError,
@@ -182,37 +178,36 @@ router.get('/resolve', authMiddleware, async (req, res) => {
   }
 
   try {
-    const config = requireLnbitsConfig();
-    const accessToken = await getLnbitsToken(config);
-    const usersBody = await lnbitsGet(`${config.nodeUrl}/users/api/v1/user`, accessToken);
-    const user = findUniqueUserByAadObjectId(usersBody?.data, identity.personAad);
-    if (!user || typeof user.id !== 'string' || user.id.length === 0) {
+    const person = peopleStore().get(identity.personAad);
+    if (!person) {
       res.status(502).json({
-        error: `linked person ${identity.personAad} has no LNbits user`,
+        error: `linked person ${identity.personAad} is not in the Zaplie directory`,
       });
       return;
     }
-    res.json({ personAad: identity.personAad, lnbitsUserId: user.id });
+    res.json({ personAad: person.oid });
   } catch (error) {
-    console.error('LNbits identity resolution failed:', error.message);
-    const status = error.message.includes('must be set') ? 503 : 502;
-    res.status(status).json({ error: error.message });
+    console.error('Identity resolution failed:', error.message);
+    res.status(502).json({ error: 'identity resolution failed' });
   }
 });
 
 // GET /api/identities/people — admin only. Names and Entra object ids of the
-// people with an LNbits user, for the reward-override picker. Never wallets,
+// people in the Zaplie directory, for the reward-override picker. Never wallets,
 // keys or balances.
 router.get('/people', requireAdmin, async (req, res) => {
   try {
-    const config = requireLnbitsConfig();
-    const accessToken = await getLnbitsToken(config);
-    const usersBody = await lnbitsGet(`${config.nodeUrl}/users/api/v1/user`, accessToken);
-    res.json({ people: listPeople(usersBody?.data) });
+    res.json({
+      people: peopleStore()
+        .list()
+        .map((person) => ({
+          personAad: person.oid,
+          displayName: String(person.displayName || person.oid).slice(0, 100),
+        })),
+    });
   } catch (error) {
     console.error('Listing people failed:', error.message);
-    const status = error.message.includes('must be set') ? 503 : 502;
-    res.status(status).json({ error: 'people list unavailable' });
+    res.status(502).json({ error: 'people list unavailable' });
   }
 });
 

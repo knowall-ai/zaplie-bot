@@ -23,7 +23,7 @@ const migrateRewardAmounts = (rewardAmounts) => {
 
 // Every sats ceiling this backend reads is parsed here, so a malformed value
 // fails closed everywhere instead of silently widening one cap and rejecting
-// another. Shared with the LNbits gateway's ZAP_MAX_AMOUNT_SATS.
+// another. Shared with the wallet gateway's ZAP_MAX_AMOUNT_SATS.
 const positiveIntFromEnv = (name, fallback) => {
   const configured = process.env[name];
   // Whitespace-only is unset, not malformed — matching src/services/envNumbers.ts

@@ -4,70 +4,67 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const {
-  createEnsureCaller,
-  createInvoice,
+  createOwnedInvoice,
+  createPayReward,
   createSendZap,
+  getAllPayments,
+  getNostrRewards,
   getWalletBalance,
-  maxZapAmountSats,
+  listDirectoryUsers,
   listUsers,
-  readRawUserPages,
+  listUserWallets,
+  maxZapAmountSats,
   listWalletPayments,
+  payOwnedInvoice,
   redactSensitive,
   resetCachesForTests,
   sanitizePayment,
   sanitizeWallet,
   sanitizeBalanceMsat,
-  sanitizeUser,
-} = require('./lnbitsGatewayService');
+} = require('./walletGateway');
+const { resetPeopleStoreForTests, peopleStore } = require('./peopleStore');
+const { NwcPaymentRefused, setNwcWalletsForTests } = require('./nwcWallet');
+const { resetZapRecordsForTests, zapRecords } = require('./zapRecordStore');
+const { createFakeNwc, nwcUrlFor } = require('./testSupport/fakeNwc');
 const {
   createZapIdempotencyStore,
-} = require('./lnbitsZapIdempotencyStore');
+} = require('./zapIdempotencyStore');
 
-const USERS = [
-  { id: 'user-1', external_id: 'oid-1' },
-  { id: 'user-2', external_id: 'oid-2' },
-];
-const WALLETS = {
-  'user-1': [{ id: 'wallet-1', inkey: 'in-1', adminkey: 'ad-1' }],
-  'user-2': [{ id: 'wallet-2', inkey: 'in-2', adminkey: 'ad-2' }],
-};
+const OID_1 = '00000000-0000-4000-8000-000000000001';
+const OID_2 = '00000000-0000-4000-8000-000000000002';
 
-const jsonResponse = (body) => ({
-  ok: true,
-  status: 200,
-  headers: { get: () => 'application/json' },
-  json: async () => body,
-});
-
+// A temporary directory of two people whose Allowance wallets sit behind a
+// fake NWC wallet service. No LNbits HTTP call is expected at all: fetch
+// refuses every request.
 const installLnbitsStub = () => {
-  process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-  process.env.LNBITS_USERNAME = 'service';
-  process.env.LNBITS_PASSWORD = 'secret';
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-gateway-'));
+  process.env.ZAPLIE_DATA_DIR = dir;
+  process.env.ZAPLIE_STORE_KEY = 'a'.repeat(64);
+  process.env.LNBITS_URL = 'https://bank.example';
+  resetPeopleStoreForTests();
+  resetZapRecordsForTests();
   resetCachesForTests();
-
-  const paths = [];
+  const fake = createFakeNwc();
+  setNwcWalletsForTests(fake.factory);
+  const store = peopleStore();
+  const ids = {};
+  for (const [oid, name, n] of [[OID_1, 'Ada', 1], [OID_2, 'Bea', 2]]) {
+    fake.add(nwcUrlFor(n), { balanceSats: 5 * n });
+    store.upsertProfile({ oid, displayName: name });
+    store.setAllowanceWallet(oid, {
+      walletId: `wallet-${n}`,
+      nwc: nwcUrlFor(n),
+      lightningAddress: `zaplie-${n}@bank.example`,
+      source: 'operator',
+    });
+    ids[oid] = `wallet-${n}`;
+  }
+  const http = [];
   global.fetch = async (url) => {
-    const { pathname } = new URL(url);
-    paths.push(pathname);
-    if (pathname === '/api/v1/auth') {
-      return jsonResponse({ access_token: 'token' });
-    }
-    if (pathname === '/users/api/v1/user') {
-      return jsonResponse(USERS);
-    }
-    const walletMatch = /^\/users\/api\/v1\/user\/([^/]+)\/wallet$/.exec(pathname);
-    if (walletMatch) {
-      return jsonResponse(WALLETS[walletMatch[1]] || []);
-    }
-    if (pathname === '/api/v1/wallet') {
-      return jsonResponse({ balance: 5000 });
-    }
-    if (pathname === '/api/v1/payments') {
-      return jsonResponse([]);
-    }
-    throw new Error(`unexpected LNbits path ${pathname}`);
+    http.push(String(url));
+    throw new Error(`no HTTP expected: ${url}`);
   };
-  return paths;
+  return { fake, http, store };
 };
 
 test('wallet serialization excludes LNbits invoice and admin keys', () => {
@@ -127,56 +124,107 @@ test('payments without the removed pending flag derive it from status', () => {
 test('a wallet read is refused when the wallet belongs to somebody else', async () => {
   installLnbitsStub();
 
-  await assert.rejects(getWalletBalance('wallet-2', 'oid-1'), {
+  await assert.rejects(getWalletBalance('wallet-2', OID_1), {
     message: 'Wallet does not belong to this account',
     status: 403,
   });
-  assert.equal(await getWalletBalance('wallet-1', 'oid-1'), 5);
+  assert.equal(await getWalletBalance('wallet-1', OID_1), 5);
 });
 
-test('parallel payment reads share one walk over the LNbits users', async () => {
-  const paths = installLnbitsStub();
-
-  await Promise.all([
-    listWalletPayments('wallet-1'),
-    listWalletPayments('wallet-2'),
-    listWalletPayments('wallet-1'),
-  ]);
-
-  assert.equal(paths.filter((p) => p === '/users/api/v1/user').length, 1);
-  assert.equal(paths.filter((p) => p.endsWith('/wallet')).length, USERS.length);
+test('an Allowance wallet never pays an arbitrary invoice', async () => {
+  const { fake } = installLnbitsStub();
+  const pay = (walletId) =>
+    payOwnedInvoice({ walletId, paymentRequest: 'lnbc10n1anything', aadObjectId: OID_1 });
+  await assert.rejects(pay('wallet-1'), (error) => error.status === 403 && /only be sent as zaps/.test(error.message));
+  await assert.rejects(pay('wallet-2'), /does not belong/);
+  assert.equal(fake.calls.filter((call) => call.method === 'pay_invoice').length, 0);
 });
 
-test('a burst with no cached token triggers one super-user login, not three', async () => {
-  const paths = installLnbitsStub();
-
-  await Promise.all([listUsers(), listUsers(), listUsers()]);
-
-  assert.equal(paths.filter((p) => p === '/api/v1/auth').length, 1);
-  assert.equal(paths.filter((p) => p === '/users/api/v1/user').length, 3);
-});
-
-test('a failed login is retried rather than cached as in flight', async () => {
+test('nobody outside the directory reaches a wallet', async () => {
   installLnbitsStub();
-  let attempts = 0;
-  const failing = global.fetch;
-  global.fetch = async (url, init) => {
-    const { pathname } = new URL(url);
-    if (pathname === '/api/v1/auth') {
-      attempts += 1;
-      if (attempts === 1) {
-        throw new Error('LNbits auth failed (status: 502)');
-      }
-    }
-    return failing(url, init);
-  };
-
-  await assert.rejects(listUsers(), { message: 'LNbits auth failed (status: 502)' });
-  assert.deepEqual(
-    (await listUsers()).map((user) => user.id),
-    ['user-1', 'user-2'],
+  await assert.rejects(
+    getWalletBalance('wallet-1', '00000000-0000-4000-8000-0000000000ff'),
+    (error) => error.status === 403,
   );
-  assert.equal(attempts, 2);
+});
+
+test('directory reads go over NWC and never make an LNbits HTTP call', async () => {
+  const { fake, http } = installLnbitsStub();
+
+  const users = await listUsers();
+  assert.deepEqual(users.map((user) => user.id), [OID_1, OID_2]);
+  assert.equal(users[0].aadObjectId, OID_1);
+  assert.deepEqual(await listUserWallets(OID_1), [
+    { id: 'wallet-1', name: 'Allowance', user: OID_1, balance_msat: 5000, deleted: false },
+  ]);
+  assert.deepEqual(http, []);
+  assert.ok(fake.calls.every((call) => call.method === 'get_balance'));
+});
+
+test('the allowance sync sees one complete entry per person, keyed by Entra id', async () => {
+  installLnbitsStub();
+  const listed = await listDirectoryUsers();
+  assert.equal(listed.complete, true);
+  assert.deepEqual(
+    listed.users.map((user) => [user.external_id, user.extra.display_name]),
+    [[OID_1, 'Ada'], [OID_2, 'Bea']],
+  );
+});
+
+test('wallet history comes from NWC, with Zaplie\'s record of each zap as extra', async () => {
+  const { fake } = installLnbitsStub();
+  const hash = 'ab'.repeat(32);
+  fake.wallets.get(nwcUrlFor(1)).transactions = [
+    { type: 'outgoing', state: 'settled', payment_hash: hash, amount: 21000, fees_paid: 0, description: 'raw', created_at: 100 },
+    { type: 'incoming', state: 'settled', payment_hash: 'cd'.repeat(32), amount: 5000, fees_paid: 0, description: 'Weekly allowance', created_at: 90 },
+    { type: 'outgoing', state: 'failed', payment_hash: 'ef'.repeat(32), amount: 1000, created_at: 80 },
+  ];
+  zapRecords().record({
+    paymentHash: hash,
+    amountSats: 21,
+    memo: 'thanks',
+    from: { oid: OID_1, displayName: 'Ada', walletId: 'wallet-1' },
+    to: { oid: OID_2, displayName: 'Bea' },
+  });
+
+  const payments = await listWalletPayments('wallet-1');
+  assert.deepEqual(
+    payments.map((payment) => [payment.checking_id, payment.amount, payment.memo]),
+    [[hash, -21000, 'thanks'], ['cd'.repeat(32), 5000, 'Weekly allowance']],
+  );
+  assert.equal(payments[0].extra.to.user, OID_2);
+  assert.equal(payments[0].wallet_id, 'wallet-1');
+  assert.deepEqual(payments[1].extra, {});
+});
+
+test('the feed is Zaplie\'s zap records as sending legs', async () => {
+  installLnbitsStub();
+  zapRecords().record({ paymentHash: '11'.repeat(32), amountSats: 3, memo: 'a', timeMs: 1000, from: { oid: OID_1, displayName: 'Ada', walletId: 'wallet-1' }, to: { oid: OID_2, displayName: 'Bea' } });
+  zapRecords().record({ paymentHash: '22'.repeat(32), kind: 'reward', amountSats: 7, memo: 'PR', timeMs: 2000, from: { displayName: 'Automation' }, to: { oid: OID_1, displayName: 'Ada' }, reward: { eventType: 'githubPrMerged' } });
+  const payments = await getAllPayments({ limit: 10 });
+  assert.deepEqual(payments.map((p) => [p.amount, p.wallet_id]), [[-7000, 'treasury'], [-3000, 'wallet-1']]);
+  assert.equal(payments[0].extra.automation, true);
+  assert.equal(payments[0].extra.eventType, 'githubPrMerged');
+  assert.equal(payments[1].extra.tag, 'zap');
+});
+
+test('the rewards store is off by default and an absent nostrmarket reads as empty', async (t) => {
+  installLnbitsStub();
+  t.after(() => {
+    delete process.env.ZAPLIE_REWARDS_STORE_ENABLED;
+    delete process.env.ZAPLIE_REWARDS_STORE_INKEY;
+  });
+  assert.deepEqual(await getNostrRewards('stall-1'), []);
+
+  process.env.ZAPLIE_REWARDS_STORE_ENABLED = 'true';
+  process.env.ZAPLIE_REWARDS_STORE_INKEY = 'f'.repeat(32);
+  global.fetch = async () => ({
+    ok: false,
+    status: 404,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ detail: 'Not Found' }),
+  });
+  assert.deepEqual(await getNostrRewards('stall-1'), []);
 });
 
 test('payment serialization requires a stable identifier and preserves state', () => {
@@ -234,21 +282,12 @@ test('payment serialization rejects records without a stable identifier', () => 
   );
 });
 
-test('one unidentifiable row is dropped, not the whole payments page', async (t) => {
-  installLnbitsStub();
-  const upstream = global.fetch;
-  global.fetch = async (url, init) => {
-    if (new URL(url).pathname === '/api/v1/payments') {
-      return jsonResponse([
-        { checking_id: 'good-1', amount: -10, time: 1, wallet_id: 'wallet-1' },
-        // No checking_id, payment_hash or id: LNbits cannot identify this row.
-        { amount: -20, time: 2, wallet_id: 'wallet-1', memo: 'private note' },
-        { payment_hash: 'good-2', amount: 30, time: 3, wallet_id: 'wallet-1' },
-      ]);
-    }
-    return upstream(url, init);
-  };
-
+test('one unidentifiable row is dropped, not the whole history', async (t) => {
+  const { fake } = installLnbitsStub();
+  fake.wallets.get(nwcUrlFor(1)).transactions = [
+    { type: 'outgoing', state: 'settled', payment_hash: 'aa'.repeat(32), amount: 1000, created_at: 1 },
+    { type: 'outgoing', state: 'settled', amount: 2000, created_at: 2, description: 'private note' },
+  ];
   const warnings = [];
   const originalWarn = console.warn;
   console.warn = (...args) => warnings.push(args.join(' '));
@@ -257,102 +296,61 @@ test('one unidentifiable row is dropped, not the whole payments page', async (t)
   });
 
   const payments = await listWalletPayments('wallet-1');
-
-  assert.deepEqual(
-    payments.map((payment) => payment.checking_id),
-    ['good-1', 'good-2'],
-  );
+  assert.deepEqual(payments.map((payment) => payment.checking_id), ['aa'.repeat(32)]);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /missing a stable identifier/);
-  assert.match(warnings[0], /wallet_id=wallet-1/);
-  assert.match(warnings[0], /time=2/);
-  // The dropped record's own content must not reach the log.
   assert.ok(!warnings[0].includes('private note'));
 });
 
-test('invoice creation returns the exact stable invoice identifier', async (t) => {
-  const originalFetch = global.fetch;
-  const originalEnvironment = {
-    nodeUrl: process.env.LNBITS_NODE_URL,
-    username: process.env.LNBITS_USERNAME,
-    password: process.env.LNBITS_PASSWORD,
-  };
-  process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-  process.env.LNBITS_USERNAME = 'test-user';
-  process.env.LNBITS_PASSWORD = 'test-password';
-  t.after(() => {
-    global.fetch = originalFetch;
-    for (const [key, value] of Object.entries({
-      LNBITS_NODE_URL: originalEnvironment.nodeUrl,
-      LNBITS_USERNAME: originalEnvironment.username,
-      LNBITS_PASSWORD: originalEnvironment.password,
-    })) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
-
-  global.fetch = async (url, options) => {
-    assert.equal(url, 'https://lnbits.test/api/v1/payments');
-    assert.equal(options.headers['X-Api-Key'], 'invoice-key');
-    assert.deepEqual(JSON.parse(options.body), {
-      out: false,
-      amount: 20,
-      memo: 'thank you',
-    });
-    return {
-      ok: true,
-      status: 201,
-      headers: { get: () => 'application/json' },
-      json: async () => ({
-        payment_request: 'lnbc1invoice',
-        checking_id: 'invoice-1',
-        adminkey: 'must-not-leak',
-      }),
-    };
-  };
-
-  assert.deepEqual(
-    await createInvoice({ inkey: 'invoice-key' }, 20, 'thank you'),
-    { paymentRequest: 'lnbc1invoice', invoiceId: 'invoice-1' },
-  );
-
-  global.fetch = async () => ({
-    ok: true,
-    status: 201,
-    headers: { get: () => 'application/json' },
-    json: async () => ({
-      payment_request: 'lnbc1invoice',
-      checking_id: 'x'.repeat(257),
-      payment_hash: 'invoice-2',
-    }),
-  });
-
-  assert.deepEqual(
-    await createInvoice({ inkey: 'invoice-key' }, 20, 'thank you'),
-    { paymentRequest: 'lnbc1invoice', invoiceId: 'invoice-2' },
+test('an invoice on the caller\'s own Allowance wallet is made over NWC', async () => {
+  const { fake } = installLnbitsStub();
+  const invoice = await createOwnedInvoice({ walletId: 'wallet-1', amount: 20, memo: 'top up', aadObjectId: OID_1 });
+  assert.match(invoice.paymentRequest, /^lnbc/);
+  assert.match(invoice.invoiceId, /^[0-9a-f]{64}$/);
+  assert.deepEqual(fake.calls.at(-1).params, { amount: 20000, description: 'top up' });
+  await assert.rejects(
+    createOwnedInvoice({ walletId: 'wallet-2', amount: 20, memo: 'x', aadObjectId: OID_1 }),
+    (error) => error.status === 403,
   );
 });
 
-const createTestZapDependencies = (store, onPay = async () => ({
-  payment_hash: 'payment-1',
-  checking_id: 'payment-1',
-})) => ({
-  findCallerForZap: async () => ({ id: 'sender-1' }),
-  listWalletsForZap: async (userId) => userId === 'sender-1'
-    ? [{ id: 'allowance-1', name: 'Allowance' }]
-    : [{ id: 'private-1', name: 'Private' }],
-  getBalanceForZap: async () => 100,
+const SENDER = {
+  oid: '00000000-0000-4000-8000-00000000000a',
+  displayName: 'Sender',
+  allowance: { walletId: 'allowance-1' },
+};
+const RECIPIENT = {
+  oid: '00000000-0000-4000-8000-00000000000b',
+  displayName: 'Recipient',
+  receive: { lightningAddress: 'recipient@lnbits.test' },
+};
+
+// `onPay` answers like the old LNbits pay call; the fake NWC wallet turns its
+// payment_hash into the adapter's { paymentHash }.
+const createTestZapDependencies = (
+  store,
+  onPay = async () => ({ payment_hash: 'payment-1', checking_id: 'payment-1' }),
+  { balance = () => 100, recorded = [] } = {},
+) => ({
+  findCallerForZap: async () => SENDER,
+  findRecipientForZap: async (oid) => (oid === RECIPIENT.oid ? RECIPIENT : null),
+  walletForZap: () => ({
+    getBalanceSats: async () => balance(),
+    payInvoice: async (paymentRequest) => {
+      const result = await onPay(paymentRequest);
+      return { paymentHash: result.payment_hash, feesSats: 0 };
+    },
+  }),
   createInvoiceForZap: async () => ({
     paymentRequest: 'lnbc1invoice',
     invoiceId: 'invoice-1',
   }),
-  payInvoiceForZap: onPay,
+  recordZap: (entry) => recorded.push(entry),
   idempotencyStore: store,
 });
 
 const validZap = {
-  recipientUserId: 'recipient-1',
+  recipientUserId: RECIPIENT.oid,
   amount: 20,
   memo: 'thank you',
   aadObjectId: 'caller-oid',
@@ -363,24 +361,24 @@ test('self-zaps are rejected before an invoice or payment is created', async () 
   let invoiceCalls = 0;
   let paymentCalls = 0;
   const sendZap = createSendZap({
-    findCallerForZap: async () => ({ id: 'sender-1' }),
-    listWalletsForZap: async () => [],
-    getBalanceForZap: async () => 100,
+    ...createTestZapDependencies(
+      createZapIdempotencyStore({
+        storePath: path.join(os.tmpdir(), `zaplie-self-zap-${process.pid}.json`),
+      }),
+      async () => {
+        paymentCalls += 1;
+        return { payment_hash: 'payment-1' };
+      },
+    ),
+    findRecipientForZap: async () => SENDER,
     createInvoiceForZap: async () => {
       invoiceCalls += 1;
       return { paymentRequest: 'lnbc1invoice', invoiceId: 'invoice-1' };
     },
-    payInvoiceForZap: async () => {
-      paymentCalls += 1;
-      return { payment_hash: 'payment-1', checking_id: 'payment-1' };
-    },
-    idempotencyStore: createZapIdempotencyStore({
-      storePath: path.join(os.tmpdir(), `zaplie-self-zap-${process.pid}.json`),
-    }),
   });
 
   await assert.rejects(
-    sendZap({ ...validZap, recipientUserId: 'sender-1' }),
+    sendZap({ ...validZap, recipientUserId: SENDER.oid.toUpperCase() }),
     (error) => error.status === 409 && /own account/.test(error.message),
   );
   assert.equal(invoiceCalls, 0);
@@ -498,7 +496,7 @@ test('gateway validates zap recipients and amounts without calling LNbits', asyn
     ...createTestZapDependencies(createZapIdempotencyStore()),
     findCallerForZap: async () => {
       callerLookups += 1;
-      return { id: 'sender-1' };
+      return SENDER;
     },
   });
 
@@ -519,16 +517,16 @@ test('failures before a payment attempt release the key for retry', async (t) =>
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   let balance = 5;
   let paymentCalls = 0;
-  const sendZap = createSendZap({
-    ...createTestZapDependencies(
+  const sendZap = createSendZap(
+    createTestZapDependencies(
       createZapIdempotencyStore({ storePath }),
       async () => {
         paymentCalls += 1;
         return { payment_hash: 'payment-1', checking_id: 'payment-1' };
       },
+      { balance: () => balance },
     ),
-    getBalanceForZap: async () => balance,
-  });
+  );
 
   await assert.rejects(
     sendZap(validZap),
@@ -787,206 +785,130 @@ test('numeric wallet balances survive sanitisation, strings included', () => {
   assert.equal(sanitizeBalanceMsat('42000'), 42000);
 });
 
-// Provisioning for people who never met the bot in Teams. The portal creates
-// only the LNbits user and wallets that are missing, and never pays anything.
-const ensureCallerHarness = ({ users = [], wallets = {} } = {}) => {
-  const calls = [];
-  const ensureCaller = createEnsureCaller({
-    listUsersForCaller: async () => {
-      calls.push(['list-users']);
-      return users;
-    },
-    createUserForCaller: async (input) => {
-      calls.push(['create-user', input]);
-      const user = { id: `user-${input.aadObjectId}`, external_id: input.aadObjectId, email: input.email };
-      users.push(user);
-      wallets[user.id] = [];
-      return user;
-    },
-    listWalletsForCaller: async (userId) => {
-      calls.push(['list-wallets', userId]);
-      return wallets[userId] || [];
-    },
-    createWalletForCaller: async (userId, name) => {
-      calls.push(['create-wallet', userId, name]);
-      const wallet = { id: `${userId}-${name.toLowerCase()}`, name, inkey: 'in', adminkey: 'ad' };
-      (wallets[userId] ||= []).push(wallet);
-      return wallet;
-    },
-  });
-  return { ensureCaller, calls };
-};
-
-test('a signed-in person with no LNbits user gets one with both wallets, and no payment', async () => {
-  const { ensureCaller, calls } = ensureCallerHarness();
-
-  const result = await ensureCaller({
-    aadObjectId: 'new-oid',
-    displayName: '  Ada Lovelace ',
-    email: 'ada@example.test',
-  });
-
-  assert.equal(result.created, true);
-  assert.deepEqual(result.createdWallets, ['Allowance', 'Private']);
-  assert.equal(result.user.aadObjectId, 'new-oid');
-  assert.equal('inkey' in result.user, false);
-  assert.deepEqual(calls[1], [
-    'create-user',
-    { aadObjectId: 'new-oid', displayName: 'Ada Lovelace', email: 'ada@example.test' },
-  ]);
-  assert.deepEqual(
-    calls.filter(([kind]) => kind === 'create-wallet'),
-    [
-      ['create-wallet', 'user-new-oid', 'Allowance'],
-      ['create-wallet', 'user-new-oid', 'Private'],
-    ],
+test('a paid zap is recorded once, by payment hash, naming both people', async () => {
+  const recorded = [];
+  const paid = [];
+  const sendZap = createSendZap(
+    createTestZapDependencies(
+      createZapIdempotencyStore({
+        storePath: path.join(os.tmpdir(), `zaplie-zap-meta-${process.pid}-${Date.now()}.json`),
+      }),
+      async (paymentRequest) => {
+        paid.push(paymentRequest);
+        return { payment_hash: 'ab'.repeat(32) };
+      },
+      { recorded },
+    ),
   );
-  assert.ok(calls.every(([kind]) => !/pay|invoice/.test(kind)));
-});
-
-test('an existing user only gets the wallet that is missing', async () => {
-  const { ensureCaller, calls } = ensureCallerHarness({
-    users: [{ id: 'user-1', external_id: 'oid-1' }],
-    wallets: { 'user-1': [{ id: 'w-1', name: 'allowance ' }] },
-  });
-
-  const result = await ensureCaller({ aadObjectId: 'oid-1' });
-
-  assert.equal(result.created, false);
-  assert.deepEqual(result.createdWallets, ['Private']);
-  assert.equal(calls.some(([kind]) => kind === 'create-user'), false);
+  const result = await sendZap({ ...validZap, idempotencyKey: `zap-meta-${Date.now()}-0001`, source: 'bot' });
+  assert.deepEqual(result, { payment_hash: 'ab'.repeat(32), checking_id: 'ab'.repeat(32) });
+  assert.deepEqual(paid, ['lnbc1invoice']);
+  assert.equal(recorded.length, 1);
   assert.deepEqual(
-    calls.filter(([kind]) => kind === 'create-wallet'),
-    [['create-wallet', 'user-1', 'Private']],
+    { from: recorded[0].from, to: recorded[0].to, source: recorded[0].source, kind: recorded[0].kind },
+    {
+      from: { oid: SENDER.oid, displayName: 'Sender', walletId: 'allowance-1' },
+      to: { oid: RECIPIENT.oid, displayName: 'Recipient' },
+      source: 'bot',
+      kind: 'zap',
+    },
   );
 });
 
-test('a fully provisioned user is left alone', async () => {
-  const { ensureCaller, calls } = ensureCallerHarness({
-    users: [{ id: 'user-1', external_id: 'oid-1' }],
-    wallets: { 'user-1': [{ id: 'w-1', name: 'Allowance' }, { id: 'w-2', name: 'Private' }] },
+// Ben's rule: an Allowance wallet pays only another Zaplie member, resolved
+// here from the directory; nothing the client sends is ever paid.
+test('a zap to someone outside the directory, or to an address or invoice, is refused before any payment', async () => {
+  let invoices = 0;
+  let pays = 0;
+  const sendZap = createSendZap({
+    ...createTestZapDependencies(
+      createZapIdempotencyStore({
+        storePath: path.join(os.tmpdir(), `zaplie-zap-unknown-${process.pid}-${Date.now()}.json`),
+      }),
+      async () => {
+        pays += 1;
+        return { payment_hash: 'payment-1' };
+      },
+    ),
+    findRecipientForZap: async () => null,
+    createInvoiceForZap: async () => {
+      invoices += 1;
+      return { paymentRequest: 'lnbc1invoice' };
+    },
   });
+  const key = (n) => `zap-refused-${Date.now()}-${n}0000`;
+  await assert.rejects(sendZap({ ...validZap, idempotencyKey: key(1) }), (error) => error.status === 409 && error.paymentOutcome === 'not_paid');
+  for (const [n, recipientUserId] of [[2, 'ada@wallet.other'], [3, 'lnbc10n1pexternalinvoice'], [4, '../admin']]) {
+    await assert.rejects(
+      sendZap({ ...validZap, recipientUserId, idempotencyKey: key(n) }),
+      (error) => error.status === 400 && error.paymentOutcome === 'not_paid',
+    );
+  }
+  assert.equal(invoices, 0);
+  assert.equal(pays, 0);
+});
 
-  const result = await ensureCaller({ aadObjectId: 'oid-1' });
-
-  assert.deepEqual(
-    { created: result.created, createdWallets: result.createdWallets },
-    { created: false, createdWallets: [] },
+test('a definite wallet refusal releases the key: nothing was paid', async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-zap-refused-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let attempts = 0;
+  const sendZap = createSendZap({
+    ...createTestZapDependencies(createZapIdempotencyStore({ storePath: path.join(tempDir, 'zaps.json') })),
+    walletForZap: () => ({
+      getBalanceSats: async () => 100,
+      payInvoice: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new NwcPaymentRefused('The wallet budget for this period is used up.', 'QUOTA_EXCEEDED');
+        return { paymentHash: 'cd'.repeat(32) };
+      },
+    }),
+  });
+  await assert.rejects(
+    sendZap(validZap),
+    (error) => error.status === 409 && error.expose && /budget/.test(error.message) && error.paymentOutcome === 'not_paid',
   );
-  assert.deepEqual(calls.map(([kind]) => kind), ['list-users', 'list-wallets']);
+  const retried = await sendZap(validZap);
+  assert.equal(retried.payment_hash, 'cd'.repeat(32));
 });
 
-test('two sign-ins at once create one LNbits user, not two', async () => {
-  const { ensureCaller, calls } = ensureCallerHarness();
-
-  const [first, second] = await Promise.all([
-    ensureCaller({ aadObjectId: 'new-oid' }),
-    ensureCaller({ aadObjectId: 'new-oid' }),
-  ]);
-
-  assert.equal(first.user.id, second.user.id);
-  assert.equal(calls.filter(([kind]) => kind === 'create-user').length, 1);
-});
-
-test('provisioning refuses an oid that is not a plain id', async () => {
-  const { ensureCaller, calls } = ensureCallerHarness();
+test('a reward is paid from the Treasury only to a directory member, and recorded', async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-reward-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const recorded = [];
+  const paidFrom = [];
+  const payReward = createPayReward({
+    findRecipient: async (oid) => (oid === RECIPIENT.oid ? RECIPIENT : null),
+    treasuryWallet: () => ({
+      payInvoice: async (paymentRequest) => {
+        paidFrom.push(paymentRequest);
+        return { paymentHash: 'ee'.repeat(32) };
+      },
+    }),
+    createInvoiceForReward: async () => ({ paymentRequest: 'lnbc1reward' }),
+    recordReward: (entry) => recorded.push(entry),
+    idempotencyStore: createZapIdempotencyStore({ storePath: path.join(tempDir, 'zaps.json') }),
+  });
+  const reward = {
+    recipientOid: RECIPIENT.oid,
+    recipientLabel: 'octocat',
+    amountSats: 50,
+    memo: 'GitHub: PR #7 merged',
+    reward: { eventType: 'githubPrMerged', repo: 'acme/api' },
+    idempotencyKey: 'reward-delivery-0001',
+  };
+  assert.equal((await payReward(reward)).payment_hash, 'ee'.repeat(32));
+  assert.equal((await payReward(reward)).payment_hash, 'ee'.repeat(32));
+  assert.deepEqual(paidFrom, ['lnbc1reward']);
+  assert.equal(recorded[0].kind, 'reward');
+  assert.equal(recorded[0].to.displayName, 'octocat');
 
   await assert.rejects(
-    ensureCaller({ aadObjectId: '../admin' }),
+    payReward({ ...reward, recipientOid: '00000000-0000-4000-8000-0000000000ff', idempotencyKey: 'reward-delivery-0002' }),
+    (error) => error.status === 409 && error.paymentOutcome === 'not_paid',
+  );
+  await assert.rejects(
+    payReward({ ...reward, recipientOid: 'someone@wallet.other', idempotencyKey: 'reward-delivery-0003' }),
     (error) => error.status === 400,
   );
-  assert.deepEqual(calls, []);
-});
-
-test('a portal-provisioned user is listed by the name stored in extra.display_name', () => {
-  const user = sanitizeUser({
-    id: 'lnbits-user-9',
-    external_id: 'oid-9',
-    extra: { display_name: 'Satoshi Nakamoto' },
-  });
-  assert.equal(user.displayName, 'Satoshi Nakamoto');
-  assert.equal(sanitizeUser({ id: 'lnbits-user-10' }).displayName, 'lnbits-user-10');
-  assert.equal(
-    sanitizeUser({ id: 'u', username: 'jack', extra: { display_name: 'Ignored' } })
-      .displayName,
-    'jack',
-  );
-});
-
-// LNbits 1.6 pages the Users API (ten per request by default) and orders
-// nothing unless asked: the portal reads every page, as the bot does.
-const installPagedUsers = (allUsers, { total = allUsers.length, cap = Infinity } = {}) => {
-  process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-  process.env.LNBITS_USERNAME = 'service';
-  process.env.LNBITS_PASSWORD = 'secret';
-  resetCachesForTests();
-  const requests = [];
-  global.fetch = async (url) => {
-    const parsed = new URL(url);
-    if (parsed.pathname === '/api/v1/auth') {
-      return jsonResponse({ access_token: 'token' });
-    }
-    if (parsed.pathname === '/users/api/v1/user') {
-      requests.push(Object.fromEntries(parsed.searchParams));
-      const offset = Number(parsed.searchParams.get('offset') || 0);
-      const limit = Math.min(Number(parsed.searchParams.get('limit') || 10), cap);
-      return jsonResponse({ data: allUsers.slice(offset, offset + limit), total });
-    }
-    throw new Error(`unexpected LNbits path ${parsed.pathname}`);
-  };
-  return requests;
-};
-
-const manyUsers = (count) =>
-  Array.from({ length: count }, (_, index) => ({
-    id: `user-${String(index).padStart(4, '0')}`,
-    external_id: `oid-${index}`,
-  }));
-
-test('the user list is read page by page, ordered by id, until the total', async () => {
-  const everyone = manyUsers(250);
-  const requests = installPagedUsers(everyone);
-  const page = await readRawUserPages();
-  assert.equal(page.users.length, 250);
-  assert.equal(page.total, 250);
-  assert.equal(page.complete, true);
-  assert.deepEqual(
-    requests.map((query) => [query.sortby, query.limit, query.offset]),
-    [
-      ['id', '100', '0'],
-      ['id', '100', '100'],
-      ['id', '100', '200'],
-    ],
-  );
-  assert.equal((await listUsers()).length, 250);
-});
-
-test('a server that caps the page size is still read to the end', async () => {
-  installPagedUsers(manyUsers(25), { cap: 10 });
-  const page = await readRawUserPages();
-  assert.equal(page.users.length, 25);
-  assert.equal(page.complete, true);
-});
-
-test('a list that ends short of its total is reported incomplete, and refused to other callers', async () => {
-  installPagedUsers(manyUsers(10), { total: 12 });
-  const page = await readRawUserPages();
-  assert.equal(page.users.length, 10);
-  assert.equal(page.total, 12);
-  assert.equal(page.complete, false);
-  await assert.rejects(listUsers(), /fewer users than it announced/);
-});
-
-test('a server that ignores offset is refused, not read as a partial list', async () => {
-  process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-  process.env.LNBITS_USERNAME = 'service';
-  process.env.LNBITS_PASSWORD = 'secret';
-  resetCachesForTests();
-  const first = manyUsers(10);
-  global.fetch = async (url) => {
-    const { pathname } = new URL(url);
-    if (pathname === '/api/v1/auth') return jsonResponse({ access_token: 'token' });
-    return jsonResponse({ data: first });
-  };
-  await assert.rejects(readRawUserPages(), /ignored the users offset/);
+  assert.equal(paidFrom.length, 1);
 });

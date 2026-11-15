@@ -561,12 +561,12 @@ test('a malformed stored policy is a 500 on read, so the bot pays nothing', asyn
   assert.equal(read.status, 500);
 });
 
-test('the people list is admin only and never reached without LNbits config', async () => {
+test('the people list is admin only and read from the Zaplie directory', async () => {
   const anonymous = await get('/api/identities/people');
   assert.equal(anonymous.status, 401);
   const user = await get('/api/identities/people', `Bearer ${USER_TOKEN}`);
   assert.equal(user.status, 403);
   const admin = await get('/api/identities/people', `Bearer ${ADMIN_TOKEN}`);
-  assert.equal(admin.status, 503);
-  assert.deepEqual(admin.body, { error: 'people list unavailable' });
+  assert.equal(admin.status, 200);
+  assert.ok(Array.isArray(admin.body.people));
 });

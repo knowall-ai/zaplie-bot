@@ -6,8 +6,9 @@
 //   node backend/scripts/allowance-sync.js                 # preview, changes nothing
 //   node backend/scripts/allowance-sync.js --apply --confirm-total <sats>
 //
-// Run from tabs/, with the portal backend's environment (LNBITS_NODE_URL,
-// LNBITS_USERNAME, LNBITS_PASSWORD, ALLOWANCE_FUND_ADMINKEY, ZAPLIE_DATA_DIR).
+// Run from tabs/, with the portal backend's environment (LNBITS_URL,
+// ALLOWANCE_FUND_ADMINKEY, ZAPLIE_DATA_DIR and ZAPLIE_STORE_KEY, which opens
+// the people directory the Allowance wallet keys live in).
 // The policy comes from data.json (allowancePolicy). It prints no key.
 const fs = require('fs');
 const { dataPath } = require('../dataPaths');

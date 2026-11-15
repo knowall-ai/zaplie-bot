@@ -2,43 +2,27 @@
 // Aggregated series for the Reports page. Recognition zaps are outgoing
 // payments from Allowance wallets; automated payouts are outgoing payments
 // from the treasury. Shared org view, any authenticated tenant user.
+//
+// Both series come from Zaplie's own record of what it paid
+// (zapRecordStore.js): zaps between members and rewards from the Treasury.
+// Nothing here calls LNbits or any wallet.
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
-const {
-  REQUEST_TIMEOUT_MS,
-  requireLnbitsConfig,
-  getLnbitsToken,
-  lnbitsGet,
-} = require('./lnbitsAdmin');
+const { zapRecords } = require('./zapRecordStore');
 
 const router = express.Router();
 
-const TREASURY_USERNAME = process.env.TREASURY_USERNAME || 'automation';
 const WEEKS = 8;
 
 const paymentEpoch = (time) =>
   typeof time === 'number' ? time : Date.parse(time) / 1000;
 
-const walletOutgoingIntoBuckets = async (config, wallet, nowTs, buckets, totals) => {
-  const response = await fetch(`${config.nodeUrl}/api/v1/payments?limit=1000`, {
-    headers: { 'X-Api-Key': wallet.inkey },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`payments fetch failed (status: ${response.status})`);
-  }
-  const list = await response.json();
-  for (const payment of Array.isArray(list) ? list : []) {
-    if (payment.amount >= 0 || payment.memo?.includes('Weekly Allowance cleared')) {
-      continue;
-    }
-    const sats = Math.abs(payment.amount) / 1000;
-    totals.sats += sats;
-    totals.count += 1;
-    const weeksAgo = Math.floor((nowTs - paymentEpoch(payment.time)) / (7 * 86400));
-    if (weeksAgo >= 0 && weeksAgo < WEEKS) {
-      buckets[WEEKS - 1 - weeksAgo] += sats;
-    }
+const intoBuckets = (record, nowTs, buckets, totals) => {
+  totals.sats += record.amountSats;
+  totals.count += 1;
+  const weeksAgo = Math.floor((nowTs - paymentEpoch(record.time)) / (7 * 86400));
+  if (weeksAgo >= 0 && weeksAgo < WEEKS) {
+    buckets[WEEKS - 1 - weeksAgo] += record.amountSats;
   }
 };
 
@@ -57,10 +41,6 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const config = requireLnbitsConfig();
-    const accessToken = await getLnbitsToken(config);
-    const usersBody = await lnbitsGet(`${config.nodeUrl}/users/api/v1/user`, accessToken);
-    const rawUsers = Array.isArray(usersBody?.data) ? usersBody.data : [];
     const nowTs = Math.floor(Date.now() / 1000);
 
     const zapsWeekly = new Array(WEEKS).fill(0);
@@ -68,24 +48,13 @@ router.get('/', async (req, res) => {
     const zapTotals = { sats: 0, count: 0 };
     const automationTotals = { sats: 0, count: 0 };
 
-    await Promise.all(
-      rawUsers.map(async (user) => {
-        const wallets = await lnbitsGet(
-          `${config.nodeUrl}/users/api/v1/user/${user.id}/wallet`,
-          accessToken,
-        );
-        for (const wallet of wallets) {
-          if (wallet.deleted === true) {
-            continue;
-          }
-          if (user.username === TREASURY_USERNAME) {
-            await walletOutgoingIntoBuckets(config, wallet, nowTs, automationWeekly, automationTotals);
-          } else if (wallet.name === 'Allowance') {
-            await walletOutgoingIntoBuckets(config, wallet, nowTs, zapsWeekly, zapTotals);
-          }
-        }
-      }),
-    );
+    for (const record of zapRecords().list()) {
+      if (record.kind === 'reward') {
+        intoBuckets(record, nowTs, automationWeekly, automationTotals);
+      } else {
+        intoBuckets(record, nowTs, zapsWeekly, zapTotals);
+      }
+    }
 
     res.json({
       weeks: WEEKS,
@@ -98,7 +67,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Reports aggregation failed:', error.message);
-    res.status(502).json({ error: error.message });
+    res.status(502).json({ error: 'reports are unavailable' });
   }
 });
 
