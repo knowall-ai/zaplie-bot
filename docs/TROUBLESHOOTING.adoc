@@ -19,6 +19,9 @@
 | Every LNbits call fails after the LNbits 1.7 upgrade (`two_factor_required`)
 | Zaplie no longer logs in to LNbits; a build that still sets `LNBITS_USERNAME`/`LNBITS_PASSWORD` predates `docs/LNBITS_MIGRATION.adoc`. Deploy the current build and follow the runbook. A wallet call failing now means an NWC connection did not answer (relay down, connection deleted in LNbits, or a relay not on `ZAPLIE_NWC_RELAYS`); "the wallet budget for this period is used up" is the NWC budget (`QUOTA_EXCEEDED`). In *Add people*, "LNbits refused the token" means the pasted ACL token expired or lacks read on `/api/v1/wallets` / write on `/api/v1/wallet`
 
+| A portal page says "Something went wrong" with a reference (or an API answer carries a `correlationId`)
+| Search the portal's App Service log stream for the id: `Portal client error <reference>` (a page that failed to render, logged by the browser) or `Unhandled request error <correlationId>` (the backend; the stack is in that log line, never in the response). Unknown `/api/*` and `/internal/*` paths answer a JSON 404 `{"error":"not_found"}`, and an unknown portal address shows the portal's own Not found page
+
 | Every zap fails with the generic "D'oh!" error after a restart
 | A ledger lock is still held. Check the bot's startup log: `Zap ledger lock ... was <n>s old at startup and has been removed as crash-left` means it recovered on its own (reconcile any `processing` or `unknown` record the next line counts); `Zap ledger lock ... is <n>s old and may belong to a live process; leaving it` means the lock was younger than `ZAPLIE_LEDGER_STALE_LOCK_MS` (default 30 s) at boot. Restart the bot once more after 30 seconds, or follow the lock recovery procedure in `docs/DEPLOYMENT.adoc` (Persistent application state). Never delete `bot-zap-ledger.json` or a record in it to make zaps work again
 

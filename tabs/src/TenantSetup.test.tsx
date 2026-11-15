@@ -1,5 +1,6 @@
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import TenantSetup from './TenantSetup';
 
 const mockIsSetupAdmin = jest.fn();
@@ -26,7 +27,11 @@ const settle = async () => {
   });
 };
 const mount = () => {
-  root.render(<TenantSetup />);
+  root.render(
+    <MemoryRouter>
+      <TenantSetup />
+    </MemoryRouter>,
+  );
 };
 const render = async () => {
   await act(async () => {
@@ -64,7 +69,7 @@ describe('TenantSetup', () => {
     mockIsSetupAdmin.mockReturnValue(false);
     await render();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'administrators',
+      'Admins only',
     );
     expect(mockGetTenantMe).not.toHaveBeenCalled();
   });
