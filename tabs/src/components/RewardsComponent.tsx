@@ -7,16 +7,16 @@ import React, {
 } from 'react';
 import { useMsal } from '@azure/msal-react';
 import styles from './RewardsComponent.module.css';
-import { getNostrRewards } from '../services/lnbits/rewards';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getNostrRewards } from '../services/wallet/rewards';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import PurchasePopup from './PurchasePopup';
 import imagePlaceholder from '../images/imagePlaceholderNew.svg';
 import { RewardNameContext } from './RewardNameContext';
 import {
   isFunded,
   selectWalletByName,
-} from '../services/lnbits/walletSelection';
+} from '../services/wallet/walletSelection';
 
 // Read per call rather than once at module load, so a test (and a re-render
 // after a config change) sees the current value.

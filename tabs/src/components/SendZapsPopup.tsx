@@ -7,11 +7,11 @@ import React, {
 } from 'react';
 import styles from './SendZapsPopup.module.css';
 import { RewardNameContext } from './RewardNameContext';
-import { isFunded } from '../services/lnbits/walletSelection';
+import { isFunded } from '../services/wallet/walletSelection';
 import { useCache } from '../utils/CacheContext';
-import { sendZap, newIdempotencyKey } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { sendZap, newIdempotencyKey } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import { useMsal } from '@azure/msal-react';
 import loaderGif from '../images/Loader.gif';
 import ZapIcon from '../images/ZapIcon.svg';

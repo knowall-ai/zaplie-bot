@@ -3,7 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { InteractionStatus } from '@azure/msal-browser';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { clearApiCache } from '../services/lnbits/cache';
+import { clearApiCache } from '../services/wallet/cache';
 import { markSilentSignInAttempted } from '../services/silentSignIn';
 import { teamsContextQueryOptions } from '../services/teamsContextService';
 import { appUrl } from '../services/appLocation';

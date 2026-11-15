@@ -9,7 +9,7 @@ import styles from './setting.module.css';
 import {
   getMyDirectoryEntry,
   MyDirectoryEntry,
-  setMyReceiveTarget,
+  setMyReceiveAddress,
 } from '../services/directory';
 
 type LoadState =
@@ -20,14 +20,12 @@ type LoadState =
 const formatSats = (sats: number | null): string =>
   sats === null ? 'unavailable' : `${Math.floor(sats).toLocaleString()} sats`;
 
-// Your Private wallet is your own LNbits wallet: Zaplie never holds a key that
-// can spend from it. This card registers, once, where your zaps land — a
-// Lightning address (preferred), or the invoice (read) key of the wallet,
-// which also lets Zaplie show its balance. Neither is ever shown again.
+// Your Private wallet is your own: Zaplie only ever pays into it, at the
+// Lightning address you register here once. Any Lightning wallet works,
+// within the domains your organisation allows.
 const ReceiveTargetCard: FunctionComponent = () => {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [address, setAddress] = useState('');
-  const [invoiceKey, setInvoiceKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -52,16 +50,16 @@ const ReceiveTargetCard: FunctionComponent = () => {
     void load();
   }, [load]);
 
-  const save = async (target: {
-    lightningAddress?: string | null;
-    invoiceKey?: string | null;
-  }) => {
+  const save = async (lightningAddress: string | null) => {
     setSaving(true);
     setSaveError(null);
     try {
-      await setMyReceiveTarget(target);
-      setInvoiceKey('');
-      toast.success('Saved where you receive zaps.');
+      await setMyReceiveAddress(lightningAddress);
+      toast.success(
+        lightningAddress
+          ? 'Saved where you receive zaps.'
+          : 'Removed your Lightning address.',
+      );
       await load();
     } catch (error) {
       setSaveError(
@@ -100,8 +98,12 @@ const ReceiveTargetCard: FunctionComponent = () => {
   }
 
   const { entry } = state;
-  const registeredAddress = entry.receive.lightningAddress;
-  const keyRegistered = entry.receive.invoiceKeyRegistered;
+  const registered = entry.receive.lightningAddress;
+  const budget = entry.budget;
+  const remaining =
+    budget && budget.totalSats !== null && budget.usedSats !== null
+      ? Math.max(0, budget.totalSats - budget.usedSats)
+      : null;
 
   return (
     <section className={styles.section} aria-labelledby="receive-heading">
@@ -111,8 +113,8 @@ const ReceiveTargetCard: FunctionComponent = () => {
         </h2>
         <p className={styles.intro}>
           Zaps you receive go to your own Private wallet. Zaplie never holds a
-          key that can spend from it: give it your Lightning address, or the
-          invoice (read-only) key of your Private wallet.
+          key to it and only ever pays into it: give it your wallet&apos;s
+          Lightning address.
         </p>
       </div>
       <div className={styles.card}>
@@ -122,19 +124,15 @@ const ReceiveTargetCard: FunctionComponent = () => {
             ? formatSats(entry.allowanceSats)
             : 'not set up yet — ask a Zaplie admin'}
         </p>
-        <p className={styles.fieldLabel} data-testid="receive-status">
-          Receiving:{' '}
-          {registeredAddress
-            ? registeredAddress
-            : keyRegistered
-              ? 'Private wallet (invoice key)'
-              : 'not set up — colleagues cannot zap you yet'}
-        </p>
-        {keyRegistered ? (
-          <p className={styles.fieldLabel} data-testid="private-balance">
-            Private wallet balance: {formatSats(entry.privateSats)}
+        {remaining !== null ? (
+          <p className={styles.fieldLabel} data-testid="allowance-budget">
+            Left to send this period: {formatSats(remaining)}
           </p>
         ) : null}
+        <p className={styles.fieldLabel} data-testid="receive-status">
+          Receiving at:{' '}
+          {registered || 'not set up — colleagues cannot zap you yet'}
+        </p>
 
         <label className={styles.fieldLabel} htmlFor="receive-address">
           Lightning address
@@ -146,7 +144,7 @@ const ReceiveTargetCard: FunctionComponent = () => {
             type="text"
             inputMode="email"
             autoComplete="off"
-            placeholder="name@your-lnbits-host"
+            placeholder="name@your-wallet-host"
             value={address}
             onChange={event => setAddress(event.target.value)}
             disabled={saving}
@@ -155,59 +153,20 @@ const ReceiveTargetCard: FunctionComponent = () => {
             type="button"
             className={styles.primaryButton}
             disabled={
-              saving || !address.trim() || address.trim() === registeredAddress
+              saving || !address.trim() || address.trim() === registered
             }
-            onClick={() => void save({ lightningAddress: address.trim() })}
+            onClick={() => void save(address.trim())}
           >
             Save
           </button>
-          {registeredAddress ? (
+          {registered ? (
             <button
               type="button"
               className={styles.secondaryButton}
               disabled={saving}
-              onClick={() => void save({ lightningAddress: null })}
+              onClick={() => void save(null)}
             >
               Remove
-            </button>
-          ) : null}
-        </div>
-
-        <label className={styles.fieldLabel} htmlFor="receive-invoice-key">
-          Or the invoice key of your Private wallet (never the admin key)
-        </label>
-        <div className={styles.inputRow}>
-          <input
-            id="receive-invoice-key"
-            className={`${styles.textBox} ${styles.editing}`}
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={
-              keyRegistered
-                ? 'Registered — paste to replace'
-                : '32 hexadecimal characters'
-            }
-            value={invoiceKey}
-            onChange={event => setInvoiceKey(event.target.value)}
-            disabled={saving}
-          />
-          <button
-            type="button"
-            className={styles.primaryButton}
-            disabled={saving || !invoiceKey.trim()}
-            onClick={() => void save({ invoiceKey: invoiceKey.trim() })}
-          >
-            Save key
-          </button>
-          {keyRegistered ? (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              disabled={saving}
-              onClick={() => void save({ invoiceKey: null })}
-            >
-              Remove key
             </button>
           ) : null}
         </div>

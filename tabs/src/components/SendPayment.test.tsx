@@ -18,7 +18,7 @@ jest.mock('@yudiel/react-qr-scanner', () => ({
   Scanner: () => null,
 }));
 
-jest.mock('../services/lnbits/payments', () => ({
+jest.mock('../services/wallet/payments', () => ({
   payInvoice: () => Promise.resolve({ payment_hash: 'hash' }),
 }));
 

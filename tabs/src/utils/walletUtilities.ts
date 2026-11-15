@@ -1,6 +1,6 @@
-import { getAllPayments } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getAllPayments } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 
 export interface ZapTransfer {
   transaction: Transaction;

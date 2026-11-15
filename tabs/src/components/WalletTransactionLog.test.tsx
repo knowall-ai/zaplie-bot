@@ -1,8 +1,8 @@
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { getWalletTransactionsSince } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getWalletTransactionsSince } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import { fetchZapActivity } from '../utils/walletUtilities';
 import { DEFAULT_REWARD_NAME, RewardNameContext } from './RewardNameContext';
 import WalletTransactionLog from './WalletTransactionLog';
@@ -13,15 +13,15 @@ jest.mock('@azure/msal-react', () => ({
   useMsal: () => mockUseMsal(),
 }));
 
-jest.mock('../services/lnbits/payments', () => ({
+jest.mock('../services/wallet/payments', () => ({
   getWalletTransactionsSince: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   getUsers: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/wallets', () => ({
+jest.mock('../services/wallet/wallets', () => ({
   getUserWallets: jest.fn(),
 }));
 

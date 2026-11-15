@@ -33,7 +33,7 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   ensureCurrentUser: () => mockEnsureCurrentUser(),
 }));
 

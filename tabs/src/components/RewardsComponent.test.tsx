@@ -2,7 +2,7 @@ import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import RewardsComponent from './RewardsComponent';
-import { getNostrRewards } from '../services/lnbits/rewards';
+import { getNostrRewards } from '../services/wallet/rewards';
 import { RewardNameContext } from './RewardNameContext';
 
 jest.mock('@azure/msal-react', () => ({
@@ -12,13 +12,13 @@ jest.mock('@azure/msal-react', () => ({
   }),
 }));
 
-jest.mock('../services/lnbits/rewards', () => ({
+jest.mock('../services/wallet/rewards', () => ({
   getNostrRewards: jest.fn(),
 }));
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   getUsers: jest.fn(),
 }));
-jest.mock('../services/lnbits/wallets', () => ({
+jest.mock('../services/wallet/wallets', () => ({
   getUserWallets: jest.fn(),
 }));
 

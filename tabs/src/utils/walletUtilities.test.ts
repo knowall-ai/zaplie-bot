@@ -1,6 +1,6 @@
-import { getAllPayments } from '../services/lnbits/payments';
-import { getUsers } from '../services/lnbits/users';
-import { getUserWallets } from '../services/lnbits/wallets';
+import { getAllPayments } from '../services/wallet/payments';
+import { getUsers } from '../services/wallet/users';
+import { getUserWallets } from '../services/wallet/wallets';
 import {
   fetchVerifiedZapPayments,
   fetchZapActivity,
@@ -8,15 +8,15 @@ import {
   PAYMENT_PAGE_SIZE,
 } from './walletUtilities';
 
-jest.mock('../services/lnbits/payments', () => ({
+jest.mock('../services/wallet/payments', () => ({
   getAllPayments: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/users', () => ({
+jest.mock('../services/wallet/users', () => ({
   getUsers: jest.fn(),
 }));
 
-jest.mock('../services/lnbits/wallets', () => ({
+jest.mock('../services/wallet/wallets', () => ({
   getUserWallets: jest.fn(),
 }));
 

@@ -3,12 +3,12 @@ import { createRoot, Root } from 'react-dom/client';
 import ReceiveTargetCard from './ReceiveTargetCard';
 
 const mockGetMyDirectoryEntry = jest.fn();
-const mockSetMyReceiveTarget = jest.fn();
+const mockSetMyReceiveAddress = jest.fn();
 const mockToastSuccess = jest.fn();
 
 jest.mock('../services/directory', () => ({
   getMyDirectoryEntry: () => mockGetMyDirectoryEntry(),
-  setMyReceiveTarget: (target: unknown) => mockSetMyReceiveTarget(target),
+  setMyReceiveAddress: (address: unknown) => mockSetMyReceiveAddress(address),
 }));
 
 jest.mock('react-toastify', () => ({
@@ -21,10 +21,10 @@ const entry = (overrides: Record<string, unknown> = {}) => ({
   email: '',
   allowanceWalletId: 'w-1',
   allowanceSource: 'token',
-  receive: { lightningAddress: null, invoiceKeyRegistered: false },
+  allowanceLightningAddress: 'zaplie-0f8fad5bd9cb@bank.example',
+  receive: { lightningAddress: null },
   allowanceSats: 2100,
-  privateSats: null,
-  provisioning: 'automatic',
+  budget: null,
   ...overrides,
 });
 
@@ -89,23 +89,20 @@ describe('ReceiveTargetCard', () => {
     expect(
       container.querySelector('[data-testid="allowance-status"]')?.textContent,
     ).toContain('2,100 sats');
-    expect(container.querySelector('[data-testid="private-balance"]')).toBe(
+    expect(container.querySelector('[data-testid="allowance-budget"]')).toBe(
       null,
     );
+    // There is no invoice-key path any more: an address is the only target.
+    expect(container.querySelector('#receive-invoice-key')).toBe(null);
   });
 
   test('saves a Lightning address and reloads', async () => {
     mockGetMyDirectoryEntry
       .mockResolvedValueOnce(entry())
       .mockResolvedValueOnce(
-        entry({
-          receive: {
-            lightningAddress: 'ada@bank.example',
-            invoiceKeyRegistered: false,
-          },
-        }),
+        entry({ receive: { lightningAddress: 'ada@bank.example' } }),
       );
-    mockSetMyReceiveTarget.mockResolvedValue({});
+    mockSetMyReceiveAddress.mockResolvedValue({});
 
     await render();
     await setInput('receive-address', ' ada@bank.example ');
@@ -114,46 +111,64 @@ describe('ReceiveTargetCard', () => {
     });
     await settle();
 
-    expect(mockSetMyReceiveTarget).toHaveBeenCalledWith({
-      lightningAddress: 'ada@bank.example',
-    });
+    expect(mockSetMyReceiveAddress).toHaveBeenCalledWith('ada@bank.example');
     expect(
       container.querySelector('[data-testid="receive-status"]')?.textContent,
     ).toContain('ada@bank.example');
   });
 
-  test('shows the backend refusal and never echoes the key', async () => {
+  test('shows why an address is refused', async () => {
     mockGetMyDirectoryEntry.mockResolvedValue(entry());
-    mockSetMyReceiveTarget.mockRejectedValue(
-      new Error('that is an admin key; paste the invoice (read) key instead'),
+    mockSetMyReceiveAddress.mockRejectedValue(
+      new Error(
+        'Lightning addresses on wallet.other are not accepted here. Allowed: bank.example.',
+      ),
     );
 
     await render();
-    await setInput('receive-invoice-key', 'a'.repeat(32));
+    await setInput('receive-address', 'ada@wallet.other');
     await act(async () => {
-      button('Save key').click();
+      button('Save').click();
     });
     await settle();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'admin key',
+      'not accepted here',
     );
-    expect(container.textContent).not.toContain('a'.repeat(32));
   });
 
-  test('shows the Private balance when an invoice key is registered', async () => {
+  test('removes a registered address', async () => {
+    mockGetMyDirectoryEntry.mockResolvedValue(
+      entry({ receive: { lightningAddress: 'ada@bank.example' } }),
+    );
+    mockSetMyReceiveAddress.mockResolvedValue({});
+
+    await render();
+    await act(async () => {
+      button('Remove').click();
+    });
+    await settle();
+
+    expect(mockSetMyReceiveAddress).toHaveBeenCalledWith(null);
+  });
+
+  test('shows what is left to send when the wallet reports a budget', async () => {
     mockGetMyDirectoryEntry.mockResolvedValue(
       entry({
-        receive: { lightningAddress: null, invoiceKeyRegistered: true },
-        privateSats: 500,
+        budget: {
+          totalSats: 10000,
+          usedSats: 2500,
+          renewsAt: null,
+          renewalPeriod: 'weekly',
+        },
       }),
     );
 
     await render();
 
     expect(
-      container.querySelector('[data-testid="private-balance"]')?.textContent,
-    ).toContain('500 sats');
+      container.querySelector('[data-testid="allowance-budget"]')?.textContent,
+    ).toContain('7,500 sats');
   });
 
   test('explains when the person is not in the directory yet', async () => {
