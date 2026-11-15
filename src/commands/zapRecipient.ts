@@ -11,7 +11,7 @@ export interface RecipientDeps {
   ledger: ZapLedger;
   entryKey: string;
   recipientId: string;
-  // Typed as nullable on purpose: the LNbits lookup can legitimately miss.
+  // Typed as nullable on purpose: the directory lookup can legitimately miss.
   getReceiver: () => Promise<ZapRecipient | null>;
   validateReceiver?: (receiver: ZapRecipient) => string | null;
   pay: (receiver: ZapRecipient) => Promise<{ paymentHash: string }>;
@@ -25,7 +25,8 @@ export interface ZapRecipient {
   id?: string;
   aadObjectId?: string;
   displayName?: string;
-  privateWallet?: unknown;
+  // Registered a Lightning address or an invoice key in the portal.
+  canReceive?: boolean;
 }
 
 export const validateSelfZap = (
@@ -39,10 +40,10 @@ export const validateSelfZap = (
   return sameUserId || sameAadObjectId ? 'you cannot zap yourself' : null;
 };
 
-// LNbits user ids are plain tokens. The card's recipient ids are client
-// controlled and end up in superuser LNbits paths, so anything else (a "/",
-// "?", "%" or "..") is dropped here rather than trusted (#441). Same shape as
-// the portal gateway's USER_ID_PATTERN (tabs/backend/lnbitsGatewayService.js).
+// Recipient ids are Entra object ids (the people directory's key), which are
+// plain tokens. The card's ids are client controlled and end up in portal
+// directory paths, so anything else (a "/", "?", "%" or "..") is dropped here
+// rather than trusted (#441).
 const LNBITS_USER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export const normalizeRecipientIds = (rawReceiverIds: unknown): string[] => {
@@ -110,9 +111,16 @@ export async function processZapRecipient({
 
   const label = receiver?.displayName || `User ID: ${recipientId}`;
 
-  if (!receiver?.privateWallet) {
+  if (!receiver) {
     await ledger.releaseIfProcessing(entryKey);
     return { status: 'failed', label };
+  }
+  if (!receiver.canReceive) {
+    await ledger.releaseIfProcessing(entryKey);
+    return {
+      status: 'failed',
+      label: `${label} (has not set up where they receive zaps yet)`,
+    };
   }
 
   const validationError = validateReceiver?.(receiver);

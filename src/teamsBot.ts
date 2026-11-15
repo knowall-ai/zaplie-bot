@@ -51,7 +51,8 @@ import { t } from './i18n';
 import { runConversationalTurn } from './services/foundryAgentService';
 import config from './config';
 import { createReadOnlyTools } from './commands/agentTools';
-import { getUser, getWalletBalance } from './services/lnbitsService';
+import { getWalletBalance } from './services/lnbitsService';
+import { getPerson } from './services/peopleDirectory';
 import {
   commandSubject,
   recordActivity,
@@ -78,8 +79,6 @@ if (!globalRewardName) {
     'LNBITS_POINTS_LABEL is not set. Configure it in env/.env.dev (propagated to the bot by scripts/writeEnv.js).',
   );
 }
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
@@ -207,7 +206,7 @@ export class TeamsBot extends TeamsActivityHandler {
             !sendingWallet.inkey ||
             !sendingWallet.adminkey
           ) {
-            throw new Error('No sending wallet found.');
+            throw new UserFacingError('allowanceNotReady');
           }
 
           if (receiverIds.length === 0) {
@@ -267,7 +266,7 @@ export class TeamsBot extends TeamsActivityHandler {
               ledger: this.zapLedger,
               entryKey: keyFor(recId),
               recipientId: recId,
-              getReceiver: () => getUser(adminKey, recId),
+              getReceiver: () => getPerson(recId),
               validateReceiver: receiver =>
                 validateSelfZap(currentUser, receiver),
               pay: receiver =>

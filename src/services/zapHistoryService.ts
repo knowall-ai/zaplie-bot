@@ -2,24 +2,22 @@
 //
 // Reconstructs "who zapped whom, when, why, how much" from raw LNbits payments.
 //
-// LNbits payments don't reliably carry `extra.tag === 'zap'` in practice (see
-// tabs/src/utils/walletUtilities.ts, which documents and abandons that filter).
-// The pattern that does work in production, ported from
-// tabs/src/components/FeedList.tsx: identify wallets by name convention
-// (Allowance = sender, Private = receiver), keep outgoing Allowance payments,
-// and cross-reference by checking_id against the receiving side to confirm it
-// landed in a Private wallet.
+// Since the least-privilege redesign (docs/LNBITS_MIGRATION.adoc) every
+// Allowance wallet belongs to zaplie.service and every person's Private wallet
+// is their own, so Zaplie sees only the sending side of a zap. A zap is an
+// outgoing payment from an Allowance wallet carrying the metadata Zaplie
+// writes on every zap it pays (`extra.tag === 'zap'`, `extra.to.user` = the
+// recipient's Entra object id; src/services/paymentExtra.ts and the portal
+// gateway's zapExtra). The earlier checking_id cross-reference against the
+// receiving Private wallet is gone with the Private wallet keys.
 
 import {
-  getUsers,
-  getUserWallets,
   getPayments,
   getAllPaymentsPage,
   PaginatedPaymentsUnsupportedError,
 } from './lnbitsService';
-import { isAllowanceWallet, isPrivateWallet } from './walletNames';
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
+import { listPeople } from './peopleDirectory';
+import { isRecord } from '../utils/typeGuards';
 
 const parseTransactionTime = (timestamp: number | string): Date | null => {
   if (typeof timestamp === 'number') {
@@ -35,8 +33,8 @@ const parseTransactionTime = (timestamp: number | string): Date | null => {
 const cleanCheckingId = (checkingId: string | undefined): string =>
   checkingId?.replace('internal_', '') || '';
 
-// A team-wide read fans out one LNbits request per user and one per relevant
-// wallet, so an unbounded Promise.all grows with head-count and can exhaust the
+// A team-wide read fans out one LNbits request per Allowance wallet, so an
+// unbounded Promise.all grows with head-count and can exhaust the
 // connection pool or trip LNbits' rate limiter. Cap the in-flight requests
 // instead: still parallel, but with a ceiling that does not depend on team size.
 export const MAX_CONCURRENT_LNBITS_REQUESTS = 8;
@@ -227,6 +225,26 @@ const readPayments = async (
   }
 };
 
+// The recipient's Entra object id from a zap's metadata, or null when the
+// payment is not a Zaplie zap (a withdrawal, an allowance sweep, a reward).
+const zapRecipientId = (payment: Transaction): string | null => {
+  let extra: unknown = payment.extra;
+  if (typeof extra === 'string') {
+    try {
+      extra = JSON.parse(extra);
+    } catch {
+      return null;
+    }
+  }
+  if (!isRecord(extra) || extra.tag !== 'zap' || extra.automation === true) {
+    return null;
+  }
+  const to = extra.to;
+  return isRecord(to) && typeof to.user === 'string' && to.user !== ''
+    ? to.user.toLowerCase()
+    : null;
+};
+
 export async function getZapActivity(
   options: GetRecentZapsOptions = {},
 ): Promise<ZapActivityResult> {
@@ -240,114 +258,51 @@ export async function getZapActivity(
     truncated: false,
   };
 
-  const users = await getUsers(adminKey, null);
+  const users = await listPeople();
   if (!users || users.length === 0) {
     return empty;
   }
 
-  // One user's unreadable wallet list must not reject the whole ranking, but it
-  // does mean that user's zaps are missing — count it rather than hide it.
-  const walletResults = await mapWithConcurrency(
-    users,
-    MAX_CONCURRENT_LNBITS_REQUESTS,
-    user => settle(async () => (await getUserWallets(adminKey, user.id)) || []),
-  );
-
-  let skippedUsers = 0;
-  const walletsByUser: { user: User; wallets: Wallet[] }[] = [];
-  for (const [index, result] of walletResults.entries()) {
-    if (result.ok) {
-      walletsByUser.push({ user: users[index], wallets: result.value || [] });
-    } else {
-      skippedUsers += 1;
-      console.error(
-        `getRecentZaps: failed to fetch wallets for user ${users[index].id}:`,
-        result.error,
-      );
-    }
-  }
-
+  const userById = new Map<string, User>();
   const walletToUser = new Map<string, User>();
   const allowanceWallets: Wallet[] = [];
-  const privateWalletIds = new Set<string>();
-  const relevantWallets: Wallet[] = [];
-
-  for (const { user, wallets } of walletsByUser) {
-    for (const wallet of wallets) {
-      walletToUser.set(wallet.id, user);
-      if (isAllowanceWallet(wallet.name)) {
-        allowanceWallets.push(wallet);
-        relevantWallets.push(wallet);
-      } else if (isPrivateWallet(wallet.name)) {
-        privateWalletIds.add(wallet.id);
-        relevantWallets.push(wallet);
-      }
+  for (const user of users) {
+    userById.set(user.id.toLowerCase(), user);
+    if (user.allowanceWallet) {
+      walletToUser.set(user.allowanceWallet.id, user);
+      allowanceWallets.push(user.allowanceWallet);
     }
   }
-
-  const allowanceWalletIds = new Set(allowanceWallets.map(w => w.id));
 
   const {
     payments: allPayments,
     skippedWallets,
     truncated,
-  } = await readPayments(relevantWallets);
+  } = await readPayments(allowanceWallets);
 
-  // Internal transfers write both the debit and credit side under the same
-  // checking_id (one side prefixed with "internal_") — index both so either
-  // side can find its counterpart.
-  const paymentsByCheckingId = new Map<string, Transaction[]>();
-  for (const payment of allPayments) {
-    const cleanId = cleanCheckingId(payment.checking_id);
-    if (!cleanId) continue;
-    const existing = paymentsByCheckingId.get(cleanId) || [];
-    existing.push(payment);
-    paymentsByCheckingId.set(cleanId, existing);
-  }
-
-  const findReceivingPayment = (
-    payment: Transaction,
-  ): Transaction | undefined => {
-    const cleanId = cleanCheckingId(payment.checking_id);
-    const matches = paymentsByCheckingId.get(cleanId) || [];
-    return matches.find(p => p.wallet_id !== payment.wallet_id && p.amount > 0);
-  };
-
-  const zapPayments = allPayments.filter(payment => {
-    if (!allowanceWalletIds.has(payment.wallet_id)) return false; // must originate from an Allowance wallet
-    if (payment.amount >= 0) return false; // must be outgoing
-    if (payment.memo?.includes('Weekly Allowance cleared')) return false; // exclude scheduled top-up sweeps
-
-    const receivingPayment = findReceivingPayment(payment);
-    return (
-      !!receivingPayment && privateWalletIds.has(receivingPayment.wallet_id)
-    );
-  });
-
-  // Both sides of an internal transfer can surface once per wallet fetched,
-  // so dedupe by checking_id before mapping to ZapActivity.
+  // A page read can surface one payment twice (overlapping pages), so dedupe
+  // by checking_id before mapping to ZapActivity.
   const seenCheckingIds = new Set<string>();
-  const dedupedPayments = zapPayments.filter(payment => {
+  let activity: ZapActivity[] = [];
+  for (const payment of allPayments) {
+    if (!walletToUser.has(payment.wallet_id)) continue; // must leave an Allowance wallet
+    if (payment.amount >= 0) continue; // must be outgoing
+    if (payment.memo?.includes('Weekly Allowance cleared')) continue; // scheduled sweeps
+    const recipientId = zapRecipientId(payment);
+    if (!recipientId) continue;
     const cleanId = cleanCheckingId(payment.checking_id);
-    if (!cleanId) return true;
-    if (seenCheckingIds.has(cleanId)) return false;
-    seenCheckingIds.add(cleanId);
-    return true;
-  });
-
-  let activity: ZapActivity[] = dedupedPayments.map(payment => {
-    const receivingPayment = findReceivingPayment(payment);
-    const time = parseTransactionTime(payment.time) ?? new Date(0);
-    return {
+    if (cleanId) {
+      if (seenCheckingIds.has(cleanId)) continue;
+      seenCheckingIds.add(cleanId);
+    }
+    activity.push({
       from: walletToUser.get(payment.wallet_id) ?? null,
-      to: receivingPayment
-        ? (walletToUser.get(receivingPayment.wallet_id) ?? null)
-        : null,
+      to: userById.get(recipientId) ?? null,
       amountSats: Math.abs(Math.floor(payment.amount / 1000)),
       memo: payment.memo ?? '',
-      time,
-    };
-  });
+      time: parseTransactionTime(payment.time) ?? new Date(0),
+    });
+  }
 
   if (sinceTimestamp) {
     activity = activity.filter(
@@ -356,10 +311,10 @@ export async function getZapActivity(
   }
 
   if (userAadObjectId) {
+    const wanted = userAadObjectId.toLowerCase();
     activity = activity.filter(
       entry =>
-        entry.from?.aadObjectId === userAadObjectId ||
-        entry.to?.aadObjectId === userAadObjectId,
+        entry.from?.aadObjectId === wanted || entry.to?.aadObjectId === wanted,
     );
   }
 
@@ -367,8 +322,10 @@ export async function getZapActivity(
 
   return {
     zaps: activity.slice(0, limit),
-    partial: skippedUsers > 0 || skippedWallets > 0 || truncated,
-    skippedUsers,
+    partial: skippedWallets > 0 || truncated,
+    // People are read from Zaplie's own directory in one call, so no single
+    // person can be skipped any more; kept for the callers' coverage shape.
+    skippedUsers: 0,
     skippedWallets,
     truncated,
   };
@@ -392,18 +349,17 @@ export interface ZapLeaderboard extends ZapReadCoverage {
 }
 
 // Ranks recognition given, not money held: a Private wallet is the owner's own
-// balance (and may one day be an external wallet we cannot read), so only zaps
-// sent out of Allowance wallets count.
+// balance (Zaplie cannot read it), so only zaps sent out of Allowance wallets
+// count.
 //
 // This is the same *measure* as the portal leaderboard
 // (tabs/src/components/Leaderboard.tsx) — sats sent, ranked per user — but it is
 // stricter about what counts: the portal sums every outgoing payment from any
 // mapped wallet minus "Weekly Allowance cleared", while this reuses
 // getRecentZaps(), which additionally requires the payment to leave an Allowance
-// wallet and to land in a Private wallet (cross-referenced by checking_id). The
-// bot therefore excludes outgoing payments the portal would still count, such as
-// a withdrawal to an external invoice. Expect small differences until the two
-// converge.
+// wallet and to carry Zaplie's zap metadata. The bot therefore excludes
+// outgoing payments the portal would still count, such as a withdrawal to an
+// external invoice. Expect small differences until the two converge.
 export async function getZapLeaderboard(
   options: { sinceTimestamp?: number } = {},
 ): Promise<ZapLeaderboard> {

@@ -7,18 +7,23 @@ interface Wallet {
   user: string;
   adminkey: string;
   inkey: string;
-  balance_msat: number;
+  // Only known after a balance read; the directory does not send one.
+  balance_msat?: number;
   deleted: boolean;
 }
 
+// A person in Zaplie's directory (src/services/peopleDirectory.ts). `id` and
+// `aadObjectId` are both the Entra object id. The Allowance wallet is owned by
+// zaplie.service; the person's Private wallet is their own and the bot never
+// holds its keys, so a User only says whether they can receive.
 interface User {
   id: string;
   displayName: string;
   profileImg: string;
   aadObjectId: string;
   email: string;
-  privateWallet: Wallet | null;
   allowanceWallet: Wallet | null;
+  canReceive: boolean;
 }
 
 type WalletType = 'Allowance' | 'Private';

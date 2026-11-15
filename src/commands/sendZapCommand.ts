@@ -1,21 +1,19 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory, MessageFactory } from 'botbuilder';
+import { payInvoice, getWalletBalance } from '../services/lnbitsService';
 import {
-  getUsers,
-  payInvoice,
-  createInvoice,
-  getWalletBalance,
-} from '../services/lnbitsService';
+  createInvoiceForPerson,
+  listPeople,
+} from '../services/peopleDirectory';
 import { UserService } from '../services/userService';
 import { genericErrorMessage } from '../messages';
 import { LocaleTag, formatNumber, t } from '../i18n';
 import { MAX_ZAP_SATS, resolveZapMaxRecipients } from './zapBudget';
 import {
   ZapPaymentExtra,
+  toPaymentExtraRecipient,
   toPaymentExtraWallet,
 } from '../services/paymentExtra';
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
 
 export class SendZapCommand extends SSOCommand {
@@ -31,6 +29,12 @@ export class SendZapCommand extends SSOCommand {
       // fail a turn, and the error path below runs for any failure. The raw
       // tag is kept so the card's numbers follow the client's region.
       const locale = context.activity?.locale;
+      // No Allowance wallet yet (no API token, and no operator has linked
+      // one): say so instead of failing on the balance read.
+      if (!currentUser?.allowanceWallet) {
+        await context.sendActivity(t(locale, 'allowanceNotReady'));
+        return;
+      }
       const card = await createZapCard(
         currentUser,
         globalRewardName,
@@ -222,17 +226,13 @@ export async function SendZap(
         'sender Allowance',
         sender.displayName,
       ),
-      to: toPaymentExtraWallet(
-        receiver.privateWallet,
-        'receiver Private',
-        receiver.displayName,
-      ),
+      to: toPaymentExtraRecipient(receiver),
     };
 
-    // Create an invoice for the amount in the recipient's wallet
-    const paymentRequest = await createInvoice(
-      receiver.privateWallet.inkey,
-      receiver.privateWallet.id,
+    // The portal invoices the recipient from their Lightning address or the
+    // invoice key of their own Private wallet; the bot never holds either.
+    const paymentRequest = await createInvoiceForPerson(
+      receiver.id,
       zapAmount,
       zapMessage,
       extra,
@@ -489,7 +489,8 @@ async function createZapCard(
 // Function to populate choices
 async function populateWalletChoices() {
   console.log('Populating wallet choices ...');
-  const users = await getUsers(adminKey, null);
+  // Only people who can receive: choosing anyone else would fail on submit.
+  const users = (await listPeople()).filter(user => user.canReceive);
 
   // Get the current user
   const userService = UserService.getInstance();

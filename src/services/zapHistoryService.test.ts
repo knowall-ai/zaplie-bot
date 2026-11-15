@@ -1,8 +1,13 @@
 // zapHistoryService.test.ts
 //
-// Mocks lnbitsService (an external dependency of the module under test), not
-// zapHistoryService itself — the matching/filtering logic being tested here
-// lives entirely in zapHistoryService.
+// Mocks lnbitsService and peopleDirectory (external dependencies of the module
+// under test), not zapHistoryService itself — the matching/filtering logic
+// being tested here lives entirely in zapHistoryService.
+//
+// Since the least-privilege redesign only the sending side of a zap is
+// visible: every Allowance wallet belongs to zaplie.service, every Private
+// wallet to its owner. A zap is an outgoing Allowance payment carrying
+// Zaplie's zap metadata, the recipient named by Entra id in `extra.to.user`.
 
 import {
   getRecentZaps,
@@ -12,840 +17,293 @@ import {
   getZapActivity,
 } from './zapHistoryService';
 import {
-  getUsers,
-  getUserWallets,
   getPayments,
   getAllPaymentsPage,
   PaginatedPaymentsUnsupportedError,
 } from './lnbitsService';
+import { listPeople } from './peopleDirectory';
 import { expect, describe, test, beforeEach, jest } from '@jest/globals';
 
 jest.mock('./lnbitsService');
+jest.mock('./peopleDirectory');
 
-const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
-const mockGetUserWallets = getUserWallets as jest.MockedFunction<
-  typeof getUserWallets
->;
+const mockListPeople = listPeople as jest.MockedFunction<typeof listPeople>;
 const mockGetPayments = getPayments as jest.MockedFunction<typeof getPayments>;
 const mockGetAllPaymentsPage = getAllPaymentsPage as jest.MockedFunction<
   typeof getAllPaymentsPage
 >;
 
-// Every payment on the instance, which is what the paginated endpoint returns:
-// the union of the per-wallet fixtures, each row appearing once.
-const allFixturePayments = (): Transaction[] =>
-  Object.values(walletsByInkey).reduce<Transaction[]>(
-    (rows, walletRows) => rows.concat(walletRows),
-    [],
-  );
+const ALICE = 'aaaaaaaa-0000-4000-8000-000000000001';
+const BOB = 'bbbbbbbb-0000-4000-8000-000000000002';
+const CAROL = 'cccccccc-0000-4000-8000-000000000003';
 
-// Force the per-wallet fallback: the instance has no paginated all-payments
-// endpoint, or these credentials may not read it. The error is built from the
-// mocked class so the `instanceof` check in the module under test still sees it
-// as the availability signal rather than a real failure.
-const useWalletFallback = () => {
-  mockGetAllPaymentsPage.mockRejectedValue(
-    new PaginatedPaymentsUnsupportedError(404),
-  );
-};
-
-const alice: User = {
-  id: 'user-alice',
-  displayName: 'Alice',
-  profileImg: '',
-  aadObjectId: 'aad-alice',
-  email: 'alice@example.com',
-  privateWallet: null,
-  allowanceWallet: null,
-};
-
-const bob: User = {
-  id: 'user-bob',
-  displayName: 'Bob',
-  profileImg: '',
-  aadObjectId: 'aad-bob',
-  email: 'bob@example.com',
-  privateWallet: null,
-  allowanceWallet: null,
-};
-
-const aliceAllowance: Wallet = {
-  id: 'w-alice-allow',
+const allowance = (oid: string, id: string): Wallet => ({
+  id,
   admin: '',
   name: 'Allowance',
-  user: alice.id,
-  adminkey: 'adm-alice-allow',
-  inkey: 'ink-alice-allow',
-  balance_msat: 900000,
+  user: oid,
+  adminkey: '',
+  inkey: `ink-${id}`,
   deleted: false,
-};
+});
 
-const alicePrivate: Wallet = {
-  id: 'w-alice-priv',
-  admin: '',
-  name: 'Private',
-  user: alice.id,
-  adminkey: 'adm-alice-priv',
-  inkey: 'ink-alice-priv',
-  balance_msat: 0,
-  deleted: false,
-};
+const person = (oid: string, displayName: string, walletId?: string): User => ({
+  id: oid,
+  displayName,
+  profileImg: '',
+  aadObjectId: oid,
+  email: '',
+  allowanceWallet: walletId ? allowance(oid, walletId) : null,
+  canReceive: true,
+});
 
-const bobAllowance: Wallet = {
-  id: 'w-bob-allow',
-  admin: '',
-  name: 'Allowance',
-  user: bob.id,
-  adminkey: 'adm-bob-allow',
-  inkey: 'ink-bob-allow',
-  balance_msat: 1000000,
-  deleted: false,
-};
+const alice = person(ALICE, 'Alice', 'w-alice');
+const bob = person(BOB, 'Bob', 'w-bob');
+// Carol can receive but has no Allowance wallet yet (awaiting an operator).
+const carol = person(CAROL, 'Carol');
 
-const bobPrivate: Wallet = {
-  id: 'w-bob-priv',
-  admin: '',
-  name: 'Private',
-  user: bob.id,
-  adminkey: 'adm-bob-priv',
-  inkey: 'ink-bob-priv',
-  balance_msat: 100000,
-  deleted: false,
-};
+const zapExtra = (from: User, to: string) => ({
+  tag: 'zap',
+  from: { id: from.allowanceWallet?.id, name: 'Allowance', user: from.id },
+  to: { name: 'Private', user: to, displayName: to },
+});
 
-const walletsByInkey: Record<string, Transaction[]> = {};
-
-const setupUsersAndWallets = () => {
-  mockGetUsers.mockResolvedValue([alice, bob]);
-  mockGetUserWallets.mockImplementation(async (_adminKey, userId) => {
-    if (userId === alice.id) return [aliceAllowance, alicePrivate];
-    if (userId === bob.id) return [bobAllowance, bobPrivate];
-    return [];
-  });
-  mockGetPayments.mockImplementation(
-    async (inKey: string, _limit?: number, offset = 0) =>
-      // One short page: the fixtures are far smaller than a page, so paging
-      // stops after the first read.
-      offset === 0 ? walletsByInkey[inKey] || [] : [],
-  );
-  // Default to the primary path — one paginated read of every payment.
-  mockGetAllPaymentsPage.mockImplementation(async (_limit, offset) =>
-    offset === 0 ? allFixturePayments() : [],
-  );
-};
-
-const tx = (overrides: Partial<Transaction>): Transaction => ({
-  checking_id: 'default',
+let counter = 0;
+const zap = (
+  from: User,
+  to: string,
+  sats: number,
+  time: number,
+  overrides: Partial<Transaction> = {},
+): Transaction => ({
+  checking_id: `pay-${(counter += 1)}`,
   pending: false,
-  amount: 0,
+  amount: -sats * 1000,
   fee: 0,
-  memo: '',
-  time: 0,
-  extra: {},
-  wallet_id: '',
+  memo: 'thanks',
+  time,
+  extra: zapExtra(from, to),
+  wallet_id: from.allowanceWallet?.id as string,
   ...overrides,
 });
 
+let payments: Transaction[] = [];
+
+const usePaginated = () => {
+  mockGetAllPaymentsPage.mockImplementation(async (limit, offset) =>
+    payments.slice(offset, offset + limit),
+  );
+};
+
+// Force the per-wallet fallback: no LNBITS_API_TOKEN. The error is built from
+// the mocked class so the module's `instanceof` check still recognises it.
+const useWalletFallback = () => {
+  mockGetAllPaymentsPage.mockRejectedValue(
+    new PaginatedPaymentsUnsupportedError(0),
+  );
+  mockGetPayments.mockImplementation(async (inkey, limit, offset) =>
+    payments
+      .filter(payment => `ink-${payment.wallet_id}` === inkey)
+      .slice(offset, offset + limit),
+  );
+};
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  counter = 0;
+  payments = [];
+  mockListPeople.mockResolvedValue([alice, bob, carol]);
+  usePaginated();
+});
+
 describe('zapHistoryService', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    for (const key of Object.keys(walletsByInkey)) {
-      delete walletsByInkey[key];
-    }
-    setupUsersAndWallets();
+  test('a zap is an outgoing Allowance payment with zap metadata', async () => {
+    payments = [zap(alice, BOB, 21, 1000)];
+
+    const zaps = await getRecentZaps();
+
+    expect(zaps).toHaveLength(1);
+    expect(zaps[0]).toMatchObject({ amountSats: 21, memo: 'thanks' });
+    expect(zaps[0].from?.id).toBe(ALICE);
+    expect(zaps[0].to?.id).toBe(BOB);
   });
 
-  test('matches a zap across the Allowance (debit) and Private (credit) sides by checking_id', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'zap1',
-        amount: -100000,
-        memo: 'Great work!',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_zap1',
-        amount: 100000,
-        memo: 'Great work!',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
+  test('a recipient outside the directory is kept, with no recipient', async () => {
+    payments = [zap(alice, 'dddddddd-0000-4000-8000-000000000004', 5, 1000)];
 
-    const result = await getRecentZaps();
+    const [only] = await getRecentZaps();
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      amountSats: 100,
-      memo: 'Great work!',
-    });
-    expect(result[0].from?.displayName).toBe('Alice');
-    expect(result[0].to?.displayName).toBe('Bob');
+    expect(only.to).toBeNull();
+    expect(only.from?.id).toBe(ALICE);
   });
 
-  test('excludes scheduled "Weekly Allowance cleared" sweeps', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'sweep1',
-        amount: -50000,
-        memo: 'Weekly Allowance cleared',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
+  test('excludes sweeps, rewards, incoming and untagged payments', async () => {
+    payments = [
+      zap(alice, BOB, 1, 1000, { memo: 'Weekly Allowance cleared' }),
+      zap(alice, BOB, 2, 1001, {
+        extra: { ...zapExtra(alice, BOB), automation: true },
       }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_sweep1',
-        amount: 50000,
-        memo: 'Weekly Allowance cleared',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
+      zap(alice, BOB, 3, 1002, { amount: 3000 }),
+      zap(alice, BOB, 4, 1003, { extra: {} }),
+      // Not from an Allowance wallet Zaplie knows (the Fund, say).
+      zap(alice, BOB, 5, 1004, { wallet_id: 'w-fund' }),
+      zap(alice, BOB, 6, 1005),
     ];
 
-    const result = await getRecentZaps();
+    const zaps = await getRecentZaps();
 
-    expect(result).toHaveLength(0);
+    expect(zaps.map(z => z.amountSats)).toEqual([6]);
   });
 
-  test('excludes outgoing Allowance payments with no matching Private-wallet receipt', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'external1',
-        amount: -30000,
-        memo: 'External lightning payment',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
+  test('reads extra stored as a JSON string', async () => {
+    payments = [
+      zap(alice, BOB, 7, 1000, {
+        extra: JSON.stringify(zapExtra(alice, BOB)) as unknown as Record<
+          string,
+          unknown
+        >,
       }),
     ];
 
-    const result = await getRecentZaps();
-
-    expect(result).toHaveLength(0);
+    expect((await getRecentZaps()).map(z => z.amountSats)).toEqual([7]);
   });
 
-  test('deduplicates a single zap seen from both the debit and credit wallet fetch', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'zap1',
-        amount: -100000,
-        memo: 'Thanks!',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_zap1',
-        amount: 100000,
-        memo: 'Thanks!',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-    walletsByInkey[alicePrivate.inkey] = [];
-    walletsByInkey[bobAllowance.inkey] = [];
+  test('deduplicates one payment that surfaces twice', async () => {
+    const once = zap(alice, BOB, 8, 1000);
+    payments = [once, { ...once, checking_id: `internal_${once.checking_id}` }];
 
-    const result = await getRecentZaps();
-
-    expect(result).toHaveLength(1);
+    expect(await getRecentZaps()).toHaveLength(1);
   });
 
-  test('filters out zaps before sinceTimestamp', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'old-zap',
-        amount: -10000,
-        memo: 'old',
-        time: 1000000000,
-        wallet_id: aliceAllowance.id,
-      }),
-      tx({
-        checking_id: 'new-zap',
-        amount: -20000,
-        memo: 'new',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_old-zap',
-        amount: 10000,
-        memo: 'old',
-        time: 1000000000,
-        wallet_id: bobPrivate.id,
-      }),
-      tx({
-        checking_id: 'internal_new-zap',
-        amount: 20000,
-        memo: 'new',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
+  test('filters by time and by person, sorts newest first and limits', async () => {
+    payments = [
+      zap(alice, BOB, 1, 100),
+      zap(bob, ALICE, 2, 300),
+      zap(alice, CAROL, 3, 200),
     ];
 
-    const result = await getRecentZaps({ sinceTimestamp: 1700000000 });
-
-    expect(result).toHaveLength(1);
-    expect(result[0].memo).toBe('new');
+    expect(
+      (await getRecentZaps({ sinceTimestamp: 150 })).map(z => z.amountSats),
+    ).toEqual([2, 3]);
+    expect(
+      (await getRecentZaps({ userAadObjectId: CAROL.toUpperCase() })).map(
+        z => z.amountSats,
+      ),
+    ).toEqual([3]);
+    expect((await getRecentZaps({ limit: 2 })).map(z => z.amountSats)).toEqual([
+      2, 3,
+    ]);
   });
 
-  test('filters to zaps involving a specific user as either sender or receiver', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'a-to-b',
-        amount: -10000,
-        memo: 'alice to bob',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobAllowance.inkey] = [
-      tx({
-        checking_id: 'b-to-a',
-        amount: -20000,
-        memo: 'bob to alice',
-        time: 1750000001,
-        wallet_id: bobAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_a-to-b',
-        amount: 10000,
-        memo: 'alice to bob',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-    walletsByInkey[alicePrivate.inkey] = [
-      tx({
-        checking_id: 'internal_b-to-a',
-        amount: 20000,
-        memo: 'bob to alice',
-        time: 1750000001,
-        wallet_id: alicePrivate.id,
-      }),
-    ];
+  test('returns nothing when the directory is empty', async () => {
+    mockListPeople.mockResolvedValue([]);
 
-    const result = await getRecentZaps({ userAadObjectId: bob.aadObjectId });
-
-    expect(result).toHaveLength(2);
-  });
-
-  test('sorts newest first and respects limit', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'z1',
-        amount: -1000,
-        memo: 'first',
-        time: 100,
-        wallet_id: aliceAllowance.id,
-      }),
-      tx({
-        checking_id: 'z2',
-        amount: -1000,
-        memo: 'second',
-        time: 200,
-        wallet_id: aliceAllowance.id,
-      }),
-      tx({
-        checking_id: 'z3',
-        amount: -1000,
-        memo: 'third',
-        time: 300,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_z1',
-        amount: 1000,
-        memo: 'first',
-        time: 100,
-        wallet_id: bobPrivate.id,
-      }),
-      tx({
-        checking_id: 'internal_z2',
-        amount: 1000,
-        memo: 'second',
-        time: 200,
-        wallet_id: bobPrivate.id,
-      }),
-      tx({
-        checking_id: 'internal_z3',
-        amount: 1000,
-        memo: 'third',
-        time: 300,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-
-    const result = await getRecentZaps({ limit: 2 });
-
-    expect(result).toHaveLength(2);
-    expect(result[0].memo).toBe('third');
-    expect(result[1].memo).toBe('second');
-  });
-
-  test('returns an empty array when there are no users', async () => {
-    mockGetUsers.mockResolvedValue([]);
-
-    const result = await getRecentZaps();
-
-    expect(result).toEqual([]);
+    await expect(getRecentZaps()).resolves.toEqual([]);
+    expect(mockGetAllPaymentsPage).not.toHaveBeenCalled();
   });
 });
 
 describe('getZapLeaderboard', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    for (const key of Object.keys(walletsByInkey)) {
-      delete walletsByInkey[key];
-    }
-    setupUsersAndWallets();
-  });
-
-  test('sums every zap a teammate sent out of their Allowance wallet, highest first', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'a1',
-        amount: -100000,
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-      tx({
-        checking_id: 'a2',
-        amount: -20000,
-        time: 1750000001,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobAllowance.inkey] = [
-      tx({
-        checking_id: 'b1',
-        amount: -50000,
-        time: 1750000002,
-        wallet_id: bobAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_a1',
-        amount: 100000,
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-      tx({
-        checking_id: 'internal_a2',
-        amount: 20000,
-        time: 1750000001,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-    walletsByInkey[alicePrivate.inkey] = [
-      tx({
-        checking_id: 'internal_b1',
-        amount: 50000,
-        time: 1750000002,
-        wallet_id: alicePrivate.id,
-      }),
+  test('ranks sats sent, highest first, ties by name, self-zaps excluded', async () => {
+    payments = [
+      zap(alice, BOB, 10, 100),
+      zap(alice, CAROL, 5, 101),
+      zap(bob, ALICE, 15, 102),
+      zap(alice, ALICE, 100, 103),
     ];
 
-    const result = await getZapLeaderboard();
+    const board = await getZapLeaderboard();
 
-    expect(
-      result.entries.map(entry => [entry.user.displayName, entry.zappedSats]),
-    ).toEqual([
-      ['Alice', 120],
-      ['Bob', 50],
+    expect(board.entries.map(e => [e.user.displayName, e.zappedSats])).toEqual([
+      ['Alice', 15],
+      ['Bob', 15],
     ]);
+    expect(board.partial).toBe(false);
   });
 
-  test('ignores sats received into a Private wallet', async () => {
-    // Bob's Private wallet is his own money: a payment in from anywhere other
-    // than a teammate's Allowance wallet must not put him on the leaderboard.
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'coffee-money',
-        amount: 900000,
-        memo: 'Sold a coffee',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'a1',
-        amount: -10000,
-        time: 1750000001,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[alicePrivate.inkey] = [];
-    walletsByInkey[bobAllowance.inkey] = [];
+  test('counts only zaps sent after sinceTimestamp', async () => {
+    payments = [zap(alice, BOB, 10, 100), zap(alice, BOB, 4, 500)];
 
-    const result = await getZapLeaderboard();
+    const board = await getZapLeaderboard({ sinceTimestamp: 400 });
 
-    expect(result.entries).toEqual([]);
-    expect(result.partial).toBe(false);
-  });
-
-  test('breaks ties on display name so equal totals keep a stable order', async () => {
-    walletsByInkey[bobAllowance.inkey] = [
-      tx({
-        checking_id: 'b1',
-        amount: -10000,
-        time: 1750000002,
-        wallet_id: bobAllowance.id,
-      }),
-    ];
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'a1',
-        amount: -10000,
-        time: 1750000001,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[alicePrivate.inkey] = [
-      tx({
-        checking_id: 'internal_b1',
-        amount: 10000,
-        time: 1750000002,
-        wallet_id: alicePrivate.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_a1',
-        amount: 10000,
-        time: 1750000001,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-
-    const result = await getZapLeaderboard();
-
-    expect(result.entries.map(entry => entry.user.displayName)).toEqual([
-      'Alice',
-      'Bob',
-    ]);
-  });
-});
-
-describe('LNbits request fan-out', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    for (const key of Object.keys(walletsByInkey)) {
-      delete walletsByInkey[key];
-    }
-  });
-
-  test('keeps in-flight wallet and payment reads under the concurrency cap', async () => {
-    const teamSize = MAX_CONCURRENT_LNBITS_REQUESTS * 4;
-    const users: User[] = Array.from(
-      { length: teamSize },
-      (_unused, index) => ({
-        id: `user-${index}`,
-        displayName: `User ${index}`,
-        profileImg: '',
-        aadObjectId: `aad-${index}`,
-        email: `user${index}@example.com`,
-        privateWallet: null,
-        allowanceWallet: null,
-      }),
-    );
-
-    let walletReadsInFlight = 0;
-    let peakWalletReads = 0;
-    let paymentReadsInFlight = 0;
-    let peakPaymentReads = 0;
-
-    mockGetUsers.mockResolvedValue(users);
-    mockGetUserWallets.mockImplementation(async (_adminKey, userId) => {
-      walletReadsInFlight += 1;
-      peakWalletReads = Math.max(peakWalletReads, walletReadsInFlight);
-      await new Promise(resolve => setTimeout(resolve, 0));
-      walletReadsInFlight -= 1;
-      return [
-        {
-          id: `w-${userId}-allow`,
-          admin: '',
-          name: 'Allowance',
-          user: userId,
-          adminkey: `adm-${userId}-allow`,
-          inkey: `ink-${userId}-allow`,
-          balance_msat: 0,
-          deleted: false,
-        },
-        {
-          id: `w-${userId}-priv`,
-          admin: '',
-          name: 'Private',
-          user: userId,
-          adminkey: `adm-${userId}-priv`,
-          inkey: `ink-${userId}-priv`,
-          balance_msat: 0,
-          deleted: false,
-        },
-      ];
-    });
-    mockGetPayments.mockImplementation(async () => {
-      paymentReadsInFlight += 1;
-      peakPaymentReads = Math.max(peakPaymentReads, paymentReadsInFlight);
-      await new Promise(resolve => setTimeout(resolve, 0));
-      paymentReadsInFlight -= 1;
-      return [];
-    });
-    // The pool matters on the fallback path, which is the one that still issues
-    // a request per wallet.
-    useWalletFallback();
-
-    await getRecentZaps();
-
-    expect(mockGetUserWallets).toHaveBeenCalledTimes(teamSize);
-    expect(mockGetPayments).toHaveBeenCalledTimes(teamSize * 2);
-    // Every wallet read must ask for a full page, or totals undercount.
-    for (const call of mockGetPayments.mock.calls) {
-      expect(call[1]).toBe(PAYMENTS_PAGE_SIZE);
-    }
-    expect(peakWalletReads).toBeLessThanOrEqual(MAX_CONCURRENT_LNBITS_REQUESTS);
-    expect(peakPaymentReads).toBeLessThanOrEqual(
-      MAX_CONCURRENT_LNBITS_REQUESTS,
-    );
-    // Still parallel, not one-at-a-time.
-    expect(peakWalletReads).toBeGreaterThan(1);
-    expect(peakPaymentReads).toBeGreaterThan(1);
-  });
-});
-
-describe('incomplete reads are reported, never scored as zero', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    for (const key of Object.keys(walletsByInkey)) {
-      delete walletsByInkey[key];
-    }
-    setupUsersAndWallets();
-  });
-
-  const aliceZapsBob = () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'zap1',
-        amount: -100000,
-        memo: 'Great work!',
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_zap1',
-        amount: 100000,
-        memo: 'Great work!',
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-  };
-
-  test('a failed wallet payment read flags partial instead of scoring zero', async () => {
-    aliceZapsBob();
-    useWalletFallback();
-    // Bob's Allowance read fails; Alice's zap is still counted, but the result
-    // must say the ranking is incomplete rather than assert Bob sent nothing.
-    mockGetPayments.mockImplementation(async (inKey: string) => {
-      if (inKey === bobAllowance.inkey) {
-        throw new Error('429 Too Many Requests');
-      }
-      return walletsByInkey[inKey] || [];
-    });
-
-    const result = await getZapLeaderboard();
-
-    expect(result.entries.map(e => e.user.displayName)).toEqual(['Alice']);
-    expect(result.partial).toBe(true);
-    expect(result.skippedWallets).toBe(1);
-    expect(result.skippedUsers).toBe(0);
-  });
-
-  test('a failed user wallet read skips that user rather than rejecting', async () => {
-    aliceZapsBob();
-    mockGetUserWallets.mockImplementation(async (_adminKey, userId) => {
-      if (userId === bob.id) throw new Error('500 Internal Server Error');
-      return [aliceAllowance, alicePrivate];
-    });
-
-    const result = await getZapLeaderboard();
-
-    expect(result.partial).toBe(true);
-    expect(result.skippedUsers).toBe(1);
-    // Bob's Private wallet is unknown, so the cross-reference cannot confirm
-    // where the zap landed — the total is a floor, and says so.
-    expect(result.entries.length).toBeLessThanOrEqual(1);
-  });
-
-  test('a complete read is not flagged partial', async () => {
-    aliceZapsBob();
-
-    const result = await getZapLeaderboard();
-
-    expect(result.partial).toBe(false);
-    expect(result.skippedUsers).toBe(0);
-    expect(result.skippedWallets).toBe(0);
-    expect(result.truncated).toBe(false);
+    expect(board.entries).toEqual([expect.objectContaining({ zappedSats: 4 })]);
   });
 });
 
 describe('payment paging', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    for (const key of Object.keys(walletsByInkey)) {
-      delete walletsByInkey[key];
-    }
-    setupUsersAndWallets();
-  });
+  test('pages the account-wide read until a short page comes back', async () => {
+    payments = Array.from({ length: PAYMENTS_PAGE_SIZE + 1 }, (_, index) =>
+      zap(alice, BOB, 1, index),
+    );
 
-  test('pages the instance-wide read until a short page comes back', async () => {
-    // A zap whose receiving side sits beyond the first page. Before paging, the
-    // receiver row was cut off, the checking_id cross-reference failed, and the
-    // sender's zap vanished from the totals with nothing logged.
-    const filler = (index: number) =>
-      tx({
-        checking_id: `filler-${index}`,
-        amount: -1,
-        time: 1749000000,
-        wallet_id: alicePrivate.id,
-      });
-    const senderRow = tx({
-      checking_id: 'zap-far',
-      amount: -100000,
-      memo: 'Thanks',
-      time: 1750000000,
-      wallet_id: aliceAllowance.id,
-    });
-    const receiverRow = tx({
-      checking_id: 'internal_zap-far',
-      amount: 100000,
-      memo: 'Thanks',
-      time: 1750000000,
-      wallet_id: bobPrivate.id,
-    });
+    const activity = await getZapActivity({ limit: Number.MAX_SAFE_INTEGER });
 
-    const firstPage = [
-      senderRow,
-      ...Array.from({ length: PAYMENTS_PAGE_SIZE - 1 }, (_u, i) => filler(i)),
-    ];
-    mockGetAllPaymentsPage.mockImplementation(async (_limit, offset) => {
-      if (offset === 0) return firstPage;
-      if (offset === PAYMENTS_PAGE_SIZE) return [receiverRow];
-      return [];
-    });
-
-    const result = await getZapLeaderboard();
-
+    expect(activity.zaps).toHaveLength(PAYMENTS_PAGE_SIZE + 1);
     expect(mockGetAllPaymentsPage).toHaveBeenCalledTimes(2);
-    expect(result.entries.map(e => [e.user.displayName, e.zappedSats])).toEqual(
-      [['Alice', 100]],
-    );
-    expect(result.partial).toBe(false);
-  });
-
-  test('reads every payment in one instance-wide call set, not one per wallet', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [];
-    const result = await getZapActivity();
-
-    expect(mockGetAllPaymentsPage).toHaveBeenCalledTimes(1);
     expect(mockGetPayments).not.toHaveBeenCalled();
-    expect(result.partial).toBe(false);
   });
 
-  test('falls back to per-wallet paging when the endpoint is unavailable', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'zap1',
-        amount: -100000,
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_zap1',
-        amount: 100000,
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
+  test('without the API token, pages each Allowance wallet by invoice key', async () => {
     useWalletFallback();
+    payments = [zap(alice, BOB, 1, 100), zap(bob, ALICE, 2, 200)];
 
-    const result = await getZapLeaderboard();
+    const zaps = await getRecentZaps();
 
-    expect(mockGetPayments).toHaveBeenCalled();
-    expect(result.entries.map(e => [e.user.displayName, e.zappedSats])).toEqual(
-      [['Alice', 100]],
-    );
-    expect(result.partial).toBe(false);
+    expect(zaps.map(z => z.amountSats)).toEqual([2, 1]);
+    expect(mockGetPayments.mock.calls.map(call => call[0]).sort()).toEqual([
+      'ink-w-alice',
+      'ink-w-bob',
+    ]);
   });
 
   test('a non-availability error is not swallowed by the fallback', async () => {
-    mockGetAllPaymentsPage.mockRejectedValue(new Error('boom'));
+    mockGetAllPaymentsPage.mockRejectedValue(new Error('LNbits is down'));
 
-    await expect(getZapLeaderboard()).rejects.toThrow('boom');
-    expect(mockGetPayments).not.toHaveBeenCalled();
+    await expect(getRecentZaps()).rejects.toThrow('LNbits is down');
   });
 });
 
-describe('leaderboard period filter', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    for (const key of Object.keys(walletsByInkey)) {
-      delete walletsByInkey[key];
-    }
-    setupUsersAndWallets();
+describe('incomplete reads are reported, never scored as zero', () => {
+  test('a failed wallet read flags partial', async () => {
+    useWalletFallback();
+    payments = [zap(alice, BOB, 1, 100)];
+    mockGetPayments.mockImplementation(async inkey => {
+      if (inkey === 'ink-w-bob') throw new Error('429');
+      return payments;
+    });
+
+    const activity = await getZapActivity();
+
+    expect(activity.partial).toBe(true);
+    expect(activity.skippedWallets).toBe(1);
+    expect(activity.zaps).toHaveLength(1);
   });
 
-  test('counts only zaps sent after sinceTimestamp', async () => {
-    walletsByInkey[aliceAllowance.inkey] = [
-      tx({
-        checking_id: 'old',
-        amount: -500000,
-        time: 1700000000,
-        wallet_id: aliceAllowance.id,
-      }),
-      tx({
-        checking_id: 'new',
-        amount: -100000,
-        time: 1750000000,
-        wallet_id: aliceAllowance.id,
-      }),
-    ];
-    walletsByInkey[bobPrivate.inkey] = [
-      tx({
-        checking_id: 'internal_old',
-        amount: 500000,
-        time: 1700000000,
-        wallet_id: bobPrivate.id,
-      }),
-      tx({
-        checking_id: 'internal_new',
-        amount: 100000,
-        time: 1750000000,
-        wallet_id: bobPrivate.id,
-      }),
-    ];
-
-    const allTime = await getZapLeaderboard();
-    expect(allTime.entries[0].zappedSats).toBe(600);
-
-    const recent = await getZapLeaderboard({ sinceTimestamp: 1740000000 });
-    expect(recent.entries.map(e => [e.user.displayName, e.zappedSats])).toEqual(
-      [['Alice', 100]],
+  test('keeps in-flight wallet reads under the concurrency cap', async () => {
+    useWalletFallback();
+    const many = Array.from(
+      { length: MAX_CONCURRENT_LNBITS_REQUESTS * 3 },
+      (_, index) =>
+        person(
+          `eeeeeeee-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          `P${index}`,
+          `w-${index}`,
+        ),
     );
+    mockListPeople.mockResolvedValue(many);
+    let inFlight = 0;
+    let peak = 0;
+    mockGetPayments.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 2));
+      inFlight -= 1;
+      return [];
+    });
+
+    await getZapActivity();
+
+    expect(peak).toBeLessThanOrEqual(MAX_CONCURRENT_LNBITS_REQUESTS);
+    expect(mockGetPayments).toHaveBeenCalledTimes(many.length);
   });
 });

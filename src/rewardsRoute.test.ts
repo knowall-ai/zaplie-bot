@@ -23,11 +23,8 @@ import { RewardLedger, rewardKey } from './services/rewardLedger';
 import { RewardBudgetLedger } from './services/rewardBudget';
 import { RewardBudget } from './services/fetchRewardPolicy';
 import { RewardAmount, RewardError } from './services/rewardsService';
-import {
-  createInvoice,
-  getUserWalletsByUserId,
-  payInvoice,
-} from './services/lnbitsService';
+import { payInvoice } from './services/lnbitsService';
+import { createInvoiceForPerson } from './services/peopleDirectory';
 import { resolveRewardRecipientByGithubId } from './services/identityService';
 import {
   createPendingReward,
@@ -36,9 +33,10 @@ import {
 
 // The real payReward runs; only its LNbits and portal calls are stubbed, so
 // "payInvoice was called once" means the treasury paid once.
+jest.mock('./services/peopleDirectory', () => ({
+  createInvoiceForPerson: jest.fn(),
+}));
 jest.mock('./services/lnbitsService', () => ({
-  getUserWalletsByUserId: jest.fn(),
-  createInvoice: jest.fn(),
   payInvoice: jest.fn(),
 }));
 jest.mock('./services/identityService', () => ({
@@ -54,8 +52,7 @@ jest.mock('./services/fetchWebhookKeys', () => ({
 
 type AsyncMock = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 const mockedPayInvoice = payInvoice as unknown as AsyncMock;
-const mockedCreateInvoice = createInvoice as unknown as AsyncMock;
-const mockedGetWallets = getUserWalletsByUserId as unknown as AsyncMock;
+const mockedCreateInvoice = createInvoiceForPerson as unknown as AsyncMock;
 const mockedResolveRecipient =
   resolveRewardRecipientByGithubId as unknown as AsyncMock;
 const mockedCreatePendingReward = createPendingReward as unknown as AsyncMock;
@@ -174,10 +171,7 @@ beforeEach(() => {
     })),
   };
   process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
-  mockedResolveRecipient.mockResolvedValue({ lnbitsUserId: 'user-1' });
-  mockedGetWallets.mockResolvedValue([
-    { id: 'wallet-private', name: 'Private', user: 'user-1', inkey: 'in' },
-  ]);
+  mockedResolveRecipient.mockResolvedValue({ personAad: 'oid-1' });
   mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
   mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
   mockedCreatePendingReward.mockResolvedValue(undefined);
@@ -349,7 +343,7 @@ describe('POST /api/v1/rewards idempotency', () => {
   });
 
   test('a failure before payInvoice releases the key so a retry can pay', async () => {
-    mockedCreateInvoice.mockResolvedValueOnce(new Error('LNbits down'));
+    mockedCreateInvoice.mockRejectedValueOnce(new Error('LNbits down'));
     const url = await startServer();
 
     const failed = await post(url);
@@ -658,7 +652,7 @@ describe('POST /api/v1/rewards: budget cap', () => {
   test('a failure known to be before payment releases the reservation', async () => {
     deps.getRewardBudget.mockResolvedValue(budget(1000));
     deps.resolveAmountSats.mockResolvedValue(amount(600));
-    mockedCreateInvoice.mockResolvedValueOnce(new Error('LNbits down'));
+    mockedCreateInvoice.mockRejectedValueOnce(new Error('LNbits down'));
     const url = await startServer({ now: () => WEEK_44 });
 
     const failed = await post(url);

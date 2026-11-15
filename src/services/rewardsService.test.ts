@@ -8,11 +8,8 @@ import {
   RewardPaymentUncertainError,
 } from './rewardsService';
 import { getRewardConfig, RewardPolicy } from './fetchRewardPolicy';
-import {
-  createInvoice,
-  getUserWalletsByUserId,
-  payInvoice,
-} from './lnbitsService';
+import { payInvoice } from './lnbitsService';
+import { createInvoiceForPerson } from './peopleDirectory';
 import { resolveRewardRecipientByGithubId } from './identityService';
 import {
   createPendingReward,
@@ -28,9 +25,10 @@ import {
 } from '@jest/globals';
 
 jest.mock('./fetchRewardPolicy', () => ({ getRewardConfig: jest.fn() }));
+jest.mock('./peopleDirectory', () => ({
+  createInvoiceForPerson: jest.fn(),
+}));
 jest.mock('./lnbitsService', () => ({
-  getUserWalletsByUserId: jest.fn(),
-  createInvoice: jest.fn(),
   payInvoice: jest.fn(),
 }));
 jest.mock('./identityService', () => ({
@@ -63,8 +61,7 @@ const mockConfig = (
   });
 type AsyncMock = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 const mockedPayInvoice = payInvoice as unknown as AsyncMock;
-const mockedCreateInvoice = createInvoice as unknown as AsyncMock;
-const mockedGetWallets = getUserWalletsByUserId as unknown as AsyncMock;
+const mockedCreateInvoice = createInvoiceForPerson as unknown as AsyncMock;
 const mockedResolveRecipient =
   resolveRewardRecipientByGithubId as unknown as AsyncMock;
 
@@ -217,7 +214,6 @@ describe('resolveAmountSats', () => {
 
 const RECIPIENT = {
   personAad: '11111111-2222-3333-4444-555555555555',
-  lnbitsUserId: 'user-1',
 };
 
 describe('payReward', () => {
@@ -234,10 +230,7 @@ describe('payReward', () => {
 
   beforeEach(() => {
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
-    mockedResolveRecipient.mockResolvedValue({ lnbitsUserId: 'user-1' });
-    mockedGetWallets.mockResolvedValue([
-      { id: 'wallet-private', name: 'Private', user: 'user-1', inkey: 'in' },
-    ]);
+    mockedResolveRecipient.mockResolvedValue({ personAad: 'oid-1' });
     mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
     mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
   });
@@ -273,7 +266,7 @@ describe('payReward', () => {
   });
 
   test('a failure before payInvoice is a plain error', async () => {
-    mockedCreateInvoice.mockResolvedValue(new Error('LNbits down'));
+    mockedCreateInvoice.mockRejectedValue(new Error('LNbits down'));
 
     const error = await payReward(reward, RECIPIENT).catch(
       (caught: unknown) => caught,
@@ -307,8 +300,10 @@ describe('payReward', () => {
     expect(error).not.toBeInstanceOf(RewardPaymentUncertainError);
   });
 
-  test('a recipient without a Private wallet fails before payInvoice', async () => {
-    mockedGetWallets.mockResolvedValue([]);
+  test('a recipient with no receive target fails before payInvoice', async () => {
+    mockedCreateInvoice.mockRejectedValue(
+      new Error('octocat has not set up where they receive zaps yet'),
+    );
 
     const error = await payReward(reward, RECIPIENT).catch(
       (caught: unknown) => caught,
@@ -395,7 +390,6 @@ describe('reward policy: base override and level bonus', () => {
     await expect(
       resolveAmountSats(withLabels([]), {
         personAad: 'aaaaaaaa-2222-3333-4444-555555555555',
-        lnbitsUserId: 'user-2',
       }),
     ).rejects.toMatchObject({ statusCode: 503 });
   });
@@ -506,9 +500,6 @@ describe('resolveRewardRecipient and the payment extra', () => {
 
   test('the payment extra records the base, bonus and level', async () => {
     process.env.REWARDS_TREASURY_ADMINKEY = 'treasury-admin-key';
-    mockedGetWallets.mockResolvedValue([
-      { id: 'wallet-private', name: 'Private', user: 'user-1', inkey: 'in' },
-    ]);
     mockedCreateInvoice.mockResolvedValue('lnbc-invoice');
     mockedPayInvoice.mockResolvedValue({ payment_hash: 'hash-1' });
 

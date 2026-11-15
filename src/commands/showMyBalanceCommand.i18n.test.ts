@@ -13,31 +13,23 @@ import {
   test,
 } from '@jest/globals';
 import type { TurnContext } from 'botbuilder';
-import { getUserWallets } from '../services/lnbitsService';
+import { getBalances } from '../services/peopleDirectory';
 import { ShowMyBalanceCommand } from './showMyBalanceCommand';
 
-jest.mock('../services/lnbitsService');
+jest.mock('../services/peopleDirectory');
 
 const originalPointsLabel = process.env.LNBITS_POINTS_LABEL;
-
-const wallet = (name: string, balance_msat?: number): Wallet =>
-  ({
-    id: `w-${name.toLowerCase()}`,
-    admin: 'admin-1',
-    name,
-    user: 'u-1',
-    adminkey: `${name}-adminkey`,
-    inkey: `${name}-inkey`,
-    balance_msat,
-    deleted: false,
-  }) as Wallet;
 
 const makeContext = (locale: unknown) => {
   const sendActivity = jest
     .fn<() => Promise<void>>()
     .mockResolvedValue(undefined);
   const turnState = new Map<unknown, unknown>();
-  turnState.set('user', { id: 'u-1', aadObjectId: 'aad-1' });
+  turnState.set('user', {
+    id: 'u-1',
+    aadObjectId: 'aad-1',
+    allowanceWallet: { id: 'w-allowance' },
+  });
   const context = {
     activity: { type: 'message', locale, from: { id: 'user-1' } },
     turnState,
@@ -56,8 +48,8 @@ describe('ShowMyBalanceCommand languages', () => {
     process.env.LNBITS_POINTS_LABEL = 'Sats';
     consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest
-      .mocked(getUserWallets)
-      .mockResolvedValue([wallet('Allowance', 21000), wallet('Private', 5000)]);
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 21, privateSats: 5 });
   });
 
   afterEach(() => {
@@ -95,13 +87,16 @@ describe('ShowMyBalanceCommand languages', () => {
   });
 
   test('reports a wallet without a balance in the user language', async () => {
-    jest.mocked(getUserWallets).mockResolvedValue([wallet('Allowance')]);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: null, privateSats: null });
     const { context, sendActivity } = makeContext('es-ES');
 
     await new ShowMyBalanceCommand().execute(context);
 
     expect(replies(sendActivity)).toEqual([
       'La información de saldo no está disponible para la cartera w-allowance.',
+      'Tu cartera Private es tuya y Zaplie no la lee. Registra una clave de factura en la página Wallet del portal para ver aquí su saldo.',
     ]);
   });
 
@@ -110,7 +105,7 @@ describe('ShowMyBalanceCommand languages', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
     jest
-      .mocked(getUserWallets)
+      .mocked(getBalances)
       .mockRejectedValue(new Error('inkey abc123 leaked'));
     const { context, sendActivity } = makeContext('es');
 

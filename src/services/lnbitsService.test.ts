@@ -6,16 +6,15 @@ import {
   afterEach,
   jest,
 } from '@jest/globals';
-import { USER_LIST_PAGE_SIZE } from './lnbitsService';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const BASE = 'https://lnbits.test';
-const USERNAME = 'lnbits-admin';
-const PASSWORD = 'lnbits-secret';
 
 const originalFetch = global.fetch;
+const originalUrl = process.env.LNBITS_URL;
 const originalNodeUrl = process.env.LNBITS_NODE_URL;
-const originalUsername = process.env.LNBITS_USERNAME;
-const originalPassword = process.env.LNBITS_PASSWORD;
+const originalToken = process.env.LNBITS_API_TOKEN;
 
 type LnbitsService = typeof import('./lnbitsService');
 
@@ -32,28 +31,17 @@ const lastRequest = () => {
   return { url: String(call[0]), init: call[1] };
 };
 
-const requestTo = (url: string) => {
-  const call = fetchMock.mock.calls.find(c => String(c[0]) === url);
-  if (!call) {
-    throw new Error(
-      `No fetch call to ${url}, saw: ${fetchMock.mock.calls.map(c => c[0])}`,
-    );
-  }
-  return { url: String(call[0]), init: call[1] };
-};
-
 let service: LnbitsService;
 
 beforeEach(() => {
-  process.env.LNBITS_NODE_URL = BASE;
-  process.env.LNBITS_USERNAME = USERNAME;
-  process.env.LNBITS_PASSWORD = PASSWORD;
+  process.env.LNBITS_URL = BASE;
+  delete process.env.LNBITS_NODE_URL;
+  process.env.LNBITS_API_TOKEN = 'acl-token';
   fetchMock.mockReset();
   fetchMock.mockImplementation(async input => {
     throw new Error(`Unexpected fetch call: ${input}`);
   });
   global.fetch = fetchMock;
-  // The module caches the access token at module scope; each test gets a fresh copy.
   jest.resetModules();
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   service = require('./lnbitsService');
@@ -69,82 +57,52 @@ const restoreEnv = (key: string, value: string | undefined) => {
 
 afterEach(() => {
   global.fetch = originalFetch;
+  restoreEnv('LNBITS_URL', originalUrl);
   restoreEnv('LNBITS_NODE_URL', originalNodeUrl);
-  restoreEnv('LNBITS_USERNAME', originalUsername);
-  restoreEnv('LNBITS_PASSWORD', originalPassword);
+  restoreEnv('LNBITS_API_TOKEN', originalToken);
   fetchMock.mockReset();
   jest.resetModules();
 });
 
-const stubAuth = (token = 'tok-1') => {
-  fetchMock.mockImplementationOnce(async () =>
-    jsonResponse({ access_token: token }),
-  );
-};
-
-describe('getAccessToken', () => {
-  test('POSTs the credentials to /api/v1/auth and returns the token', async () => {
-    stubAuth('tok-1');
-
-    const token = await service.getAccessToken('user-a', 'pass-a');
-
-    expect(token).toBe('tok-1');
-    expect(lastRequest()).toEqual({
-      url: `${BASE}/api/v1/auth`,
-      init: {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          accept: 'application/json',
-        },
-        body: JSON.stringify({ username: 'user-a', password: 'pass-a' }),
-      },
-    });
+describe('least privilege', () => {
+  // The bot never logs in to LNbits (mandatory 2FA would refuse it) and
+  // never calls the admin Users API; checked against the source itself.
+  test('no bot source calls /api/v1/auth or /users/api/v1, or reads the old credentials', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.ts$/.test(entry.name) && !/\.test\.ts$/.test(entry.name)) {
+          const code = fs
+            .readFileSync(full, 'utf8')
+            .split('\n')
+            .filter(line => !/^\s*(\/\/|\*|\/\*)/.test(line))
+            .join('\n');
+          if (
+            /\/api\/v1\/auth\b|\/users\/api\/v1|LNBITS_(USERNAME|PASSWORD|ADMINKEY)\b/.test(
+              code,
+            )
+          ) {
+            offenders.push(path.relative(process.cwd(), full));
+          }
+        }
+      }
+    };
+    walk(path.resolve(__dirname, '..'));
+    expect(offenders).toEqual([]);
   });
 
-  test('caches the token: the second call does not hit the network', async () => {
-    stubAuth('tok-1');
-
-    await service.getAccessToken('user-a', 'pass-a');
-    const second = await service.getAccessToken('user-a', 'pass-a');
-
-    expect(second).toBe('tok-1');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  test('rejects on a non-2xx response', async () => {
+  test('LNBITS_NODE_URL is still read when LNBITS_URL is unset', async () => {
+    delete process.env.LNBITS_URL;
+    process.env.LNBITS_NODE_URL = 'https://legacy.test/';
     fetchMock.mockImplementationOnce(async () =>
-      jsonResponse(
-        { detail: 'bad login' },
-        { status: 401, statusText: 'Unauthorized' },
-      ),
+      jsonResponse({ balance: 1000 }),
     );
 
-    // The catch rethrows a generic error; the status code is only logged, not propagated.
-    await expect(service.getAccessToken('user-a', 'wrong')).rejects.toThrow(
-      'Failed to retrieve access token',
-    );
-  });
+    await service.getWalletBalance('in-key');
 
-  test('rejects when the response is not JSON', async () => {
-    fetchMock.mockImplementationOnce(
-      async () =>
-        new Response('<html>', { headers: { 'content-type': 'text/html' } }),
-    );
-
-    await expect(service.getAccessToken('user-a', 'pass-a')).rejects.toThrow(
-      'Failed to retrieve access token',
-    );
-  });
-
-  test('rejects on a network error', async () => {
-    fetchMock.mockImplementationOnce(async () => {
-      throw new TypeError('fetch failed');
-    });
-
-    await expect(service.getAccessToken('user-a', 'pass-a')).rejects.toThrow(
-      'Failed to retrieve access token',
-    );
+    expect(lastRequest().url).toBe('https://legacy.test/api/v1/wallet');
   });
 });
 
@@ -195,387 +153,39 @@ describe('createInvoice', () => {
   });
 });
 
-describe('getWallets', () => {
-  const rawWallet = {
-    id: 'w-1',
-    admin: 'admin-1',
-    name: 'Alice - Allowance',
-    adminkey: 'ak-1',
-    user: 'u-1',
-    inkey: 'ik-1',
-  };
-  const userWalletEntry = {
-    id: 'w-1',
-    admin: 'admin-1',
-    name: 'Alice - Allowance',
-    adminkey: 'ak-1',
-    user: 'u-1',
-    inkey: 'ik-1',
-    balance_msat: 21000,
-    deleted: false,
-  };
-
-  const stubWalletRoutes = (
-    wallets: object[],
-    userWallets: Record<string, object[]>,
-  ) => {
-    fetchMock.mockImplementation(async input => {
-      const url = String(input);
-      if (url === `${BASE}/api/v1/auth`)
-        return jsonResponse({ access_token: 'tok-1' });
-      if (url === `${BASE}/api/v1/wallets`) return jsonResponse(wallets);
-      for (const [userId, entries] of Object.entries(userWallets)) {
-        if (url === `${BASE}/users/api/v1/user/${userId}/wallet`)
-          return jsonResponse(entries);
-      }
-      throw new Error(`Unexpected fetch call: ${url}`);
-    });
-  };
-
-  test('GETs /api/v1/wallets with a Bearer token and maps balance and deleted from the per-user route', async () => {
-    stubWalletRoutes([rawWallet], { 'u-1': [userWalletEntry] });
-
-    const wallets = await service.getWallets('admin-key');
-
-    expect(wallets).toEqual([
-      {
-        id: 'w-1',
-        admin: 'admin-1',
-        name: 'Alice - Allowance',
-        adminkey: 'ak-1',
-        user: 'u-1',
-        inkey: 'ik-1',
-        balance_msat: 21000,
-        deleted: false,
-      },
-    ]);
-
-    const authReq = requestTo(`${BASE}/api/v1/auth`);
-    expect(JSON.parse(String(authReq.init?.body))).toEqual({
-      username: USERNAME,
-      password: PASSWORD,
-    });
-
-    const walletsReq = requestTo(`${BASE}/api/v1/wallets`);
-    expect(walletsReq.init?.method).toBe('GET');
-    expect(walletsReq.init?.headers).toEqual({
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer tok-1',
-    });
-    expect(
-      fetchMock.mock.calls.filter(
-        call => String(call[0]) === `${BASE}/users/api/v1/user/u-1/wallet`,
-      ),
-    ).toHaveLength(1);
-  });
-
-  test('filters wallets by name', async () => {
-    const otherWallet = {
-      ...rawWallet,
-      id: 'w-2',
-      name: 'Bob - Private',
-      user: 'u-2',
-    };
-    stubWalletRoutes([rawWallet, otherWallet], {
-      'u-1': [userWalletEntry],
-      'u-2': [{ ...userWalletEntry, id: 'w-2', user: 'u-2' }],
-    });
-
-    const wallets = await service.getWallets('admin-key', 'Allowance');
-
-    expect(wallets?.map(w => w.id)).toEqual(['w-1']);
-  });
-
-  test('rejects a wallet without a string user before requesting wallet details', async () => {
-    stubWalletRoutes([{ id: 'w-1', name: 'Alice - Allowance' }], {});
-
-    await expect(service.getWallets('admin-key')).rejects.toThrow(
-      'getWallets: LNbits wallet at index 0 is missing string user',
-    );
-    expect(
-      fetchMock.mock.calls.some(call =>
-        String(call[0]).includes('/undefined/'),
-      ),
-    ).toBe(false);
-  });
-
-  // Bug: getWalletById pre-filters deleted entries and returns null, so the wallet
-  // maps to deleted: undefined and survives the `!= true` filter.
-  test.failing('excludes a wallet deleted on the per-user route', async () => {
-    const deletedWallet = {
-      ...rawWallet,
-      id: 'w-3',
-      name: 'Carol - Allowance',
-      user: 'u-3',
-    };
-    stubWalletRoutes([rawWallet, deletedWallet], {
-      'u-1': [userWalletEntry],
-      'u-3': [{ ...userWalletEntry, id: 'w-3', user: 'u-3', deleted: true }],
-    });
-
-    const wallets = await service.getWallets('admin-key', 'Allowance');
-
-    expect(wallets?.map(w => w.id)).toEqual(['w-1']);
-  });
-
-  test('rejects on a non-2xx response', async () => {
-    stubAuth();
+describe('getWalletIdFromKey', () => {
+  // GET /api/v1/wallets does not take a wallet key, so the id comes from the
+  // key's own wallet. LNbits sends it to an admin key only.
+  test('reads the id from GET /api/v1/wallet with the key', async () => {
     fetchMock.mockImplementationOnce(async () =>
-      jsonResponse({}, { status: 500 }),
+      jsonResponse({ id: 'w-1', name: 'Allowance', balance: 0 }),
     );
 
-    await expect(service.getWallets('admin-key')).rejects.toThrow(
-      'Error getting wallets response (status: 500)',
-    );
-  });
-
-  test('rejects when LNbits does not return a wallet array', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse({ not: 'an array' }),
-    );
-
-    await expect(service.getWallets('admin-key')).rejects.toThrow(
-      'getWallets: LNbits did not return a wallet array',
-    );
-  });
-});
-
-describe('getUserWallets', () => {
-  test('GETs the per-user wallet route with a Bearer token and drops deleted wallets', async () => {
-    stubAuth('tok-1');
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([
-        {
-          id: 'w-1',
-          name: 'Alice - Private',
-          adminkey: 'ak-1',
-          user: 'u-1',
-          inkey: 'ik-1',
-          balance_msat: 5000,
-          deleted: false,
-        },
-        {
-          id: 'w-2',
-          name: 'Alice - Old',
-          adminkey: 'ak-2',
-          user: 'u-1',
-          inkey: 'ik-2',
-          balance_msat: 0,
-          deleted: true,
-        },
-      ]),
-    );
-
-    const wallets = await service.getUserWallets('admin-key', 'u-1');
-
-    expect(wallets).toEqual([
-      {
-        id: 'w-1',
-        admin: null,
-        name: 'Alice - Private',
-        adminkey: 'ak-1',
-        user: 'u-1',
-        inkey: 'ik-1',
-        balance_msat: 5000,
-        deleted: false,
-      },
-    ]);
+    await expect(service.getWalletIdFromKey('admin-key')).resolves.toBe('w-1');
     expect(lastRequest()).toEqual({
-      url: `${BASE}/users/api/v1/user/u-1/wallet`,
+      url: `${BASE}/api/v1/wallet`,
       init: {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: 'Bearer tok-1',
+          'X-Api-Key': 'admin-key',
         },
       },
     });
   });
 
-  test('rejects on a non-2xx response', async () => {
-    stubAuth();
+  test('is null, not a guess, when LNbits sends no id', async () => {
     fetchMock.mockImplementationOnce(async () =>
-      jsonResponse({}, { status: 404 }),
+      jsonResponse({ name: 'Allowance', balance: 0 }),
     );
 
-    await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-      'Error getting users wallets response (status: 404)',
-    );
-  });
-
-  test('names the offending wallet position and fields', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([
-        { id: 'w-1', name: 'Alice - Private', user: 'u-1' },
-        { id: 'w-2' },
-      ]),
-    );
-
-    await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-      'getUserWallets: LNbits wallet at index 1 is missing string name, string user',
-    );
-  });
-
-  test('rejects when LNbits does not return a wallet array', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () => jsonResponse(null));
-
-    await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-      'getUserWallets: LNbits did not return a wallet array',
-    );
-  });
-
-  // An optional field is optional in its presence, not in its type: a string
-  // "true" passes `deleted !== true` and keeps a deleted wallet visible, and a
-  // string balance becomes NaN as soon as a caller divides it by 1000.
-  test.each([
-    ['deleted', 'true', 'boolean deleted'],
-    ['balance_msat', '5000', 'number balance_msat'],
-    ['inkey', 42, 'string inkey'],
-    // null is not "no balance": it would reach showMyBalanceCommand as a
-    // confident 0 sats for a wallet LNbits never said was empty.
-    ['balance_msat', null, 'number balance_msat'],
-  ])(
-    'rejects a wallet whose optional %s has the wrong type',
-    async (field, value, expected) => {
-      stubAuth();
-      fetchMock.mockImplementationOnce(async () =>
-        jsonResponse([
-          { id: 'w-1', name: 'Alice - Private', user: 'u-1', [field]: value },
-        ]),
-      );
-
-      await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-        `getUserWallets: LNbits wallet at index 0 is missing ${expected}`,
-      );
-    },
-  );
-
-  test('names every required field when a row is not an object at all', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () => jsonResponse(['w-1']));
-
-    await expect(service.getUserWallets('admin-key', 'u-1')).rejects.toThrow(
-      'getUserWallets: LNbits wallet at index 0 is missing string id, string name, string user',
-    );
-  });
-
-  test('accepts an explicit null for the descriptive optional fields', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([
-        {
-          id: 'w-1',
-          name: 'Alice - Private',
-          user: 'u-1',
-          admin: null,
-          adminkey: null,
-          inkey: null,
-          deleted: null,
-        },
-      ]),
-    );
-
-    await expect(
-      service.getUserWallets('admin-key', 'u-1'),
-    ).resolves.toHaveLength(1);
-  });
-
-  test('accepts a wallet that simply omits the optional fields', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([{ id: 'w-1', name: 'Alice - Private', user: 'u-1' }]),
-    );
-
-    await expect(
-      service.getUserWallets('admin-key', 'u-1'),
-    ).resolves.toHaveLength(1);
-  });
-});
-
-describe('getWalletById', () => {
-  test('returns the matching non-deleted wallet from the per-user route', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([
-        {
-          id: 'w-1',
-          admin: 'admin-1',
-          name: 'Alice - Allowance',
-          user: 'u-1',
-          adminkey: 'ak-1',
-          inkey: 'ik-1',
-          balance_msat: 21000,
-          deleted: false,
-        },
-        { id: 'w-2', name: 'Alice - Old', user: 'u-1', deleted: true },
-      ]),
-    );
-
-    await expect(service.getWalletById('u-1', 'w-1')).resolves.toEqual({
-      id: 'w-1',
-      admin: 'admin-1',
-      name: 'Alice - Allowance',
-      user: 'u-1',
-      adminkey: 'ak-1',
-      inkey: 'ik-1',
-      balance_msat: 21000,
-      deleted: false,
-    });
-  });
-
-  test('returns null when the wallet ID is not found among non-deleted wallets', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([
-        { id: 'w-2', name: 'Alice - Old', user: 'u-1', deleted: true },
-      ]),
-    );
-
-    await expect(service.getWalletById('u-1', 'w-1')).resolves.toBeNull();
-  });
-
-  test('rejects when a wallet from the per-user route is missing required string fields', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([{ id: 'w-1', user: 'u-1' }]),
-    );
-
-    await expect(service.getWalletById('u-1', 'w-1')).rejects.toThrow(
-      'getWalletById: LNbits wallet at index 0 is missing string name',
-    );
-  });
-
-  test('rejects when LNbits does not return a wallet array', async () => {
-    stubAuth();
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse({ unexpected: 'shape' }),
-    );
-
-    await expect(service.getWalletById('u-1', 'w-1')).rejects.toThrow(
-      'getWalletById: LNbits did not return a wallet array',
-    );
+    await expect(service.getWalletIdFromKey('in-key')).resolves.toBeNull();
   });
 });
 
 describe('getPaymentsSince', () => {
-  // getPaymentsSince resolves the wallet ID via the unexported
-  // getWalletIdFromKey, which shares the same wallet-shape validation — a
-  // malformed /api/v1/wallets response must reject the whole call.
-  test('propagates the wallet validation error from the underlying wallet lookup', async () => {
+  test('refuses to query payments when no wallet resolves for the key', async () => {
     fetchMock.mockImplementationOnce(async () => jsonResponse({}));
-
-    await expect(service.getPaymentsSince('in-key', 0)).rejects.toThrow(
-      'getWalletIdFromKey: LNbits did not return a wallet array',
-    );
-  });
-
-  test('refuses to query payments when no wallet matches the key', async () => {
-    fetchMock.mockImplementationOnce(async () =>
-      jsonResponse([{ id: 'w-1', name: 'Alice', user: 'u-1', inkey: 'other' }]),
-    );
 
     await expect(service.getPaymentsSince('in-key', 0)).rejects.toThrow(
       'getPaymentsSince: no wallet could be resolved for the supplied key',
@@ -592,11 +202,7 @@ describe('getPaymentsSince', () => {
 // Error object that callers spent as a balance or pasted into a query string.
 describe('read helpers rethrow instead of resolving with the Error', () => {
   const cases: Array<[string, () => Promise<unknown>]> = [
-    ['getWalletDetails', () => service.getWalletDetails('in-key', 'w-1')],
     ['getWalletBalance', () => service.getWalletBalance('in-key')],
-    ['getWalletName', () => service.getWalletName('in-key')],
-    ['getWalletPayLinks', () => service.getWalletPayLinks('in-key', 'w-1')],
-    ['getInvoicePayment', () => service.getInvoicePayment('in-key', 'inv-1')],
     ['getPaymentsSince', () => service.getPaymentsSince('in-key', 0)],
   ];
 
@@ -694,8 +300,7 @@ describe('payment reads', () => {
     await expect(service.getPayments('ink-1')).rejects.toThrow(/429/);
   });
 
-  test('getAllPaymentsPage reads the paginated endpoint as the superuser', async () => {
-    stubAuth();
+  test('getAllPaymentsPage reads the paginated endpoint with the ACL token', async () => {
     fetchMock.mockImplementationOnce(async () => jsonResponse([{ id: 'p1' }]));
 
     const payments = await service.getAllPaymentsPage(1000, 2000);
@@ -706,10 +311,21 @@ describe('payment reads', () => {
     expect(url).toContain('limit=1000');
     expect(url).toContain('offset=2000');
     expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect((init?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer acl-token',
+    );
+  });
+
+  test('getAllPaymentsPage without the token signals unavailability without a request', async () => {
+    delete process.env.LNBITS_API_TOKEN;
+
+    await expect(service.getAllPaymentsPage(10, 0)).rejects.toBeInstanceOf(
+      service.PaginatedPaymentsUnsupportedError,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('getAllPaymentsPage unwraps the shapes LNbits versions have shipped', async () => {
-    stubAuth();
     fetchMock.mockImplementationOnce(async () =>
       jsonResponse({ data: [{ id: 'p1' }] }),
     );
@@ -720,7 +336,6 @@ describe('payment reads', () => {
   });
 
   test('getAllPaymentsPage signals unavailability so callers can fall back', async () => {
-    stubAuth();
     fetchMock.mockImplementationOnce(async () =>
       jsonResponse({ detail: 'Not Found' }, { status: 404 }),
     );
@@ -731,7 +346,6 @@ describe('payment reads', () => {
   });
 
   test('getAllPaymentsPage still throws plainly on a server error', async () => {
-    stubAuth();
     fetchMock.mockImplementationOnce(async () =>
       jsonResponse({ detail: 'boom' }, { status: 500 }),
     );
@@ -739,324 +353,5 @@ describe('payment reads', () => {
     const error = await service.getAllPaymentsPage(10, 0).catch(e => e);
     expect(error).not.toBeInstanceOf(service.PaginatedPaymentsUnsupportedError);
     expect(String(error)).toContain('500');
-  });
-});
-
-describe('getUsers', () => {
-  const PAGE = USER_LIST_PAGE_SIZE;
-  const rawUser = (n: number) => ({
-    id: `u-${String(n).padStart(4, '0')}`,
-    external_id: `aad-${n}`,
-    email: `person.${n}@acme.test`,
-    extra: null,
-  });
-  const usersPage = (from: number, count: number) =>
-    Array.from({ length: count }, (_, i) => rawUser(from + i));
-  const listUrl = (offset: number, extra = '') =>
-    `${BASE}/users/api/v1/user?limit=${PAGE}&offset=${offset}&sortby=id&direction=asc${extra}`;
-
-  const stubUserPages = (
-    pages: Record<string, Response | (() => Response)>,
-  ) => {
-    fetchMock.mockImplementation(async input => {
-      const url = String(input);
-      if (url === `${BASE}/api/v1/auth`)
-        return jsonResponse({ access_token: 'tok-1' });
-      const page = pages[url];
-      if (page) return typeof page === 'function' ? page() : page;
-      throw new Error(`Unexpected fetch call: ${url}`);
-    });
-  };
-  const listCalls = () =>
-    fetchMock.mock.calls
-      .map(c => String(c[0]))
-      .filter(u => u.includes('/users/api/v1/user?'));
-
-  test('reads every page of the user list until total is reached, not just the first', async () => {
-    const total = PAGE + 15;
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, PAGE), total }),
-      [listUrl(PAGE)]: jsonResponse({ data: usersPage(PAGE + 1, 15), total }),
-    });
-
-    const users = await service.getUsers('admin-key', null);
-
-    expect(users).toHaveLength(total);
-    expect(users[0]).toMatchObject({
-      id: 'u-0001',
-      aadObjectId: 'aad-1',
-      displayName: 'Person 1',
-    });
-    expect(users[total - 1]).toMatchObject({ id: 'u-0115' });
-    expect(listCalls()).toEqual([listUrl(0), listUrl(PAGE)]);
-  });
-
-  test('advances offset by the rows received when the server caps the page size', async () => {
-    const total = 120;
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, 50), total }),
-      [listUrl(50)]: jsonResponse({ data: usersPage(51, 50), total }),
-      [listUrl(100)]: jsonResponse({ data: usersPage(101, 20), total }),
-    });
-
-    const users = await service.getUsers('admin-key', null);
-
-    expect(users).toHaveLength(total);
-    expect(listCalls()).toEqual([listUrl(0), listUrl(50), listUrl(100)]);
-  });
-
-  test('keeps the external_id filter on the paged, ordered request', async () => {
-    stubUserPages({
-      [listUrl(0, '&external_id=aad-7')]: jsonResponse({
-        data: [rawUser(7)],
-        total: 1,
-      }),
-    });
-
-    const users = await service.getUsers('admin-key', { aadObjectId: 'aad-7' });
-
-    expect(users.map(u => u.id)).toEqual(['u-0007']);
-    expect(lastRequest().url).toBe(listUrl(0, '&external_id=aad-7'));
-  });
-
-  test('returns an empty list when the instance has no users', async () => {
-    stubUserPages({ [listUrl(0)]: jsonResponse({ data: [], total: 0 }) });
-
-    await expect(service.getUsers('admin-key', null)).resolves.toEqual([]);
-    expect(listCalls()).toEqual([listUrl(0)]);
-  });
-
-  test('surfaces a failed page with its number instead of returning a partial list', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, PAGE), total: 150 }),
-      [listUrl(PAGE)]: jsonResponse({ detail: 'boom' }, { status: 500 }),
-    });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /status: 500, page 2/,
-    );
-  });
-
-  test('stops and reports when the server ignores offset', async () => {
-    const samePage = () =>
-      jsonResponse({ data: usersPage(1, PAGE), total: 150 });
-    stubUserPages({ [listUrl(0)]: samePage, [listUrl(PAGE)]: samePage });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /ignored offset on page 2/,
-    );
-  });
-
-  test('rejects a page without a data array instead of treating it as empty', async () => {
-    stubUserPages({ [listUrl(0)]: jsonResponse({ total: 15 }) });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /page 1 has no data array/,
-    );
-  });
-
-  test('rejects a page whose total is not a non-negative integer', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, 5), total: -1 }),
-    });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /page 1 has an invalid total/,
-    );
-  });
-
-  test('without a total, a short page is not the end: paging continues until an empty page', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, 50) }),
-      [listUrl(50)]: jsonResponse({ data: usersPage(51, 30) }),
-      [listUrl(80)]: jsonResponse({ data: [] }),
-    });
-
-    const users = await service.getUsers('admin-key', null);
-
-    expect(users).toHaveLength(80);
-    expect(listCalls()).toEqual([listUrl(0), listUrl(50), listUrl(80)]);
-  });
-
-  test('without a total, the page cap allows the final empty page and refuses one more', async () => {
-    const pages: Record<string, () => Response> = {};
-    for (let n = 0; n < 100; n++) {
-      pages[listUrl(n)] = () => jsonResponse({ data: [rawUser(n + 1)] });
-    }
-
-    stubUserPages({
-      ...pages,
-      [listUrl(100)]: () => jsonResponse({ data: [] }),
-    });
-    await expect(service.getUsers('admin-key', null)).resolves.toHaveLength(
-      100,
-    );
-    // One request beyond the cap: the empty terminator.
-    expect(listCalls()).toHaveLength(101);
-
-    stubUserPages({
-      ...pages,
-      [listUrl(100)]: () => jsonResponse({ data: [rawUser(101)] }),
-    });
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /more than 100 accounts, refusing a partial list/,
-    );
-  });
-
-  test('a page request that fails before any response names the page and keeps the cause', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, PAGE), total: 150 }),
-      [listUrl(PAGE)]: () => {
-        throw new Error('ECONNRESET');
-      },
-    });
-
-    const error = await service.getUsers('admin-key', null).catch(e => e);
-
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toMatch(/page 2 request failed/);
-    expect((error as Error).cause).toBeInstanceOf(Error);
-  });
-
-  test('a page that is not JSON names the page', async () => {
-    stubUserPages({ [listUrl(0)]: new Response('<html>', { status: 200 }) });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /page 1 is not valid JSON/,
-    );
-  });
-
-  test('rejects a record without a string id or with a non-string field', async () => {
-    stubUserPages({ [listUrl(0)]: jsonResponse({ data: [{}], total: 1 }) });
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /page 1, record 1 has no string id/,
-    );
-
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({
-        data: [{ id: 'u-1', email: 42 }],
-        total: 1,
-      }),
-    });
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /record 1 \(u-1\) has a non-string email/,
-    );
-  });
-
-  test('an empty page before the announced total is a failure, not a shorter list', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, PAGE), total: 150 }),
-      [listUrl(PAGE)]: jsonResponse({ data: [], total: 150 }),
-    });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /page 2 came back empty after 100 of the announced 150 accounts/,
-    );
-  });
-
-  test('keeps null optional fields readable instead of rejecting the page', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({
-        data: [
-          {
-            id: 'u-1',
-            username: null,
-            email: null,
-            external_id: null,
-            extra: null,
-          },
-        ],
-        total: 1,
-      }),
-    });
-
-    await expect(service.getUsers('admin-key', null)).resolves.toMatchObject([
-      { id: 'u-1', displayName: 'u-1', aadObjectId: '' },
-    ]);
-  });
-
-  test('rejects a present null total instead of paging as if it were absent', async () => {
-    stubUserPages({
-      [listUrl(0)]: jsonResponse({ data: usersPage(1, 5), total: null }),
-    });
-
-    await expect(service.getUsers('admin-key', null)).rejects.toThrow(
-      /page 1 has an invalid total \(null\)/,
-    );
-  });
-});
-
-// A card recipient id is client-controlled. Interpolated raw into a superuser
-// path, "../" segments are resolved by the URL parser and the request escapes
-// /users/api/v1/user/<id> to any LNbits endpoint (#441).
-describe('untrusted user ids stay inside their path segment', () => {
-  const traversalIds = [
-    '../../../../api/v1/wallet?',
-    '../../../../admin/api/v1/settings?',
-    'a/../../b',
-    'x?all_wallets=true',
-  ];
-
-  const lnbitsPaths = () =>
-    fetchMock.mock.calls
-      .map(call => new URL(String(call[0])))
-      .filter(url => url.pathname !== '/api/v1/auth')
-      .map(url => url.pathname + url.search);
-
-  const respondWith = (body: unknown) =>
-    fetchMock.mockImplementation(async input =>
-      String(input).endsWith('/api/v1/auth')
-        ? jsonResponse({ access_token: 'tok-1' })
-        : jsonResponse(body),
-    );
-
-  const userWalletPath = (id: string) =>
-    `/users/api/v1/user/${encodeURIComponent(id)}/wallet`;
-
-  test.each(traversalIds)('getUser keeps %j in its segment', async id => {
-    respondWith({ id: 'u-1' });
-    await service.getUser('admin-key', id).catch(() => undefined);
-    const paths = lnbitsPaths();
-    expect(paths.length).toBeGreaterThan(0);
-    for (const path of paths) {
-      expect(
-        path.startsWith(`/users/api/v1/user/${encodeURIComponent(id)}`),
-      ).toBe(true);
-    }
-  });
-
-  test.each(traversalIds)(
-    'getUserWallets keeps %j in its segment',
-    async id => {
-      respondWith([]);
-      await service.getUserWallets('admin-key', id).catch(() => undefined);
-      expect(lnbitsPaths()).toEqual([userWalletPath(id)]);
-    },
-  );
-
-  test.each(traversalIds)('getWalletById keeps %j in its segment', async id => {
-    respondWith([]);
-    await service.getWalletById(id, 'w-1').catch(() => undefined);
-    expect(lnbitsPaths()).toEqual([userWalletPath(id)]);
-  });
-
-  test.each(traversalIds)('createWallet keeps %j in its segment', async id => {
-    respondWith({
-      id: 'w-1',
-      name: 'Allowance',
-      adminkey: 'a',
-      inkey: 'i',
-      user: 'u-1',
-    });
-    await service
-      .createWallet('admin-key', id, 'Allowance')
-      .catch(() => undefined);
-    const paths = lnbitsPaths();
-    // The POST carries the untrusted id; the follow-up read uses the user id
-    // LNbits returned for the new wallet, which is not client-controlled.
-    expect(paths[0]).toBe(userWalletPath(id));
-    for (const path of paths) {
-      expect(path.startsWith('/users/api/v1/user/')).toBe(true);
-    }
   });
 });

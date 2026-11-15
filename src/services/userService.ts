@@ -1,33 +1,10 @@
 // userService.ts
 
 import { TeamsChannelAccount } from 'botbuilder';
-import {
-  getUsers,
-  createUser,
-  createWallet,
-  getUserWallets,
-  topUpWallet,
-  getWalletById,
-} from './lnbitsService';
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
-
-async function applyInitialAllowance(walletId: string): Promise<void> {
-  const initialAllowanceStr = process.env.LNBITS_INITIAL_ALLOWANCE;
-  if (!initialAllowanceStr) {
-    return;
-  }
-  const initialAllowance = Number.parseInt(initialAllowanceStr, 10);
-  if (!Number.isInteger(initialAllowance) || initialAllowance <= 0) {
-    console.error('Invalid initial allowance value:', initialAllowanceStr);
-    return;
-  }
-  await topUpWallet(walletId, initialAllowance);
-}
+import { ensurePerson } from './peopleDirectory';
 
 export class UserService {
   private static instance: UserService;
-  private users: Map<string, User> = new Map(); // Simple in-memory cache
   private constructor() {}
 
   // Private variable to hold the current user
@@ -50,81 +27,24 @@ export class UserService {
     return this.currentUser;
   }
 
+  /**
+   * Resolves the turn's sender in Zaplie's people directory, which adds them
+   * on their first turn and, when the portal holds an LNbits API token,
+   * creates their Allowance wallet under zaplie.service. Nothing is created in
+   * LNbits for the person's own account and no balance is minted: the opening
+   * allowance is paid from the Fund wallet by the allowance extension.
+   *
+   * The returned user's `allowanceWallet` is null until a wallet exists
+   * (no token and no operator link yet); commands that spend check for it.
+   */
   public async ensureUserSetup(
     teamsChannelAccount: TeamsChannelAccount,
   ): Promise<User> {
-    const aadObjectId = teamsChannelAccount.aadObjectId;
-
-    let user: User;
-    const lnbitsUsers = await getUsers(adminKey, {
-      aadObjectId: aadObjectId, // userProfile.aadObjectId,
+    const { user } = await ensurePerson({
+      aadObjectId: teamsChannelAccount.aadObjectId,
+      displayName: teamsChannelAccount.name,
+      email: teamsChannelAccount.email,
     });
-    if (lnbitsUsers.length > 1) {
-      throw new Error('More than one user found with the same aadObjectId');
-    }
-
-    if (!lnbitsUsers || lnbitsUsers.length < 1) {
-      user = await createUser(
-        adminKey,
-        teamsChannelAccount.name,
-        'Private',
-        teamsChannelAccount.email,
-        '',
-        {
-          aadObjectId: aadObjectId,
-          userType: 'teammate',
-          profileImg: `https://hiberniaevros.sharepoint.com/_layouts/15/userphoto.aspx?AccountName='${teamsChannelAccount.userPrincipalName}`,
-        },
-      );
-
-      const allowanceWallet = await createWallet(
-        adminKey,
-        user.id,
-        'Allowance',
-      );
-      await applyInitialAllowance(allowanceWallet.id);
-      user = { ...user, allowanceWallet };
-    } else {
-      user = lnbitsUsers[0];
-    }
-
-    let allowanceWallet = user.allowanceWallet
-      ? await getWalletById(user.id, user.allowanceWallet.id)
-      : null;
-    if (allowanceWallet?.deleted) {
-      throw new Error(
-        'Mmm ... it looks like your allowance wallet has been deleted?!',
-      );
-    }
-    if (!allowanceWallet) {
-      const userWallets = await getUserWallets(adminKey, user.id);
-      // Only fund a wallet we just created: existing users pass through here
-      // every turn, and re-funding on balance would let anyone who spends to
-      // zero get topped back up on their next message.
-      allowanceWallet = userWallets.find(w => w.name === 'Allowance') ?? null;
-      if (!allowanceWallet) {
-        allowanceWallet = await createWallet(adminKey, user.id, 'Allowance');
-        await applyInitialAllowance(allowanceWallet.id);
-      }
-      user = { ...user, allowanceWallet };
-    }
-
-    let privateWallet = user.privateWallet
-      ? await getWalletById(user.id, user.privateWallet.id)
-      : null;
-    if (privateWallet?.deleted) {
-      throw new Error(
-        'Mmm ... it looks like your private wallet has been deleted?!',
-      );
-    }
-    if (!privateWallet) {
-      const userWallets = await getUserWallets(adminKey, user.id);
-      privateWallet =
-        userWallets.find(w => w.name === 'Private') ??
-        (await createWallet(adminKey, user.id, 'Private'));
-      user = { ...user, privateWallet };
-    }
-
     this.setCurrentUser(user);
     return user;
   }

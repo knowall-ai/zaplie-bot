@@ -18,15 +18,13 @@ import * as path from 'path';
 import { TurnContext } from 'botbuilder';
 import { SSOCommandMap } from './commands/SSOCommandMap';
 import { runConversationalTurn } from './services/foundryAgentService';
+import { getWalletBalance, payInvoice } from './services/lnbitsService';
 import {
-  createInvoice,
-  getUser,
-  getUserWallets,
-  getUsers,
-  getWalletBalance,
-  getWallets,
-  payInvoice,
-} from './services/lnbitsService';
+  createInvoiceForPerson,
+  getBalances,
+  getPerson,
+  listPeople,
+} from './services/peopleDirectory';
 import { en, es as esCopy, t } from './i18n';
 import {
   DEFAULT_LEADERBOARD_WINDOW_DAYS,
@@ -38,6 +36,7 @@ import {
 import { getZapLeaderboard } from './services/zapHistoryService';
 
 jest.mock('./services/lnbitsService');
+jest.mock('./services/peopleDirectory');
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -223,24 +222,17 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.mocked(getWalletBalance).mockResolvedValue(25_000);
-    jest
-      .mocked(getUsers)
-      .mockResolvedValue([
-        { id: 'user-2', displayName: 'Bob', aadObjectId: 'aad-2' } as never,
-      ]);
-    jest.mocked(getWallets).mockResolvedValue([
+    jest.mocked(listPeople).mockResolvedValue([
       {
-        id: 'w-bob-priv',
-        name: 'Private',
-        user: 'user-2',
-        balance_msat: 12_345_000,
+        id: 'user-2',
+        displayName: 'Bob',
+        aadObjectId: 'aad-2',
+        canReceive: true,
       } as never,
     ]);
     jest
-      .mocked(getUserWallets)
-      .mockResolvedValue([
-        { id: 'w-1', name: 'Allowance', balance_msat: 21_000_000 } as never,
-      ]);
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 21_000, privateSats: 12_345 });
     // A ranked, partial read, so the leaderboard card's title, rows and
     // incomplete-read note are all swept, not just its error path.
     jest.mocked(getZapLeaderboard).mockResolvedValue({
@@ -370,8 +362,8 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
     expect(sendActivity).toHaveBeenCalledWith(
       '¡Ups! Debes indicar un número entero entre 1 y 10.000 Sats.',
     );
-    expect(getUser).not.toHaveBeenCalled();
-    expect(createInvoice).not.toHaveBeenCalled();
+    expect(getPerson).not.toHaveBeenCalled();
+    expect(createInvoiceForPerson).not.toHaveBeenCalled();
     expect(payInvoice).not.toHaveBeenCalled();
   });
 
@@ -418,7 +410,7 @@ describe('TeamsBot answers a Spanish client in Spanish everywhere', () => {
     expect(sendActivity).toHaveBeenCalledWith(
       '¡Ups! Puedes enviar un zap a un máximo de 3 personas por tarjeta y seleccionaste 4. No se envió ningún zap; elige 3 o menos e inténtalo de nuevo.',
     );
-    expect(getUser).not.toHaveBeenCalled();
+    expect(getPerson).not.toHaveBeenCalled();
     expect(payInvoice).not.toHaveBeenCalled();
   });
 

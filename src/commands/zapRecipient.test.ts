@@ -31,7 +31,7 @@ const ENTRY_KEY = zapKey({
   action: 'submitZaps',
 });
 
-const receiverOk = { displayName: 'Alice', privateWallet: { id: 'w1' } };
+const receiverOk = { displayName: 'Alice', canReceive: true };
 const okPay = async () => ({ paymentHash: 'hash-1' });
 
 const run = (
@@ -94,10 +94,20 @@ describe('processZapRecipient', () => {
     await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
   });
 
-  test('a missing private wallet frees the slot', async () => {
+  test('a recipient with no receive target frees the slot and says why', async () => {
     await expect(
       run(ledger, { getReceiver: async () => ({ displayName: 'Alice' }) }),
-    ).resolves.toEqual({ status: 'failed', label: 'Alice' });
+    ).resolves.toEqual({
+      status: 'failed',
+      label: 'Alice (has not set up where they receive zaps yet)',
+    });
+    await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
+  });
+
+  test('a recipient missing from the directory frees the slot', async () => {
+    await expect(
+      run(ledger, { getReceiver: async () => null }),
+    ).resolves.toEqual({ status: 'failed', label: 'User ID: alice' });
     await expect(ledger.get(ENTRY_KEY)).resolves.toBeUndefined();
   });
 
@@ -218,7 +228,7 @@ describe('processZapRecipient', () => {
         recipientId,
         getReceiver: async () => ({
           displayName: 'Bob',
-          privateWallet: { id: 'wallet-bob' },
+          canReceive: true,
         }),
         pay: retryPay,
       });

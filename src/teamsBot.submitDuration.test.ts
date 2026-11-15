@@ -19,14 +19,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { TurnContext } from 'botbuilder';
 import { GENERIC_ERROR_MESSAGE } from './messages';
-import {
-  createInvoice,
-  getUser,
-  getWalletBalance,
-  payInvoice,
-} from './services/lnbitsService';
+import { getWalletBalance, payInvoice } from './services/lnbitsService';
+import { createInvoiceForPerson, getPerson } from './services/peopleDirectory';
 
 jest.mock('./services/lnbitsService');
+jest.mock('./services/peopleDirectory');
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -64,16 +61,7 @@ const userFor = (id: string): User => ({
   profileImg: '',
   aadObjectId: `aad-${id}`,
   email: `${id}@example.test`,
-  privateWallet: {
-    id: `w-${id}-priv`,
-    admin: '',
-    name: 'Private',
-    user: id,
-    adminkey: `adm-${id}-priv`,
-    inkey: `ink-${id}-priv`,
-    balance_msat: 0,
-    deleted: false,
-  },
+  canReceive: true,
   allowanceWallet: null,
 });
 
@@ -113,7 +101,7 @@ const submit = (
           id: 'user-1',
           displayName: 'Alice',
           aadObjectId: 'aad-user-1',
-          privateWallet: null,
+          canReceive: false,
           allowanceWallet: {
             id: 'w-alice-allow',
             inkey: 'ink-alice-allow',
@@ -134,11 +122,11 @@ const originalCap = process.env.ZAP_MAX_RECIPIENTS;
 beforeEach(() => {
   delete process.env.ZAP_MAX_RECIPIENTS;
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
-  jest
-    .mocked(getUser)
-    .mockImplementation(async (_adminKey: string, id: string) => userFor(id));
+  jest.mocked(getPerson).mockImplementation(async (id: string) => userFor(id));
   jest.mocked(getWalletBalance).mockResolvedValue(1000);
-  jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
+  jest
+    .mocked(createInvoiceForPerson)
+    .mockResolvedValue('lnbc1-payment-request');
   jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
 });
 
@@ -162,8 +150,8 @@ describe('TeamsBot caps the recipients of one zap card', () => {
     await new TeamsBot().run(mock.context);
 
     expect(payInvoice).not.toHaveBeenCalled();
-    expect(createInvoice).not.toHaveBeenCalled();
-    expect(getUser).not.toHaveBeenCalled();
+    expect(createInvoiceForPerson).not.toHaveBeenCalled();
+    expect(getPerson).not.toHaveBeenCalled();
     // The cap is checked before the live balance read.
     expect(getWalletBalance).not.toHaveBeenCalled();
     expect(mock.context.updateActivity).not.toHaveBeenCalled();

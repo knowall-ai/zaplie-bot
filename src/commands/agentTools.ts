@@ -5,12 +5,11 @@
 
 import { TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
-import { getUserWallets } from '../services/lnbitsService';
+import { getBalances } from '../services/peopleDirectory';
 import {
   getZapActivity,
   getZapLeaderboard,
 } from '../services/zapHistoryService';
-import { isAllowanceWallet, isPrivateWallet } from '../services/walletNames';
 import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
 import {
   CONNECT_CALENDAR_COMMAND,
@@ -23,15 +22,7 @@ import {
   windowStartSeconds,
 } from './showLeaderboardCommand';
 
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
-
-const toSats = (balanceMsat: number): number => Math.floor(balanceMsat / 1000);
-
-// Shares the wallet-name rule with the leaderboard, so a casing difference
-// cannot make a wallet count towards a ranking but vanish from a balance reply.
-const isBalanceWallet = (wallet: Wallet): boolean =>
-  isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name);
 
 // One ceiling for the card's LEADERBOARD_WINDOW_DAYS and this tool's `days`,
 // so the two accept the same range.
@@ -167,13 +158,26 @@ const getMyBalanceTool: ToolDefinition = {
     if (error) return { error };
 
     const user = turnContext.turnState.get('user') as User;
-    const wallets = await getUserWallets(adminKey, user.id);
+    const balances = await getBalances(user.id);
+    // A wallet Zaplie cannot read is reported as unknown, never as 0: the
+    // Private wallet is the person's own, read only through an invoice key
+    // they chose to register.
+    const floor = (sats: number | null): number | null =>
+      sats === null ? null : Math.floor(sats);
     return {
       rewardLabel,
-      wallets: wallets.filter(isBalanceWallet).map(wallet => ({
-        name: wallet.name,
-        balanceSats: toSats(wallet.balance_msat),
-      })),
+      wallets: [
+        { name: 'Allowance', balanceSats: floor(balances.allowanceSats) },
+        {
+          name: 'Private',
+          balanceSats: floor(balances.privateSats),
+          ...(balances.privateSats === null
+            ? {
+                note: 'not linked to Zaplie; the person reads it in their own wallet',
+              }
+            : {}),
+        },
+      ],
     };
   },
 };

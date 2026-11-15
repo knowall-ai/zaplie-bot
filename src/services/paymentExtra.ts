@@ -21,10 +21,18 @@ export interface PaymentExtraWallet {
   balance_msat?: never;
 }
 
+// The recipient of a zap, named by Entra object id. Their Private wallet is
+// their own and Zaplie does not know its id, so no wallet id is recorded.
+export interface PaymentExtraRecipient {
+  name: 'Private';
+  user: string;
+  displayName: string;
+}
+
 export interface ZapPaymentExtra {
   tag: 'zap';
   from: PaymentExtraWallet;
-  to: PaymentExtraWallet;
+  to: PaymentExtraRecipient;
 }
 
 // Prose for the error message only; the union documents who may call this.
@@ -56,5 +64,23 @@ export function toPaymentExtraWallet(
     name: wallet.name,
     user: wallet.user,
     displayName,
+  };
+}
+
+/**
+ * Builds the public projection of a zap recipient for payment metadata: the
+ * same fields the portal gateway writes (tabs/backend/lnbitsGatewayService.js
+ * zapExtra), so the feed reads bot and portal zaps alike.
+ */
+export function toPaymentExtraRecipient(
+  recipient: Pick<User, 'id' | 'displayName'>,
+): PaymentExtraRecipient {
+  if (!recipient?.id) {
+    throw new Error('Cannot build payment metadata: recipient is missing');
+  }
+  return {
+    name: 'Private',
+    user: recipient.id,
+    displayName: recipient.displayName || recipient.id,
   };
 }

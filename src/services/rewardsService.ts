@@ -1,8 +1,5 @@
-import {
-  getUserWalletsByUserId,
-  createInvoice,
-  payInvoice,
-} from './lnbitsService';
+import { payInvoice } from './lnbitsService';
+import { createInvoiceForPerson } from './peopleDirectory';
 import { getRewardConfig } from './fetchRewardPolicy';
 import { getAutomations } from './fetchAutomations';
 import {
@@ -13,7 +10,7 @@ import {
   createPendingReward,
   PendingRewardWriteUncertainError,
 } from './pendingRewardsService';
-import { toPaymentExtraWallet } from './paymentExtra';
+import { toPaymentExtraRecipient } from './paymentExtra';
 import { positiveIntFromEnv } from './envNumbers';
 
 const TREASURY_DISPLAY_NAME = 'Automation';
@@ -283,10 +280,14 @@ function maxAmountSats(): number {
   return positiveIntFromEnv('REWARDS_MAX_AMOUNT_SATS', 10000);
 }
 
-function requiredEnv(name: string): string {
-  const value = process.env[name];
+// The Treasury wallet's admin key. ZAPLIE_TREASURY_ADMINKEY is the current
+// name; REWARDS_TREASURY_ADMINKEY is still read for existing deployments.
+function treasuryAdminKeyFromEnv(): string {
+  const value =
+    process.env.ZAPLIE_TREASURY_ADMINKEY?.trim() ||
+    process.env.REWARDS_TREASURY_ADMINKEY?.trim();
   if (!value) {
-    throw new Error(`${name} is not set`);
+    throw new Error('ZAPLIE_TREASURY_ADMINKEY is not set');
   }
   return value;
 }
@@ -324,7 +325,7 @@ export async function payReward(
   reward: ResolvedRewardRequest,
   recipient: ResolvedRewardRecipient | null,
 ): Promise<{ paymentHash: string } | { pending: true }> {
-  const treasuryAdminKey = requiredEnv('REWARDS_TREASURY_ADMINKEY');
+  const treasuryAdminKey = treasuryAdminKeyFromEnv();
 
   if (recipient === null) {
     if (!reward.recipientId) {
@@ -356,19 +357,8 @@ export async function payReward(
     return { pending: true };
   }
 
-  const userId = recipient.lnbitsUserId;
-  const wallets = await getUserWalletsByUserId(userId);
-  if (!Array.isArray(wallets)) {
-    throw new Error(`Could not read the wallets for LNbits user ${userId}`);
-  }
-
-  const privateWallet = wallets.find(wallet => wallet.name === 'Private');
-  if (!privateWallet) {
-    throw new Error(`LNbits user ${userId} has no Private wallet`);
-  }
-
-  // Shape the feed and transaction log read. The recipient wallet goes
-  // through the same projection SendZap uses, so no keys are persisted.
+  // Shape the feed and transaction log read. The recipient goes through the
+  // same projection SendZap uses, so no keys are persisted.
   const extra = {
     tag: 'zap',
     automation: true,
@@ -383,24 +373,21 @@ export async function payReward(
     // object, and a lookup just to fill id/name/user would put an LNbits round
     // trip on the payment path for fields no reader uses (see SOLUTION_DESIGN).
     from: { displayName: TREASURY_DISPLAY_NAME },
-    to: toPaymentExtraWallet(
-      privateWallet,
-      'recipient Private',
-      reward.recipient,
-    ),
+    to: toPaymentExtraRecipient({
+      id: recipient.personAad,
+      displayName: reward.recipient,
+    }),
   };
 
-  const paymentRequest = await createInvoice(
-    privateWallet.inkey,
-    privateWallet.id,
+  // The portal invoices the recipient from their Lightning address or the
+  // invoice key of their own Private wallet. A recipient who has registered
+  // neither is refused here, before anything is paid, so it can be retried.
+  const paymentRequest = await createInvoiceForPerson(
+    recipient.personAad,
     reward.amountSats,
     reward.reason,
     extra,
   );
-  // createInvoice returns the caught error object instead of throwing (legacy)
-  if (typeof paymentRequest !== 'string') {
-    throw new Error(`creating reward invoice failed: ${paymentRequest}`);
-  }
 
   // From here the request has left this process, so a failure no longer
   // means "nothing was paid". Only the errors above may be retried.

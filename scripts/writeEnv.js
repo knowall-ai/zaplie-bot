@@ -48,10 +48,11 @@ const tabEndpoint =
 
 // Select specific variables to write
 const selectedVars = {
+  // No LNbits username, password or super-user key: the bot holds wallet
+  // keys only (docs/LNBITS_MIGRATION.adoc).
+  LNBITS_URL: envConfig.LNBITS_URL,
   LNBITS_NODE_URL: envConfig.LNBITS_NODE_URL,
-  LNBITS_USERNAME: envConfig.LNBITS_USERNAME,
-  LNBITS_PASSWORD: envConfig.LNBITS_PASSWORD,
-  LNBITS_ADMINKEY: envConfig.LNBITS_ADMINKEY,
+  LNBITS_API_TOKEN: envConfig.LNBITS_API_TOKEN,
   LNBITS_POINTS_LABEL: envConfig.LNBITS_POINTS_LABEL,
   LEADERBOARD_WINDOW_DAYS: envConfig.LEADERBOARD_WINDOW_DAYS,
   LEADERBOARD_TOP_N: envConfig.LEADERBOARD_TOP_N,
@@ -99,10 +100,9 @@ const appendEnvFile = (filePath, vars) => {
 
 // Append to .env.local
 appendEnvFile(envOutputPath, {
+  LNBITS_URL: selectedVars.LNBITS_URL,
   LNBITS_NODE_URL: selectedVars.LNBITS_NODE_URL,
-  LNBITS_USERNAME: selectedVars.LNBITS_USERNAME,
-  LNBITS_PASSWORD: selectedVars.LNBITS_PASSWORD,
-  LNBITS_ADMINKEY: selectedVars.LNBITS_ADMINKEY,
+  LNBITS_API_TOKEN: selectedVars.LNBITS_API_TOKEN,
   LNBITS_POINTS_LABEL: selectedVars.LNBITS_POINTS_LABEL,
   LEADERBOARD_WINDOW_DAYS: selectedVars.LEADERBOARD_WINDOW_DAYS,
   LEADERBOARD_TOP_N: selectedVars.LEADERBOARD_TOP_N,

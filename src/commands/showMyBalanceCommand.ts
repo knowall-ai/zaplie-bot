@@ -1,9 +1,7 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext } from 'botbuilder';
-import { getUserWallets } from '../services/lnbitsService';
+import { getBalances } from '../services/peopleDirectory';
 import { t } from '../i18n';
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 
 export class ShowMyBalanceCommand extends SSOCommand {
   async execute(context: TurnContext): Promise<void> {
@@ -11,7 +9,6 @@ export class ShowMyBalanceCommand extends SSOCommand {
     // client's region.
     const locale = context.activity?.locale;
     try {
-      //await context.sendActivity('Showing your balance...');
       console.log('Showing your balance...');
 
       const globalRewardName = process.env.LNBITS_POINTS_LABEL as string;
@@ -24,36 +21,41 @@ export class ShowMyBalanceCommand extends SSOCommand {
         return;
       }
 
-      // Wallet objects carry keys, so only the id is logged.
       console.log('Showing balance for user', user.id);
 
-      // Get the user's wallets
-      const usersWallets = await getUserWallets(adminKey, user.id);
+      // The Allowance wallet is Zaplie's; the Private wallet is the person's
+      // own and has a balance here only when they registered its invoice key.
+      const balances = await getBalances(user.id);
 
-      if (!usersWallets || usersWallets.length === 0) {
-        await context.sendActivity(t(locale, 'balanceNoWallets'));
-        return;
-      }
-
-      // Loop through all wallets and send their balances
-      for (const wallet of usersWallets) {
-        const balanceMsat = wallet.balance_msat;
-        if (balanceMsat === undefined) {
-          await context.sendActivity(
-            t(locale, 'balanceUnavailable', { walletId: wallet.id }),
-          );
-          continue;
-        }
-
-        const balanceSat = balanceMsat / 1000; // Convert from msat to sat
+      if (balances.allowanceSats === null) {
+        await context.sendActivity(
+          t(
+            locale,
+            user.allowanceWallet ? 'balanceUnavailable' : 'allowanceNotReady',
+            {
+              walletId: user.allowanceWallet?.id ?? '',
+            },
+          ),
+        );
+      } else {
         await context.sendActivity(
           t(locale, 'balanceLine', {
-            walletName: wallet.name,
-            balance: balanceSat,
+            walletName: 'Allowance',
+            balance: balances.allowanceSats,
             rewardName: globalRewardName,
           }),
         );
       }
+
+      await context.sendActivity(
+        balances.privateSats === null
+          ? t(locale, 'balancePrivateNotLinked')
+          : t(locale, 'balanceLine', {
+              walletName: 'Private',
+              balance: balances.privateSats,
+              rewardName: globalRewardName,
+            }),
+      );
     } catch (error) {
       console.error('Error in ShowMyBalanceCommand:', error);
       await context.sendActivity(t(locale, 'balanceError'));

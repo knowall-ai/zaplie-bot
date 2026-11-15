@@ -24,11 +24,9 @@ import { formatNumber } from '../i18n';
 import {
   getAllPaymentsPage,
   getPayments,
-  getUserWallets,
-  getUsers,
-  getWallets,
   PaginatedPaymentsUnsupportedError,
 } from '../services/lnbitsService';
+import { listPeople } from '../services/peopleDirectory';
 import {
   afterEach,
   beforeEach,
@@ -40,13 +38,11 @@ import {
 import { TurnContext } from 'botbuilder';
 
 jest.mock('../services/lnbitsService');
+jest.mock('../services/peopleDirectory');
 
-const mockGetUsers = getUsers as jest.MockedFunction<typeof getUsers>;
-const mockGetUserWallets = getUserWallets as jest.MockedFunction<
-  typeof getUserWallets
->;
+// The people directory: everyone, each with their Allowance wallet.
+const mockGetUsers = listPeople as jest.MockedFunction<typeof listPeople>;
 const mockGetPayments = getPayments as jest.MockedFunction<typeof getPayments>;
-const mockGetWallets = getWallets as jest.MockedFunction<typeof getWallets>;
 const mockGetAllPaymentsPage = getAllPaymentsPage as jest.MockedFunction<
   typeof getAllPaymentsPage
 >;
@@ -60,8 +56,8 @@ const person = (id: string, displayName: string): User => ({
   profileImg: '',
   aadObjectId: `aad-${id}`,
   email: `${id}@example.test`,
-  privateWallet: null,
   allowanceWallet: null,
+  canReceive: true,
 });
 
 const walletFor = (owner: User, name: 'Allowance' | 'Private'): Wallet => ({
@@ -85,6 +81,9 @@ const wallets = new Map(
     { allowance: walletFor(p, 'Allowance'), priv: walletFor(p, 'Private') },
   ]),
 );
+for (const p of people) {
+  p.allowanceWallet = wallets.get(p.id)!.allowance;
+}
 
 const paymentsByInkey: Record<string, Transaction[]> = {};
 
@@ -96,6 +95,11 @@ const allFixturePayments = (): Transaction[] =>
     (rows, walletRows) => rows.concat(walletRows),
     [],
   );
+
+const zapExtra = (to: User) => ({
+  tag: 'zap',
+  to: { name: 'Private', user: to.id, displayName: to.displayName },
+});
 
 const tx = (overrides: Partial<Transaction>): Transaction => ({
   checking_id: 'default',
@@ -109,8 +113,10 @@ const tx = (overrides: Partial<Transaction>): Transaction => ({
   ...overrides,
 });
 
-// One internal zap: a debit on the sender's Allowance wallet and the matching
-// credit on the receiver's Private wallet, sharing a checking_id.
+// One zap as Zaplie sees it: a debit on the sender's Allowance wallet with
+// the zap metadata naming the recipient. The credit lands in the recipient's
+// own Private wallet, which Zaplie cannot read; it is kept in the fixtures so
+// a test would notice if anything started counting it.
 const zap = (
   id: string,
   from: User,
@@ -128,6 +134,7 @@ const zap = (
       memo,
       time,
       wallet_id: fromWallet.id,
+      extra: zapExtra(to),
     }),
   );
   (paymentsByInkey[toWallet.inkey] ??= []).push(
@@ -353,10 +360,6 @@ describe('showLeaderboardCommand', () => {
     }
     nowSpy = jest.spyOn(Date, 'now').mockReturnValue(NOW_SECONDS * 1000);
     mockGetUsers.mockResolvedValue(people);
-    mockGetUserWallets.mockImplementation(async (_adminKey, userId) => {
-      const owned = wallets.get(userId);
-      return owned ? [owned.allowance, owned.priv] : [];
-    });
     mockGetPayments.mockImplementation(
       async (inKey: string) => (paymentsByInkey[inKey] || []) as Transaction[],
     );
@@ -373,11 +376,8 @@ describe('showLeaderboardCommand', () => {
 
   test('ranks by sats zapped out of Allowance wallets, never by Private balance', async () => {
     // Alice holds a large Private balance but sent nothing; Bob sent 300.
-    // The old command read Private balances through getWallets, so that
-    // boundary is stubbed too: on main this test fails on the ranking itself.
     const alicePrivate = wallets.get(alice.id)!.priv;
     alicePrivate.balance_msat = 9_000_000;
-    mockGetWallets.mockResolvedValue([alicePrivate]);
     zap('z1', bob, alice, 300);
     const { context, sendActivity } = makeContext();
 
@@ -388,7 +388,6 @@ describe('showLeaderboardCommand', () => {
       const serialised = JSON.stringify(sentCard(sendActivity));
       expect(serialised).not.toContain('9,000');
       expect(serialised).not.toMatch(/balance/i);
-      expect(mockGetWallets).not.toHaveBeenCalled();
     } finally {
       alicePrivate.balance_msat = 0;
     }
@@ -493,8 +492,7 @@ describe('showLeaderboardCommand', () => {
     expect(rows(sendActivity)).toEqual(['#1 Alice | 60 Sats']);
   });
 
-  test('counts a wallet named "allowance" in lower case and an ISO timestamp', async () => {
-    wallets.get(carol.id)!.allowance.name = 'allowance';
+  test('counts a zap with an ISO timestamp', async () => {
     const carolAllowance = wallets.get(carol.id)!.allowance;
     const bobPrivate = wallets.get(bob.id)!.priv;
     (paymentsByInkey[carolAllowance.inkey] ??= []).push(
@@ -503,6 +501,7 @@ describe('showLeaderboardCommand', () => {
         amount: -25_000,
         time: new Date(NOW_SECONDS * 1000).toISOString() as unknown as number,
         wallet_id: carolAllowance.id,
+        extra: zapExtra(bob),
       }),
     );
     (paymentsByInkey[bobPrivate.inkey] ??= []).push(
@@ -515,13 +514,9 @@ describe('showLeaderboardCommand', () => {
     );
     const { context, sendActivity } = makeContext();
 
-    try {
-      await new ShowLeaderboardCommand().execute(context);
+    await new ShowLeaderboardCommand().execute(context);
 
-      expect(rows(sendActivity)).toEqual(['#1 Carol | 25 Sats']);
-    } finally {
-      wallets.get(carol.id)!.allowance.name = 'Allowance';
-    }
+    expect(rows(sendActivity)).toEqual(['#1 Carol | 25 Sats']);
   });
 
   test('does not count a zap from a person to their own Private wallet', async () => {

@@ -18,14 +18,11 @@ import { GENERIC_ERROR_MESSAGE } from './messages';
 import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
 import { pulseSettled, resetPulseForTests } from './services/pulse';
 import { runConversationalTurn } from './services/foundryAgentService';
-import {
-  createInvoice,
-  getUser,
-  getWalletBalance,
-  payInvoice,
-} from './services/lnbitsService';
+import { getWalletBalance, payInvoice } from './services/lnbitsService';
+import { createInvoiceForPerson, getPerson } from './services/peopleDirectory';
 
 jest.mock('./services/lnbitsService');
+jest.mock('./services/peopleDirectory');
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -95,10 +92,8 @@ describe('TeamsBot onMessage error hygiene', () => {
     jest.restoreAllMocks();
   });
 
-  test('logs the error and sends a generic message instead of error.message', async () => {
+  test('a sender with no Allowance wallet is told to ask an admin', async () => {
     const bot = new TeamsBot();
-    // A verified sender with no allowance wallet fails on an internal
-    // condition, which is exactly what the catch block must not leak.
     const { context, sendActivity } = makeContext({
       replyToId: 'card-1',
       value: {
@@ -112,6 +107,35 @@ describe('TeamsBot onMessage error hygiene', () => {
       id: 'user-1',
       aadObjectId: 'aad-user-1',
       allowanceWallet: null,
+    });
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining('Allowance wallet has not been set up yet'),
+    );
+  });
+
+  test('logs the error and sends a generic message instead of error.message', async () => {
+    const bot = new TeamsBot();
+    // An LNbits failure carrying internal detail is exactly what the catch
+    // block must not leak.
+    jest
+      .mocked(getWalletBalance)
+      .mockRejectedValueOnce(new Error('No sending wallet found. key 0d1f'));
+    const { context, sendActivity } = makeContext({
+      replyToId: 'card-1',
+      value: {
+        action: 'submitZaps',
+        zapReceiverId: 'recipient-1',
+        zapMessage: 'thanks!',
+        zapAmount: '10',
+      },
+    });
+    (context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      aadObjectId: 'aad-user-1',
+      allowanceWallet: { id: 'w-1', inkey: 'in', adminkey: 'ad' },
     });
 
     await bot.run(context);
@@ -498,16 +522,7 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     profileImg: '',
     aadObjectId: 'aad-bob',
     email: 'bob@example.test',
-    privateWallet: {
-      id: 'w-bob-priv',
-      admin: '',
-      name: 'Private',
-      user: 'recipient-1',
-      adminkey: 'adm-bob-priv',
-      inkey: 'ink-bob-priv',
-      balance_msat: 0,
-      deleted: false,
-    },
+    canReceive: true,
     allowanceWallet: null,
   };
 
@@ -525,7 +540,7 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
       id: 'user-1',
       displayName: 'Alice',
       aadObjectId: 'aad-user-1',
-      privateWallet: null,
+      canReceive: false,
       allowanceWallet: {
         id: 'w-alice-allow',
         inkey: 'ink-alice-allow',
@@ -537,9 +552,11 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getUser).mockResolvedValue(receiver);
+    jest.mocked(getPerson).mockResolvedValue(receiver);
     jest.mocked(getWalletBalance).mockResolvedValue(1000);
-    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
+    jest
+      .mocked(createInvoiceForPerson)
+      .mockResolvedValue('lnbc1-payment-request');
     jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
   });
 
@@ -669,8 +686,8 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     expect(submit.sendActivity).toHaveBeenCalledWith(
       "D'oh! You must specify a whole number between 1 and 10,000 Sats.",
     );
-    expect(getUser).not.toHaveBeenCalled();
-    expect(createInvoice).not.toHaveBeenCalled();
+    expect(getPerson).not.toHaveBeenCalled();
+    expect(createInvoiceForPerson).not.toHaveBeenCalled();
     expect(payInvoice).not.toHaveBeenCalled();
   });
 
@@ -691,24 +708,17 @@ describe('TeamsBot tells the recipient once a zap is paid', () => {
     profileImg: '',
     aadObjectId: 'aad-bob',
     email: 'bob@example.test',
-    privateWallet: {
-      id: 'w-bob-priv',
-      admin: '',
-      name: 'Private',
-      user: 'recipient-1',
-      adminkey: 'adm-bob-priv',
-      inkey: 'ink-bob-priv',
-      balance_msat: 0,
-      deleted: false,
-    },
+    canReceive: true,
     allowanceWallet: null,
   };
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getUser).mockResolvedValue(receiver);
+    jest.mocked(getPerson).mockResolvedValue(receiver);
     jest.mocked(getWalletBalance).mockResolvedValue(1000);
-    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
+    jest
+      .mocked(createInvoiceForPerson)
+      .mockResolvedValue('lnbc1-payment-request');
     jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
   });
 
@@ -750,7 +760,7 @@ describe('TeamsBot tells the recipient once a zap is paid', () => {
       id: 'user-1',
       displayName: 'Alice',
       aadObjectId: 'aad-user-1',
-      privateWallet: null,
+      canReceive: false,
       allowanceWallet: {
         id: 'w-alice-allow',
         inkey: 'ink-alice-allow',
@@ -818,16 +828,7 @@ describe('TeamsBot records AgentActivity events', () => {
     profileImg: '',
     aadObjectId: 'aad-bob',
     email: 'bob@example.test',
-    privateWallet: {
-      id: 'w-bob-priv',
-      admin: '',
-      name: 'Private',
-      user: 'recipient-1',
-      adminkey: 'adm-bob-priv',
-      inkey: 'ink-bob-priv',
-      balance_msat: 0,
-      deleted: false,
-    },
+    canReceive: true,
     allowanceWallet: null,
   };
 
@@ -846,7 +847,7 @@ describe('TeamsBot records AgentActivity events', () => {
       id: 'user-1',
       displayName: 'Alice',
       aadObjectId: 'aad-user-1',
-      privateWallet: null,
+      canReceive: false,
       allowanceWallet: {
         id: 'w-alice-allow',
         inkey: 'ink-alice-allow',
@@ -862,9 +863,11 @@ describe('TeamsBot records AgentActivity events', () => {
   beforeEach(() => {
     usePulseStandIn();
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getUser).mockResolvedValue(receiver);
+    jest.mocked(getPerson).mockResolvedValue(receiver);
     jest.mocked(getWalletBalance).mockResolvedValue(1000);
-    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
+    jest
+      .mocked(createInvoiceForPerson)
+      .mockResolvedValue('lnbc1-payment-request');
     jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
   });
 
@@ -894,7 +897,9 @@ describe('TeamsBot records AgentActivity events', () => {
 
   test('a zap that never reaches LNbits records zap.failed at level error', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    jest.mocked(createInvoice).mockResolvedValue(null as unknown as string);
+    jest
+      .mocked(createInvoiceForPerson)
+      .mockResolvedValue(null as unknown as string);
 
     await new TeamsBot().run(submit('card-pulse-failed').context);
 
@@ -1023,11 +1028,9 @@ describe('TeamsBot records AgentActivity events', () => {
   test('a failed message records chat.failed at level error', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const mock = submit('card-pulse-nowallet');
-    (mock.context.turnState as Map<unknown, unknown>).set('user', {
-      id: 'user-1',
-      aadObjectId: 'aad-user-1',
-      allowanceWallet: null,
-    });
+    jest
+      .mocked(getWalletBalance)
+      .mockRejectedValueOnce(new Error('LNbits unavailable'));
 
     await new TeamsBot().run(mock.context);
 
