@@ -5,11 +5,12 @@ const fs = require('fs');
 const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
-const STORE_PATH = dataPath('pending-rewards.json');
+// Resolved per call: each organisation has its own file (dataPaths.js).
+const storePath = () => dataPath('pending-rewards.json');
 
 const readStore = () => {
   try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
+    return JSON.parse(fs.readFileSync(storePath(), 'utf8'));
   } catch (error) {
     if (error.code === 'ENOENT') {
       return { pendingRewards: [] };
@@ -19,7 +20,7 @@ const readStore = () => {
 };
 
 const writeStore = (store) => {
-  writeJsonSecure(STORE_PATH, store);
+  writeJsonSecure(storePath(), store);
 };
 
 const addPendingReward = (pending) => {

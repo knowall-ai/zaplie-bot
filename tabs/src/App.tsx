@@ -22,6 +22,7 @@ import Wallet from './Wallet';
 import AuthStart from './AuthStart';
 import AuthEnd from './AuthEnd';
 import Settings from './Settings';
+import TenantSetup from './TenantSetup';
 
 type AppProps = {
   pca: IPublicClientApplication;
@@ -121,6 +122,14 @@ function App({ pca }: AppProps) {
                 element={
                   <RequireAuth>
                     <Settings />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/setup"
+                element={
+                  <RequireAuth>
+                    <TenantSetup />
                   </RequireAuth>
                 }
               />

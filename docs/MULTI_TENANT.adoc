@@ -1,0 +1,170 @@
+= Multi-tenant administration and onboarding
+:toc: macro
+:toclevels: 2
+
+toc::[]
+
+== Status
+
+Zaplie stays locked to KnowAll's tenant until Ben approves customers.
+
+* The app registrations are single-tenant: "Zaplie" is `AzureADMyOrg` in
+  `aad.manifest.json` / `teamsapp.yml`, and so is "Zaplie Bot (prod)".
+* `ZAPLIE_ALLOWED_TENANTS` defaults to the home tenant (`AAD_TENANT_ID`).
+
+This change makes everything *ready* for more organisations: tenant-scoped
+data and admin checks, organisation setup, and the Admins section. It works
+today for the home tenant. A customer is admitted only by the manual steps in
+<<admit>>.
+
+== How it works
+
+=== Which tokens are accepted
+
+`tabs/backend/msalValidator.js` reads the token's `tid` (unverified) only to
+decide where to verify it. A tenant not on `ZAPLIE_ALLOWED_TENANTS` is refused
+before any verification, so even a correctly signed token from another tenant
+gets nowhere. An allowed tenant's token is verified against *that tenant's*
+discovery keys and issuer (`https://login.microsoftonline.com/<tid>/v2.0`),
+and the payload's `tid` must match.
+
+=== Which organisation a request acts for
+
+`tabs/backend/tenantMiddleware.js` runs every `/api` request in one tenant's
+context (`tenantContext.js`, AsyncLocalStorage):
+
+* *a portal user:* the verified token's own `tid`;
+* *the bot (shared `TAB_BACKEND_TOKEN`):* `X-Zaplie-Tenant`, which must be an
+  allowed tenant; if absent, the home tenant;
+* *KnowAll's platform operator:* may *read* another allowed organisation with
+  `X-Zaplie-Act-As-Tenant` on a GET (see <<roles>>);
+* *public reads and anything outside a request* (the allowance timer, the
+  CLI): the home tenant.
+
+=== Where each organisation's data lives
+
+`dataPaths.js` resolves each organisation's files from that context.
+
+* The home tenant keeps using the data directory root, where all existing
+  data already is. That *is* the migration: existing single-tenant data
+  belongs to the home tenant.
+* A marker, `tenant.json`, records which tenant the root belongs to. If
+  `AAD_TENANT_ID` ever changes, the backend refuses to serve the root to the
+  new tenant.
+* Every other tenant gets `tenants/<tid>/`. Per organisation:
+  * `people.json` (the directory and its NWC connections);
+  * `zap-records.json`;
+  * `data.json` (reward name, persona, reward policy, allowance policy);
+  * identities, connections, pending rewards, webhook keys;
+  * `tenant-config.json` (setup).
+* Shared by the whole deployment: `secrets.json`, the GitHub App
+  credentials, the zap idempotency store and the allowance sync state.
+
+An admin of one organisation therefore cannot read or change another's
+people, wallets, settings or provisioner. Every store a request touches is
+its own tenant's. `tabs/backend/multiTenant.test.js` proves it with real
+signed tokens for three tenants.
+
+[[roles]]
+=== Who is an admin (`adminRoles.js`)
+
+Entra is the single source of truth; Zaplie keeps no admin list.
+
+[cols="1,2"]
+|===
+| Zaplie admin of their own tenant
+| The *Zaplie.Admin* app role (assign it to the tenant's "Zaplie Admins"
+  group), or *Global Administrator* (`wids`), so an organisation can never
+  lock itself out.
+
+| May use "Set up your organisation"
+| Zaplie admins, plus the IT roles that grant consent: Privileged Role
+  Administrator, Cloud Application Administrator, Application Administrator.
+
+| Platform operator (KnowAll support)
+| The *Zaplie.PlatformOperator* app role, honoured *only* in a token from
+  `ZAPLIE_PLATFORM_TENANT_ID` (default the home tenant). It allows reading
+  another organisation's admin views and `GET /api/tenant/platform/tenants`,
+  and nothing else: writes are refused. A customer tenant can create a role
+  of that name; it never counts.
+|===
+
+`wids` reaches the ID token because `groupMembershipClaims` is
+`DirectoryRole` in `aad.manifest.json`.
+
+=== Set up your organisation (`/setup`)
+
+For the IT admin who granted consent, and for Zaplie admins. Saved per
+organisation (`PUT /api/tenant/setup`):
+
+. *Zaplie Admins group.* Create it in Entra and assign it the Zaplie.Admin
+  role. The page deep-links to *Enterprise applications → Zaplie → Users and
+  groups*. Paste the group's object id so Settings → Admins can list it.
+. *Who can use Zaplie.* The page explains *Assignment required* (Enterprise
+  application → Properties), and sets the organisation's guest allow-list
+  (`person@domain`, `@domain` or an object id). The allow-list is added to the
+  deployment's `ZAPLIE_GUEST_ALLOWLIST` for that organisation's provisioning
+  gate.
+. *Wallets.* Default budget and period for *Add people* (the wallet
+  provisioner).
+
+=== Settings → Admins
+
+The members of the Zaplie Admins group, read from Microsoft Graph with the
+signed-in admin's own delegated token:
+
+* Reading needs *GroupMember.Read.All*.
+* Adding and removing appear only if the tenant granted the optional
+  *GroupMember.ReadWrite.All* (plus *User.ReadBasic.All* to find the person)
+  and Graph lets this admin manage the group.
+* Otherwise the list is read-only, with a link to the group in Entra.
+* Without the read permission, the section says so and links to Entra.
+
+Delegated from the browser rather than on-behalf-of in the backend: the
+portal backend holds no client secret and receives ID tokens, which cannot be
+exchanged (issue #184). Moving to OBO comes with that issue.
+
+== Still home-tenant only (follow-ups)
+
+These run for the home tenant only, by design for now:
+
+* The Teams bot: its registration is single-tenant, it gates on
+  `AAD_APP_TENANT_ID`, and it sends no `X-Zaplie-Tenant` header yet.
+* The allowance sync and timer, and the Fund wallet (`ALLOWANCE_FUND_ADMINKEY`).
+* The Treasury NWC connection (`ZAPLIE_TREASURY_NWC`): another organisation
+  has no Treasury, so its rewards are refused.
+* The GitHub App and the rewards store.
+
+Each needs a per-organisation setting before a customer can use that feature.
+
+== What Ben does in Entra now (home tenant)
+
+. Apply the `aad.manifest.json` change to "Zaplie" (`teamsapp provision`, or
+  by hand):
+  * *Token configuration → Add groups claim → Directory roles* (emits `wids`);
+  * *App roles → Zaplie.PlatformOperator*.
+. *API permissions → Microsoft Graph → delegated → GroupMember.Read.All →
+  Grant admin consent.* Optional: *GroupMember.ReadWrite.All* and
+  *User.ReadBasic.All* (lets Settings → Admins add and remove members).
+. Create the "Zaplie Admins" group, assign it the Zaplie.Admin role
+  (*Enterprise applications → Zaplie → Users and groups*), and paste its
+  object id on `/setup`.
+. Assign Zaplie.PlatformOperator to the KnowAll support staff who need it.
+
+Nothing else changes: `ZAPLIE_ALLOWED_TENANTS` stays unset (home only).
+
+[[admit]]
+== Later: admitting a customer organisation (manual, needs Ben's approval)
+
+. "Zaplie" app registration: set `signInAudience` to `AzureADMultipleOrgs`
+  (in `aad.manifest.json` / `teamsapp.yml` and in Entra). Keep the SPA
+  redirect URIs; add `<portal>/setup`.
+. For Teams, "Zaplie Bot (prod)" must become multi-tenant too, and the bot
+  must send `X-Zaplie-Tenant` (a follow-up; see above).
+. Send the customer's IT admin the admin-consent link:
+  `https://login.microsoftonline.com/<customer tenant id>/adminconsent?client_id=<Zaplie client id>&redirect_uri=<portal>/setup`
+. Add the customer's tenant id to `ZAPLIE_ALLOWED_TENANTS` on
+  `zaplie-prod-webapp`. Until then their tokens are refused.
+. Their IT admin signs in and lands on *Set up your organisation*.
+. Rollback: remove the tenant id from `ZAPLIE_ALLOWED_TENANTS`. Their data
+  stays in `tenants/<tid>/`, untouched.

@@ -108,13 +108,16 @@ const toPayment = (entry) => ({
   },
 });
 
-let defaultStore = null;
+// One record file per organisation (dataPaths.js).
+const stores = new Map();
 const zapRecords = () => {
-  if (!defaultStore) defaultStore = createZapRecordStore();
-  return defaultStore;
+  const { currentTenant } = require('./tenantContext');
+  const key = currentTenant() || 'home';
+  if (!stores.has(key)) stores.set(key, createZapRecordStore());
+  return stores.get(key);
 };
 const resetZapRecordsForTests = () => {
-  defaultStore = null;
+  stores.clear();
 };
 
 module.exports = { createZapRecordStore, resetZapRecordsForTests, toPayment, zapRecords };

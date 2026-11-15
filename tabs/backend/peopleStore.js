@@ -181,15 +181,18 @@ const toPublicPerson = (person) => ({
   },
 });
 
-let defaultStore = null;
-/** The process-wide store, created on first use so tests can set the data dir first. */
+// One store per organisation (its own people.json, dataPaths.js), created on
+// first use so tests can set the data dir first.
+const stores = new Map();
 const peopleStore = () => {
-  if (!defaultStore) defaultStore = createPeopleStore();
-  return defaultStore;
+  const { currentTenant } = require('./tenantContext');
+  const key = currentTenant() || 'home';
+  if (!stores.has(key)) stores.set(key, createPeopleStore());
+  return stores.get(key);
 };
 
 const resetPeopleStoreForTests = () => {
-  defaultStore = null;
+  stores.clear();
 };
 
 module.exports = {

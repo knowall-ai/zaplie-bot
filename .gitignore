@@ -61,6 +61,10 @@ docs/.asciidoctor/
 tabs/backend/github-app-credentials.json
 tabs/backend/secrets.json
 tabs/backend/people.json
+tabs/backend/zap-records.json
+tabs/backend/tenant.json
+tabs/backend/tenant-config.json
+tabs/backend/tenants/
 tabs/backend/people.json.*.tmp
 
 # Python cache (assets/agent/scripts)

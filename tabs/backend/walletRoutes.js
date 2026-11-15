@@ -4,7 +4,9 @@ const {
   extractBearerToken: defaultExtractBearerToken,
   verifyMsalPayload: defaultVerifyMsalPayload,
 } = require('./msalValidator');
-const { tokenMemberVerdict } = require('./memberGate');
+const { parseGuestAllowlist, tokenMemberVerdict } = require('./memberGate');
+const { currentTenant } = require('./tenantContext');
+const { readTenantSettings } = require('./tenantSettingsStore');
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const INVOICE_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
@@ -125,14 +127,22 @@ const createWalletRouter = ({
       res.status(400).json({ error: 'invalid setup request' });
       return;
     }
-    const verdict = tokenMemberVerdict({
-      oid: req.auth.oid,
-      tid: req.auth.tid,
-      acct: req.auth.acct,
-      preferred_username: req.auth.preferredUsername,
-    });
+    // A member of the organisation the request runs for (the token's own,
+    // allowed tenant), or someone on that organisation's guest allow-list:
+    // the deployment's ZAPLIE_GUEST_ALLOWLIST plus the one set in setup.
+    const tenantGuests = readTenantSettings().guestAllowlist || [];
+    const verdict = tokenMemberVerdict(
+      {
+        oid: req.auth.oid,
+        tid: req.auth.tid,
+        acct: req.auth.acct,
+        preferred_username: req.auth.preferredUsername,
+      },
+      currentTenant() || undefined,
+      parseGuestAllowlist([process.env.ZAPLIE_GUEST_ALLOWLIST || '', ...tenantGuests].join(',')),
+    );
     if (!verdict.allowed) {
-      console.warn(`LNbits provisioning refused (${verdict.reason}) for ${req.auth.oid}`);
+      console.warn(`Directory provisioning refused (${verdict.reason}) for ${req.auth.oid}`);
       res.status(403).json({ error: 'not a member of this organisation' });
       return;
     }

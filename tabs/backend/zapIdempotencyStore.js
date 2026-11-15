@@ -1,7 +1,7 @@
 const { createHash, randomUUID } = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { dataPath } = require('./dataPaths');
+const { globalDataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
 
 const STORE_VERSION = 1;
@@ -310,7 +310,7 @@ const pruneExpired = (store, nowMs) => {
 
 const createZapIdempotencyStore = ({
   // The file keeps its original name so existing records stay in force.
-  storePath = dataPath('lnbits-zap-idempotency.json'),
+  storePath = globalDataPath('lnbits-zap-idempotency.json'),
   now = () => new Date().toISOString(),
 } = {}) => {
   const lockPath = `${storePath}.lock`;

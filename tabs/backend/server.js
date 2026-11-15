@@ -57,6 +57,13 @@ app.get('/healthz', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Every /api request runs as one organisation (tenantMiddleware.js): stores,
+// settings and admin checks below all resolve to the caller's own tenant.
+app.use('/api', require('./tenantMiddleware').tenantMiddleware);
+
+// The organisation's own view and "Set up your organisation".
+app.use('/api/tenant', require('./tenantRoutes'));
+
 // All browser access to wallets goes through this authenticated same-origin
 // gateway; wallet connections stay in the Node process. /api/lnbits is the
 // old path, kept so a portal tab loaded before a deploy keeps working.
@@ -93,12 +100,13 @@ const { requireSignedInOrBot } = require('./readAuth');
 // outside the deployment tree: ZAPLIE_DATA_DIR points at a durable directory
 // (for example /home/data/zaplie on Linux App Service). Unset - the local
 // development default - keeps the store next to the code as before.
-const dataFilePath = dataPath('data.json');
+// Per organisation: resolved on every read and write (dataPaths.js).
+const dataFilePath = () => dataPath('data.json');
 
 // Function to read data from the JSON file
 const readData = () => {
   try {
-    const data = fs.readFileSync(dataFilePath, 'utf8');
+    const data = fs.readFileSync(dataFilePath(), 'utf8');
     return JSON.parse(data);
   } catch (error) {
     console.error('Error reading data file:', error);
@@ -114,7 +122,7 @@ const readAllowanceData = readDataStrict(dataFilePath);
 // Function to write data to the JSON file
 const writeData = (data) => {
   try {
-    writeJsonSecure(dataFilePath, data);
+    writeJsonSecure(dataFilePath(), data);
     return true;
   } catch (error) {
     console.error('Error writing data file:', error);
