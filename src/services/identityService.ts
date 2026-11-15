@@ -1,8 +1,9 @@
 import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 
+// The person a GitHub id is linked to, by Entra object id: the key of
+// Zaplie's people directory (no LNbits user id exists any more).
 export interface ResolvedRewardRecipient {
   personAad: string;
-  lnbitsUserId: string;
 }
 
 export async function resolveRewardRecipientByGithubId(
@@ -21,13 +22,8 @@ export async function resolveRewardRecipientByGithubId(
     throw new Error(`identity resolve failed: ${response.status}`);
   }
   const data = await response.json();
-  if (
-    typeof data.personAad !== 'string' ||
-    data.personAad.length === 0 ||
-    typeof data.lnbitsUserId !== 'string' ||
-    data.lnbitsUserId.length === 0
-  ) {
+  if (typeof data.personAad !== 'string' || data.personAad.length === 0) {
     throw new Error('identity resolve returned an invalid recipient');
   }
-  return { personAad: data.personAad, lnbitsUserId: data.lnbitsUserId };
+  return { personAad: data.personAad };
 }

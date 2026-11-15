@@ -1,8 +1,9 @@
+import { createHash } from 'crypto';
 import {
-  getUserWalletsByUserId,
-  createInvoice,
-  payInvoice,
-} from './lnbitsService';
+  payReward as payRewardThroughPortal,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
+} from './peopleDirectory';
 import { getRewardConfig } from './fetchRewardPolicy';
 import { getAutomations } from './fetchAutomations';
 import {
@@ -13,10 +14,8 @@ import {
   createPendingReward,
   PendingRewardWriteUncertainError,
 } from './pendingRewardsService';
-import { toPaymentExtraWallet } from './paymentExtra';
 import { positiveIntFromEnv } from './envNumbers';
 
-const TREASURY_DISPLAY_NAME = 'Automation';
 const GITHUB_REWARD_EVENT_TYPES = [
   'githubPrMerged',
   'githubIssueClosed',
@@ -283,14 +282,6 @@ function maxAmountSats(): number {
   return positiveIntFromEnv('REWARDS_MAX_AMOUNT_SATS', 10000);
 }
 
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set`);
-  }
-  return value;
-}
-
 /**
  * Resolves the recipient through the identity graph, keyed on the stable
  * GitHub id. A recipient who hasn't linked GitHub yet is null, so the reward
@@ -323,9 +314,10 @@ export async function resolveRewardRecipient(request: {
 export async function payReward(
   reward: ResolvedRewardRequest,
   recipient: ResolvedRewardRecipient | null,
+  // Stable per delivery (processReward passes a hash of its ledger key), so
+  // the portal pays one reward at most once however often it is retried.
+  idempotencyKey?: string,
 ): Promise<{ paymentHash: string } | { pending: true }> {
-  const treasuryAdminKey = requiredEnv('REWARDS_TREASURY_ADMINKEY');
-
   if (recipient === null) {
     if (!reward.recipientId) {
       throw new RewardError(
@@ -356,67 +348,48 @@ export async function payReward(
     return { pending: true };
   }
 
-  const userId = recipient.lnbitsUserId;
-  const wallets = await getUserWalletsByUserId(userId);
-  if (!Array.isArray(wallets)) {
-    throw new Error(`Could not read the wallets for LNbits user ${userId}`);
-  }
-
-  const privateWallet = wallets.find(wallet => wallet.name === 'Private');
-  if (!privateWallet) {
-    throw new Error(`LNbits user ${userId} has no Private wallet`);
-  }
-
-  // Shape the feed and transaction log read. The recipient wallet goes
-  // through the same projection SendZap uses, so no keys are persisted.
-  const extra = {
-    tag: 'zap',
-    automation: true,
-    eventType: reward.eventType,
-    repo: reward.repo,
-    source: reward.source,
-    // How the amount was made up: numbers and a short level name, no names.
-    ...(reward.baseSats !== undefined ? { baseSats: reward.baseSats } : {}),
-    ...(reward.bonusSats !== undefined ? { bonusSats: reward.bonusSats } : {}),
-    ...(reward.level !== undefined ? { level: reward.level } : {}),
-    // The bot holds only the treasury wallet's admin key, not its wallet
-    // object, and a lookup just to fill id/name/user would put an LNbits round
-    // trip on the payment path for fields no reader uses (see SOLUTION_DESIGN).
-    from: { displayName: TREASURY_DISPLAY_NAME },
-    to: toPaymentExtraWallet(
-      privateWallet,
-      'recipient Private',
-      reward.recipient,
-    ),
-  };
-
-  const paymentRequest = await createInvoice(
-    privateWallet.inkey,
-    privateWallet.id,
-    reward.amountSats,
-    reward.reason,
-    extra,
-  );
-  // createInvoice returns the caught error object instead of throwing (legacy)
-  if (typeof paymentRequest !== 'string') {
-    throw new Error(`creating reward invoice failed: ${paymentRequest}`);
-  }
-
-  // From here the request has left this process, so a failure no longer
-  // means "nothing was paid". Only the errors above may be retried.
-  let result;
+  // The portal pays from the Treasury (over NWC) to the recipient's
+  // registered address, resolved from the directory by Entra id, and records
+  // it for the feed and the automation stats. The bot holds no Treasury
+  // credential.
+  const key =
+    idempotencyKey ??
+    createHash('sha256')
+      .update(JSON.stringify({ reward, personAad: recipient.personAad }))
+      .digest('hex');
   try {
-    result = await payInvoice(treasuryAdminKey, paymentRequest, extra);
+    const paymentHash = await payRewardThroughPortal({
+      recipientOid: recipient.personAad,
+      recipientLabel: reward.recipient,
+      amountSats: reward.amountSats,
+      memo: reward.reason,
+      // How the amount was made up: numbers and a short level name, no names.
+      reward: {
+        ...(reward.eventType !== undefined
+          ? { eventType: reward.eventType }
+          : {}),
+        ...(reward.repo !== undefined ? { repo: reward.repo } : {}),
+        source: reward.source,
+        ...(reward.baseSats !== undefined ? { baseSats: reward.baseSats } : {}),
+        ...(reward.bonusSats !== undefined
+          ? { bonusSats: reward.bonusSats }
+          : {}),
+        ...(reward.level ? { level: reward.level } : {}),
+      },
+      idempotencyKey: key,
+    });
+    return { paymentHash };
   } catch (error) {
+    // A refusal before payment (no receive address, Treasury budget used
+    // up) is a plain error a retry may repeat; anything else may have paid.
+    if (error instanceof PaymentNotSentError) {
+      throw error;
+    }
     throw new RewardPaymentUncertainError(
-      'The reward payment request failed after being sent to LNbits.',
+      error instanceof PaymentOutcomeUncertainError
+        ? error.message
+        : 'The reward payment request failed after being sent to the portal.',
       error,
     );
   }
-  if (!result?.payment_hash) {
-    throw new RewardPaymentUncertainError(
-      'The reward payment returned no payment hash, so it cannot be confirmed.',
-    );
-  }
-  return { paymentHash: result.payment_hash };
 }

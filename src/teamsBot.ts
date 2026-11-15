@@ -14,6 +14,7 @@ import { SEND_ZAP_COMMAND } from './commands/commandNames';
 import {
   SendZapCommand,
   SendZap,
+  allowanceBalanceSats,
   buildZapReceiptCard,
 } from './commands/sendZapCommand';
 import { ZapLedger, zapKey } from './services/zapLedger';
@@ -51,7 +52,8 @@ import { t } from './i18n';
 import { runConversationalTurn } from './services/foundryAgentService';
 import config from './config';
 import { createReadOnlyTools } from './commands/agentTools';
-import { getUser, getWalletBalance } from './services/lnbitsService';
+import { createHash } from 'crypto';
+import { getPerson } from './services/peopleDirectory';
 import {
   commandSubject,
   recordActivity,
@@ -78,8 +80,6 @@ if (!globalRewardName) {
     'LNBITS_POINTS_LABEL is not set. Configure it in env/.env.dev (propagated to the bot by scripts/writeEnv.js).',
   );
 }
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 
 export class TeamsBot extends TeamsActivityHandler {
   conversationState: ConversationState;
@@ -202,12 +202,8 @@ export class TeamsBot extends TeamsActivityHandler {
           if (!currentUser || (!currentUser.id && !currentUser.aadObjectId)) {
             throw new UserFacingError('senderUnverified');
           }
-          if (
-            !sendingWallet?.id ||
-            !sendingWallet.inkey ||
-            !sendingWallet.adminkey
-          ) {
-            throw new Error('No sending wallet found.');
+          if (!sendingWallet?.id) {
+            throw new UserFacingError('allowanceNotReady');
           }
 
           if (receiverIds.length === 0) {
@@ -248,7 +244,7 @@ export class TeamsBot extends TeamsActivityHandler {
             return;
           }
 
-          const liveBalance = await getWalletBalance(sendingWallet.inkey);
+          const liveBalance = await allowanceBalanceSats(currentUser);
           const amount = validateZapSubmit(
             zapAmount,
             pendingReceiverIds.length,
@@ -267,7 +263,7 @@ export class TeamsBot extends TeamsActivityHandler {
               ledger: this.zapLedger,
               entryKey: keyFor(recId),
               recipientId: recId,
-              getReceiver: () => getUser(adminKey, recId),
+              getReceiver: () => getPerson(recId),
               validateReceiver: receiver =>
                 validateSelfZap(currentUser, receiver),
               pay: receiver =>
@@ -279,6 +275,9 @@ export class TeamsBot extends TeamsActivityHandler {
                   context,
                   false,
                   globalRewardName,
+                  // The ledger key is unique per card and recipient, so the
+                  // portal pays a resubmitted card at most once too.
+                  createHash('sha256').update(keyFor(recId)).digest('hex'),
                 ),
               onPaid: async receiver => {
                 paidReceivers.push(receiver);
@@ -336,9 +335,7 @@ export class TeamsBot extends TeamsActivityHandler {
           // same way, for the same reason.
           const updateReceiptCard = async (): Promise<void> => {
             //fetch remainingBalance
-            const remainingBalance = await getWalletBalance(
-              currentUser.allowanceWallet.inkey,
-            );
+            const remainingBalance = await allowanceBalanceSats(currentUser);
             console.log('Remaining Balance:', remainingBalance);
 
             // Update the adaptive card to a read-only receipt for the

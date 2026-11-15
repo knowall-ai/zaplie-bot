@@ -15,8 +15,6 @@ import { FetchUserMiddleware } from './fetchUserMiddleware';
 import { UserService } from './userService';
 import { memberVerdict, parseGuestAllowlist } from './memberGate';
 
-jest.mock('./lnbitsService');
-
 const HOME = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const OTHER = '11111111-2222-3333-4444-555555555555';
 const originalTenant = process.env.AAD_APP_TENANT_ID;

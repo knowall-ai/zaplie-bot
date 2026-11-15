@@ -19,13 +19,27 @@ import { SSOCommand, SSOCommandMap } from './commands/SSOCommandMap';
 import { pulseSettled, resetPulseForTests } from './services/pulse';
 import { runConversationalTurn } from './services/foundryAgentService';
 import {
-  createInvoice,
-  getUser,
-  getWalletBalance,
-  payInvoice,
-} from './services/lnbitsService';
+  getBalances,
+  getPerson,
+  payZap,
+  PaymentNotSentError,
+} from './services/peopleDirectory';
 
-jest.mock('./services/lnbitsService');
+jest.mock('./services/peopleDirectory', () => {
+  const actual = jest.requireActual<
+    typeof import('./services/peopleDirectory')
+  >('./services/peopleDirectory');
+  return {
+    ...actual,
+    ensurePerson: jest.fn(),
+    listPeople: jest.fn(),
+    getPerson: jest.fn(),
+    payZap: jest.fn(),
+    payReward: jest.fn(),
+    getBalances: jest.fn(),
+    listZaps: jest.fn(),
+  };
+});
 jest.mock('./services/foundryAgentService');
 jest.mock('./services/graphService');
 jest.mock('./services/zapHistoryService');
@@ -95,10 +109,8 @@ describe('TeamsBot onMessage error hygiene', () => {
     jest.restoreAllMocks();
   });
 
-  test('logs the error and sends a generic message instead of error.message', async () => {
+  test('a sender with no Allowance wallet is told to ask an admin', async () => {
     const bot = new TeamsBot();
-    // A verified sender with no allowance wallet fails on an internal
-    // condition, which is exactly what the catch block must not leak.
     const { context, sendActivity } = makeContext({
       replyToId: 'card-1',
       value: {
@@ -112,6 +124,35 @@ describe('TeamsBot onMessage error hygiene', () => {
       id: 'user-1',
       aadObjectId: 'aad-user-1',
       allowanceWallet: null,
+    });
+
+    await bot.run(context);
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining('Allowance wallet has not been set up yet'),
+    );
+  });
+
+  test('logs the error and sends a generic message instead of error.message', async () => {
+    const bot = new TeamsBot();
+    // An LNbits failure carrying internal detail is exactly what the catch
+    // block must not leak.
+    jest
+      .mocked(getBalances)
+      .mockRejectedValueOnce(new Error('No sending wallet found. key 0d1f'));
+    const { context, sendActivity } = makeContext({
+      replyToId: 'card-1',
+      value: {
+        action: 'submitZaps',
+        zapReceiverId: 'recipient-1',
+        zapMessage: 'thanks!',
+        zapAmount: '10',
+      },
+    });
+    (context.turnState as Map<unknown, unknown>).set('user', {
+      id: 'user-1',
+      aadObjectId: 'aad-user-1',
+      allowanceWallet: { id: 'w-1', inkey: 'in', adminkey: 'ad' },
     });
 
     await bot.run(context);
@@ -498,16 +539,7 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     profileImg: '',
     aadObjectId: 'aad-bob',
     email: 'bob@example.test',
-    privateWallet: {
-      id: 'w-bob-priv',
-      admin: '',
-      name: 'Private',
-      user: 'recipient-1',
-      adminkey: 'adm-bob-priv',
-      inkey: 'ink-bob-priv',
-      balance_msat: 0,
-      deleted: false,
-    },
+    canReceive: true,
     allowanceWallet: null,
   };
 
@@ -525,7 +557,7 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
       id: 'user-1',
       displayName: 'Alice',
       aadObjectId: 'aad-user-1',
-      privateWallet: null,
+      canReceive: false,
       allowanceWallet: {
         id: 'w-alice-allow',
         inkey: 'ink-alice-allow',
@@ -537,10 +569,11 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getUser).mockResolvedValue(receiver);
-    jest.mocked(getWalletBalance).mockResolvedValue(1000);
-    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
-    jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
+    jest.mocked(getPerson).mockResolvedValue(receiver);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 1000, budgetRemainingSats: null });
+    jest.mocked(payZap).mockResolvedValue('hash-1');
   });
 
   afterEach(() => {
@@ -555,10 +588,10 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     await bot.run(first.context);
     await bot.run(second.context);
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     // The paid submit reads the balance twice (budget check, receipt); the
     // duplicate is stopped before it touches LNbits at all.
-    expect(getWalletBalance).toHaveBeenCalledTimes(2);
+    expect(getBalances).toHaveBeenCalledTimes(2);
     expect(first.sendActivity).toHaveBeenCalledWith(
       expect.stringContaining('Awesome! You sent 10'),
     );
@@ -578,9 +611,9 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     const gate = new Promise<void>(resolve => {
       releaseBalance = resolve;
     });
-    jest.mocked(getWalletBalance).mockImplementation(async () => {
+    jest.mocked(getBalances).mockImplementation(async () => {
       await gate;
-      return 1000;
+      return { allowanceSats: 1000, budgetRemainingSats: null };
     });
 
     const runs = Promise.all([bot.run(first.context), bot.run(second.context)]);
@@ -588,10 +621,10 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     releaseBalance();
     await runs;
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     // Three balance reads: both submits passed the pending check while the
     // ledger was still empty, then the winner read it again for the receipt.
-    expect(getWalletBalance).toHaveBeenCalledTimes(3);
+    expect(getBalances).toHaveBeenCalledTimes(3);
     const replies = [
       ...first.sendActivity.mock.calls,
       ...second.sendActivity.mock.calls,
@@ -614,16 +647,16 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     const bot = new TeamsBot();
     const submit = submitContext('card-balance-fails');
     let reads = 0;
-    jest.mocked(getWalletBalance).mockImplementation(async () => {
+    jest.mocked(getBalances).mockImplementation(async () => {
       reads += 1;
       // The budget check passes; the receipt read is the one that fails.
       if (reads > 1) throw new Error('Error getting wallet balance');
-      return 1000;
+      return { allowanceSats: 1000, budgetRemainingSats: null };
     });
 
     await bot.run(submit.context);
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     expect(submit.sendActivity).toHaveBeenCalledWith(
       expect.stringContaining('Awesome! You sent 10'),
     );
@@ -646,7 +679,7 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
 
     await bot.run(submit.context);
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     expect(submit.sendActivity).toHaveBeenCalledWith(
       expect.stringContaining('Awesome! You sent 10'),
     );
@@ -660,7 +693,9 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
   // Number('1e3') is 1000: a submit forged outside the card used to pay
   // 1,000 sats for an amount the card would never let through.
   test('a forged 1e3 amount sends nothing and gets the amount error', async () => {
-    jest.mocked(getWalletBalance).mockResolvedValue(5000);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 5000, budgetRemainingSats: null });
     const bot = new TeamsBot();
     const submit = submitContext('card-forged-amount', '1e3');
 
@@ -669,9 +704,8 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     expect(submit.sendActivity).toHaveBeenCalledWith(
       "D'oh! You must specify a whole number between 1 and 10,000 Sats.",
     );
-    expect(getUser).not.toHaveBeenCalled();
-    expect(createInvoice).not.toHaveBeenCalled();
-    expect(payInvoice).not.toHaveBeenCalled();
+    expect(getPerson).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
   });
 
   test('pays a different card to the same recipient normally', async () => {
@@ -680,7 +714,7 @@ describe('TeamsBot pays a zap card at most once per recipient', () => {
     await bot.run(submitContext('card-a').context);
     await bot.run(submitContext('card-b').context);
 
-    expect(payInvoice).toHaveBeenCalledTimes(2);
+    expect(payZap).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -691,25 +725,17 @@ describe('TeamsBot tells the recipient once a zap is paid', () => {
     profileImg: '',
     aadObjectId: 'aad-bob',
     email: 'bob@example.test',
-    privateWallet: {
-      id: 'w-bob-priv',
-      admin: '',
-      name: 'Private',
-      user: 'recipient-1',
-      adminkey: 'adm-bob-priv',
-      inkey: 'ink-bob-priv',
-      balance_msat: 0,
-      deleted: false,
-    },
+    canReceive: true,
     allowanceWallet: null,
   };
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getUser).mockResolvedValue(receiver);
-    jest.mocked(getWalletBalance).mockResolvedValue(1000);
-    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
-    jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
+    jest.mocked(getPerson).mockResolvedValue(receiver);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 1000, budgetRemainingSats: null });
+    jest.mocked(payZap).mockResolvedValue('hash-1');
   });
 
   afterEach(() => {
@@ -750,7 +776,7 @@ describe('TeamsBot tells the recipient once a zap is paid', () => {
       id: 'user-1',
       displayName: 'Alice',
       aadObjectId: 'aad-user-1',
-      privateWallet: null,
+      canReceive: false,
       allowanceWallet: {
         id: 'w-alice-allow',
         inkey: 'ink-alice-allow',
@@ -763,7 +789,7 @@ describe('TeamsBot tells the recipient once a zap is paid', () => {
     await bot.run(mock.context);
     await bot.settleBackgroundWork();
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     expect(createConversationAsync).toHaveBeenCalledTimes(1);
     const [botAppId, channelId, serviceUrl, , parameters] =
       createConversationAsync.mock.calls[0];
@@ -818,16 +844,7 @@ describe('TeamsBot records AgentActivity events', () => {
     profileImg: '',
     aadObjectId: 'aad-bob',
     email: 'bob@example.test',
-    privateWallet: {
-      id: 'w-bob-priv',
-      admin: '',
-      name: 'Private',
-      user: 'recipient-1',
-      adminkey: 'adm-bob-priv',
-      inkey: 'ink-bob-priv',
-      balance_msat: 0,
-      deleted: false,
-    },
+    canReceive: true,
     allowanceWallet: null,
   };
 
@@ -846,7 +863,7 @@ describe('TeamsBot records AgentActivity events', () => {
       id: 'user-1',
       displayName: 'Alice',
       aadObjectId: 'aad-user-1',
-      privateWallet: null,
+      canReceive: false,
       allowanceWallet: {
         id: 'w-alice-allow',
         inkey: 'ink-alice-allow',
@@ -862,10 +879,11 @@ describe('TeamsBot records AgentActivity events', () => {
   beforeEach(() => {
     usePulseStandIn();
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.mocked(getUser).mockResolvedValue(receiver);
-    jest.mocked(getWalletBalance).mockResolvedValue(1000);
-    jest.mocked(createInvoice).mockResolvedValue('lnbc1-payment-request');
-    jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
+    jest.mocked(getPerson).mockResolvedValue(receiver);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 1000, budgetRemainingSats: null });
+    jest.mocked(payZap).mockResolvedValue('hash-1');
   });
 
   afterEach(() => {
@@ -892,9 +910,11 @@ describe('TeamsBot records AgentActivity events', () => {
     }
   });
 
-  test('a zap that never reaches LNbits records zap.failed at level error', async () => {
+  test('a zap the portal refuses before paying records zap.failed at level error', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    jest.mocked(createInvoice).mockResolvedValue(null as unknown as string);
+    jest
+      .mocked(payZap)
+      .mockRejectedValueOnce(new PaymentNotSentError('recipient not ready'));
 
     await new TeamsBot().run(submit('card-pulse-failed').context);
 
@@ -933,7 +953,7 @@ describe('TeamsBot records AgentActivity events', () => {
 
     await pulseSettled();
 
-    expect(payInvoice).toHaveBeenCalledTimes(1);
+    expect(payZap).toHaveBeenCalledTimes(1);
     expect(mock.sendActivity).toHaveBeenCalledWith(
       expect.stringContaining('Awesome! You sent 10'),
     );
@@ -1023,11 +1043,9 @@ describe('TeamsBot records AgentActivity events', () => {
   test('a failed message records chat.failed at level error', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const mock = submit('card-pulse-nowallet');
-    (mock.context.turnState as Map<unknown, unknown>).set('user', {
-      id: 'user-1',
-      aadObjectId: 'aad-user-1',
-      allowanceWallet: null,
-    });
+    jest
+      .mocked(getBalances)
+      .mockRejectedValueOnce(new Error('LNbits unavailable'));
 
     await new TeamsBot().run(mock.context);
 
@@ -1059,6 +1077,6 @@ describe('TeamsBot records AgentActivity events', () => {
         subject: 'user-facing',
       }),
     ]);
-    expect(payInvoice).not.toHaveBeenCalled();
+    expect(payZap).not.toHaveBeenCalled();
   });
 });

@@ -1,10 +1,10 @@
 // agentTools.test.ts
 //
-// Mocks lnbitsService/zapHistoryService (external dependencies), not
+// Mocks peopleDirectory/zapHistoryService (external dependencies), not
 // agentTools itself.
 
 import { createReadOnlyTools } from './agentTools';
-import { getUserWallets } from '../services/lnbitsService';
+import { getBalances } from '../services/peopleDirectory';
 import {
   getZapActivity,
   getZapLeaderboard,
@@ -30,13 +30,11 @@ const requireRecord = (value: unknown): Record<string, unknown> => {
   return value;
 };
 
-jest.mock('../services/lnbitsService');
+jest.mock('../services/peopleDirectory');
 jest.mock('../services/zapHistoryService');
 jest.mock('../services/graphService');
 
-const mockGetUserWallets = getUserWallets as jest.MockedFunction<
-  typeof getUserWallets
->;
+const mockGetBalances = getBalances as jest.MockedFunction<typeof getBalances>;
 const mockGetZapActivity = getZapActivity as jest.MockedFunction<
   typeof getZapActivity
 >;
@@ -96,8 +94,8 @@ const currentUser: User = {
   profileImg: '',
   aadObjectId: 'aad-alice',
   email: 'alice@example.com',
-  privateWallet: null,
   allowanceWallet: null,
+  canReceive: false,
 };
 
 const makeTurnContext = (user: User | undefined): TurnContext => {
@@ -106,30 +104,17 @@ const makeTurnContext = (user: User | undefined): TurnContext => {
   return { turnState } as unknown as TurnContext;
 };
 
-const wallet = (overrides: Partial<Wallet>): Wallet => ({
-  id: 'w1',
-  admin: '',
-  name: 'Allowance',
-  user: 'user-1',
-  adminkey: '',
-  inkey: '',
-  balance_msat: 0,
-  deleted: false,
-  ...overrides,
-});
-
 describe('agentTools', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   describe('get_my_balance', () => {
-    test('returns only Allowance and Private balances in sats', async () => {
-      mockGetUserWallets.mockResolvedValue([
-        wallet({ name: 'Allowance', balance_msat: 900000 }),
-        wallet({ name: 'LNbits wallet', balance_msat: 3000000 }),
-        wallet({ name: 'Private', balance_msat: 50000 }),
-      ]);
+    test('returns the Allowance balance in whole sats and the Private wallet as unreadable', async () => {
+      mockGetBalances.mockResolvedValue({
+        allowanceSats: 900.5,
+        budgetRemainingSats: null,
+      });
 
       const tool = createReadOnlyTools().find(
         t => t.name === 'get_my_balance',
@@ -138,17 +123,18 @@ describe('agentTools', () => {
         await tool.handler({}, makeTurnContext(currentUser)),
       );
 
+      expect(mockGetBalances).toHaveBeenCalledWith('user-1');
       expect(result.wallets).toEqual([
         { name: 'Allowance', balanceSats: 900 },
-        { name: 'Private', balanceSats: 50 },
+        expect.objectContaining({ name: 'Private', balanceSats: null }),
       ]);
     });
 
-    test('matches wallet names case-insensitively, as LNbits echoes them back', async () => {
-      mockGetUserWallets.mockResolvedValue([
-        wallet({ name: 'allowance', balance_msat: 900000 }),
-        wallet({ name: 'PRIVATE', balance_msat: 50000 }),
-      ]);
+    test('a reported budget is passed on; the Private wallet is unknown, never 0', async () => {
+      mockGetBalances.mockResolvedValue({
+        allowanceSats: 900,
+        budgetRemainingSats: 300,
+      });
 
       const tool = createReadOnlyTools().find(
         t => t.name === 'get_my_balance',
@@ -157,9 +143,10 @@ describe('agentTools', () => {
         await tool.handler({}, makeTurnContext(currentUser)),
       );
 
-      expect(
-        (result.wallets as Array<{ name: string }>).map(w => w.name),
-      ).toEqual(['allowance', 'PRIVATE']);
+      const wallets = result.wallets as Array<Record<string, unknown>>;
+      expect(wallets[1]).toMatchObject({ name: 'Private', balanceSats: null });
+      expect(wallets[0]).toMatchObject({ budgetRemainingSats: 300 });
+      expect(wallets[1].note).toEqual(expect.stringContaining('does not read'));
     });
 
     test('rejects unknown arguments rather than ignoring them', async () => {
@@ -175,7 +162,7 @@ describe('agentTools', () => {
       );
 
       expect(result.error).toContain('userId');
-      expect(mockGetUserWallets).not.toHaveBeenCalled();
+      expect(mockGetBalances).not.toHaveBeenCalled();
     });
   });
 
@@ -218,7 +205,7 @@ describe('agentTools', () => {
       ]);
       expect(result.partial).toBe(false);
       expect(result.incompleteReason).toBeUndefined();
-      expect(mockGetUserWallets).not.toHaveBeenCalled();
+      expect(mockGetBalances).not.toHaveBeenCalled();
     });
 
     test('accepts a days window and passes the cut-off through', async () => {

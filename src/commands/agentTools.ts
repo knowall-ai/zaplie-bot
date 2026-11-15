@@ -5,12 +5,11 @@
 
 import { TurnContext } from 'botbuilder';
 import { ToolDefinition } from '../services/foundryAgentService';
-import { getUserWallets } from '../services/lnbitsService';
+import { getBalances } from '../services/peopleDirectory';
 import {
   getZapActivity,
   getZapLeaderboard,
 } from '../services/zapHistoryService';
-import { isAllowanceWallet, isPrivateWallet } from '../services/walletNames';
 import { getRecentMeetings, getRelevantPeople } from '../services/graphService';
 import {
   CONNECT_CALENDAR_COMMAND,
@@ -23,15 +22,7 @@ import {
   windowStartSeconds,
 } from './showLeaderboardCommand';
 
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 const rewardLabel = process.env.LNBITS_POINTS_LABEL as string;
-
-const toSats = (balanceMsat: number): number => Math.floor(balanceMsat / 1000);
-
-// Shares the wallet-name rule with the leaderboard, so a casing difference
-// cannot make a wallet count towards a ranking but vanish from a balance reply.
-const isBalanceWallet = (wallet: Wallet): boolean =>
-  isAllowanceWallet(wallet.name) || isPrivateWallet(wallet.name);
 
 // One ceiling for the card's LEADERBOARD_WINDOW_DAYS and this tool's `days`,
 // so the two accept the same range.
@@ -155,7 +146,8 @@ const clampWholeNumber = (
 
 const getMyBalanceTool: ToolDefinition = {
   name: 'get_my_balance',
-  description: "Get the current user's Allowance and Private wallet balances.",
+  description:
+    "Get the current user's Allowance balance (and remaining budget when the wallet reports it). The Private wallet is the user's own and is not readable.",
   parameters: {
     type: 'object',
     properties: {},
@@ -167,13 +159,28 @@ const getMyBalanceTool: ToolDefinition = {
     if (error) return { error };
 
     const user = turnContext.turnState.get('user') as User;
-    const wallets = await getUserWallets(adminKey, user.id);
+    const balances = await getBalances(user.id);
+    // A wallet Zaplie cannot read is reported as unknown, never as 0: the
+    // Private wallet is the person's own and Zaplie never reads it.
     return {
       rewardLabel,
-      wallets: wallets.filter(isBalanceWallet).map(wallet => ({
-        name: wallet.name,
-        balanceSats: toSats(wallet.balance_msat),
-      })),
+      wallets: [
+        {
+          name: 'Allowance',
+          balanceSats:
+            balances.allowanceSats === null
+              ? null
+              : Math.floor(balances.allowanceSats),
+          ...(balances.budgetRemainingSats !== null
+            ? { budgetRemainingSats: balances.budgetRemainingSats }
+            : {}),
+        },
+        {
+          name: 'Private',
+          balanceSats: null,
+          note: "the person's own wallet; Zaplie does not read it",
+        },
+      ],
     };
   },
 };

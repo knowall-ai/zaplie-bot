@@ -64,6 +64,12 @@ export const en = {
   balanceLine:
     'Your {{walletName}} wallet has a balance of {{balance}} {{rewardName}}.',
   balanceError: 'Sorry, something went wrong while showing your balance.',
+  balancePrivateNotLinked:
+    'Zaps you receive go to your own Private wallet, which Zaplie does not read: check its balance in your wallet app.',
+  balanceBudgetLine:
+    'You can still send {{balance}} {{rewardName}} this period.',
+  allowanceNotReady:
+    'Your Allowance wallet has not been set up yet. Ask a Zaplie admin to set it up, then try again.',
   workSignalsConnected:
     'Work signals connected — ask me about recent meetings or collaborators!',
   signInFailed:
@@ -168,6 +174,12 @@ export const es: Record<MessageKey, string> = {
   balanceLine:
     'Tu cartera {{walletName}} tiene un saldo de {{balance}} {{rewardName}}.',
   balanceError: 'Lo siento, algo salió mal al mostrar tu saldo.',
+  balancePrivateNotLinked:
+    'Los zaps que recibes van a tu propia cartera Private, que Zaplie no lee: consulta su saldo en tu aplicación de cartera.',
+  balanceBudgetLine:
+    'Todavía puedes enviar {{balance}} {{rewardName}} en este periodo.',
+  allowanceNotReady:
+    'Tu cartera Allowance todavía no está configurada. Pide a un administrador de Zaplie que la configure y vuelve a intentarlo.',
   workSignalsConnected:
     'Señales de trabajo conectadas. Pregúntame por reuniones o colaboradores recientes.',
   signInFailed:

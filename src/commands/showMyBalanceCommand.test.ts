@@ -1,7 +1,7 @@
 // showMyBalanceCommand.test.ts
 //
-// Mocks lnbitsService (the HTTP boundary), not the command. Pins that the
-// balance reply is right and that no wallet key reaches the logs.
+// Mocks the people directory (the HTTP boundary), not the command. Pins that
+// the balance reply is right and that no wallet key reaches the logs.
 
 import {
   afterEach,
@@ -13,9 +13,9 @@ import {
 } from '@jest/globals';
 import { TurnContext } from 'botbuilder';
 import { ShowMyBalanceCommand } from './showMyBalanceCommand';
-import { getUserWallets } from '../services/lnbitsService';
+import { getBalances } from '../services/peopleDirectory';
 
-jest.mock('../services/lnbitsService');
+jest.mock('../services/peopleDirectory');
 
 const wallet = (name: string, balanceMsat: number): Wallet => ({
   id: `w-${name.toLowerCase()}`,
@@ -34,8 +34,8 @@ const user: User = {
   profileImg: '',
   aadObjectId: 'aad-alice',
   email: 'alice@example.test',
-  privateWallet: wallet('Private', 5000),
   allowanceWallet: wallet('Allowance', 21000),
+  canReceive: true,
 };
 
 const makeContext = (turnUser: User | undefined) => {
@@ -59,8 +59,8 @@ describe('ShowMyBalanceCommand', () => {
     process.env.LNBITS_POINTS_LABEL = 'Sats';
     consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest
-      .mocked(getUserWallets)
-      .mockResolvedValue([wallet('Allowance', 21000), wallet('Private', 5000)]);
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 21, budgetRemainingSats: null });
   });
 
   afterEach(() => {
@@ -72,7 +72,7 @@ describe('ShowMyBalanceCommand', () => {
     }
   });
 
-  test('replies with one balance line per wallet', async () => {
+  test('replies with the Allowance balance and explains the Private wallet', async () => {
     const { context, sendActivity } = makeContext(user);
 
     await new ShowMyBalanceCommand().execute(context);
@@ -81,7 +81,7 @@ describe('ShowMyBalanceCommand', () => {
       'Your Allowance wallet has a balance of 21 Sats.',
     );
     expect(sendActivity).toHaveBeenCalledWith(
-      'Your Private wallet has a balance of 5 Sats.',
+      expect.stringContaining('Zaps you receive go to your own Private wallet'),
     );
   });
 
@@ -96,12 +96,35 @@ describe('ShowMyBalanceCommand', () => {
     expect(logged).not.toContain('-secret');
   });
 
-  test('tells the user when no wallets exist', async () => {
-    jest.mocked(getUserWallets).mockResolvedValue([]);
+  test('a budget the wallet reports is shown; the Private wallet is never shown as 0', async () => {
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 21, budgetRemainingSats: 4 });
     const { context, sendActivity } = makeContext(user);
 
     await new ShowMyBalanceCommand().execute(context);
 
-    expect(sendActivity).toHaveBeenCalledWith('No wallets found for the user.');
+    expect(sendActivity).toHaveBeenCalledWith(
+      'You can still send 4 Sats this period.',
+    );
+    expect(sendActivity).not.toHaveBeenCalledWith(
+      'Your Private wallet has a balance of 0 Sats.',
+    );
+  });
+
+  test('a person with no Allowance wallet yet is told to ask an admin', async () => {
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: null, budgetRemainingSats: null });
+    const { context, sendActivity } = makeContext({
+      ...user,
+      allowanceWallet: null,
+    });
+
+    await new ShowMyBalanceCommand().execute(context);
+
+    expect(sendActivity).toHaveBeenCalledWith(
+      expect.stringContaining('Allowance wallet has not been set up yet'),
+    );
   });
 });

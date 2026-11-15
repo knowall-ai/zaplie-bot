@@ -1,21 +1,16 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory, MessageFactory } from 'botbuilder';
 import {
-  getUsers,
-  payInvoice,
-  createInvoice,
-  getWalletBalance,
-} from '../services/lnbitsService';
+  getBalances,
+  listPeople,
+  payZap,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
+} from '../services/peopleDirectory';
 import { UserService } from '../services/userService';
 import { genericErrorMessage } from '../messages';
 import { LocaleTag, formatNumber, t } from '../i18n';
 import { MAX_ZAP_SATS, resolveZapMaxRecipients } from './zapBudget';
-import {
-  ZapPaymentExtra,
-  toPaymentExtraWallet,
-} from '../services/paymentExtra';
-
-const adminKey = process.env.LNBITS_ADMINKEY as string;
 const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
 
 export class SendZapCommand extends SSOCommand {
@@ -31,6 +26,12 @@ export class SendZapCommand extends SSOCommand {
       // fail a turn, and the error path below runs for any failure. The raw
       // tag is kept so the card's numbers follow the client's region.
       const locale = context.activity?.locale;
+      // No Allowance wallet yet (no API token, and no operator has linked
+      // one): say so instead of failing on the balance read.
+      if (!currentUser?.allowanceWallet) {
+        await context.sendActivity(t(locale, 'allowanceNotReady'));
+        return;
+      }
       const card = await createZapCard(
         currentUser,
         globalRewardName,
@@ -188,8 +189,8 @@ export function buildZapReceiptCard(
   };
 }
 
-// Thrown only once payInvoice has been called: at that point the payment may
-// have settled even though we failed to confirm it, so a retry is unsafe.
+// The payment may have left: the portal could not confirm it, or its answer
+// never arrived. A retry is unsafe; the ledger keeps it for reconciliation.
 export class PaymentOutcomeUnknownError extends Error {
   constructor(
     message: string,
@@ -200,6 +201,15 @@ export class PaymentOutcomeUnknownError extends Error {
   }
 }
 
+/**
+ * The sender's live Allowance balance in sats, or NaN when it cannot be read
+ * (callers already treat a non-finite balance as unreadable).
+ */
+export async function allowanceBalanceSats(user: User): Promise<number> {
+  const { allowanceSats } = await getBalances(user.id);
+  return allowanceSats === null ? Number.NaN : allowanceSats;
+}
+
 export async function SendZap(
   sender: User,
   receiver: User,
@@ -208,62 +218,41 @@ export async function SendZap(
   context: TurnContext,
   updateCard: boolean = true,
   globalRewardName: string,
+  idempotencyKey?: string,
 ): Promise<SendZapResult> {
   try {
     console.log('Sending zap ...');
 
-    // Metadata LNbits stores on the invoice and the payment so the portal
-    // can show who zapped whom. Wallet objects carry keys, so only the
-    // projection goes in, and a missing wallet fails before any LNbits call.
-    const extra: ZapPaymentExtra = {
-      tag: 'zap',
-      from: toPaymentExtraWallet(
-        sender.allowanceWallet,
-        'sender Allowance',
-        sender.displayName,
-      ),
-      to: toPaymentExtraWallet(
-        receiver.privateWallet,
-        'receiver Private',
-        receiver.displayName,
-      ),
-    };
-
-    // Create an invoice for the amount in the recipient's wallet
-    const paymentRequest = await createInvoice(
-      receiver.privateWallet.inkey,
-      receiver.privateWallet.id,
-      zapAmount,
-      zapMessage,
-      extra,
-    );
-
-    if (!paymentRequest) {
-      throw new Error('Failed to create an invoice.');
+    if (!sender.allowanceWallet) {
+      throw new Error('Cannot send a zap: sender Allowance wallet is missing');
     }
 
-    // Pay the invoice
-
-    let result;
+    // The portal pays from the sender's Allowance wallet to the receiver's
+    // registered address, both resolved from the directory by Entra id: the
+    // bot never supplies an invoice or an address. One key per zap, so a
+    // retry of the same card never pays twice.
+    let paymentHash: string;
     try {
-      result = await payInvoice(
-        sender.allowanceWallet.adminkey,
-        paymentRequest,
-        extra,
-      );
+      paymentHash = await payZap({
+        senderOid: sender.id,
+        recipientOid: receiver.id,
+        amountSats: zapAmount,
+        memo: zapMessage,
+        idempotencyKey:
+          idempotencyKey ?? `zap-${sender.id}-${receiver.id}-${Date.now()}`,
+      });
     } catch (error) {
+      if (error instanceof PaymentNotSentError) {
+        throw error;
+      }
+      if (error instanceof PaymentOutcomeUncertainError) {
+        throw new PaymentOutcomeUnknownError(error.message, error);
+      }
       throw new PaymentOutcomeUnknownError(
-        'The payment request failed after being sent to LNbits.',
+        'The zap request failed after being sent to the portal.',
         error,
       );
     }
-
-    if (!result?.payment_hash) {
-      throw new PaymentOutcomeUnknownError(
-        'The payment returned no payment hash, so it cannot be confirmed.',
-      );
-    }
-    const paymentHash: string = result.payment_hash;
 
     console.log('Payment result: settled');
 
@@ -276,9 +265,7 @@ export async function SendZap(
     const updateReceiptCard = async (): Promise<void> => {
       // Updated adaptive card (read-only)
       //fetch remainingBalance
-      const remainingBalance = await getWalletBalance(
-        sender.allowanceWallet.inkey,
-      );
+      const remainingBalance = await allowanceBalanceSats(sender);
       console.log('Remaining Balance:', remainingBalance);
 
       const updatedCard = buildZapReceiptCard(
@@ -407,7 +394,7 @@ async function createZapCard(
   console.log('Creating Zap Card ...');
   const walletChoices = await populateWalletChoices();
 
-  const currentBalance = await getWalletBalance(sender.allowanceWallet.inkey);
+  const currentBalance = await allowanceBalanceSats(sender);
   // A balance that cannot be read is the same failure as a rejected read:
   // no card, the generic error, nothing to fill in for nothing.
   if (!Number.isFinite(currentBalance)) {
@@ -489,7 +476,8 @@ async function createZapCard(
 // Function to populate choices
 async function populateWalletChoices() {
   console.log('Populating wallet choices ...');
-  const users = await getUsers(adminKey, null);
+  // Only people who can receive: choosing anyone else would fail on submit.
+  const users = (await listPeople()).filter(user => user.canReceive);
 
   // Get the current user
   const userService = UserService.getInstance();
