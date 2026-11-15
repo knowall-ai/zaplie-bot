@@ -1,54 +1,62 @@
 // peopleDirectory.ts
 //
-// The bot's view of Zaplie's people directory, which the portal backend owns
-// (tabs/backend/directoryRoutes.js, /api/directory/internal/*). It replaces
-// the LNbits admin Users API: the bot never logs in to LNbits, never lists
-// LNbits users and never reads a wallet it does not pay from.
+// The bot's only way to people and money. The portal backend owns Zaplie's
+// people directory and every wallet connection
+// (tabs/backend/directoryRoutes.js, /api/directory/internal/*, shared
+// TAB_BACKEND_TOKEN). The bot holds no wallet credential at all: no LNbits
+// login, no wallet key, no NWC connection.
 //
-// What the bot can learn here, and why:
-//   * ensurePerson - the turn's sender, with their own Allowance keys (the bot
-//     pays from that wallet);
-//   * listPeople   - everyone's name and Allowance wallet id + invoice key
-//     (the card's recipient list and the leaderboard's payment reads);
-//   * getPerson    - one recipient, no keys;
-//   * createInvoiceForPerson - an invoice that pays a recipient, made by the
-//     portal from their Lightning address or invoice key, which the bot never
-//     sees;
-//   * getBalances  - the sender's Allowance and (if registered) Private
-//     balance.
+//   * ensurePerson  - the turn's sender, added on their first turn;
+//   * listPeople / getPerson - names, Entra ids, whether they can receive;
+//   * payZap        - the portal pays a zap from the sender's Allowance
+//                     wallet to another directory member, both named by
+//                     Entra id: the bot never supplies an invoice or address;
+//   * payReward     - the portal pays an automation reward from the Treasury
+//                     to a directory member;
+//   * getBalances   - the sender's Allowance balance (and budget, if the
+//                     wallet reports one);
+//   * listZaps      - Zaplie's record of every zap and reward it paid.
 import { tabBackendApiUrl, tabBackendAuthHeader } from './internalAuth';
 import { isRecord } from '../utils/typeGuards';
 
 const DIRECTORY_TIMEOUT_MS = 10000;
-
-interface DirectoryWallet {
-  id: string;
-  adminkey?: string;
-  inkey?: string;
-}
+// A payment waits for the wallet (NWC over a relay) and the recipient's
+// Lightning address; longer than a read, shorter than Teams' patience.
+const PAYMENT_TIMEOUT_MS = 25000;
 
 interface DirectoryPerson {
   oid: string;
   displayName: string;
   email: string;
   allowanceWalletId: string | null;
-  receive: { lightningAddress: string | null; invoiceKeyRegistered: boolean };
-  allowanceWallet?: DirectoryWallet | null;
+  receive: { lightningAddress: string | null };
 }
 
-// A recipient cannot be invoiced: they have not registered where they
-// receive, or their Lightning address refused. Nothing was paid, so a retry
-// once they have registered is safe. `message` is safe to show the sender.
-export class RecipientNotReadyError extends Error {
+// The portal refused before anything was paid: retrying (once the cause is
+// fixed) is safe. `message` is the portal's wording, safe to show the sender.
+export class PaymentNotSentError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'RecipientNotReadyError';
+    this.name = 'PaymentNotSentError';
+  }
+}
+
+// The payment may have left: the portal could not say, or the bot never got
+// its answer. Never retried blind; reconciled by the payment records.
+export class PaymentOutcomeUncertainError extends Error {
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'PaymentOutcomeUncertainError';
   }
 }
 
 const directoryFetch = async (
   route: string,
   init: RequestInit = {},
+  timeoutMs = DIRECTORY_TIMEOUT_MS,
 ): Promise<Response> =>
   fetch(`${tabBackendApiUrl()}/directory/internal${route}`, {
     ...init,
@@ -59,7 +67,7 @@ const directoryFetch = async (
         : { 'Content-Type': 'application/json' }),
       ...init.headers,
     },
-    signal: AbortSignal.timeout(DIRECTORY_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
 const readJson = async (response: Response, what: string): Promise<unknown> => {
@@ -82,40 +90,23 @@ const toPerson = (value: unknown, what: string): DirectoryPerson => {
   return value as unknown as DirectoryPerson;
 };
 
-// The Wallet shape the commands already use. Only the keys the directory sent
-// are set; a missing admin key stays empty and any payment from it fails.
-const toWallet = (person: DirectoryPerson): Wallet | null => {
-  const wallet = person.allowanceWallet;
-  if (!wallet || typeof wallet.id !== 'string' || wallet.id === '') {
-    return null;
-  }
-  return {
-    id: wallet.id,
-    admin: '',
-    name: 'Allowance',
-    user: person.oid,
-    adminkey: typeof wallet.adminkey === 'string' ? wallet.adminkey : '',
-    inkey: typeof wallet.inkey === 'string' ? wallet.inkey : '',
-    deleted: false,
-  };
-};
-
 const toUser = (person: DirectoryPerson): User => ({
   id: person.oid,
   displayName: person.displayName || person.oid,
   profileImg: '',
   aadObjectId: person.oid,
   email: person.email || '',
-  allowanceWallet: toWallet(person),
-  canReceive: Boolean(
-    person.receive.lightningAddress || person.receive.invoiceKeyRegistered,
-  ),
+  allowanceWallet:
+    typeof person.allowanceWalletId === 'string' && person.allowanceWalletId
+      ? { id: person.allowanceWalletId }
+      : null,
+  canReceive: Boolean(person.receive.lightningAddress),
 });
 
 export interface EnsuredPerson {
   user: User;
-  // No Allowance wallet yet: LNBITS_API_TOKEN is not configured and an
-  // operator has not linked one. The person can still receive.
+  // No Allowance wallet yet: an operator has not linked one. The person can
+  // still receive.
   awaitingOperator: boolean;
 }
 
@@ -145,7 +136,7 @@ export async function ensurePerson(input: {
   };
 }
 
-/** Everyone in the directory. Allowance wallets carry their invoice key only. */
+/** Everyone in the directory. */
 export async function listPeople(): Promise<User[]> {
   const body = await readJson(await directoryFetch('/people'), 'listPeople');
   if (!isRecord(body) || !Array.isArray(body.people)) {
@@ -167,49 +158,82 @@ export async function getPerson(oid: string): Promise<User | null> {
   return toUser(toPerson(body.person, 'getPerson'));
 }
 
-/**
- * An invoice paying `amountSats` to the person. Throws
- * RecipientNotReadyError for a 409 (nothing to invoice yet), and a plain
- * Error otherwise; in both cases no payment exists, so retrying is safe.
- */
-export async function createInvoiceForPerson(
-  oid: string,
-  amountSats: number,
-  memo: string,
-  extra: object,
-): Promise<string> {
-  const response = await directoryFetch(
-    `/people/${encodeURIComponent(oid)}/invoices`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ amountSats, memo, extra }),
-    },
-  );
-  if (response.status === 409) {
-    const body: unknown = await response.json().catch(() => null);
-    throw new RecipientNotReadyError(
-      isRecord(body) && typeof body.error === 'string'
-        ? body.error
-        : 'The recipient has not set up where they receive zaps yet.',
+// Shared by both payment routes: the portal's `outcome` decides. Anything
+// without an explicit 'not_paid' (a timeout, a dropped connection, a body
+// that does not parse) may have paid, so it is uncertain.
+const pay = async (route: string, payload: object): Promise<string> => {
+  let response: Response;
+  try {
+    response = await directoryFetch(
+      route,
+      { method: 'POST', body: JSON.stringify(payload) },
+      PAYMENT_TIMEOUT_MS,
+    );
+  } catch (error) {
+    throw new PaymentOutcomeUncertainError(
+      'The payment request did not get an answer from the portal.',
+      error,
     );
   }
-  const body = await readJson(response, 'createInvoiceForPerson');
+  const body: unknown = await response.json().catch(() => null);
   if (
-    !isRecord(body) ||
-    typeof body.paymentRequest !== 'string' ||
-    !/^ln[a-z0-9]+$/i.test(body.paymentRequest)
+    response.ok &&
+    isRecord(body) &&
+    body.outcome === 'paid' &&
+    typeof body.paymentHash === 'string' &&
+    body.paymentHash !== ''
   ) {
-    throw new Error('createInvoiceForPerson: no payment request returned');
+    return body.paymentHash;
   }
-  return body.paymentRequest;
+  const message =
+    isRecord(body) && typeof body.error === 'string'
+      ? body.error
+      : `The payment failed (status: ${response.status}).`;
+  if (isRecord(body) && body.outcome === 'not_paid') {
+    throw new PaymentNotSentError(message);
+  }
+  throw new PaymentOutcomeUncertainError(message);
+};
+
+/**
+ * Pays a zap from the sender's Allowance wallet to another directory member.
+ * `idempotencyKey` must stay the same for every retry of one zap, so the
+ * portal pays it at most once. Resolves the payment hash.
+ */
+export const payZap = (input: {
+  senderOid: string;
+  recipientOid: string;
+  amountSats: number;
+  memo: string;
+  idempotencyKey: string;
+}): Promise<string> => pay('/zaps', input);
+
+export interface RewardDetails {
+  eventType?: string;
+  repo?: string;
+  source?: string;
+  baseSats?: number;
+  bonusSats?: number;
+  level?: string;
 }
+
+/** Pays an automation reward from the Treasury to a directory member. */
+export const payReward = (input: {
+  recipientOid: string;
+  recipientLabel: string;
+  amountSats: number;
+  memo: string;
+  reward: RewardDetails;
+  idempotencyKey: string;
+}): Promise<string> => pay('/rewards', input);
 
 export interface PersonBalances {
   allowanceSats: number | null;
-  privateSats: number | null;
+  // Only when the wallet reports its NWC budget (LNbits does not).
+  budgetRemainingSats: number | null;
 }
 
-/** Live balances; null for a wallet that is not registered or unreadable. */
+/** Live Allowance balance; null when there is no wallet or it is unreadable. */
 export async function getBalances(oid: string): Promise<PersonBalances> {
   const body = await readJson(
     await directoryFetch(`/people/${encodeURIComponent(oid)}/balances`),
@@ -220,8 +244,43 @@ export async function getBalances(oid: string): Promise<PersonBalances> {
   if (!isRecord(body)) {
     throw new Error('getBalances: the directory returned no body');
   }
+  const budget = isRecord(body.budget) ? body.budget : null;
+  const total = sats(budget?.totalSats);
+  const used = sats(budget?.usedSats);
   return {
     allowanceSats: sats(body.allowanceSats),
-    privateSats: sats(body.privateSats),
+    budgetRemainingSats:
+      total !== null && used !== null ? Math.max(0, total - used) : null,
   };
+}
+
+export interface ZapRecord {
+  paymentHash: string;
+  kind: 'zap' | 'reward';
+  time: number; // Unix seconds
+  amountSats: number;
+  memo: string;
+  from: { oid: string | null; displayName: string };
+  to: { oid: string | null; displayName: string };
+}
+
+/** Every zap and reward Zaplie paid, newest first, optionally since a time. */
+export async function listZaps(sinceSeconds?: number): Promise<ZapRecord[]> {
+  const query = sinceSeconds ? `?since=${Math.floor(sinceSeconds)}` : '';
+  const body = await readJson(
+    await directoryFetch(`/zaps${query}`),
+    'listZaps',
+  );
+  if (!isRecord(body) || !Array.isArray(body.zaps)) {
+    throw new Error('listZaps: the directory returned no zaps array');
+  }
+  return body.zaps.filter(
+    (zap): zap is ZapRecord =>
+      isRecord(zap) &&
+      typeof zap.paymentHash === 'string' &&
+      typeof zap.amountSats === 'number' &&
+      typeof zap.time === 'number' &&
+      isRecord(zap.from) &&
+      isRecord(zap.to),
+  );
 }

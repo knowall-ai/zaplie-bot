@@ -110,10 +110,10 @@ describe('agentTools', () => {
   });
 
   describe('get_my_balance', () => {
-    test('returns the Allowance and Private balances in whole sats', async () => {
+    test('returns the Allowance balance in whole sats and the Private wallet as unreadable', async () => {
       mockGetBalances.mockResolvedValue({
         allowanceSats: 900.5,
-        privateSats: 50,
+        budgetRemainingSats: null,
       });
 
       const tool = createReadOnlyTools().find(
@@ -126,14 +126,14 @@ describe('agentTools', () => {
       expect(mockGetBalances).toHaveBeenCalledWith('user-1');
       expect(result.wallets).toEqual([
         { name: 'Allowance', balanceSats: 900 },
-        { name: 'Private', balanceSats: 50 },
+        expect.objectContaining({ name: 'Private', balanceSats: null }),
       ]);
     });
 
-    test('a Private wallet Zaplie cannot read is unknown, never 0', async () => {
+    test('a reported budget is passed on; the Private wallet is unknown, never 0', async () => {
       mockGetBalances.mockResolvedValue({
         allowanceSats: 900,
-        privateSats: null,
+        budgetRemainingSats: 300,
       });
 
       const tool = createReadOnlyTools().find(
@@ -145,7 +145,8 @@ describe('agentTools', () => {
 
       const wallets = result.wallets as Array<Record<string, unknown>>;
       expect(wallets[1]).toMatchObject({ name: 'Private', balanceSats: null });
-      expect(wallets[1].note).toEqual(expect.stringContaining('not linked'));
+      expect(wallets[0]).toMatchObject({ budgetRemainingSats: 300 });
+      expect(wallets[1].note).toEqual(expect.stringContaining('does not read'));
     });
 
     test('rejects unknown arguments rather than ignoring them', async () => {

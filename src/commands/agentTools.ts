@@ -146,7 +146,8 @@ const clampWholeNumber = (
 
 const getMyBalanceTool: ToolDefinition = {
   name: 'get_my_balance',
-  description: "Get the current user's Allowance and Private wallet balances.",
+  description:
+    "Get the current user's Allowance balance (and remaining budget when the wallet reports it). The Private wallet is the user's own and is not readable.",
   parameters: {
     type: 'object',
     properties: {},
@@ -160,22 +161,24 @@ const getMyBalanceTool: ToolDefinition = {
     const user = turnContext.turnState.get('user') as User;
     const balances = await getBalances(user.id);
     // A wallet Zaplie cannot read is reported as unknown, never as 0: the
-    // Private wallet is the person's own, read only through an invoice key
-    // they chose to register.
-    const floor = (sats: number | null): number | null =>
-      sats === null ? null : Math.floor(sats);
+    // Private wallet is the person's own and Zaplie never reads it.
     return {
       rewardLabel,
       wallets: [
-        { name: 'Allowance', balanceSats: floor(balances.allowanceSats) },
+        {
+          name: 'Allowance',
+          balanceSats:
+            balances.allowanceSats === null
+              ? null
+              : Math.floor(balances.allowanceSats),
+          ...(balances.budgetRemainingSats !== null
+            ? { budgetRemainingSats: balances.budgetRemainingSats }
+            : {}),
+        },
         {
           name: 'Private',
-          balanceSats: floor(balances.privateSats),
-          ...(balances.privateSats === null
-            ? {
-                note: 'not linked to Zaplie; the person reads it in their own wallet',
-              }
-            : {}),
+          balanceSats: null,
+          note: "the person's own wallet; Zaplie does not read it",
         },
       ],
     };

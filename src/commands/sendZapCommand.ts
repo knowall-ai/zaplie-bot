@@ -1,19 +1,16 @@
 import { SSOCommand } from './SSOCommandMap';
 import { TurnContext, CardFactory, MessageFactory } from 'botbuilder';
-import { payInvoice, getWalletBalance } from '../services/lnbitsService';
 import {
-  createInvoiceForPerson,
+  getBalances,
   listPeople,
+  payZap,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
 } from '../services/peopleDirectory';
 import { UserService } from '../services/userService';
 import { genericErrorMessage } from '../messages';
 import { LocaleTag, formatNumber, t } from '../i18n';
 import { MAX_ZAP_SATS, resolveZapMaxRecipients } from './zapBudget';
-import {
-  ZapPaymentExtra,
-  toPaymentExtraRecipient,
-  toPaymentExtraWallet,
-} from '../services/paymentExtra';
 const lnbitsLabel = process.env.LNBITS_POINTS_LABEL as string;
 
 export class SendZapCommand extends SSOCommand {
@@ -192,8 +189,8 @@ export function buildZapReceiptCard(
   };
 }
 
-// Thrown only once payInvoice has been called: at that point the payment may
-// have settled even though we failed to confirm it, so a retry is unsafe.
+// The payment may have left: the portal could not confirm it, or its answer
+// never arrived. A retry is unsafe; the ledger keeps it for reconciliation.
 export class PaymentOutcomeUnknownError extends Error {
   constructor(
     message: string,
@@ -204,6 +201,15 @@ export class PaymentOutcomeUnknownError extends Error {
   }
 }
 
+/**
+ * The sender's live Allowance balance in sats, or NaN when it cannot be read
+ * (callers already treat a non-finite balance as unreadable).
+ */
+export async function allowanceBalanceSats(user: User): Promise<number> {
+  const { allowanceSats } = await getBalances(user.id);
+  return allowanceSats === null ? Number.NaN : allowanceSats;
+}
+
 export async function SendZap(
   sender: User,
   receiver: User,
@@ -212,58 +218,41 @@ export async function SendZap(
   context: TurnContext,
   updateCard: boolean = true,
   globalRewardName: string,
+  idempotencyKey?: string,
 ): Promise<SendZapResult> {
   try {
     console.log('Sending zap ...');
 
-    // Metadata LNbits stores on the invoice and the payment so the portal
-    // can show who zapped whom. Wallet objects carry keys, so only the
-    // projection goes in, and a missing wallet fails before any LNbits call.
-    const extra: ZapPaymentExtra = {
-      tag: 'zap',
-      from: toPaymentExtraWallet(
-        sender.allowanceWallet,
-        'sender Allowance',
-        sender.displayName,
-      ),
-      to: toPaymentExtraRecipient(receiver),
-    };
-
-    // The portal invoices the recipient from their Lightning address or the
-    // invoice key of their own Private wallet; the bot never holds either.
-    const paymentRequest = await createInvoiceForPerson(
-      receiver.id,
-      zapAmount,
-      zapMessage,
-      extra,
-    );
-
-    if (!paymentRequest) {
-      throw new Error('Failed to create an invoice.');
+    if (!sender.allowanceWallet) {
+      throw new Error('Cannot send a zap: sender Allowance wallet is missing');
     }
 
-    // Pay the invoice
-
-    let result;
+    // The portal pays from the sender's Allowance wallet to the receiver's
+    // registered address, both resolved from the directory by Entra id: the
+    // bot never supplies an invoice or an address. One key per zap, so a
+    // retry of the same card never pays twice.
+    let paymentHash: string;
     try {
-      result = await payInvoice(
-        sender.allowanceWallet.adminkey,
-        paymentRequest,
-        extra,
-      );
+      paymentHash = await payZap({
+        senderOid: sender.id,
+        recipientOid: receiver.id,
+        amountSats: zapAmount,
+        memo: zapMessage,
+        idempotencyKey:
+          idempotencyKey ?? `zap-${sender.id}-${receiver.id}-${Date.now()}`,
+      });
     } catch (error) {
+      if (error instanceof PaymentNotSentError) {
+        throw error;
+      }
+      if (error instanceof PaymentOutcomeUncertainError) {
+        throw new PaymentOutcomeUnknownError(error.message, error);
+      }
       throw new PaymentOutcomeUnknownError(
-        'The payment request failed after being sent to LNbits.',
+        'The zap request failed after being sent to the portal.',
         error,
       );
     }
-
-    if (!result?.payment_hash) {
-      throw new PaymentOutcomeUnknownError(
-        'The payment returned no payment hash, so it cannot be confirmed.',
-      );
-    }
-    const paymentHash: string = result.payment_hash;
 
     console.log('Payment result: settled');
 
@@ -276,9 +265,7 @@ export async function SendZap(
     const updateReceiptCard = async (): Promise<void> => {
       // Updated adaptive card (read-only)
       //fetch remainingBalance
-      const remainingBalance = await getWalletBalance(
-        sender.allowanceWallet.inkey,
-      );
+      const remainingBalance = await allowanceBalanceSats(sender);
       console.log('Remaining Balance:', remainingBalance);
 
       const updatedCard = buildZapReceiptCard(
@@ -407,7 +394,7 @@ async function createZapCard(
   console.log('Creating Zap Card ...');
   const walletChoices = await populateWalletChoices();
 
-  const currentBalance = await getWalletBalance(sender.allowanceWallet.inkey);
+  const currentBalance = await allowanceBalanceSats(sender);
   // A balance that cannot be read is the same failure as a rejected read:
   // no card, the generic error, nothing to fill in for nothing.
   if (!Number.isFinite(currentBalance)) {

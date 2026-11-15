@@ -49,7 +49,7 @@ describe('ShowMyBalanceCommand languages', () => {
     consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest
       .mocked(getBalances)
-      .mockResolvedValue({ allowanceSats: 21, privateSats: 5 });
+      .mockResolvedValue({ allowanceSats: 21, budgetRemainingSats: null });
   });
 
   afterEach(() => {
@@ -68,7 +68,7 @@ describe('ShowMyBalanceCommand languages', () => {
 
     expect(replies(sendActivity)).toEqual([
       'Tu cartera Allowance tiene un saldo de 21 Sats.',
-      'Tu cartera Private tiene un saldo de 5 Sats.',
+      'Los zaps que recibes van a tu propia cartera Private, que Zaplie no lee: consulta su saldo en tu aplicación de cartera.',
     ]);
     expect(consoleLog).toHaveBeenCalled();
   });
@@ -81,7 +81,7 @@ describe('ShowMyBalanceCommand languages', () => {
 
       expect(replies(sendActivity)).toEqual([
         'Your Allowance wallet has a balance of 21 Sats.',
-        'Your Private wallet has a balance of 5 Sats.',
+        'Zaps you receive go to your own Private wallet, which Zaplie does not read: check its balance in your wallet app.',
       ]);
     }
   });
@@ -89,14 +89,14 @@ describe('ShowMyBalanceCommand languages', () => {
   test('reports a wallet without a balance in the user language', async () => {
     jest
       .mocked(getBalances)
-      .mockResolvedValue({ allowanceSats: null, privateSats: null });
+      .mockResolvedValue({ allowanceSats: null, budgetRemainingSats: null });
     const { context, sendActivity } = makeContext('es-ES');
 
     await new ShowMyBalanceCommand().execute(context);
 
     expect(replies(sendActivity)).toEqual([
       'La información de saldo no está disponible para la cartera w-allowance.',
-      'Tu cartera Private es tuya y Zaplie no la lee. Registra una clave de factura en la página Wallet del portal para ver aquí su saldo.',
+      'Los zaps que recibes van a tu propia cartera Private, que Zaplie no lee: consulta su saldo en tu aplicación de cartera.',
     ]);
   });
 

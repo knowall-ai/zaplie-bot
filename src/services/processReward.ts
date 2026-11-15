@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import {
   parseRewardRequest,
   resolveAmountSats,
@@ -259,6 +260,7 @@ export const processReward = async (
         level: amount.level,
       },
       recipient,
+      createHash('sha256').update(ledgerKey).digest('hex'),
     );
   } catch (error) {
     if (error instanceof RewardPaymentUncertainError) {

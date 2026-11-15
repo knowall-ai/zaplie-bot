@@ -1,12 +1,14 @@
 // filepath: tabs/backend/peopleStore.js
 // Zaplie's own directory: Entra object id -> the person's Allowance wallet
-// (owned by zaplie.service) and where they receive zaps (their Private wallet
-// stays under their own LNbits account). It replaces reading LNbits'
-// external_id through the admin Users API.
+// (owned by zaplie.service, reached only through its NWC connection string,
+// plus the zaplie-<oid> Lightning address the allowance extension pays) and
+// where they receive zaps: the Lightning address of their own Private wallet.
+// It replaces reading LNbits' external_id through the admin Users API.
 //
-// On disk (people.json under ZAPLIE_DATA_DIR) every wallet key is sealed by
-// keyCipher.js; callers only ever see decrypted keys through `get`/`list`, and
-// `toPublicPerson` is the projection anything leaving the server goes through.
+// On disk (people.json under ZAPLIE_DATA_DIR) the NWC connection string is
+// sealed by keyCipher.js; callers only ever see it decrypted through
+// `get`/`list`, and `toPublicPerson` is the projection anything leaving the
+// server goes through.
 const fs = require('fs');
 const { dataPath } = require('./dataPaths');
 const { writeJsonSecure } = require('./secureJsonStore');
@@ -35,8 +37,7 @@ const cleanText = (value, max) =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
 
 const SEALED_FIELDS = {
-  allowance: ['adminkey', 'inkey'],
-  receive: ['inkey'],
+  allowance: ['nwc'],
 };
 
 const createPeopleStore = ({
@@ -127,36 +128,46 @@ const createPeopleStore = ({
     }));
   };
 
-  const setAllowanceWallet = (oid, { walletId, adminkey, inkey, source }) =>
+  // `walletId` is the NWC connection id (a hash, see nwcWallet.js), `nwc` the
+  // connection string, `lightningAddress` the Allowance wallet's own address.
+  const setAllowanceWallet = (oid, { walletId, nwc, lightningAddress, source }) =>
     update(oid, (current) => {
       if (!current) throw new PeopleStoreError('unknown person', 404);
       return {
         ...current,
-        allowance: { walletId, adminkey, inkey, source, linkedAt: now() },
+        allowance: { walletId, nwc, lightningAddress, source, linkedAt: now() },
       };
     });
 
-  const setReceiveTarget = (oid, { lightningAddress = null, inkey = null }) =>
+  const setReceiveTarget = (oid, { lightningAddress = null }) =>
     update(oid, (current) => {
       if (!current) throw new PeopleStoreError('unknown person', 404);
       return {
         ...current,
-        receive:
-          lightningAddress || inkey
-            ? { lightningAddress, inkey, updatedAt: now() }
-            : null,
+        receive: lightningAddress ? { lightningAddress, updatedAt: now() } : null,
       };
     });
 
   const findByAllowanceWalletId = (walletId) =>
     list().find((person) => person.allowance?.walletId === walletId) || null;
 
-  return { get, list, upsertProfile, setAllowanceWallet, setReceiveTarget, findByAllowanceWalletId };
+  const findByAllowanceAddress = (address) =>
+    list().find((person) => person.allowance?.lightningAddress === address) || null;
+
+  return {
+    get,
+    list,
+    upsertProfile,
+    setAllowanceWallet,
+    setReceiveTarget,
+    findByAllowanceWalletId,
+    findByAllowanceAddress,
+  };
 };
 
 /**
- * What may leave the server about a person: no key, ever. `receive` says how
- * they receive, and the Lightning address itself (it is a public identifier).
+ * What may leave the server about a person: never the NWC connection string.
+ * Lightning addresses are public identifiers and are included.
  */
 const toPublicPerson = (person) => ({
   oid: person.oid,
@@ -164,9 +175,9 @@ const toPublicPerson = (person) => ({
   email: person.email || '',
   allowanceWalletId: person.allowance?.walletId || null,
   allowanceSource: person.allowance?.source || null,
+  allowanceLightningAddress: person.allowance?.lightningAddress || null,
   receive: {
     lightningAddress: person.receive?.lightningAddress || null,
-    invoiceKeyRegistered: Boolean(person.receive?.inkey),
   },
 });
 

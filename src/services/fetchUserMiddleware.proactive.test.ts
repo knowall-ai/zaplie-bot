@@ -7,8 +7,6 @@ import type { TurnContext } from 'botbuilder';
 import { FetchUserMiddleware } from './fetchUserMiddleware';
 import { UserService } from './userService';
 
-jest.mock('./lnbitsService');
-
 const makeContext = (activity: Record<string, unknown>) =>
   ({
     activity,

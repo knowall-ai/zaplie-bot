@@ -25,6 +25,13 @@ description = "32-char lowercase hex API key next to an adminkey/inkey/X-Api-Key
 regex = '''(?i)(adminkey|inkey|x-api-key)['"]?\s*[:=]\s*['"]?[a-f0-9]{32}['"]?'''
 keywords = ["adminkey", "inkey", "x-api-key"]
 
+[[rules]]
+id = "nostr-wallet-connect-secret"
+description = "Nostr Wallet Connect (NIP-47) connection string carrying its secret"
+# Matches e.g. nostr+walletconnect://<64 hex>?relay=wss://...&secret=<64 hex>
+regex = '''nostr\+walletconnect://[0-9a-f]{64}\?[^\s'"]*secret=[0-9a-f]{64}'''
+keywords = ["nostr+walletconnect"]
+
 # ---------------------------------------------------------------------------
 # Allowlist
 # ---------------------------------------------------------------------------

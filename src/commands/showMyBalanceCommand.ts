@@ -23,8 +23,8 @@ export class ShowMyBalanceCommand extends SSOCommand {
 
       console.log('Showing balance for user', user.id);
 
-      // The Allowance wallet is Zaplie's; the Private wallet is the person's
-      // own and has a balance here only when they registered its invoice key.
+      // The Allowance wallet is Zaplie's (read over NWC by the portal); the
+      // Private wallet is the person's own and Zaplie never reads it.
       const balances = await getBalances(user.id);
 
       if (balances.allowanceSats === null) {
@@ -47,15 +47,16 @@ export class ShowMyBalanceCommand extends SSOCommand {
         );
       }
 
-      await context.sendActivity(
-        balances.privateSats === null
-          ? t(locale, 'balancePrivateNotLinked')
-          : t(locale, 'balanceLine', {
-              walletName: 'Private',
-              balance: balances.privateSats,
-              rewardName: globalRewardName,
-            }),
-      );
+      if (balances.budgetRemainingSats !== null) {
+        await context.sendActivity(
+          t(locale, 'balanceBudgetLine', {
+            balance: balances.budgetRemainingSats,
+            rewardName: globalRewardName,
+          }),
+        );
+      }
+
+      await context.sendActivity(t(locale, 'balancePrivateNotLinked'));
     } catch (error) {
       console.error('Error in ShowMyBalanceCommand:', error);
       await context.sendActivity(t(locale, 'balanceError'));

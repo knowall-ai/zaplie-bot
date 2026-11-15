@@ -57,9 +57,12 @@ app.get('/healthz', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-// All browser access to LNbits goes through this authenticated same-origin
-// gateway. Wallet and service-account keys stay in the Node process.
-app.use('/api/lnbits', require('./lnbitsRoutes'));
+// All browser access to wallets goes through this authenticated same-origin
+// gateway; wallet connections stay in the Node process. /api/lnbits is the
+// old path, kept so a portal tab loaded before a deploy keeps working.
+const walletRoutes = require('./walletRoutes');
+app.use('/api/wallet', walletRoutes);
+app.use('/api/lnbits', walletRoutes);
 
 // Zaplie's people directory: the signed-in person's receive target (MSAL),
 // operator wallet linking (Zaplie.Admin) and the bot's internal calls (shared
@@ -245,7 +248,7 @@ app.post('/api/reward-policy', requireAdmin, (req, res) => {
 
 // A body key this route does not read is a key the caller believed it could
 // set, so the request is refused instead of silently half-honoured — the same
-// contract the payment routes state in lnbitsRoutes.js.
+// contract the payment routes state in walletRoutes.js.
 const BOT_PERSONA_BODY_KEYS = new Set(['botPersona']);
 const REWARD_NAME_BODY_KEYS = new Set(['newRewardName']);
 

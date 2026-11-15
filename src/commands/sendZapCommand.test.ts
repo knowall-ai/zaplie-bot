@@ -12,22 +12,38 @@ import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import type { TurnContext } from 'botbuilder';
 import {
   SendZap,
+  PaymentOutcomeUnknownError,
   SendZapCommand,
   buildZapReceiptCard,
   zapAmountInput,
   zapAmountRegex,
 } from './sendZapCommand';
 import { MAX_ZAP_SATS } from './zapBudget';
-import { getWalletBalance, payInvoice } from '../services/lnbitsService';
 import {
-  createInvoiceForPerson,
+  getBalances,
   listPeople,
+  payZap,
+  PaymentNotSentError,
+  PaymentOutcomeUncertainError,
 } from '../services/peopleDirectory';
 import { GENERIC_ERROR_MESSAGE } from '../messages';
 import { parseSatsAmount } from '../utils/satsAmount';
 
-jest.mock('../services/lnbitsService');
-jest.mock('../services/peopleDirectory');
+jest.mock('../services/peopleDirectory', () => {
+  const actual = jest.requireActual<
+    typeof import('../services/peopleDirectory')
+  >('../services/peopleDirectory');
+  return {
+    ...actual,
+    ensurePerson: jest.fn(),
+    listPeople: jest.fn(),
+    getPerson: jest.fn(),
+    payZap: jest.fn(),
+    payReward: jest.fn(),
+    getBalances: jest.fn(),
+    listZaps: jest.fn(),
+  };
+});
 
 // A sender with an Allowance wallet unless a test sets its own: without one
 // the command answers allowanceNotReady before building a card.
@@ -115,18 +131,13 @@ describe('SendZap after the payment settles', () => {
     const consoleError = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
-    jest
-      .mocked(createInvoiceForPerson)
-      .mockResolvedValue('lnbc-payment-request');
-    jest
-      .mocked(payInvoice)
-      .mockResolvedValue({ payment_hash: 'hash-bob' } as never);
+    jest.mocked(payZap).mockResolvedValue('hash-bob');
     // The balance read is presentation only, and it is the first thing the
     // receipt update does. Before this fix its failure escaped as a plain
     // Error, which zapRecipient reads as "never reached LNbits" and releases -
     // letting a resubmit pay Bob a second time.
     jest
-      .mocked(getWalletBalance)
+      .mocked(getBalances)
       .mockRejectedValue(new Error('LNbits balance read failed'));
 
     const updateActivity = jest
@@ -150,13 +161,10 @@ describe('SendZap after the payment settles', () => {
   test('a card update failure is logged, not thrown', async () => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.mocked(payZap).mockResolvedValue('hash-bob');
     jest
-      .mocked(createInvoiceForPerson)
-      .mockResolvedValue('lnbc-payment-request');
-    jest
-      .mocked(payInvoice)
-      .mockResolvedValue({ payment_hash: 'hash-bob' } as never);
-    jest.mocked(getWalletBalance).mockResolvedValue(979 as never);
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 979, budgetRemainingSats: null });
 
     const context = {
       activity: { replyToId: 'card-1' },
@@ -429,7 +437,9 @@ describe('the zap card caps the amount at the live balance', () => {
   const cardFor = async (balance: number) => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.mocked(listPeople).mockResolvedValue([]);
-    jest.mocked(getWalletBalance).mockResolvedValue(balance as never);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: balance, budgetRemainingSats: null });
     const { context, sendActivity } = makeContext();
     (context.turnState as Map<unknown, unknown>).set('user', {
       id: 'user-1',
@@ -491,7 +501,10 @@ describe('the zap card caps the amount at the live balance', () => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     jest.mocked(listPeople).mockResolvedValue([]);
-    jest.mocked(getWalletBalance).mockResolvedValue(Number.NaN as never);
+    jest.mocked(getBalances).mockResolvedValue({
+      allowanceSats: Number.NaN,
+      budgetRemainingSats: null,
+    });
     const { context, sendActivity } = makeContext();
     (context.turnState as Map<unknown, unknown>).set('user', {
       id: 'user-1',
@@ -517,20 +530,6 @@ describe('the zap card caps the amount at the live balance', () => {
 });
 
 // Every key found anywhere inside a value, depth first.
-const collectKeys = (
-  value: unknown,
-  found: Set<string> = new Set(),
-): Set<string> => {
-  if (value && typeof value === 'object') {
-    for (const [key, child] of Object.entries(
-      value as Record<string, unknown>,
-    )) {
-      found.add(key);
-      collectKeys(child, found);
-    }
-  }
-  return found;
-};
 
 const makeWallet = (overrides: Partial<Wallet>): Wallet => ({
   id: 'wallet-id',
@@ -583,137 +582,93 @@ const SECRET_VALUES = [
   'receiver-allowance-inkey',
 ];
 
-describe('SendZap payment metadata', () => {
-  const sendOneZap = async (from: User = sender, to: User = receiver) => {
-    jest
-      .mocked(createInvoiceForPerson)
-      .mockResolvedValue('lnbc1-payment-request');
-    jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
-    const { context } = makeContext();
-
-    await SendZap(from, to, 'thanks', 21, context, false, 'Sats');
-
-    return {
-      invoiceExtra: jest.mocked(createInvoiceForPerson).mock.calls[0][3],
-      paymentExtra: jest.mocked(payInvoice).mock.calls[0][2],
-    };
-  };
-
+describe('SendZap asks the portal to pay a directory member', () => {
   afterEach(() => {
-    jest.mocked(createInvoiceForPerson).mockReset();
-    jest.mocked(payInvoice).mockReset();
+    jest.mocked(payZap).mockReset();
   });
 
-  test('never sends wallet keys or balances in the payment metadata', async () => {
-    const { invoiceExtra, paymentExtra } = await sendOneZap();
+  test('names both people by Entra id and sends no invoice, address or key', async () => {
+    jest.mocked(payZap).mockResolvedValue('hash-1');
+    const { context } = makeContext();
 
-    for (const extra of [invoiceExtra, paymentExtra]) {
-      const keys = collectKeys(extra);
-      expect(keys.has('adminkey')).toBe(false);
-      expect(keys.has('inkey')).toBe(false);
-      expect(keys.has('balance_msat')).toBe(false);
-      const serialised = JSON.stringify(extra);
-      for (const secret of SECRET_VALUES) {
-        expect(serialised).not.toContain(secret);
-      }
+    await expect(
+      SendZap(
+        sender,
+        receiver,
+        'thanks',
+        21,
+        context,
+        false,
+        'Sats',
+        'k'.repeat(64),
+      ),
+    ).resolves.toEqual({ paymentHash: 'hash-1' });
+
+    expect(payZap).toHaveBeenCalledWith({
+      senderOid: 'sender-id',
+      recipientOid: 'receiver-id',
+      amountSats: 21,
+      memo: 'thanks',
+      idempotencyKey: 'k'.repeat(64),
+    });
+    const serialised = JSON.stringify(jest.mocked(payZap).mock.calls[0][0]);
+    for (const secret of SECRET_VALUES) {
+      expect(serialised).not.toContain(secret);
     }
   });
 
-  test('names the sender wallet and the recipient by Entra id', async () => {
-    const { invoiceExtra } = await sendOneZap();
-
-    // The recipient's Private wallet is their own; Zaplie does not know its
-    // id, so `to` names the person rather than a wallet.
-    expect(invoiceExtra).toEqual({
-      tag: 'zap',
-      from: {
-        id: 'sender-allowance',
-        name: 'Allowance',
-        user: 'sender-user',
-        displayName: 'Ada Sender',
-      },
-      to: {
-        name: 'Private',
-        user: 'receiver-id',
-        displayName: 'Bob Receiver',
-      },
-    });
-  });
-
-  test('keeps the fields the portal feed and automation readers use', async () => {
-    // FeedList.tsx and the bot leaderboard read extra.from.user and
-    // extra.to.user, automationPayments.js reads extra.to.user and
-    // extra.to.displayName, WalletTransactionLog.tsx reads extra.tag.
-    const { invoiceExtra } = await sendOneZap();
-    const extra = invoiceExtra as {
-      tag: string;
-      from: { user: string };
-      to: { user: string; displayName: string };
-    };
-
-    expect(extra.tag).toBe('zap');
-    expect(extra.from.user).toBe('sender-user');
-    expect(extra.to.user).toBe('receiver-id');
-    expect(extra.to.displayName).toBe('Bob Receiver');
-  });
-
-  test('sends the same metadata on the invoice and on the payment', async () => {
-    const { invoiceExtra, paymentExtra } = await sendOneZap();
-
-    expect(paymentExtra).toEqual(invoiceExtra);
-  });
-
-  test('pays from the sender Allowance adminkey into an invoice the portal makes for the receiver', async () => {
-    await sendOneZap();
-
-    expect(createInvoiceForPerson).toHaveBeenCalledWith(
-      'receiver-id',
-      21,
-      'thanks',
-      expect.anything(),
-    );
-    expect(payInvoice).toHaveBeenCalledWith(
-      'sender-allowance-adminkey',
-      'lnbc1-payment-request',
-      expect.anything(),
-    );
-  });
-
-  test('does not pay a receiver the portal cannot invoice yet', async () => {
+  test('a refusal the portal reports as not paid stays a plain error (safe to retry)', async () => {
     jest
-      .mocked(createInvoiceForPerson)
+      .mocked(payZap)
       .mockRejectedValue(
-        new Error('Bob Receiver has not set up where they receive zaps yet'),
+        new PaymentNotSentError(
+          'Bob Receiver has not set up where they receive zaps yet',
+        ),
       );
     const { context } = makeContext();
 
-    await expect(
-      SendZap(sender, receiver, 'thanks', 21, context, false, 'Sats'),
-    ).rejects.toThrow(/has not set up/);
-    expect(payInvoice).not.toHaveBeenCalled();
+    const error = await SendZap(
+      sender,
+      receiver,
+      'thanks',
+      21,
+      context,
+      false,
+      'Sats',
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PaymentNotSentError);
+    expect(error).not.toBeInstanceOf(PaymentOutcomeUnknownError);
   });
 
-  test('does not pay when the invoice cannot be created', async () => {
-    jest
-      .mocked(createInvoiceForPerson)
-      .mockRejectedValue(new Error('LNbits down'));
-    jest.mocked(payInvoice).mockResolvedValue({ payment_hash: 'hash-1' });
+  test('an answer that does not say is an unknown outcome (never retried)', async () => {
+    for (const failure of [
+      new PaymentOutcomeUncertainError('relay timed out'),
+      new Error('socket hang up'),
+    ]) {
+      jest.mocked(payZap).mockRejectedValueOnce(failure);
+      const { context } = makeContext();
+      await expect(
+        SendZap(sender, receiver, 'thanks', 21, context, false, 'Sats'),
+      ).rejects.toBeInstanceOf(PaymentOutcomeUnknownError);
+    }
+  });
+
+  test('does not ask the portal when the sender has no Allowance wallet', async () => {
+    const senderWithoutAllowance: User = { ...sender, allowanceWallet: null };
     const { context } = makeContext();
 
     await expect(
-      SendZap(sender, receiver, 'thanks', 21, context, false, 'Sats'),
-    ).rejects.toThrow('LNbits down');
-    expect(payInvoice).not.toHaveBeenCalled();
-  });
-
-  test('does not create an invoice when the sender has no Allowance wallet', async () => {
-    const senderWithoutAllowance: User = { ...sender, allowanceWallet: null };
-
-    await expect(sendOneZap(senderWithoutAllowance, receiver)).rejects.toThrow(
-      /sender Allowance wallet is missing/,
-    );
-    expect(createInvoiceForPerson).not.toHaveBeenCalled();
-    expect(payInvoice).not.toHaveBeenCalled();
+      SendZap(
+        senderWithoutAllowance,
+        receiver,
+        'thanks',
+        21,
+        context,
+        false,
+        'Sats',
+      ),
+    ).rejects.toThrow(/sender Allowance wallet is missing/);
+    expect(payZap).not.toHaveBeenCalled();
   });
 });
 
@@ -729,7 +684,9 @@ describe('the zap card advertises the recipient cap', () => {
   const receiverInputFor = async (locale?: string) => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.mocked(listPeople).mockResolvedValue([]);
-    jest.mocked(getWalletBalance).mockResolvedValue(1000 as never);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 1000, budgetRemainingSats: null });
     const { context, sendActivity } = makeContext();
     (context as unknown as { activity: unknown }).activity = { locale };
     (context.turnState as Map<unknown, unknown>).set('user', {
@@ -835,7 +792,9 @@ describe('zap card and receipt in the user language', () => {
       .mockResolvedValue([
         { id: 'user-2', displayName: 'Bob', aadObjectId: 'aad-2' } as never,
       ]);
-    jest.mocked(getWalletBalance).mockResolvedValue(15000);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: 15000, budgetRemainingSats: null });
     const { context, sendActivity } = makeContext();
     (context as unknown as { activity: unknown }).activity = {
       locale: 'es-MX',
@@ -882,7 +841,9 @@ describe('zap card numbers follow the client region', () => {
   const cardFor = async (locale: string, balance: number) => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.mocked(listPeople).mockResolvedValue([]);
-    jest.mocked(getWalletBalance).mockResolvedValue(balance as never);
+    jest
+      .mocked(getBalances)
+      .mockResolvedValue({ allowanceSats: balance, budgetRemainingSats: null });
     const { context, sendActivity } = makeContext();
     (context as unknown as { activity: unknown }).activity = { locale };
     (context.turnState as Map<unknown, unknown>).set('user', {

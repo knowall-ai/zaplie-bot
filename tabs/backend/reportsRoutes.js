@@ -3,14 +3,12 @@
 // payments from Allowance wallets; automated payouts are outgoing payments
 // from the treasury. Shared org view, any authenticated tenant user.
 //
-// Allowance wallets come from the people directory and are read with their
-// invoice keys; the treasury is read with ZAPLIE_TREASURY_INKEY. Nothing here
-// logs in to LNbits or lists its users.
+// Both series come from Zaplie's own record of what it paid
+// (zapRecordStore.js): zaps between members and rewards from the Treasury.
+// Nothing here calls LNbits or any wallet.
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
-const { treasuryInkey } = require('./lnbitsConfig');
-const { lnbitsRequest } = require('./lnbitsClient');
-const { peopleStore } = require('./peopleStore');
+const { zapRecords } = require('./zapRecordStore');
 
 const router = express.Router();
 
@@ -19,19 +17,12 @@ const WEEKS = 8;
 const paymentEpoch = (time) =>
   typeof time === 'number' ? time : Date.parse(time) / 1000;
 
-const walletOutgoingIntoBuckets = async (walletKey, nowTs, buckets, totals) => {
-  const list = await lnbitsRequest('/api/v1/payments?limit=1000', { walletKey });
-  for (const payment of Array.isArray(list) ? list : []) {
-    if (payment.amount >= 0 || payment.memo?.includes('Weekly Allowance cleared')) {
-      continue;
-    }
-    const sats = Math.abs(payment.amount) / 1000;
-    totals.sats += sats;
-    totals.count += 1;
-    const weeksAgo = Math.floor((nowTs - paymentEpoch(payment.time)) / (7 * 86400));
-    if (weeksAgo >= 0 && weeksAgo < WEEKS) {
-      buckets[WEEKS - 1 - weeksAgo] += sats;
-    }
+const intoBuckets = (record, nowTs, buckets, totals) => {
+  totals.sats += record.amountSats;
+  totals.count += 1;
+  const weeksAgo = Math.floor((nowTs - paymentEpoch(record.time)) / (7 * 86400));
+  if (weeksAgo >= 0 && weeksAgo < WEEKS) {
+    buckets[WEEKS - 1 - weeksAgo] += record.amountSats;
   }
 };
 
@@ -57,18 +48,12 @@ router.get('/', async (req, res) => {
     const zapTotals = { sats: 0, count: 0 };
     const automationTotals = { sats: 0, count: 0 };
 
-    const allowanceKeys = peopleStore()
-      .list()
-      .map((person) => person.allowance?.inkey)
-      .filter(Boolean);
-    await Promise.all(
-      allowanceKeys.map((walletKey) =>
-        walletOutgoingIntoBuckets(walletKey, nowTs, zapsWeekly, zapTotals),
-      ),
-    );
-    const treasuryKey = treasuryInkey();
-    if (treasuryKey) {
-      await walletOutgoingIntoBuckets(treasuryKey, nowTs, automationWeekly, automationTotals);
+    for (const record of zapRecords().list()) {
+      if (record.kind === 'reward') {
+        intoBuckets(record, nowTs, automationWeekly, automationTotals);
+      } else {
+        intoBuckets(record, nowTs, zapsWeekly, zapTotals);
+      }
     }
 
     res.json({
@@ -79,9 +64,6 @@ router.get('/', async (req, res) => {
       totalZapCount: zapTotals.count,
       totalAutomatedSats: Math.round(automationTotals.sats),
       totalAutomatedCount: automationTotals.count,
-      // False when ZAPLIE_TREASURY_INKEY is unset: the automation series is
-      // then unknown, not zero.
-      treasuryConfigured: Boolean(treasuryKey),
     });
   } catch (error) {
     console.error('Reports aggregation failed:', error.message);
