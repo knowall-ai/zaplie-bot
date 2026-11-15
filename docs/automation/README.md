@@ -32,7 +32,7 @@ only here; values live in App Service settings and nowhere else.
 | Variable | Purpose |
 | --- | --- |
 | `GITHUB_WEBHOOK_SECRET` | Shared secret GitHub signs each delivery with. Generate with `openssl rand -hex 32` and paste the same value into every repository webhook. Unset: the webhook answers 503 and pays nothing. |
-| `ZAPLIE_TREASURY_ADMINKEY` | Admin key of the treasury wallet that pays rewards (see below). `REWARDS_TREASURY_ADMINKEY` is still read when unset. |
+| `ZAPLIE_TREASURY_NWC` (portal backend) | NWC connection of the treasury wallet that pays rewards (see below). The bot asks the portal to pay and holds no treasury credential. |
 | `WEBSITE_API_URL` | Base URL of the portal backend API, including `/api` (for example `https://<portal-domain>/api`). The bot reads amounts, policy and identities from it. |
 | `TAB_BACKEND_TOKEN` | Shared secret the bot sends to the portal backend. Must be a real value, the same on both apps, or every reward fails before payment. |
 | `REWARDS_MAX_AMOUNT_SATS` | Ceiling for one reward (base plus bonus). Defaults to 10000. Set it on the bot and the portal backend. A malformed value fails closed. |
@@ -48,9 +48,11 @@ Rewards are paid from a dedicated treasury, never from a teammate's Allowance:
    `Allowance`.
 2. Fund it with **one budget period at most**. The bot's budget ledger is the
    first limit; the wallet balance is the second, independent one.
-3. Set `ZAPLIE_TREASURY_ADMINKEY` on the bot to that wallet's **Admin key**,
-   and `ZAPLIE_TREASURY_INKEY` on the portal backend to its **Invoice key**:
-   the portal finds the treasury by key, not by an LNbits username.
+3. On that wallet create an NWC connection (*NWC Provider*): permissions pay,
+   invoice, lookup, history, balance and info; budget = one budget period.
+   Set `ZAPLIE_TREASURY_NWC` on the portal backend to its connection string.
+   Rewards go only to directory members, at their registered Lightning
+   address.
 
 Payments carry the memo `GitHub: PR #<n> merged - <title>` and show as sent by
 "Automation" in the recipient's transaction log.

@@ -66,10 +66,12 @@ API. See `docs/LNBITS_MIGRATION.adoc`.
 === How are Teams users mapped to wallets?
 
 By the Entra ID (AAD) object id, in Zaplie's own people directory
-(`people.json`, wallet keys encrypted). `FetchUserMiddleware` adds the person
+(`people.json`, NWC connections encrypted). `FetchUserMiddleware` adds the person
 on their first bot interaction; their Allowance wallet belongs to
 `zaplie.service`, and they receive zaps in their own Private wallet through a
-Lightning address or invoice key they register on the portal's Wallet page.
+Lightning address they register on the portal's Wallet page. Zaplie spends
+from Allowance wallets over Nostr Wallet Connect, with a budget LNbits
+enforces, and holds no wallet key.
 
 === How do I report a security issue?
 

@@ -73,7 +73,7 @@ flowchart TB
 | Azure Functions v3 programming model (function.json), TypeScript, extension bundle 4.x
 
 | Wallet layer
-| LNbits 1.7+ (wallet keys and an optional scoped ACL token; no admin API) on the Bitcoin Lightning Network
+| LNbits 1.7+ reached over Nostr Wallet Connect (NIP-47); no admin API, no standing token
 
 | Identity
 | Microsoft Entra ID (AAD) — multi-tenant bot registration, SSO, MSAL in the tabs
@@ -152,59 +152,72 @@ sequenceDiagram
     B->>R: One-line notice: sender, amount, message
 ....
 
-=== LNbits Integration
+=== Wallet Integration (LNbits over NWC)
 
-Zaplie runs with least privilege against LNbits (`docs/LNBITS_MIGRATION.adoc`).
-It never logs in (no `POST /api/v1/auth`: LNbits 1.7's mandatory 2FA refuses a
-password login) and never calls the admin Users API (`/users/api/v1/*`). The
-LNbits account it uses, `zaplie.service`, is an ordinary user that owns:
+Zaplie runs with least privilege against its wallet backend, LNbits today
+(`docs/LNBITS_MIGRATION.adoc`). It never logs in (no `POST /api/v1/auth`:
+LNbits 1.7's mandatory 2FA refuses a password login) and never calls the
+admin Users API (`/users/api/v1/*`). The LNbits account `zaplie.service`, an
+ordinary user, owns:
 
 - one *Allowance* wallet per person (the budget they zap from);
 - the *Fund* wallet the allowance extension pays schedules from;
 - the *Treasury* wallet automation rewards are paid from.
 
-Each person's *Private* wallet stays under their own LNbits account. Zaplie
-knows only where they receive: a Lightning address (paid over LNURL-pay, the
-preferred way) or the invoice key of that wallet (receive and read only). It
-can never spend from a Private wallet.
+Zaplie spends only through Nostr Wallet Connect (NIP-47). Each Allowance
+wallet and the Treasury is an NWC connection string with a budget the wallet
+backend enforces (`tabs/backend/nwcWallet.js` over `@getalby/sdk`, pinned).
+The Fund keeps its admin key, for the LNbits allowance extension only
+(`allowanceExtensionClient.js`). Each person's *Private* wallet is their own;
+Zaplie knows only its Lightning address and only ever pays into it.
 
-Zaplie's people directory (`tabs/backend/peopleStore.js`, `people.json` under
-`ZAPLIE_DATA_DIR`) maps an Entra object id to the person's Allowance wallet
-keys and receive target; the keys are sealed with AES-256-GCM under
-`ZAPLIE_STORE_KEY`. It replaces looking people up by `external_id` in LNbits.
-The portal backend owns it:
+*Payment policy.* An Allowance wallet pays only another directory member,
+resolved server-side from their Entra object id to their registered
+Lightning address. Nothing a client sends (an invoice, an address, the
+sender themself) is ever paid. The route that would pay an arbitrary invoice
+answers 403. Treasury rewards likewise go only to directory members.
 
-- `tabs/backend/walletDirectory.js` provisions an Allowance wallet with the
-  optional ACL token `LNBITS_API_TOKEN` (`POST /api/v1/wallet` creates a
-  wallet under the token's own account) or accepts one an operator linked;
-  validates receive targets (a Lightning address must resolve and sit on an
-  allowed domain; an invoice key must open a wallet that is not Zaplie's, and
-  an admin key is refused); and invoices a person
-  (`tabs/backend/lnurlPay.js` checks the BOLT 11 amount before anyone pays).
-- `tabs/backend/directoryRoutes.js` serves it at `/api/directory`: `/me`
-  (MSAL) to register a receive target, `/admin` (Zaplie.Admin) to link
-  wallets, `/internal` (shared `TAB_BACKEND_TOKEN`) for the bot.
-- `tabs/backend/lnbitsClient.js` is the one HTTP client; every request
-  carries exactly one credential, a wallet key or the API token.
+Zaplie's people directory (`tabs/backend/peopleStore.js`, `people.json`
+under `ZAPLIE_DATA_DIR`) maps an Entra object id to the Allowance wallet's
+NWC connection (sealed with AES-256-GCM under `ZAPLIE_STORE_KEY`) and
+Lightning address, plus the person's receive address. The portal backend
+owns it:
 
-Three clients call LNbits:
+- `tabs/backend/walletDirectory.js` links an Allowance wallet (the NWC
+  connection is tried and the address resolved first; duplicates are
+  refused), onboards people through a provisioner, validates receive
+  addresses (allowed domains only; Zaplie's own addresses are refused) and
+  invoices a person at their address (`lnurlPay.js` checks the BOLT 11 amount
+  before anyone pays).
+- `tabs/backend/walletProvisioner.js` defines the provisioner interface
+  (create a person's Allowance wallet; return only an NWC connection and a
+  Lightning address). `lnbitsProvisioner.js` implements it with a short-lived
+  ACL token an admin pastes for one request. The token is never stored or
+  logged. The new wallet's admin key is used transiently, and the NWC secret
+  is generated locally.
+- `tabs/backend/zapRecordStore.js` is Zaplie's own record of every zap and
+  reward, keyed by payment hash. NWC carries no LNbits `extra`, so the feed,
+  the leaderboards, the reports and the automation stats read this.
+- `tabs/backend/directoryRoutes.js` serves `/api/directory`:
+  - `/me` (MSAL): balance and receive address;
+  - `/admin` (Zaplie.Admin): list people, *Add people*;
+  - `/internal` (shared `TAB_BACKEND_TOKEN`, the bot): people, pay a zap,
+    pay a reward, balances, zap records.
 
-- `src/services/lnbitsService.ts` — the bot, wallet keys only (the sender's
-  Allowance key from `/api/directory/internal/people/ensure`, or
-  `ZAPLIE_TREASURY_ADMINKEY`), plus `GET /api/v1/payments/all/paginated` with
-  the API token when it is set. People, invoices for recipients and balances
-  come from `src/services/peopleDirectory.ts`. A Zap = the portal invoices the
-  recipient, then the bot pays it from the sender's Allowance wallet with the
-  zap metadata (`extra.to.user` is the recipient's Entra id).
-- `tabs/backend/lnbitsGatewayService.js` — the portal's authenticated gateway
-  at `/api/lnbits/*` over the directory. Wallet routes resolve the wallet
-  through the caller's own directory entry, so a wallet id on its own grants
-  neither reads nor writes. The user directory, Allowance balances, the
-  payment feed and per-Allowance-wallet history stay deliberately
-  tenant-wide, as before.
-- `functions/services/lnbitsService.ts` — the legacy request-scoped variant;
-  the LNbits base URL and credentials arrive with each HTTP request (issue
-  #438). It is not part of this design.
+  Payment answers carry `outcome` (paid / not_paid / unknown).
+- `tabs/backend/walletGateway.js` is the portal's gateway at `/api/wallet/*`
+  (alias `/api/lnbits/*`). Wallet routes resolve the wallet through the
+  caller's own directory entry, so a wallet id on its own grants neither
+  reads nor writes.
+- `tabs/backend/lnbitsClient.js` is the only HTTP client to LNbits, for what
+  is LNbits-specific: the allowance extension, the optional rewards store and
+  the provisioner.
+
+The bot (`src/services/peopleDirectory.ts`) holds no wallet credential. It
+asks the portal to pay zaps (`payZap`, one idempotency key per card and
+recipient) and rewards (`payReward`, one per delivery). It reads balances and
+zap records the same way. `functions/services/lnbitsService.ts` is the legacy
+request-scoped client (issue #438) and is not part of this design.
 
 === Submit Duration
 
@@ -234,6 +247,10 @@ so an over-cap submit costs no LNbits call, leaves no ledger record, and gets
 the same refusal when resubmitted. The count is the whole card after
 de-duplication, not only the recipients still pending. Recipient
 notifications are no longer part of the turn (see Recipient Notifications).
+Since the move to NWC each recipient is one call to the portal
+(`/api/directory/internal/zaps`), which resolves the recipient's Lightning
+address over HTTPS and pays over an NWC relay. The estimates above predate
+that, so re-measure before raising `ZAP_MAX_RECIPIENTS`.
 None of this bounds a single LNbits call that stalls: those calls have no
 request timeout of their own.
 
@@ -491,7 +508,7 @@ signed out locally, because MSAL clears its cache before opening the popup, but
 `inProgress` stays `logout`, so Sign In is disabled until then. MSAL's
 `auth.popupRelayUri` is the designed remedy and is not part of this change.
 
-`RequireAuth` also calls `POST /api/lnbits/users/me` before rendering a guarded
+`RequireAuth` also calls `POST /api/wallet/users/me` before rendering a guarded
 route. The call is shared by every guarded route and keyed to the signed-in
 account: a different person signing in without a reload is set up afresh, and
 a failed call is retried on the next guarded route instead of being remembered. The bot creates LNbits users on a person's first
@@ -570,7 +587,11 @@ per-request via HTTP Basic auth plus `siteURL`/`adminkey` query parameters.
 
 | People and wallets
 | Zaplie people directory (`people.json`, keys encrypted) + LNbits wallets
-| Keyed by Entra object id; an Allowance wallet under `zaplie.service`, and a receive target (Lightning address or invoice key) for the person's own Private wallet
+| Keyed by Entra object id; an Allowance wallet under `zaplie.service` (its NWC connection and Lightning address), and the Lightning address of the person's own Private wallet
+
+| Zap and reward records
+| `zap-records.json` under the portal backend's `ZAPLIE_DATA_DIR`
+| One record per payment Zaplie made (payment hash, both people by Entra id, amount, memo, reward details). The feed, leaderboards, reports and automation stats read it
 
 | Transactions / Zaps
 | LNbits payments ledger
@@ -650,7 +671,7 @@ not anyone's own wallet.
 *Decision:* Each person has an Allowance wallet owned by `zaplie.service`
 (funded only by the LNbits allowance extension from the Fund wallet; nothing
 is minted) and their own Private wallet, which receives zaps through a
-Lightning address or an invoice key they register.
+Lightning address they register.
 
 *Rationale:* Cleanly separates "money to give" from "money earned". The
 Private wallet is private: its balance is never surfaced or ranked.

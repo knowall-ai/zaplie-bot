@@ -152,17 +152,17 @@ The backend already answers cross-origin requests (`cors()` in
 are meant to land there.
 
 People are kept in Zaplie's own directory (`people.json` under
-`ZAPLIE_DATA_DIR`, wallet keys encrypted with `ZAPLIE_STORE_KEY`), keyed by
-the Entra `oid`. Zaplie never creates LNbits users and never logs in to
-LNbits (see `docs/LNBITS_MIGRATION.adoc`). On first sign-in
-`POST /api/lnbits/users/me` (the one gateway route that does not require an
-existing directory entry) adds the person and, when `LNBITS_API_TOKEN` is
-configured, creates their empty Allowance wallet under the `zaplie.service`
-account; without the token an admin links a wallet in *Settings → People and
-Allowance wallets*. It moves no sats: the opening allowance is paid from the
-Fund wallet by the allowance extension. Each person registers where they
-receive zaps (a Lightning address, or the invoice key of their own Private
-wallet) on the portal's *Wallet* page.
+`ZAPLIE_DATA_DIR`, NWC connections encrypted with `ZAPLIE_STORE_KEY`), keyed
+by the Entra `oid`. Zaplie never creates wallet-backend users and never logs
+in to the wallet backend (see `docs/LNBITS_MIGRATION.adoc`). On first sign-in
+`POST /api/wallet/users/me` (the one gateway route that does not require an
+existing directory entry; `/api/lnbits/...` is still served as an alias)
+adds the person. An admin then gives them an Allowance wallet in *Settings →
+People and Allowance wallets → Add people*, either with the LNbits
+provisioner and a short-lived token, or by pasting an NWC connection. It
+moves no sats: the opening allowance is paid from the Fund wallet by the
+allowance extension. Each person registers the Lightning address of their own
+Private wallet on the portal's *Wallet* page.
 
 The route serves exactly the people the bot serves. `tabs/backend/memberGate.js`
 mirrors `src/services/memberGate.ts`: members of the home tenant are
@@ -339,24 +339,24 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
 | Bot
 
 | `LNBITS_URL`
-| Base URL of the LNbits instance. `LNBITS_NODE_URL` is still read when this
-  is unset, so existing app settings keep working
-| Bot, Portal backend
+| Base URL of the LNbits instance: the allowance extension (Fund), the
+  optional rewards store and the LNbits provisioner. `LNBITS_NODE_URL` is
+  still read when this is unset
+| Portal backend
 
-| `LNBITS_API_TOKEN`
-| Optional. ACL token of the `zaplie.service` account: write on
-  `/api/v1/wallet`, read on `/api/v1/wallets` and `/api/v1/payments`.
-  The portal uses it to create a person's Allowance wallet on first sign-in
-  and to read balances and payments in one call. Without it an admin links
-  each Allowance wallet and every wallet is read with its own invoice key.
-  LNbits grants write per path, so the token can also reset the keys of any
-  `zaplie.service` wallet: keep it off the bot (which reads it only to save
-  the leaderboard a request per wallet) and never give it a `REACT_APP_`
-  prefix. See `docs/LNBITS_MIGRATION.adoc`
-| Portal backend (bot: optional, not recommended)
+| `ZAPLIE_TREASURY_NWC`
+| NWC connection string of the Treasury wallet (owned by `zaplie.service`)
+  that automation rewards are paid from; budget = one reward period. The bot
+  holds no Treasury credential: it asks the portal to pay
+| Portal backend
+
+| `ZAPLIE_NWC_RELAYS`
+| Relays an NWC connection may use, comma-separated (`*` allows any).
+  Default: `wss://<public LNbits host>/nostrclient/api/v1/relay`
+| Portal backend
 
 | `ZAPLIE_STORE_KEY`
-| 64 hex characters (`openssl rand -hex 32`) that encrypt the wallet keys in
+| 64 hex characters (`openssl rand -hex 32`) that encrypt the NWC connections in
   the people directory (`people.json`). Unset, one is generated into
   `secrets.json` beside the data, in local development only: a deployed
   backend (`NODE_ENV=production` or Azure App Service) refuses to open the
@@ -441,15 +441,9 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
   portal-managed keys created in Automations). GitHub does not use it
 | Bot
 
-| `ZAPLIE_TREASURY_ADMINKEY`
-| Admin key of the Treasury wallet (owned by `zaplie.service`) that reward
-  payouts are drawn from. `REWARDS_TREASURY_ADMINKEY` is still read when this
-  is unset
-| Bot
-
-| `ZAPLIE_TREASURY_INKEY`
-| Invoice (read) key of the Treasury wallet: the automation stats, the reports
-  and (when enabled) the rewards store read it. Replaces `TREASURY_USERNAME`
+| `ZAPLIE_REWARDS_STORE_INKEY`
+| Invoice key the optional rewards store (nostrmarket) is read with, when
+  `ZAPLIE_REWARDS_STORE_ENABLED=true`
 | Portal backend
 
 | `REWARDS_MAX_AMOUNT_SATS`
@@ -610,7 +604,7 @@ Deploy `dist/` with Azure Functions Core Tools or your preferred pipeline
   its own tenant. Comma-separated: `person@example.com`, `@example.com` for a
   whole domain, or an Entra object id. Empty or unset (the default): members
   only. Anonymous meeting participants are never served. The portal backend
-  reads the same setting for `POST /api/lnbits/users/me`
+  reads the same setting for `POST /api/wallet/users/me`
 | Bot, Portal backend
 
 | `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL`
@@ -638,7 +632,8 @@ never in tracked files.
 portal has no references to `REACT_APP_LNBITS_PASSWORD` or
 `REACT_APP_LNBITS_ADMINKEY`; build workflows must not supply them. The deploy
 workflows fail if the built bundle names any LNbits credential
-(`LNBITS_API_TOKEN`, the Treasury or Fund keys, `ZAPLIE_STORE_KEY`), so keep
+(`LNBITS_API_TOKEN`, the Treasury or Fund credentials, `ZAPLIE_STORE_KEY`)
+or contains a `nostr+walletconnect://` string with a secret, so keep
 those names out of browser code, comments included: source maps carry them.
 
 [[Telemetry]]
@@ -763,10 +758,10 @@ Complete these once per new environment, right after the first deployment:
   .. Keep this list in step with the Teams app's availability (below).
 . *Prepare LNbits.* Follow `docs/LNBITS_MIGRATION.adoc`: Zaplie uses an
   ordinary, non-admin account (`zaplie.service`) and never logs in. Enable
-  the `lnurlp` and `allowance` extensions for that account, and create the
-  Fund and Treasury wallets under it. Fund the Treasury with one budget
-  period at most, and copy its admin key into `ZAPLIE_TREASURY_ADMINKEY` (bot)
-  and its invoice key into `ZAPLIE_TREASURY_INKEY` (portal). Then follow `docs/automation/README.md` to set
+  the `lnurlp`, `allowance` and `nwcprovider` extensions for that account,
+  and create the Fund and Treasury wallets under it. Fund the Treasury with
+  one budget period at most, and put its NWC connection into
+  `ZAPLIE_TREASURY_NWC` (portal). Then follow `docs/automation/README.md` to set
   `GITHUB_WEBHOOK_SECRET`, the reward amount, the budget and each repository
   webhook; nothing pays until the amount and the budget are set. Weekly
   allowances are paid by the LNbits
@@ -782,8 +777,8 @@ Complete these once per new environment, right after the first deployment:
   (`docs/LNBITS_MIGRATION.adoc`), so delete them from the app settings.
 . *Provisioning caveat.* A person is added to the directory the first time
   the bot sees them (the Teams install event or their first message) or they
-  sign in to the portal; their Allowance wallet is created then when
-  `LNBITS_API_TOKEN` is set, otherwise when an admin links one.
+  sign in to the portal; an admin then gives them an Allowance wallet in
+  *Settings → People and Allowance wallets → Add people*.
   Only *members* of the bot's own tenant (`userRole` `user`, `tenantId` =
   `AAD_APP_TENANT_ID`) and guests listed in `ZAPLIE_GUEST_ALLOWLIST` are
   provisioned or answered. Anyone else (an unlisted guest, an anonymous

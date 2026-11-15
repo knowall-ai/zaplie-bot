@@ -58,8 +58,7 @@ Configure these values on the bot process:
 | --- | --- |
 | `WEBSITE_API_URL` | Tab backend API base URL, including `/api`. Required in production. |
 | `TAB_BACKEND_TOKEN` | The same server-to-server value configured on the tab backend. |
-| `LNBITS_URL` | LNbits base URL (`LNBITS_NODE_URL` is still read). |
-| `ZAPLIE_TREASURY_ADMINKEY` | Treasury wallet the reward is paid from. The recipient is invoiced by the portal from the people directory; the bot holds no LNbits login. |
+| (none for wallets) | The bot holds no wallet credential: the portal pays the reward from the Treasury (`ZAPLIE_TREASURY_NWC` on the portal backend) to the recipient's registered Lightning address. |
 
 Do not reuse `REWARDS_API_KEY` as `TAB_BACKEND_TOKEN`; the external automation
 boundary and the internal bot-to-backend boundary have different exposure and

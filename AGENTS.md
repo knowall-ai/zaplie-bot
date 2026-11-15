@@ -69,28 +69,27 @@ deployable components in one repository:
   returns an outcome and never throws into the payment path. Not awaited by
   the sender's turn (Teams' 15-second response limit); tracked on the bot
   instance so tests can settle it (`settleBackgroundWork`).
-- **LNbits integration (least privilege, `docs/LNBITS_MIGRATION.adoc`)**:
-  Zaplie never logs in to LNbits (no `POST /api/v1/auth`, which mandatory 2FA
-  refuses) and never calls the admin Users API (`/users/api/v1/*`); tests in
-  both packages fail if a source file does. Every call carries one wallet key
-  (`X-Api-Key`) or the optional `zaplie.service` ACL token
-  (`LNBITS_API_TOKEN`, Bearer). The portal backend owns the people directory
-  (`tabs/backend/peopleStore.js`, `walletDirectory.js`, `directoryRoutes.js`,
-  keys sealed under `ZAPLIE_STORE_KEY`) and the one HTTP client
-  (`tabs/backend/lnbitsClient.js`); the bot's client is
-  `src/services/lnbitsService.ts`; `functions/services/lnbitsService.ts` is the
-  legacy request-scoped one (#438). A Zap = the portal invoices the recipient
-  (`createInvoiceForPerson`: their Lightning address over LNURL-pay, amount
-  checked, or their invoice key) then `payInvoice` from the sender's Allowance
-  wallet. The payment `extra` carries `from: { id, name, user, displayName }`
-  and `to: { name, user, displayName }` (`user` = Entra object id), built by
-  `src/services/paymentExtra.ts`, never a `Wallet` object (which holds keys);
-  the feed and leaderboard identify zaps by it, because the receiving Private
-  wallet is not visible to Zaplie. The automation reward's `from` is
-  `{ displayName }` only.
+- **Wallets (least privilege, `docs/LNBITS_MIGRATION.adoc`)**: Zaplie never
+  logs in to the wallet backend (LNbits) and never calls its admin API; tests
+  in both packages fail if a source file does. It spends only over Nostr
+  Wallet Connect: each person's Allowance wallet and the Treasury is an NWC
+  connection with a budget (`tabs/backend/nwcWallet.js`), encrypted in
+  `people.json` / `ZAPLIE_TREASURY_NWC`. The Fund keeps its admin key for the
+  LNbits allowance extension only. The portal backend owns the people
+  directory (`peopleStore.js`, `walletDirectory.js`, `directoryRoutes.js`),
+  Zaplie's own zap records (`zapRecordStore.js`, which the feed and
+  leaderboards read, since NWC carries no LNbits `extra`), the wallet gateway
+  (`walletGateway.js`, `/api/wallet`) and onboarding (`walletProvisioner.js`
+  + `lnbitsProvisioner.js`: a short-lived LNbits token pasted for one admin
+  request, never stored). The bot holds no wallet credential at all:
+  `src/services/peopleDirectory.ts` asks the portal to pay zaps and rewards.
+  **Payment policy:** an Allowance wallet pays only another directory member,
+  resolved server-side from their Entra id to their registered Lightning
+  address; never a client-supplied invoice or address, never the sender.
+  `functions/services/lnbitsService.ts` is legacy (#438).
 - **Tabs app**: routes `/feed`, `/users`, `/rewards`, `/wallet`, `/settings`
   (MSAL-guarded via `RequireAuth`, which also adds the signed-in person to
-  the directory through `POST /api/lnbits/users/me` on first use outside
+  the directory through `POST /api/wallet/users/me` on first use outside
   Teams; the Wallet page registers where they receive, and Settings lets a
   Zaplie.Admin link Allowance wallets), plus `/login`, `/auth-start`, `/auth-end`. A
   second build of the same source serves `https://getzapl.ie/portal/`
@@ -174,10 +173,10 @@ Never commit secrets. Key variables (see `docs/DEPLOYMENT.adoc` for the full
 table):
 
 - **Bot**: `BOT_ID`, `BOT_PASSWORD`, `BOT_DOMAIN`, `AAD_APP_CLIENT_ID`,
-  `AAD_APP_TENANT_ID`, `LNBITS_URL` (`LNBITS_NODE_URL` still read),
-  `LNBITS_API_TOKEN` (optional), `ZAPLIE_TREASURY_ADMINKEY`,
-  `TAB_BACKEND_TOKEN` + `WEBSITE_API_URL` (the people directory). Never an
-  LNbits username, password or super-user key,
+  `AAD_APP_TENANT_ID`, `TAB_BACKEND_TOKEN` + `WEBSITE_API_URL` (the people
+  directory, which also pays). No wallet setting at all: the portal backend
+  holds `ZAPLIE_TREASURY_NWC`, `ALLOWANCE_FUND_ADMINKEY`, `ZAPLIE_STORE_KEY`
+  and `LNBITS_URL`,
   `LEADERBOARD_WINDOW_DAYS` (1 to 365; also the assistant's default window),
   `LEADERBOARD_TOP_N` (1 to 100; values outside either range fail closed),
   `ZAP_MAX_RECIPIENTS` (1 or more, default 3; a malformed value stops the
@@ -240,7 +239,7 @@ table):
   deployed via `teamsapp deploy`, not CI.
 - People are Zaplie's, not LNbits': `people.json` under `ZAPLIE_DATA_DIR`
   on the portal backend. Losing it (or `ZAPLIE_STORE_KEY`) loses the
-  Allowance wallet keys, not the sats: the wallets still exist under
+  Allowance NWC connections, not the sats: the wallets still exist under
   `zaplie.service` and can be re-linked from Settings. Back it up with the
   rest of the data directory.
 
@@ -267,7 +266,7 @@ Any id that reaches an LNbits URL (user, wallet, invoice) goes through
 `encodeURIComponent`, and ids from a Teams card or other client input are
 checked against the plain-id pattern first (`normalizeRecipientIds` in
 `src/commands/zapRecipient.ts`, `USER_ID_PATTERN` in the portal gateway).
-Those calls carry wallet keys or the portal's internal token, so a raw
+Those calls carry the portal's internal token or reach wallets, so a raw
 `../` would let a client steer them to another endpoint.
 
 User-typed amounts are parsed with `parseSatsAmount`
