@@ -101,3 +101,23 @@ test('an address that is not a pay request is refused', async () => {
     (error) => error.status === 400,
   );
 });
+
+test('the wildcard domain setting refuses hosts that resolve to private addresses', async () => {
+  const wildcard = { ZAPLIE_LIGHTNING_ADDRESS_DOMAINS: '*' };
+  let fetched = false;
+  const fetchImpl = async () => {
+    fetched = true;
+    return json(payRequest());
+  };
+  for (const address of ['127.0.0.1', '10.1.2.3', '169.254.169.254', '192.168.0.9', '::1', 'fd00::1', '::ffff:10.0.0.1']) {
+    await assert.rejects(
+      requestInvoice('ada@internal.example', 20, '', {
+        env: wildcard,
+        fetchImpl,
+        lookupImpl: async () => [{ address }],
+      }),
+      /public host/,
+    );
+  }
+  assert.equal(fetched, false);
+});

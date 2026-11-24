@@ -9,6 +9,8 @@
 // (ZAPLIE_LIGHTNING_ADDRESS_DOMAINS, default: the public LNbits host only, so
 // allowance sats cannot leave the instance by default), no IP literals, no
 // redirects, the callback must stay on the same host, a timeout and a size cap.
+const dns = require('dns').promises;
+const net = require('net');
 const { REQUEST_TIMEOUT_MS, publicLnbitsHost } = require('./lnbitsConfig');
 
 const ADDRESS_PATTERN = /^([a-z0-9._+-]{1,64})@([a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})+)$/;
@@ -62,6 +64,45 @@ const parseLightningAddress = (value, env = process.env) => {
   return { name, domain, address };
 };
 
+const isPrivateAddress = (ip) => {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  const address = mapped ? mapped[1] : ip;
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number);
+    return (
+      a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+  const lower = address.toLowerCase();
+  return (
+    lower === '::' || lower === '::1' ||
+    /^f[cd]/.test(lower) || /^fe[89ab]/.test(lower) || lower.startsWith('ff')
+  );
+};
+
+/**
+ * With the `*` wildcard the domain is user-chosen, so refuse any that
+ * resolves to a private, loopback or link-local address. A named allow-list
+ * is operator-trusted and is not resolved. (Resolve-then-fetch leaves a DNS
+ * rebinding window; the callback must still stay on the same host.)
+ */
+const assertPublicHost = async (domain, env, lookupImpl) => {
+  if (!allowedAddressDomains(env).has('*')) return;
+  let records;
+  try {
+    records = await lookupImpl(domain, { all: true });
+  } catch (_error) {
+    throw new LnurlPayError('The Lightning address could not be reached.');
+  }
+  if (!records.length || records.some((record) => isPrivateAddress(record.address))) {
+    throw new LnurlPayError('A Lightning address must be on a public host.', 400);
+  }
+};
+
 const fetchJson = async (url, fetchImpl) => {
   let response;
   try {
@@ -96,8 +137,12 @@ const fetchJson = async (url, fetchImpl) => {
 };
 
 /** The LUD-06 pay parameters behind an address, validated. */
-const fetchPayRequest = async (value, { env = process.env, fetchImpl = fetch } = {}) => {
+const fetchPayRequest = async (
+  value,
+  { env = process.env, fetchImpl = fetch, lookupImpl = dns.lookup } = {},
+) => {
   const { name, domain, address } = parseLightningAddress(value, env);
+  await assertPublicHost(domain, env, lookupImpl);
   const params = await fetchJson(
     `https://${domain}/.well-known/lnurlp/${encodeURIComponent(name)}`,
     fetchImpl,
@@ -157,8 +202,8 @@ const bolt11AmountMsat = (invoice) => {
  * when the amount is outside the address's limits or the invoice it returns
  * is for anything other than what was asked.
  */
-const requestInvoice = async (value, amountSats, comment, { env = process.env, fetchImpl = fetch } = {}) => {
-  const params = await fetchPayRequest(value, { env, fetchImpl });
+const requestInvoice = async (value, amountSats, comment, { env = process.env, fetchImpl = fetch, lookupImpl = dns.lookup } = {}) => {
+  const params = await fetchPayRequest(value, { env, fetchImpl, lookupImpl });
   const amountMsat = amountSats * 1000;
   if (!Number.isSafeInteger(amountMsat) || amountMsat < params.minSendable || amountMsat > params.maxSendable) {
     throw new LnurlPayError(
