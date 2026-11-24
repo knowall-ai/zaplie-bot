@@ -1,12 +1,10 @@
 // The pay link on each person's Allowance wallet, which gives the wallet a
 // Lightning address (zaplie-<oid prefix>@<public LNbits host>) for the
-// allowance extension to pay into. Created and updated with that wallet's own
-// admin key; the Fund key is never used here.
-const {
-  createWalletPayLink,
-  listWalletPayLinksWithKey,
-  updateWalletPayLink,
-} = require('./lnbitsGatewayService');
+// allowance extension to pay into. Zaplie holds no Allowance wallet key since
+// the move to NWC: an operator creates the link in LNbits with these values
+// (or automatic provisioning does, once) and the address is recorded in the
+// directory. These helpers name and shape the link; nothing here calls LNbits.
+const { publicLnbitsHost } = require('./lnbitsConfig');
 
 const DESCRIPTION_PREFIX = 'Zaplie allowance';
 const MAX_DESCRIPTION_NAME = 80;
@@ -21,23 +19,6 @@ const allowanceDescription = (displayName) => {
     .trim()
     .slice(0, MAX_DESCRIPTION_NAME);
   return name ? `${DESCRIPTION_PREFIX} (${name})` : DESCRIPTION_PREFIX;
-};
-
-/**
- * The host Lightning addresses are served on: LNBITS_PUBLIC_HOST, else the
- * host of LNBITS_NODE_URL. The extension pays over public HTTPS, so this must
- * be the public name (bank.knowall.ai), not an internal address.
- */
-const publicLnbitsHost = (env = process.env) => {
-  const configured = String(env.LNBITS_PUBLIC_HOST || '').trim();
-  if (configured) {
-    return configured.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
-  }
-  try {
-    return new URL(env.LNBITS_NODE_URL).host.toLowerCase();
-  } catch (_error) {
-    return '';
-  }
 };
 
 /** The pay link fields Zaplie owns for one person. */
@@ -106,35 +87,11 @@ const updateBody = (link, desired) => {
  *
  * @returns {{ action: 'noop'|'created'|'updated', link }}
  */
-const ensureAllowancePayLink = async (
-  { wallet, oid, displayName, range, existing },
-  {
-    listLinks = listWalletPayLinksWithKey,
-    createLink = createWalletPayLink,
-    updateLink = updateWalletPayLink,
-  } = {},
-) => {
-  const desired = desiredPayLink({ oid, displayName, range });
-  const current =
-    existing === undefined ? findAllowancePayLink(await listLinks(wallet), oid) : existing;
-  if (!current) {
-    return { action: 'created', link: await createLink(wallet, desired) };
-  }
-  if (payLinkDiff(current, desired).length === 0) {
-    return { action: 'noop', link: current };
-  }
-  return {
-    action: 'updated',
-    link: await updateLink(wallet, current.id, updateBody(current, desired)),
-  };
-};
-
 module.exports = {
   DESCRIPTION_PREFIX,
   allowanceDescription,
   allowanceUsername,
   desiredPayLink,
-  ensureAllowancePayLink,
   findAllowancePayLink,
   payLinkDiff,
   publicLnbitsHost,

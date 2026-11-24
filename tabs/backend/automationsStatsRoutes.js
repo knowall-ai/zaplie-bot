@@ -3,12 +3,8 @@
 // this month. Shared org view, so any authenticated tenant user may read it.
 const express = require('express');
 const { verifyMsalToken, extractBearerToken } = require('./msalValidator');
-const {
-  REQUEST_TIMEOUT_MS,
-  requireLnbitsConfig,
-  getLnbitsToken,
-  lnbitsGet,
-} = require('./lnbitsAdmin');
+const { peopleStore } = require('./peopleStore');
+const { toPayment, zapRecords } = require('./zapRecordStore');
 const fs = require('fs');
 const {
   summarizeAutomationPayments,
@@ -18,8 +14,6 @@ const { dataPath } = require('./dataPaths');
 const { readEffectiveBudget } = require('./rewardBudget');
 
 const router = express.Router();
-
-const TREASURY_USERNAME = process.env.TREASURY_USERNAME || 'automation';
 
 // The budget the bot enforces, for "spent this period": the REWARDS_BUDGET_*
 // overrides first, then the portal's budget, as the bot resolves it. A
@@ -51,48 +45,27 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const config = requireLnbitsConfig();
-    const accessToken = await getLnbitsToken(config);
-    const usersBody = await lnbitsGet(`${config.nodeUrl}/users/api/v1/user`, accessToken);
-    const treasury = (Array.isArray(usersBody?.data) ? usersBody.data : []).find(
-      (user) => user.username === TREASURY_USERNAME,
-    );
-    if (!treasury) {
-      res.status(503).json({ error: `treasury user "${TREASURY_USERNAME}" not found` });
-      return;
-    }
-
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
     const sinceTs = Math.floor(monthStart.getTime() / 1000);
 
-    const wallets = await lnbitsGet(
-      `${config.nodeUrl}/users/api/v1/user/${treasury.id}/wallet`,
-      accessToken,
-    );
-    const paymentLists = await Promise.all(
-      wallets
-        .filter((wallet) => wallet.deleted !== true)
-        .map(async (wallet) => {
-          const response = await fetch(`${config.nodeUrl}/api/v1/payments?limit=1000`, {
-            headers: { 'X-Api-Key': wallet.inkey },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          });
-          if (!response.ok) {
-            throw new Error(`treasury payments fetch failed (status: ${response.status})`);
-          }
-          return response.json();
-        }),
-    );
-    const payments = paymentLists.flat();
+    // Treasury payouts are Zaplie's own reward records, in payment shape.
+    const payments = zapRecords()
+      .list()
+      .filter((record) => record.kind === 'reward')
+      .map(toPayment);
+    // Recipients are named from the directory; extra.to.user is their Entra id.
+    const people = peopleStore()
+      .list()
+      .map((person) => ({ id: person.oid, name: person.displayName }));
     res.json({
-      ...summarizeAutomationPayments(payments, usersBody.data, sinceTs),
+      ...summarizeAutomationPayments(payments, people, sinceTs),
       spentThisPeriod: summarizeBudgetSpend(payments, readBudget(), Date.now()),
     });
   } catch (error) {
     console.error('Automations stats failed:', error.message);
-    res.status(502).json({ error: error.message });
+    res.status(502).json({ error: 'automation stats are unavailable' });
   }
 });
 

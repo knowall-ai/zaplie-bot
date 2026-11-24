@@ -1,5 +1,5 @@
 const express = require('express');
-const defaultService = require('./lnbitsGatewayService');
+const defaultService = require('./walletGateway');
 const {
   extractBearerToken: defaultExtractBearerToken,
   verifyMsalPayload: defaultVerifyMsalPayload,
@@ -61,7 +61,7 @@ const parseMemo = (value) =>
     ? value.trim()
     : null;
 
-const createLnbitsRouter = ({
+const createWalletRouter = ({
   service = defaultService,
   extractBearerToken = defaultExtractBearerToken,
   verifyMsalPayload = defaultVerifyMsalPayload,
@@ -83,7 +83,7 @@ const createLnbitsRouter = ({
         oid: claims.oid,
         roles: claims.roles || [],
         // Profile claims from the same verified token, used only to label a
-        // newly provisioned LNbits user; authorization never reads them.
+        // newly provisioned person; authorization never reads them.
         name: typeof claims.name === 'string' ? claims.name : undefined,
         email:
           typeof claims.preferred_username === 'string'
@@ -104,15 +104,16 @@ const createLnbitsRouter = ({
       };
       next();
     } catch (error) {
-      console.error('LNbits gateway token validation failed:', error.message);
+      console.error('Wallet gateway token validation failed:', error.message);
       res.status(401).json({ error: 'invalid token' });
     }
   });
 
   // Registered before assertCaller on purpose: this is how a signed-in
-  // person who has no LNbits user yet (nobody outside Teams had one) gets
-  // one. It only ever acts on the verified token's own oid, creates nothing
-  // that already exists and moves no sats.
+  // person who is not in the Zaplie directory yet gets added (an admin then
+  // links or provisions their Allowance wallet). It only ever acts on the
+  // verified token's own oid, creates nothing in a wallet backend and moves
+  // no sats.
   //
   // It serves the same people the bot serves (src/services/memberGate.ts,
   // mirrored in memberGate.js): members of this tenant, and guests listed in
@@ -159,7 +160,8 @@ const createLnbitsRouter = ({
 
   // Directory, feed, leaderboard, rewards and per-wallet payment history are
   // intentionally tenant-visible. Every other wallet route resolves the wallet
-  // through the caller's own LNbits user, so a wallet id alone grants nothing.
+  // through the caller's own directory entry, so a wallet id alone grants
+  // nothing.
 
   const asyncRoute = (handler) => async (req, res, next) => {
     try {
@@ -348,11 +350,11 @@ const createLnbitsRouter = ({
     // The path is request-controlled, so it is passed as an argument and never
     // as the format string, which console would expand %s/%j from.
     const route = `${req.method} ${String(req.originalUrl || req.url || '').split('?')[0]}`;
-    console.error('LNbits gateway request failed:', route, error.message);
+    console.error('Wallet gateway request failed:', route, error.message);
     res.status(status).json({
       error:
         status >= 500 && !error.expose
-          ? 'LNbits service is unavailable'
+          ? 'The wallet service is unavailable'
           : error.message,
     });
   });
@@ -360,6 +362,6 @@ const createLnbitsRouter = ({
   return router;
 };
 
-module.exports = createLnbitsRouter();
-module.exports.createLnbitsRouter = createLnbitsRouter;
+module.exports = createWalletRouter();
+module.exports.createWalletRouter = createWalletRouter;
 module.exports.parseAmount = parseAmount;

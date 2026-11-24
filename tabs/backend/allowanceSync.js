@@ -1,7 +1,7 @@
 // Reconciles every person's weekly allowance schedule in the LNbits allowance
 // extension with the admin's policy.
 //
-//   gather  -> read LNbits users, Allowance wallets, pay links, the Fund
+//   gather  -> read the Zaplie people directory, Allowance wallets, pay links, the Fund
 //              wallet(s) and the extension's schedules
 //   plan    -> planAllowanceSync, pure: the actions and a summary
 //   apply   -> applyPlan: deletes first, then per person the pay link and
@@ -16,14 +16,17 @@
 // - apply must echo the preview's total per period, and is refused while a
 //   Fund wallet holds less than one period unless explicitly overridden;
 // - Zaplie never pays: the Fund key only reaches the extension APIs.
-const {
-  createWalletPayLink,
-  readRawUserPages,
-  listUserWalletsWithKeys,
-  listWalletPayLinksWithKey,
-  updateWalletPayLink,
-} = require('./lnbitsGatewayService');
-const { parseExtra } = require('./lnbitsUserDirectory');
+const { listDirectoryUsers, listPersonWallets } = require('./walletGateway');
+
+// Zaplie holds no Allowance wallet key since the move to NWC: each wallet's
+// pay link is created in LNbits by an operator (or by automatic provisioning)
+// and its address recorded in the directory. A plan from a directory entry
+// never contains a pay-link action; these refuse one if a caller builds it.
+const noWalletKeys = async () => {
+  throw Object.assign(new Error('Zaplie holds no Allowance wallet keys to manage pay links'), {
+    upstreamStatus: 403,
+  });
+};
 const {
   isPolicyActive,
   payLinkRange,
@@ -130,12 +133,12 @@ const oldestFirst = (a, b) =>
  * The plan. Pure: no I/O, no clock but `now`, no keys anywhere in its input
  * or output.
  *
- * @param input.people [{ oid, displayName, walletId, walletIssue }]
+ * @param input.people [{ oid, displayName, walletId, walletIssue, lightningAddress? }]
  * @param input.payLinks { [walletId]: link | null } (absent: unreadable)
  * @param input.allowances every schedule the Fund key(s) can see
  * @param input.fund { configured, wallets: [{ id, name, balanceSats }] }
  * @param input.state the sync store (byPerson: what Zaplie last wrote)
- * @param input.peopleComplete false when the LNbits user list is provably
+ * @param input.peopleComplete false when the people directory is provably
  *   short of its announced total: nobody missing from it is a leaver then
  * @param input.allowMassDelete the admin's explicit consent to delete more
  *   leavers than the mass-delete guard allows
@@ -301,7 +304,7 @@ const planAllowanceSync = ({
   if (leaverDeletes > massDeleteLimit && !allowMassDelete) {
     blockers.push({
       code: 'mass-delete',
-      message: `${leaverDeletes} leaver schedules would be deleted, more than ${massDeleteLimit} (max of ${MASS_DELETE_MIN} and 10% of ${primaryByOid.size}); check the LNbits user list, or confirm with allowMassDelete`,
+      message: `${leaverDeletes} leaver schedules would be deleted, more than ${massDeleteLimit} (max of ${MASS_DELETE_MIN} and 10% of ${primaryByOid.size}); check the people directory, or confirm with allowMassDelete`,
     });
   }
 
@@ -376,14 +379,17 @@ const planAllowanceSync = ({
       continue;
     }
 
-    const link = payLinks[person.walletId];
+    // A recorded address (the directory) needs no pay-link management.
+    const link = person.lightningAddress ? 'recorded' : payLinks[person.walletId];
     if (link === undefined) {
       actions.push({ ...base, kind: 'skip', reason: 'pay-link-unreadable' });
       if (row) keepLoad(row);
       continue;
     }
     const wantedLink = desiredPayLink({ oid, displayName, range });
-    if (link === null) {
+    if (link === 'recorded') {
+      // Nothing to do: the operator created the pay link in LNbits.
+    } else if (link === null) {
       actions.push({
         ...base,
         kind: 'paylink-create',
@@ -403,7 +409,7 @@ const planAllowanceSync = ({
 
     const desired = {
       name: scheduleName(oid),
-      lightning_address: `${allowanceUsername(oid)}@${publicHost}`,
+      lightning_address: person.lightningAddress || `${allowanceUsername(oid)}@${publicHost}`,
       amount: policy.amountSats,
       currency: 'sats',
       memo,
@@ -624,8 +630,8 @@ const applyPlan = async (
     clients,
     fundOrder = [...clients.keys()],
     wallets,
-    createLink = createWalletPayLink,
-    updateLink = updateWalletPayLink,
+    createLink = noWalletKeys,
+    updateLink = noWalletKeys,
     concurrency = DEFAULT_CONCURRENCY,
     now = () => new Date(),
   },
@@ -754,12 +760,12 @@ const applyPlan = async (
 
 const ALLOWANCE_WALLET = 'allowance';
 
-/** LNbits users linked to an Entra object id, with their LNbits user id. */
+/** Directory entries keyed by Entra object id (gateway listDirectoryUsers). */
 const peopleFromUsers = (users) => {
   const byOid = new Map();
   for (const user of users) {
-    const extra = parseExtra(user);
-    const candidate = user?.external_id || user?.aadObjectId || extra.aadObjectId;
+    const extra = user?.extra && typeof user.extra === 'object' ? user.extra : {};
+    const candidate = user?.external_id;
     if (typeof candidate !== 'string') continue;
     const oid = candidate.toLowerCase();
     if (!OID_PATTERN.test(oid)) continue;
@@ -796,9 +802,9 @@ const gatherSnapshot = async ({
   policy,
   env = process.env,
   concurrency = DEFAULT_CONCURRENCY,
-  listUsers = readRawUserPages,
-  listWallets = listUserWalletsWithKeys,
-  listLinks = listWalletPayLinksWithKey,
+  listUsers = listDirectoryUsers,
+  listWallets = listPersonWallets,
+  listLinks = null,
   clientFactory = createAllowanceExtensionClient,
 }) => {
   const keys = readFundKeys(env);
@@ -844,7 +850,7 @@ const gatherSnapshot = async ({
   const listed = await listUsers();
   const users = listed?.users;
   if (!Array.isArray(users)) {
-    throw new AllowanceSyncError('the LNbits user list is malformed', 502, 'users-unreadable');
+    throw new AllowanceSyncError('the people directory is malformed', 502, 'users-unreadable');
   }
   const announced = Number.isSafeInteger(listed.total) ? listed.total : null;
   const peopleComplete =
@@ -882,9 +888,20 @@ const gatherSnapshot = async ({
       return;
     }
     const wallet = matches[0];
+    // A directory wallet carries the address its schedule pays; the
+    // allowance extension needs nothing else.
+    if (wallet.lightningAddress !== undefined) {
+      if (!wallet.lightningAddress) {
+        person.walletIssue = 'missing-lightning-address';
+        return;
+      }
+      person.walletId = wallet.id;
+      person.lightningAddress = wallet.lightningAddress;
+      return;
+    }
     person.walletId = wallet.id;
     wallets.set(wallet.id, wallet);
-    if (!enabled) return;
+    if (!enabled || !listLinks) return;
     try {
       payLinks[wallet.id] = findAllowancePayLink(await listLinks(wallet), person.oid);
     } catch (error) {
@@ -896,11 +913,12 @@ const gatherSnapshot = async ({
 
   return {
     snapshot: {
-      people: people.map(({ oid, displayName, walletId, walletIssue }) => ({
+      people: people.map(({ oid, displayName, walletId, walletIssue, lightningAddress }) => ({
         oid,
         displayName,
         walletId: walletId || null,
         walletIssue: walletIssue || null,
+        ...(lightningAddress ? { lightningAddress } : {}),
       })),
       peopleComplete,
       payLinks,

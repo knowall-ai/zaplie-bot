@@ -94,6 +94,17 @@ test('planner: a new person gets a pay link and a schedule from the next anchor'
   assert.equal(result.summary.changes, 2);
 });
 
+test('planner: a recorded Allowance address needs no pay link and is what the schedule pays', () => {
+  // Since NWC Zaplie holds no Allowance wallet key: the operator created the
+  // pay link in LNbits and the directory recorded its address.
+  const result = plan({
+    people: [{ ...person(OID_A), lightningAddress: `team-a@${HOST}` }],
+    payLinks: {},
+  });
+  assert.deepEqual(kinds(result), ['create:']);
+  assert.equal(result.actions[0].body.lightning_address, `team-a@${HOST}`);
+});
+
 test('planner table: create, update, recreate, delete, dedupe, drift, paused, leaver, fund-full', () => {
   const cases = [
     {
@@ -448,18 +459,18 @@ test('planner output never contains a key', () => {
   assert.equal(/adminkey|inkey|X-Api-Key/i.test(text), false);
 });
 
-test('peopleFromUsers keeps oid users and flags duplicate LNbits users', () => {
+test('peopleFromUsers keeps directory entries keyed by Entra id and flags duplicates', () => {
   const people = peopleFromUsers([
-    { id: 'u1', external_id: OID_A.toUpperCase(), extra: { display_name: 'Ada' } },
-    { id: 'u2', external_id: OID_A },
+    { id: OID_A, external_id: OID_A.toUpperCase(), extra: { display_name: 'Ada' } },
+    { id: OID_A, external_id: OID_A },
     { id: 'u3', external_id: 'not-an-oid' },
-    { id: 'u4', extra: JSON.stringify({ aadObjectId: OID_B }) },
+    { id: OID_B, external_id: OID_B },
   ]);
   assert.deepEqual(
     people.map((p) => [p.oid, p.userId, p.displayName, Boolean(p.duplicate)]),
     [
-      [OID_A, 'u1', 'Ada', true],
-      [OID_B, 'u4', OID_B, false],
+      [OID_A, OID_A, 'Ada', true],
+      [OID_B, OID_B, OID_B, false],
     ],
   );
 });
@@ -982,4 +993,17 @@ test('store: the lock is exclusive, names its holder, and only its holder releas
   held.release();
   assert.equal(fs.existsSync(clocked.lockPath), true, 'the old holder cannot release the new lock');
   taken.release();
+});
+
+test('planner: one person in an incomplete directory never turns six schedules into leavers', () => {
+  const oids = [OID_A, OID_B, OID_C, 'dddddddd-0000-4000-8000-000000000004', 'eeeeeeee-0000-4000-8000-000000000005', 'ffffffff-0000-4000-8000-000000000006'];
+  const result = plan({
+    people: [person(OID_A)],
+    payLinks: { [`w-${OID_A.slice(0, 4)}`]: linkFor(OID_A) },
+    allowances: oids.map((oid) => rowFor(oid)),
+    peopleComplete: false,
+  });
+  assert.equal(result.actions.filter((action) => action.kind === 'delete').length, 0);
+  assert.equal(result.actions.filter((action) => action.reason === 'people-incomplete').length, 5);
+  assert.deepEqual(result.blockers.map((b) => b.code), ['people-incomplete']);
 });

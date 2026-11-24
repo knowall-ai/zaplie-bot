@@ -6,7 +6,7 @@ const {
   isFundKeyPathAllowed,
   readFundKeys,
 } = require('./allowanceExtensionClient');
-const { resetCachesForTests } = require('./lnbitsGatewayService');
+const { resetCachesForTests } = require('./walletGateway');
 
 // A fake key shaped like an LNbits key, so the masking is exercised.
 const FUND_KEY = 'f'.repeat(32);
@@ -20,8 +20,6 @@ const jsonResponse = (body, status = 200) => ({
 
 const installFetch = (handler) => {
   process.env.LNBITS_NODE_URL = 'https://lnbits.test';
-  process.env.LNBITS_USERNAME = 'service';
-  process.env.LNBITS_PASSWORD = 'secret';
   resetCachesForTests();
   const calls = [];
   global.fetch = async (url, init = {}) => {

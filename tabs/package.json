@@ -9,6 +9,7 @@
     "@azure/msal-browser": "^5.24.0",
     "@azure/msal-react": "^5.7.2",
     "@fluentui/react": "^8.125.8",
+    "@getalby/sdk": "9.0.0",
     "@microsoft/teams-js": "^2.57.0",
     "@tanstack/react-query": "5.104.1",
     "@testing-library/jest-dom": "^7.0.1",
