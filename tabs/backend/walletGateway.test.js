@@ -163,6 +163,7 @@ test('directory reads go over NWC and never make an LNbits HTTP call', async () 
 
 test('the allowance sync sees one complete entry per person, keyed by Entra id', async () => {
   installLnbitsStub();
+  peopleStore().markComplete();
   const listed = await listDirectoryUsers();
   assert.equal(listed.complete, true);
   assert.deepEqual(
@@ -177,6 +178,21 @@ test('a missing people.json is reported incomplete, not empty', async () => {
   const listed = await listDirectoryUsers();
   assert.deepEqual(listed.users, []);
   assert.equal(listed.complete, false);
+});
+
+test('a directory that only holds the people seen since the upgrade is not complete', async () => {
+  installLnbitsStub();
+  const file = path.join(process.env.ZAPLIE_DATA_DIR, 'people.json');
+  fs.rmSync(file);
+  resetPeopleStoreForTests();
+  // The first sign-in after the upgrade creates people.json with one person.
+  peopleStore().upsertProfile({ oid: OID_1, displayName: 'Ada' });
+  const listed = await listDirectoryUsers();
+  assert.equal(listed.users.length, 1);
+  assert.equal(listed.complete, false);
+
+  peopleStore().markComplete();
+  assert.equal((await listDirectoryUsers()).complete, true);
 });
 
 test('an unreadable people.json refuses the directory read', async () => {

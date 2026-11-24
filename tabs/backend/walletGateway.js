@@ -311,14 +311,15 @@ const getWalletPayLinks = async (walletId, aadObjectId) => {
 /**
  * The allowance sync's view of the directory, in the shape it has always
  * read: `{ users, total, complete }`, one entry per person keyed by Entra id.
- * The directory is local, so the list is complete once it exists; a missing
- * people.json (not yet populated after an upgrade) is "unknown", not "empty",
- * so the sync cannot read every schedule as belonging to a leaver. An
+ * The local directory only ever grows (people register on first sign-in and
+ * are never removed), so it is complete only once marked so: a missing or
+ * part-filled people.json is "unknown", not "everyone else has left", and the
+ * sync cannot read every other schedule as a leaver's. An
  * unreadable file makes listPeople throw, which refuses the sync outright.
  */
 const listDirectoryUsers = async () => {
   const directory = walletDirectory().store();
-  const complete = directory.exists ? directory.exists() : true;
+  const complete = directory.isComplete ? directory.isComplete() : true;
   const users = listPeople().map((person) => ({
     id: person.oid,
     external_id: person.oid,
@@ -415,6 +416,7 @@ const createIdempotentPayer = (idempotencyStore) => {
           scope,
           requestHash,
           invoiceId: invoice.invoiceId || invoice.paymentRequest.slice(0, 256),
+          paymentRequest: invoice.paymentRequest,
         });
         paymentAttempted = true;
         const paid = await payFrom.payInvoice(invoice.paymentRequest);

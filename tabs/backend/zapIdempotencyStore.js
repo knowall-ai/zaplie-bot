@@ -79,13 +79,22 @@ const normalizePayment = (payment) => {
   if (!payment || typeof payment !== 'object' || Array.isArray(payment)) {
     throw new ZapIdempotencyError('Zap idempotency data is invalid', 503);
   }
-  if (!valid(payment.invoiceId) || !valid(payment.paymentHash)) {
+  const validRequest =
+    payment.paymentRequest === undefined ||
+    (typeof payment.paymentRequest === 'string' &&
+      /^[\x21-\x7e]{1,4096}$/.test(payment.paymentRequest));
+  if (!valid(payment.invoiceId) || !valid(payment.paymentHash) || !validRequest) {
     throw new ZapIdempotencyError('Zap idempotency data is invalid', 503);
   }
   const normalized = {};
   if (payment.invoiceId !== undefined) normalized.invoiceId = payment.invoiceId;
   if (payment.paymentHash !== undefined) {
     normalized.paymentHash = payment.paymentHash;
+  }
+  // The full invoice: invoiceId may be only a 256-character fragment, which
+  // lookup_invoice cannot use to settle a failed or pending key.
+  if (payment.paymentRequest !== undefined) {
+    normalized.paymentRequest = payment.paymentRequest;
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 };
@@ -374,7 +383,7 @@ const createZapIdempotencyStore = ({
   // Called after the invoice exists but before the payment is sent, so a zap
   // that times out mid-payment leaves behind the invoice id needed to ask
   // LNbits what actually happened.
-  const attachPayment = async ({ scope, requestHash, invoiceId, paymentHash }) =>
+  const attachPayment = async ({ scope, requestHash, invoiceId, paymentHash, paymentRequest }) =>
     withStoreLock(async () => {
       const store = readStore(storePath);
       const existing = store.records[scope];
@@ -395,6 +404,7 @@ const createZapIdempotencyStore = ({
         ...(existing.payment ?? {}),
         ...(invoiceId === undefined ? {} : { invoiceId }),
         ...(paymentHash === undefined ? {} : { paymentHash }),
+        ...(paymentRequest === undefined ? {} : { paymentRequest }),
       });
       existing.updatedAt = now();
       writeJsonSecure(storePath, store);

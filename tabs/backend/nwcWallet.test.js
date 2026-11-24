@@ -67,6 +67,19 @@ test('a definite wallet refusal means nothing was paid', async () => {
   }
 });
 
+test('PAYMENT_FAILED only releases the key when the wallet says the invoice failed', async () => {
+  const fake = createFakeNwc();
+  const failing = async () => {
+    throw new FakeWalletError('PAYMENT_FAILED');
+  };
+  fake.add(nwcUrlFor(1), { pay: failing }).lookup = async () => ({ state: 'failed' });
+  fake.add(nwcUrlFor(2), { pay: failing }).lookup = async () => ({ state: 'pending' });
+  fake.add(nwcUrlFor(3), { pay: failing });
+  await assert.rejects(fake.factory.open(nwcUrlFor(1)).payInvoice('lnbc10n1p'), NwcPaymentRefused);
+  await assert.rejects(fake.factory.open(nwcUrlFor(2)).payInvoice('lnbc10n1p'), NwcPaymentUnknown);
+  await assert.rejects(fake.factory.open(nwcUrlFor(3)).payInvoice('lnbc10n1p'), NwcPaymentUnknown);
+});
+
 test('no answer is resolved by looking the invoice up, else reported unknown', async () => {
   const fake = createFakeNwc();
   const hang = () => new Promise(() => {});

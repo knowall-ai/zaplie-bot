@@ -66,6 +66,21 @@ const createPeopleStore = ({
   // unknown, not because nobody is registered.
   const exists = () => fs.existsSync(filePath);
 
+  // Nothing removes a person, so absence from the directory never proves
+  // someone left: the list counts as the whole workforce only once an import
+  // (or the operator) has marked it complete.
+  const isComplete = () => {
+    if (!exists()) return false;
+    return readRaw().directoryComplete === true;
+  };
+
+  const markComplete = () => {
+    const store = readRaw();
+    store.directoryComplete = true;
+    store.version = STORE_VERSION;
+    writeJsonSecure(filePath, store);
+  };
+
   const mapSealed = (record, transform) => {
     const next = { ...record };
     for (const [section, fields] of Object.entries(SEALED_FIELDS)) {
@@ -163,6 +178,8 @@ const createPeopleStore = ({
     get,
     list,
     exists,
+    isComplete,
+    markComplete,
     upsertProfile,
     setAllowanceWallet,
     setReceiveTarget,

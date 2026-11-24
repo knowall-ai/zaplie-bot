@@ -264,6 +264,26 @@ const createNwcWalletFactory = ({
         throw new NwcPaymentUnknown('The wallet confirmed a payment without a preimage');
       } catch (error) {
         if (error instanceof NwcPaymentUnknown) throw error;
+        // PAYMENT_FAILED can arrive while the payment is still in flight
+        // (e.g. after a timeout), so it only releases the key once the
+        // wallet's own record of the invoice says failed.
+        if (error?.code === 'PAYMENT_FAILED') {
+          let tx = null;
+          try {
+            tx = await lookupInvoice({ invoice: paymentRequest });
+          } catch (_lookupError) {
+            tx = null;
+          }
+          if (tx?.state === 'failed') {
+            throw new NwcPaymentRefused(REFUSAL_MESSAGES.PAYMENT_FAILED, 'PAYMENT_FAILED');
+          }
+          if (tx?.state === 'settled') {
+            const settledHash = HEX64.test(String(tx.payment_hash || '')) ? tx.payment_hash.toLowerCase() : paymentHashOf(tx.preimage);
+            if (!settledHash) throw new NwcPaymentUnknown('The wallet settled a payment it could not identify');
+            return { paymentHash: settledHash, feesSats: msatToSats(tx.fees_paid) || 0 };
+          }
+          throw new NwcPaymentUnknown('The wallet did not confirm the payment failed');
+        }
         if (REFUSAL_CODES.has(error?.code)) {
           throw new NwcPaymentRefused(REFUSAL_MESSAGES[error.code], error.code);
         }

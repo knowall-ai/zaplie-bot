@@ -994,3 +994,16 @@ test('store: the lock is exclusive, names its holder, and only its holder releas
   assert.equal(fs.existsSync(clocked.lockPath), true, 'the old holder cannot release the new lock');
   taken.release();
 });
+
+test('planner: one person in an incomplete directory never turns six schedules into leavers', () => {
+  const oids = [OID_A, OID_B, OID_C, 'dddddddd-0000-4000-8000-000000000004', 'eeeeeeee-0000-4000-8000-000000000005', 'ffffffff-0000-4000-8000-000000000006'];
+  const result = plan({
+    people: [person(OID_A)],
+    payLinks: { [`w-${OID_A.slice(0, 4)}`]: linkFor(OID_A) },
+    allowances: oids.map((oid) => rowFor(oid)),
+    peopleComplete: false,
+  });
+  assert.equal(result.actions.filter((action) => action.kind === 'delete').length, 0);
+  assert.equal(result.actions.filter((action) => action.reason === 'people-incomplete').length, 5);
+  assert.deepEqual(result.blockers.map((b) => b.code), ['people-incomplete']);
+});
