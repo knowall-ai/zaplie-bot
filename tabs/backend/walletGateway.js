@@ -311,15 +311,20 @@ const getWalletPayLinks = async (walletId, aadObjectId) => {
 /**
  * The allowance sync's view of the directory, in the shape it has always
  * read: `{ users, total, complete }`, one entry per person keyed by Entra id.
- * The directory is local, so the list is always complete.
+ * The directory is local, so the list is complete once it exists; a missing
+ * people.json (not yet populated after an upgrade) is "unknown", not "empty",
+ * so the sync cannot read every schedule as belonging to a leaver. An
+ * unreadable file makes listPeople throw, which refuses the sync outright.
  */
 const listDirectoryUsers = async () => {
+  const directory = walletDirectory().store();
+  const complete = directory.exists ? directory.exists() : true;
   const users = listPeople().map((person) => ({
     id: person.oid,
     external_id: person.oid,
     extra: { display_name: person.displayName || person.oid },
   }));
-  return { users, total: users.length, complete: true };
+  return { users, total: users.length, complete };
 };
 
 /**
@@ -415,12 +420,16 @@ const createIdempotentPayer = (idempotencyStore) => {
         const paid = await payFrom.payInvoice(invoice.paymentRequest);
         const result = { payment_hash: paid.paymentHash, checking_id: paid.paymentHash };
         try {
-          record(paid);
-        } catch (recordError) {
-          // The money has left; a missing feed entry must not read as unpaid.
-          console.error('Zap record could not be written', recordError.message);
-        }
-        try {
+          try {
+            record(paid);
+          } catch (recordError) {
+            // The money has left, but the key must not read as cleanly done:
+            // a replayed success would leave the payment out of reports and
+            // Treasury spend for good. Park it as outcome_unknown instead,
+            // which keeps the payment identifiers for reconciliation.
+            console.error('Zap record could not be written', recordError.message);
+            throw recordError;
+          }
           await idempotencyStore.complete({ scope, requestHash, result });
         } catch (persistError) {
           console.error('Payment idempotency completion could not be persisted', persistError);

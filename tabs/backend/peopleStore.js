@@ -61,6 +61,11 @@ const createPeopleStore = ({
     return parsed;
   };
 
+  // False when people.json has never been written (e.g. just after an upgrade
+  // from the LNbits-backed directory): the list is then empty because it is
+  // unknown, not because nobody is registered.
+  const exists = () => fs.existsSync(filePath);
+
   const mapSealed = (record, transform) => {
     const next = { ...record };
     for (const [section, fields] of Object.entries(SEALED_FIELDS)) {
@@ -157,6 +162,7 @@ const createPeopleStore = ({
   return {
     get,
     list,
+    exists,
     upsertProfile,
     setAllowanceWallet,
     setReceiveTarget,

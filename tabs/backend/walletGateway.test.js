@@ -171,6 +171,20 @@ test('the allowance sync sees one complete entry per person, keyed by Entra id',
   );
 });
 
+test('a missing people.json is reported incomplete, not empty', async () => {
+  installLnbitsStub();
+  fs.rmSync(path.join(process.env.ZAPLIE_DATA_DIR, 'people.json'));
+  const listed = await listDirectoryUsers();
+  assert.deepEqual(listed.users, []);
+  assert.equal(listed.complete, false);
+});
+
+test('an unreadable people.json refuses the directory read', async () => {
+  installLnbitsStub();
+  fs.writeFileSync(path.join(process.env.ZAPLIE_DATA_DIR, 'people.json'), '{not json');
+  await assert.rejects(listDirectoryUsers());
+});
+
 test('wallet history comes from NWC, with Zaplie\'s record of each zap as extra', async () => {
   const { fake } = installLnbitsStub();
   const hash = 'ab'.repeat(32);
@@ -623,6 +637,32 @@ test('a zap whose success cannot be recorded is reported, not swallowed', async 
     sendZap(validZap),
     (error) => error.status === 503 && /contact support/.test(error.message),
   );
+  assert.equal(paymentCalls, 1);
+});
+
+test('a paid zap whose record cannot be written is parked for repair, not replayed as done', async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zaplie-zap-record-'));
+  const storePath = path.join(tempDir, 'zaps.json');
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let paymentCalls = 0;
+  const deps = createTestZapDependencies(
+    createZapIdempotencyStore({ storePath }),
+    async () => {
+      paymentCalls += 1;
+      return { payment_hash: 'payment-1', checking_id: 'payment-1' };
+    },
+  );
+  deps.recordZap = () => {
+    throw new Error('disk full');
+  };
+  const sendZap = createSendZap(deps);
+
+  await assert.rejects(sendZap(validZap), (error) => error.status === 503);
+  const record = Object.values(JSON.parse(fs.readFileSync(storePath, 'utf8')).records)[0];
+  assert.equal(record.state, 'outcome_unknown');
+  assert.equal(record.payment.paymentHash, 'payment-1');
+
+  await assert.rejects(sendZap(validZap), (error) => error.status === 503);
   assert.equal(paymentCalls, 1);
 });
 
